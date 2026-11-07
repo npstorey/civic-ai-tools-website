@@ -260,12 +260,12 @@ function onePrompt(surface: Surface, where: string): HostElement {
   return found[0];
 }
 
-/** The prompt names the source and offers exactly Allow and Not now, equal in style, with the card's own words. */
+/** The prompt names the source and offers Allow and Don't allow, equal in style, then Allow all data sources (UX-2 P4b), with the card's own words. */
 function assertPrompt(prompt: HostElement, where: string): void {
   const text = textOf(prompt);
   assert.ok(text.startsWith('Boston OpenContext is set to Ask first.'), `${where}: the prompt reads: ${text}`);
   const buttons = buttonsIn(prompt);
-  assert.deepEqual(buttons.map((b) => textOf(b)), ['Allow', 'Not now'], `${where}: the prompt's buttons`);
+  assert.deepEqual(buttons.map((b) => textOf(b)), ['Allow', "Don't allow", 'Allow all data sources'], `${where}: the prompt's buttons`);
   assert.deepEqual(buttons[0].props.style, buttons[1].props.style, `${where}: the prompt's two buttons are styled differently`);
 }
 
@@ -433,7 +433,7 @@ test('criterion 1, /explore: a holding pause shows the prompt under the running 
   assertPrompt(prompt, '/explore');
   const cancel = p.button('Cancel');
   assert.ok(before(p, cancel, prompt) && before(p, prompt, stepCards(p)[0]), '/explore: the prompt is not between the running question and the run\'s steps');
-  assert.deepEqual(labels(stepCards(p)[0]), ['Allow', 'Not now'], 'premise: the step card offers both during the hold');
+  assert.deepEqual(labels(stepCards(p)[0]), ['Allow', "Don't allow", 'Allow all data sources'], 'premise: the step card offers both during the hold');
 
   // Criterion 3: Cancel during the hold.
   await p.click(cancel);
@@ -494,7 +494,7 @@ test('criterion 3, /explore on the browser\'s abort path (Amendment 3, the owner
   stream.push({ type: 'progress', panel: 'withMcp', ...LOAD_START });
   stream.push({ type: 'progress', panel: 'withMcp', message: PAUSE_LINE, phase: 'consent_pause', pause: pauseOf(nextKey()) });
   await settle(p, SCROLL_WAIT);
-  assert.deepEqual(labels(stepCards(p)[0]), ['Allow', 'Not now'], `premise: the step card offers both during the hold: ${summary(p)}`);
+  assert.deepEqual(labels(stepCards(p)[0]), ['Allow', "Don't allow", 'Allow all data sources'], `premise: the step card offers both during the hold: ${summary(p)}`);
   await p.click(p.button('Cancel'));
   await settle(p, 200);
   const text = p.text();
@@ -534,7 +534,7 @@ async function pausedOnExplore(): Promise<{ p: Surface; stream: Held }> {
   stream.push({ type: 'progress', panel: 'withMcp', ...LOAD_START });
   stream.push({ type: 'progress', panel: 'withMcp', message: PAUSE_LINE, phase: 'consent_pause', pause: pauseOf(nextKey()) });
   await settle(p, SCROLL_WAIT);
-  assert.deepEqual(labels(stepCards(p)[0]), ['Allow', 'Not now'], `premise: the step card offers both during the hold: ${summary(p)}`);
+  assert.deepEqual(labels(stepCards(p)[0]), ['Allow', "Don't allow", 'Allow all data sources'], `premise: the step card offers both during the hold: ${summary(p)}`);
   return { p, stream };
 }
 
@@ -559,7 +559,7 @@ test('criterion 3, /explore, Amendment 4 (1): Cancel during a hold when abort() 
   assert.deepEqual([...stepCards(p), ...rowCards(p)].map((c) => labels(c)).flat(), [], `a card offers an answer after Cancel: ${summary(p)}`);
 });
 
-test('criterion 3, /explore, Amendment 4 (2): the stream ends on its own during a hold: the hold is over, so the row\'s card reads the after-hold words, and Not now reads the after-hold sentence', async () => {
+test('criterion 3, /explore, Amendment 4 (2): the stream ends on its own during a hold: the hold is over, so the row\'s card reads the after-hold words, and Don\'t allow reads the after-hold sentence', async () => {
   const { p, stream } = await pausedOnExplore();
   stream.close();
   await settle(p, 200);
@@ -568,9 +568,11 @@ test('criterion 3, /explore, Amendment 4 (2): the stream ends on its own during 
   assert.ok(row, `premise: the row shows no card for the pause after the drop: ${summary(p)}`);
   assert.ok(!textOf(row).includes('The question waits up to a minute for your answer.'), `the row's card still reads as the hold being open: ${textOf(row)}`);
   assert.ok(textOf(row).includes('The question went on without your answer, so it did not use this source.'), `the row's card after the drop: ${textOf(row)}`);
-  await p.click(buttonsIn(row).find((b) => textOf(b) === 'Not now')!);
+  // UX-2 P4b (W2): after the hold the row's card offers the pair only.
+  assert.deepEqual(buttonsIn(row).map((b) => textOf(b)), ['Allow', "Don't allow"], 'the row\'s card after the drop');
+  await p.click(buttonsIn(row).find((b) => textOf(b) === "Don't allow")!);
   await settle(p);
   const after = rowCards(p).map((c) => textOf(c)).join(' ') + ' ' + stepCards(p).map((c) => textOf(c)).join(' ');
-  assert.ok(after.includes('You chose Not now. It is still set to Ask first.'), `Not now after the drop: ${after.slice(-300)}`);
-  assert.ok(!after.includes('You chose Not now. Nothing is sent to it for this question.'), 'Not now after the drop reads the in-hold sentence');
+  assert.ok(after.includes("You chose Don't allow. It is Off for later questions."), `Don't allow after the drop: ${after.slice(-300)}`);
+  assert.ok(!after.includes("You chose Don't allow. Nothing is sent to it, and it is Off now."), 'Don\'t allow after the drop reads the in-hold sentence');
 });

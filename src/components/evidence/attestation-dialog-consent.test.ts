@@ -145,16 +145,16 @@ test('criterion 7: on a 403 consent_required the dialog shows the consent card, 
   const { dialog, net } = await runConsistency();
   assert.equal(replays(net).length, 1, 'premise: the dialog sent one replay request, and stopped at its refusal');
   assert.ok(!dialog.text().includes(BARE_REFUSAL), 'the dialog shows the bare refusal sentence');
-  assert.ok(dialog.buttons('Allow').length === 1 && dialog.buttons('Not now').length === 1, `the dialog shows no consent card: ${dialog.text().slice(0, 500)}`);
+  assert.ok(dialog.buttons('Allow').length === 1 && dialog.buttons("Don't allow").length === 1, `the dialog shows no consent card: ${dialog.text().slice(0, 500)}`);
   dialog.unmount();
 });
 
-test('criterion 7: Not now sends nothing more', async () => {
+test('criterion 7: Don\'t allow (UX-2 P4b, item 8) sends nothing more', async () => {
   const { dialog, net } = await runConsistency();
-  assert.equal(dialog.buttons('Not now').length, 1, `the dialog shows no consent card: ${dialog.text().slice(0, 500)}`);
-  await dialog.click(dialog.button('Not now'));
-  assert.equal(replays(net).length, 1, 'Not now sent another replay request');
-  assert.deepEqual(net.sent.filter((r) => r.method !== 'GET' && r.path !== REPLAY_PATH).map((r) => `${r.method} ${r.path}`), [], 'Not now wrote something');
+  assert.equal(dialog.buttons("Don't allow").length, 1, `the dialog shows no consent card: ${dialog.text().slice(0, 500)}`);
+  await dialog.click(dialog.button("Don't allow"));
+  assert.equal(replays(net).length, 1, 'Don\'t allow sent another replay request');
+  assert.deepEqual(net.sent.filter((r) => r.method !== 'GET' && r.path !== REPLAY_PATH).map((r) => `${r.method} ${r.path}`), [], 'Don\'t allow wrote something');
   dialog.unmount();
 });
 
@@ -176,7 +176,7 @@ test('criterion 7: Allow stores the consent, then runs the replay test it was as
 test('criterion 7 (the guard): with no consent in force, Run shows the card before any replay is sent', async () => {
   const { dialog, net } = await runConsistency(false);
   assert.equal(replays(net).length, 0, 'the dialog sent a replay before the reader answered the card');
-  assert.ok(dialog.buttons('Allow').length === 1 && dialog.buttons('Not now').length === 1, `the dialog shows no consent card: ${dialog.text().slice(0, 500)}`);
+  assert.ok(dialog.buttons('Allow').length === 1 && dialog.buttons("Don't allow").length === 1, `the dialog shows no consent card: ${dialog.text().slice(0, 500)}`);
   await dialog.click(dialog.button('Allow'));
   assert.equal(replays(net).length, 5, 'after Allow the dialog did not run the five replays it was asked for');
   dialog.unmount();

@@ -96,7 +96,8 @@ test('row 3: after Not now the arrow is disabled, grey, and shows a not-allowed 
   const box = one(page, 'question box', (el) => el.type === 'textarea');
   await page.type(box, 'How many 311 complaints were there in Brooklyn in 2024?');
   await page.submit(one(page, 'form', (el) => el.type === 'form'));
-  await page.click(page.button('Not now'));
+  // UX-2 P4b (item 8): the card's decline reads "Don't allow".
+  await page.click(page.button("Don't allow"));
   const submit = submitButton(page);
   assert.equal(submit.props.disabled, true, 'premise: after Not now the arrow is disabled');
   assert.equal(styleOf(submit).backgroundColor, 'var(--border-color)', 'after Not now the disabled arrow keeps the accent colour');

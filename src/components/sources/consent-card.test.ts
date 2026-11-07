@@ -31,8 +31,6 @@ import {
   mount,
   registerSurfaceHooks,
   sessions,
-  textOf,
-  type HostElement,
   type Surface,
 } from './surface-test-harness.ts';
 
@@ -61,9 +59,6 @@ const COPY: string = '@/lib/sources/copy';
 const cardModule = (await import(CARD).catch(() => null)) as Mod | null;
 const copy = (await import(COPY).catch(() => null)) as Mod | null;
 
-interface KeptBy { holder: string; keeps: string; statementUrl?: string; readOn?: string }
-interface Recipient { id: string; keptBy: KeptBy[] }
-
 /** Set the configuration, run `body`, and put the environment back. */
 async function under<T>(env: Record<string, string>, body: () => Promise<T>): Promise<T> {
   const saved = Object.fromEntries(READ.map((name) => [name, process.env[name]]));
@@ -90,9 +85,8 @@ async function card(): Promise<Surface> {
   return mount(h(cardModule!.default as ComponentType<Record<string, unknown>>, { onAllow: () => undefined, onNotNow: () => undefined }));
 }
 
-function lineOf(surface: Surface, id: string): HostElement[] {
-  return surface.elements().filter((el) => el.props['data-recipient'] === id);
-}
+/** T13 (#632 G7): each source's one reader name, written out. */
+const READER_NAME: Record<string, string> = { socrata: 'Socrata', 'data-commons': 'Data Commons', 'boston-opencontext': 'Boston OpenContext', 'nyc-charter': 'NYC Charter, Laws and Rules' };
 
 const CONFIGURATIONS: Array<[string, Record<string, string>]> = [
   ['the default', {}],
@@ -100,45 +94,32 @@ const CONFIGURATIONS: Array<[string, Record<string, string>]> = [
   ['NYC_CHARTER_HOSTING=sandbox', { NYC_CHARTER_HOSTING: 'sandbox' }],
 ];
 
+// UX-2 P4b (D6 B, ASK1 = A): the card is cut to the owner's two sentences, what each answer does, ASK1's line, the
+// privacy page's link, the two answers and the link to Data source settings. The recipients and what each says it
+// keeps move to the privacy page, the card's full layer; the local-only offer moves to the line after "Don't allow".
+// The legs below held the card to the recipients list, the source names and the offer; each now holds it to their
+// absence, under every configuration they ran in.
 for (const [name, env] of CONFIGURATIONS) {
-  test(`criterion 2 (${name}): the card's recipient list carries one kept-by line per recipient`, async () => {
+  test(`criterion 2 (${name}; UX-2 P4b D6 B): the card lists no recipient and no kept-by line`, async () => {
     await under(env, async () => {
       const shown = await card();
-      const statement = await buildFlowsStatement();
-      const recipients: Recipient[] = [...statement.recipients, ...statement.sources.flatMap((s: { recipients: Recipient[] }) => s.recipients)];
-      assert.ok(recipients.length > 0, 'premise: the statement names recipients');
-      const listed = shown.elements().filter((el) => typeof el.props['data-recipient'] === 'string').map((el) => el.props['data-recipient']);
-      assert.deepEqual(listed, recipients.map((r) => r.id), 'the card does not list exactly the statement\'s recipients, one line each');
-      for (const recipient of recipients) {
-        const [line] = lineOf(shown, recipient.id);
-        const text = textOf(line);
-        for (const k of recipient.keptBy) {
-          assert.ok(text.includes(k.holder), `${recipient.id}: the line does not name the holder ${k.holder}: ${text}`);
-          if (k.keeps === 'not-stated') assert.ok(text.includes('not stated'), `${recipient.id}: a holder that states nothing does not read "not stated": ${text}`);
-          if (k.statementUrl) {
-            const links = [...shown.elements()].filter((el) => el.type === 'a' && el.props.href === k.statementUrl);
-            assert.ok(links.length >= 1, `${recipient.id}: the line does not link the statement read (${k.statementUrl})`);
-            assert.ok(text.includes(k.readOn ?? ''), `${recipient.id}: the line does not give the date the statement was read (${k.readOn})`);
-          }
-        }
-      }
+      assert.ok(shown.buttons('Allow').length === 1, `premise: the card renders: ${shown.text().slice(0, 200)}`);
+      assert.deepEqual(shown.elements().filter((el) => typeof el.props['data-recipient'] === 'string').map((el) => el.props['data-recipient']), [], 'the card still lists recipients');
+      assert.equal(shown.elements().filter((el) => el.type === 'details').length, 0, 'the card still carries the recipients\' disclosure');
       shown.unmount();
     });
   });
 }
 
-/** T13 (#632 G7): each source's one reader name, written out. */
-const READER_NAME: Record<string, string> = { socrata: 'Socrata', 'data-commons': 'Data Commons', 'boston-opencontext': 'Boston OpenContext', 'nyc-charter': 'NYC Charter, Laws and Rules' };
-
-test('criterion 11: the card names each source without " MCP Server"', async () => {
+test('criterion 11 (UX-2 P4b D6 B): the card says "MCP Server" nowhere, and names no source', async () => {
   await under({ NYC_CHARTER_HOSTING: 'sandbox' }, async () => {
     const shown = await card();
     const statement = await buildFlowsStatement();
-    for (const source of statement.sources as Array<{ sourceId: string; displayName: string }>) {
-      const name = READER_NAME[source.sourceId];
-      assert.ok(shown.text().includes(name), `the card does not name ${source.sourceId} as ${name}`);
-    }
     assert.ok(!shown.text().includes('MCP Server'), `the card says "MCP Server": ${shown.text().slice(0, 400)}`);
+    for (const source of statement.sources as Array<{ sourceId: string }>) {
+      const name = READER_NAME[source.sourceId];
+      if (name) assert.ok(!shown.text().includes(`They are ${name}`) && !shown.text().includes(`${name}:`), `the card still names ${name} in a recipients line`);
+    }
     shown.unmount();
   });
 });
@@ -146,7 +127,7 @@ test('criterion 11: the card names each source without " MCP Server"', async () 
 test('criterion 2: the card carries the owner\'s text and the two answers', async () => {
   await under({}, async () => {
     const shown = await card();
-    assert.ok(shown.buttons('Allow').length === 1 && shown.buttons('Not now').length === 1, 'the card does not offer Allow and Not now');
+    assert.ok(shown.buttons('Allow').length === 1 && shown.buttons("Don't allow").length === 1, 'the card does not offer Allow and Don\'t allow');
     assert.ok(copy?.CONSENT_CARD, `${COPY} exports no CONSENT_CARD`);
     const sentences: string[] = [copy!.CONSENT_CARD.heading, ...(copy!.CONSENT_CARD.sentences ?? [])];
     assert.ok(sentences.length > 1, `${COPY}'s CONSENT_CARD carries no sentences`);
@@ -155,22 +136,14 @@ test('criterion 2: the card carries the owner\'s text and the two answers', asyn
   });
 });
 
-test('criterion 5: unset, the card omits the guide link and says this site names no guide', async () => {
-  await under({}, async () => {
-    const shown = await card();
-    assert.ok(copy?.LOCAL_ONLY_OFFER && copy?.NO_GUIDE_SENTENCE, `${COPY} exports no LOCAL_ONLY_OFFER / NO_GUIDE_SENTENCE`);
-    assert.ok(shown.text().includes(copy!.LOCAL_ONLY_OFFER), 'the card makes no local-only offer');
-    assert.ok(shown.text().includes(copy!.NO_GUIDE_SENTENCE), 'with no guide address, the card does not say so');
-    assert.ok(!shown.elements().some((el) => el.type === 'a' && el.props.href === GUIDE), 'the card links a guide no one configured');
-    shown.unmount();
+for (const [name, env] of [['unset', {}], ['set', { SITE_DEPLOYMENT_GUIDE_URL: GUIDE }]] as Array<[string, Record<string, string>]>) {
+  test(`criterion 5 (${name}; UX-2 P4b D6 B): the card makes no local-only offer and links no guide; the line after Don't allow carries them`, async () => {
+    await under(env, async () => {
+      const shown = await card();
+      assert.ok(copy?.LOCAL_ONLY_OFFER, `${COPY} exports no LOCAL_ONLY_OFFER`);
+      assert.ok(!shown.text().includes(copy!.LOCAL_ONLY_OFFER), 'the card still makes the local-only offer');
+      assert.ok(!shown.elements().some((el) => el.type === 'a' && el.props.href === GUIDE), 'the card links the guide');
+      shown.unmount();
+    });
   });
-});
-
-test('criterion 5: set, the card links to the deployment guide', async () => {
-  await under({ SITE_DEPLOYMENT_GUIDE_URL: GUIDE }, async () => {
-    const shown = await card();
-    assert.equal(shown.elements().filter((el) => el.type === 'a' && el.props.href === GUIDE).length, 1, 'the card does not link to the configured guide');
-    assert.ok(!copy?.NO_GUIDE_SENTENCE || !shown.text().includes(copy.NO_GUIDE_SENTENCE), 'the card says no guide is named while it links to one');
-    shown.unmount();
-  });
-});
+}

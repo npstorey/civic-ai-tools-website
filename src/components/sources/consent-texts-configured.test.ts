@@ -38,7 +38,6 @@ import {
   mount,
   registerSurfaceHooks,
   sessions,
-  textOf,
   type Surface,
 } from './surface-test-harness.ts';
 
@@ -120,15 +119,17 @@ test('D1: the privacy page says withdrawing stops what is sent and cannot take b
 
 // --- D3 ---------------------------------------------------------------------------------------
 
-test('D3: set, the card\'s endpoint row carries the operator\'s statement, and the privacy page has "The model endpoint"', async () => {
+// UX-2 P4b (D6 B): the card no longer lists the recipients, the model endpoint's row among them, so the operator's
+// statement is the privacy page's alone, where "The model endpoint" carries it.
+test('D3 (UX-2 P4b D6 B): set, the card lists no endpoint row and states nothing of it; the privacy page has "The model endpoint" with the operator\'s statement', async () => {
   await under({ SITE_OPERATOR_STATES_NO_TRAINING: '1' }, async () => {
     const statement = need('ENDPOINT_NO_TRAINING');
     assert.match(statement, /do not train/);
     assert.doesNotMatch(statement, /\bsends\b|retain|retention|keep/i, 'the statement says more than training');
     const shown = await card();
-    const row = shown.elements().filter((el) => el.props['data-recipient'] === 'model-endpoint');
-    assert.equal(row.length, 1, 'premise: the card lists the model endpoint');
-    assert.ok(textOf(row[0]).includes(statement), `the endpoint row does not carry the operator's statement: ${textOf(row[0])}`);
+    assert.ok(shown.buttons('Allow').length === 1, 'premise: the card renders');
+    assert.equal(shown.elements().filter((el) => el.props['data-recipient'] === 'model-endpoint').length, 0, 'the card still lists the model endpoint');
+    assert.ok(!shown.text().includes(statement), 'the card states the operator\'s statement');
     shown.unmount();
     const page = privacyText();
     assert.ok(page.headings.includes(need('PRIVACY_ENDPOINT_HEADING')), 'the privacy page has no "The model endpoint" section');
@@ -136,13 +137,12 @@ test('D3: set, the card\'s endpoint row carries the operator\'s statement, and t
   });
 });
 
-test('D3: unset, the endpoint row stays as derived and the privacy page has no "The model endpoint" section', async () => {
+test('D3 (UX-2 P4b D6 B): unset, the card lists no endpoint row, and the privacy page has no "The model endpoint" section', async () => {
   await under({}, async () => {
     const statement = need('ENDPOINT_NO_TRAINING');
     const shown = await card();
-    const row = shown.elements().filter((el) => el.props['data-recipient'] === 'model-endpoint');
-    assert.equal(row.length, 1, 'premise: the card lists the model endpoint');
-    assert.ok(!textOf(row[0]).includes(statement), 'the endpoint row states what no operator supplied');
+    assert.equal(shown.elements().filter((el) => el.props['data-recipient'] === 'model-endpoint').length, 0, 'the card still lists the model endpoint');
+    assert.ok(!shown.text().includes(statement), 'the card states what no operator supplied');
     shown.unmount();
     const page = privacyText();
     assert.ok(!page.headings.includes(need('PRIVACY_ENDPOINT_HEADING')), 'the privacy page has a model-endpoint section no operator supplied');
@@ -152,23 +152,24 @@ test('D3: unset, the endpoint row stays as derived and the privacy page has no "
 
 // --- D4, and correction 5 -----------------------------------------------------------------------
 
-test('D4: the analytics line and the cookie sentence render below Allow and Not now; the full-statement pointer stays above; the buttons are alike', async () => {
+test('D4: the analytics line and the cookie sentence render below Allow and Don\'t allow (UX-2 P4b, item 8); the full-statement pointer stays above; the buttons are alike', async () => {
   await under({ NEXT_PUBLIC_ANALYTICS_SERVICE: 'plausible', NEXT_PUBLIC_ANALYTICS_ID: 'pa-fixture', DATABASE_URL: 'fixture' }, async () => {
     const shown = await card();
     const markup = shown.text();
-    const buttons = markup.indexOf('Not now');
-    assert.ok(buttons > 0, 'the card has no Not now');
+    const buttons = markup.indexOf("Don't allow");
+    assert.ok(buttons > 0, 'the card has no Don\'t allow');
     assert.ok(markup.indexOf('Allow') < buttons, 'premise: Allow comes first');
     const analytics = need('CARD_ANALYTICS');
     const cookie = need('CARD_COOKIE_WITH_ACCOUNTS');
     assert.ok(markup.indexOf(analytics) > buttons, 'the analytics line is not below the buttons');
     assert.ok(markup.indexOf(cookie) > buttons, 'the cookie sentence is not below the buttons');
     const full = 'The privacy page has the full statement.';
-    assert.ok(markup.indexOf(full) >= 0 && markup.indexOf(full) < markup.indexOf('Allow'), 'the full-statement pointer is not above the buttons');
+    // The effect sentence above the buttons opens "Allow:" (item 37), so the buttons are read as the pair's text.
+    assert.ok(markup.indexOf(full) >= 0 && markup.indexOf(full) < markup.indexOf("Allow Don't allow"), 'the full-statement pointer is not above the buttons');
     const [allow] = shown.buttons('Allow');
-    const [notNow] = shown.buttons('Not now');
-    assert.deepEqual(allow.props.style, notNow.props.style, 'Allow and Not now differ in size or style');
-    assert.equal(allow.props.className, notNow.props.className);
+    const [dontAllow] = shown.buttons("Don't allow");
+    assert.deepEqual(allow.props.style, dontAllow.props.style, 'Allow and Don\'t allow differ in size or style');
+    assert.equal(allow.props.className, dontAllow.props.className);
     shown.unmount();
   });
 });
@@ -191,26 +192,26 @@ test('correction 5: "on your account" and "your dashboard" render only with a da
   const cookieWith = need('CARD_COOKIE_WITH_ACCOUNTS');
   const cookieWithout = need('CARD_COOKIE_WITHOUT_ACCOUNTS');
   const withdrawWith = need('WITHDRAW_WITH_ACCOUNTS');
-  // T3 (#632 G7), T5 of R9 P3: the card states where to withdraw in its own sentences; the privacy page keeps its own.
-  const afterWith = need('CARD_CONTROLS_WITH_ACCOUNTS');
-  const afterWithout = need('CARD_CONTROLS_WITHOUT_ACCOUNTS');
+  // UX-2 P4b (D6 B): the card's own where-to-withdraw sentences (T5) are dropped; ASK1's line points to Data source
+  // settings on every instance, and the privacy page's withdraw sentence is item 40's one sentence for both.
   await under({ DATABASE_URL: 'fixture' }, async () => {
     const shown = await card();
-    assert.ok(shown.text().includes(cookieWith) && shown.text().includes(afterWith), 'with a database, the card does not say the answer can be kept on an account');
+    assert.ok(shown.text().includes(cookieWith), 'with a database, the card does not say the answer can be kept on an account');
     shown.unmount();
     assert.ok(privacyText().text.includes(withdrawWith));
   });
   await under({}, async () => {
     const shown = await card();
-    assert.ok(shown.text().includes(cookieWithout) && shown.text().includes(afterWithout), 'with no database, the card lacks its no-account sentences');
+    assert.ok(shown.text().includes(cookieWithout), 'with no database, the card lacks its no-account sentence');
     assert.ok(!/on your account|your dashboard/i.test(shown.text()), 'with no database, the card speaks of an account or a dashboard');
     shown.unmount();
     assert.ok(!/on your account|your dashboard/i.test(privacyText().text), 'with no database, the privacy page speaks of an account or a dashboard');
   });
 });
 
-test('fact 4 (Q7, correction 3): both texts say where to withdraw: the panel, or the dashboard\'s Sources tab if signed in', async () => {
-  assert.equal(need('WITHDRAW_WITH_ACCOUNTS'), 'To withdraw consent, use the panel beside the question box, or the Sources tab on your dashboard if you are signed in.');
+test('fact 4 (Q7, correction 3; UX-2 P4b item 40): both texts say where to withdraw, in one sentence: Data source settings', async () => {
+  assert.equal(need('WITHDRAW_WITH_ACCOUNTS'), 'To withdraw consent, open Data source settings.');
+  assert.equal(need('WITHDRAW_WITHOUT_ACCOUNTS'), 'To withdraw consent, open Data source settings.');
 });
 
 test('correction 6: the re-ask sentence says its list is not complete', () => {

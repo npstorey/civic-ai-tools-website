@@ -315,7 +315,11 @@ function* hostElementsIn(node: unknown): Generator<HostElement> {
   yield* hostElementsIn(node.props.children);
 }
 
-/** What a reader reads in a piece of markup: tags removed, entities decoded, whitespace collapsed. */
+/**
+ * What a reader reads in a piece of markup: tags removed, entities decoded, whitespace collapsed. A tag becomes a
+ * space, so a link inside a sentence would read "settings , then"; the space a tag left before punctuation is dropped,
+ * as a browser's text has none there (UX-2 P4b: the pointers to Data source settings are links mid-sentence).
+ */
 export function readableText(markup: string): string {
   return markup
     .replace(/<!-- -->/g, '')
@@ -327,6 +331,7 @@ export function readableText(markup: string): string {
     .replace(/&nbsp;/g, ' ')
     .replace(/&amp;/g, '&')
     .replace(/\s+/g, ' ')
+    .replace(/ ([,.;:!?])/g, '$1')
     .trim();
 }
 

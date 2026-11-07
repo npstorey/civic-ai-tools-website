@@ -200,7 +200,7 @@ test('criterion D2: a re-ask change shows the card instead of a line', async () 
   await page.type(box[0], 'What was the median household income in the Bronx?');
   await page.submit(page.elements().filter((el) => el.type === 'form')[0]);
   assert.deepEqual(net.sent.filter((r) => QUERY_ROUTES.includes(r.path)).map((r) => r.path), [], 'the question was sent on a consent that needs asking again');
-  assert.ok(page.buttons('Allow').length === 1 && page.buttons('Not now').length === 1, `a re-ask change shows no card: ${page.text().slice(0, 300)}`);
+  assert.ok(page.buttons('Allow').length === 1 && page.buttons("Don't allow").length === 1, `a re-ask change shows no card: ${page.text().slice(0, 300)}`);
   page.unmount();
   const shown = await mount(h(Panel));
   assert.equal(noticeLines(shown).length, 0, 'a re-ask change shows a notice line in the panel');

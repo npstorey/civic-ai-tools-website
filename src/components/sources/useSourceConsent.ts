@@ -300,7 +300,7 @@ export function cancelConsentPauses(): void {
 }
 
 /** A reader's answer at a pause (UX-2 P4b, L10): Allow, "Don't allow" (`off`) or "Allow all data sources" (`allow-all`). */
-export type PauseAnswer = 'allow' | 'off' | 'allow-all' | 'not-now';
+export type PauseAnswer = 'allow' | 'off' | 'allow-all';
 
 /**
  * Post the reader's answer to a pause, and keep what the route said. Each

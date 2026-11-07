@@ -124,10 +124,10 @@ test('UX-2 P4b criterion 3 (D6 B): the card renders none of the reach and pointe
   const { shown } = await card();
   const text = shown.text();
   const statement = await buildFlowsStatement();
-  const reach = copy.cardReachSentence(statement.sources.map((s: Mod) => readerSourceName(s)));
-  const recipients = statement.recipients.length + statement.sources.reduce((n: number, s: Mod) => n + s.recipients.length, 0);
-  assert.ok(!text.includes(reach), 'the card renders cardReachSentence');
-  assert.ok(!text.includes(copy.cardPointerSentence(recipients)), 'the card renders cardPointerSentence');
+  // The reach and pointer sentences by their fixed words (R9 P3's T3 and T4), since D6 B retires the builders too.
+  assert.ok(!text.includes('Your question can reach one model service and'), 'the card renders cardReachSentence');
+  for (const name of statement.sources.map((s: Mod) => readerSourceName(s) as string)) assert.ok(!text.includes(`They are ${name}`) && !text.includes(`It is ${name}.`), `the card names ${name} in a reach sentence`);
+  assert.ok(!text.includes('says it keeps is listed below, under'), 'the card renders cardPointerSentence');
   assert.ok(!text.includes(copy.LOCAL_ONLY_OFFER), 'the card renders <LocalOnlyOffer>');
   for (const controls of ['You can set each source to On, Ask first or Off beside the question box at any time.']) {
     assert.ok(!text.includes(controls), 'the card renders CARD_CONTROLS_*');

@@ -29,10 +29,10 @@
 // hold's end and the entry's end, where today's card already shows no
 // buttons; the entry's-end leg is read one millisecond either side of 600 s.
 //
-// UX-2 P4b: the buttons are "Allow", "Don't allow" and "Allow all data
-// sources" (items 8, 9; ASK2 = B), during the hold and after it (the third
-// button after the hold is this test's reading of "on both renderings"); the
-// after-hold words are item 39's; "Don't allow" turns the source Off (D7 C).
+// UX-2 P4b: during the hold the buttons are "Allow", "Don't allow" and "Allow
+// all data sources" (items 8, 9; ASK2 = B); after it, "Allow" and "Don't allow"
+// only (ruled W2, relay 26: the run has moved on and the card no longer asks);
+// the after-hold words are item 39's; "Don't allow" turns the source Off (D7 C).
 //
 // Run with: npm test
 
@@ -111,6 +111,12 @@ const ALLOWED_AFTER = 'You chose Allow. It is On for later questions.';
 const DECLINED_AFTER = "You chose Don't allow. It is Off for later questions.";
 /** The pause's buttons (UX-2 P4b, items 8 and 9; ASK2 = B): the pair, then the lighter third. */
 const PAUSE_BUTTONS = ['Allow', "Don't allow", 'Allow all data sources'];
+/**
+ * After the hold's end, the pair only. Ruled W2 (relay 26): once the hold has ended the run has moved on and the card
+ * no longer asks, so "Allow all data sources", which promises the question goes on without asking again, would promise
+ * what it cannot do. The card offers item 39's two afterChoices only.
+ */
+const AFTER_HOLD_BUTTONS = ['Allow', "Don't allow"];
 const GONE = 'This question is no longer waiting for an answer.';
 const DECIDED = 'An answer was already given for this question.';
 const WAIT = 'The question waits up to a minute for your answer.';
@@ -230,13 +236,13 @@ test('criterion 2: after the hold\'s end the card says the run went on without t
   const { page, tick } = await pausedOnClock();
   await tick(60_000);
   const card = stepsCard(page);
-  assert.deepEqual(labels(card), PAUSE_BUTTONS, `the card after the hold's end: ${card.text}`);
+  assert.deepEqual(labels(card), AFTER_HOLD_BUTTONS, `the card after the hold's end: ${card.text}`);
   for (const sentence of [ENDED, STILL, AFTER_CHOICES]) assert.ok(card.text.includes(sentence), `the card after the hold lacks "${sentence}": ${card.text}`);
   assert.ok(!card.text.includes(WAIT), 'the card still says the question waits');
   assert.equal(card.outcome, null, `the card shows an outcome before any answer: ${card.outcome}`);
   const row = rowCards(page);
   assert.equal(row.length, 1, `the row shows ${row.length} cards after the hold's end: ${summary(page)}`);
-  assert.deepEqual(labels(row[0]), PAUSE_BUTTONS, 'the row\'s card lost its buttons at the hold\'s end');
+  assert.deepEqual(labels(row[0]), AFTER_HOLD_BUTTONS, 'the row\'s card lost its buttons at the hold\'s end');
   for (const sentence of [ENDED, STILL, AFTER_CHOICES]) assert.ok(row[0].text.includes(sentence), `the row's card lacks "${sentence}"`);
   // The two buttons stay equal (fix round 1).
   assert.deepEqual(card.buttons[0].props.style, card.buttons[1].props.style, 'the two buttons are styled differently after the hold');
@@ -275,7 +281,7 @@ test('criterion 2 (UX-2 P4b criterion 5): Don\'t allow after the hold says it is
 test('criterion 2: the buttons stay until the entry\'s end, 600 s from the pause\'s start; then they go, the card says the question is no longer waiting, and the row\'s card goes', async () => {
   const { page, key, tick } = await pausedOnClock();
   await tick(599_999);
-  assert.deepEqual(labels(stepsCard(page)), PAUSE_BUTTONS, `the buttons went before the entry's end: ${stepsCard(page).text}`);
+  assert.deepEqual(labels(stepsCard(page)), AFTER_HOLD_BUTTONS, `the buttons went before the entry's end: ${stepsCard(page).text}`);
   assert.equal(rowCards(page).length, 1, `the row's card went before the entry's end: ${summary(page)}`);
   await tick(1);
   const card = stepsCard(page);
@@ -383,7 +389,7 @@ test('note 4, ProgressLog (the home page): the run moves on and completes with t
   stream.close();
   await settle(page);
   const card = stepsCard(page);
-  assert.deepEqual(labels(card), PAUSE_BUTTONS, `the card in the steps lost its buttons when the run moved on: ${card.text}`);
+  assert.deepEqual(labels(card), AFTER_HOLD_BUTTONS, `the card in the steps lost its buttons when the run moved on: ${card.text}`);
   assert.ok(card.text.includes(ENDED) && card.text.includes(STILL), `the card after the run moved on: ${card.text}`);
 });
 
@@ -410,6 +416,6 @@ test('note 4, AnswerView (/ask, notebook mode): the run moves on with the questi
   stream.push({ type: 'phase_a_progress', message: 'Searching for datasets about service requests', phase: 'tool_start', iteration: 2, args: { query: 'service requests' }, toolName: 'search', operationType: 'search' });
   await settle(page);
   const card = stepsCard(page);
-  assert.deepEqual(labels(card), PAUSE_BUTTONS, `the card in the step view lost its buttons when the run moved on: ${card.text}`);
+  assert.deepEqual(labels(card), AFTER_HOLD_BUTTONS, `the card in the step view lost its buttons when the run moved on: ${card.text}`);
   assert.ok(card.text.includes(ENDED) && card.text.includes(STILL), `the card after the run moved on: ${card.text}`);
 });

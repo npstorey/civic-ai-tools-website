@@ -398,8 +398,9 @@ const FRIENDLY_STREAM_COPY: Record<StreamErrorKind, string> = {
   // card in its place (W3); this copy is what a surface without one says.
   consent_required: 'This site asks for your consent before it sends your question anywhere, so nothing has been sent yet.',
   // R6 W3: a consent is in force, and every source is Off or Ask first, so
-  // nothing was sent. The panel beside the question box is what turns one On.
-  no_sources_on: 'Every data source is set to Off or Ask first, so nothing was sent. Turn a source On in the panel beside the question box, then ask again.',
+  // nothing was sent. Data source settings (the Settings overlay) is what
+  // turns one On (UX-2 P4b, items 42/50; a link where the surface can carry one).
+  no_sources_on: 'Every data source is set to Off or Ask first, so nothing was sent. Turn a source On in Data source settings, then ask again.',
   generic: 'Something went wrong while running this query. Please try again in a moment.',
 };
 

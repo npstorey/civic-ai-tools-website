@@ -774,7 +774,7 @@ export const RECIPIENT_STATEMENTS: Readonly<Record<string, (ctx: Context) => Sta
                   [
                     'A question may need a data source set to Ask first. ' +
                       'Then the site cannot stop to ask you, because it has no store to keep your answer in. ' +
-                      'The source is not used for that question. You can turn it On in the panel for your next question.',
+                      'The source is not used for that question. You can turn it On in Data source settings for your next question.',
                   ],
                   ['env:KV_REST_API_URL', 'env:KV_REST_API_TOKEN', 'env:SOURCE_ROUTING'],
                 ),

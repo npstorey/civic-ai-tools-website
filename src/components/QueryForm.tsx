@@ -16,12 +16,13 @@ import {
   type QueryMode,
 } from '@/lib/query-presentation';
 import { parseModelsResponse, type Model } from '@/lib/model-list';
-import { friendlyStreamError, MODELS_LOAD_ERROR } from '@/lib/streaming';
-import { JUST_IN_TIME_LINE, NOT_NOW_LINE } from '@/lib/sources/copy';
+import { MODELS_LOAD_ERROR } from '@/lib/streaming';
+import { DONT_ALLOW_LINE, JUST_IN_TIME_LINE } from '@/lib/sources/copy';
 import { readerSourceName } from '@/lib/sources/source-name';
 import ConsentCard from '@/components/sources/ConsentCard';
 import SourcesPanel from '@/components/sources/SourcesPanel';
 import LocalOnlyOffer from '@/components/sources/LocalOnlyOffer';
+import NoSourcesOnLine from '@/components/sources/NoSourcesOnLine';
 import { currentStates, useSourceConsent, type SourceStateValue } from '@/components/sources/useSourceConsent';
 import RateLimitBanner from './RateLimitBanner';
 import { useDefaultPortalArg, usePortalLocked } from '@/components/DefaultPortalProvider';
@@ -929,12 +930,12 @@ export default function QueryForm({
       )}
       {declined && !cardOpen && (
         <p role="status" style={{ margin: 0, fontSize: '14px', lineHeight: 1.6, color: 'var(--text-secondary)' }}>
-          {NOT_NOW_LINE} <LocalOnlyOffer statement={consent.statement} />
+          {DONT_ALLOW_LINE} <LocalOnlyOffer statement={consent.statement} />
         </p>
       )}
       {noneOn && !cardOpen && (
         <p role="status" style={{ margin: 0, fontSize: '14px', lineHeight: 1.6, color: 'var(--text-secondary)' }}>
-          {friendlyStreamError({ code: 'no_sources_on' })}
+          <NoSourcesOnLine />
         </p>
       )}
       <details open={sourcesOpen} onToggle={(e) => setSourcesOpen(e.currentTarget.open)}>

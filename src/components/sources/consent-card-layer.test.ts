@@ -1,16 +1,12 @@
 // R9 P3 (#680; #660, D2 = A of the UX pass): the first-consent card as a decision layer.
 //
-// CRITERION 1. Above its two buttons the card renders exactly the short layer, in order: the heading,
-// T1, T2, T3 (one model service and the statement's sources, counted, then named in a sentence of
-// their own), T4 (the statement's recipient count, pointing to the summary by its first words), the
-// local-only offer, T5, T6 (the privacy link) and T7. No kept-by line renders above the buttons.
-// Directly below them, one `<details>`, shut by default (no `open`), whose summary is T8 with the
-// same count; then the analytics line where analytics is on, and the cookie sentence (amendment 1:
-// the disclosure below the buttons, so opening it cannot move them). Inside the disclosure: the lead
-// line (T11), the base recipients each as a line (the model's labelled "Model service"), the
-// sandbox definition directly above the per-source lines (only where a source runs in this site's
-// sandbox), and one line per data source grouping its recipients, the sandbox host's kept-by line
-// given in full once and named "as above" after. The two buttons keep their size and style.
+// CRITERION 1, AS UX-2 P4b CUTS THE CARD TO D6 B (ASK1 = A, ASK2 = B). Above its two buttons the card
+// renders exactly, in order: the heading, T1, T2 (item 34: the ruled CARD_LEAD), what each answer does
+// (item 37 without its Allow-all half), ASK1's line and T6 (the privacy link). No kept-by line, no
+// recipient line and no disclosure render anywhere on the card: the privacy page is its full layer.
+// Below the buttons: the link to Data source settings, the analytics line where analytics is on, and
+// the cookie sentence. The two buttons keep their size and style. R9 P3's T3, T4, T5, T8, T10 and T11
+// and the local-only offer left the card (D6 B); the sandbox definition's lifecycle pins left with T10.
 //
 // CRITERION 2 (the parts this file asserts). The flows statement, its base version and its hash, and
 // the privacy page's statements, are byte-identical to the base's (`607d101`), pinned below by
@@ -19,20 +15,14 @@
 // (`consent.ts`) and the privacy page's endpoint heading stay "The model endpoint". "Where this
 // question went" is asserted in `src/lib/flows/where-it-went.test.ts`.
 //
-// THE SANDBOX DEFINITION is the owner's ruling after the second research check (amendment 1), which
-// replaced the first ruling's "deleted after the question" because the hosting module keeps the
-// sandbox; its two figures are pinned here to `src/lib/mcp/hosting/lifecycle.ts`, read as text, so a
-// change to either setting fails.
-//
 // WHAT IS DRIVEN. The real card on the surface harness (`./surface-test-harness.ts`), reading the
 // REAL `/api/flows` and `/api/sources/consent` handlers, at the reference instance's six sources
 // (the change log's 2026-10-21 entry, with its five base recipients: 14 in all), at the consent-text
 // tests' three sources (five recipients), and at two sources with no hosted one.
 //
 // WHAT MAKES IT ABLE TO FAIL. Every expected sentence is written out here, never read from
-// `copy.ts`. At the base the card lists every recipient above its buttons and has no disclosure; the
-// names include a comma-bearing one, so a list joined only by commas reads as seven names, and the
-// six-source configuration has four sandbox holders, so a list that prints each in full is counted.
+// `copy.ts`. Before P4b the card carried T3, T4, the offer, T5 and T7 above its buttons and the
+// recipients' disclosure below them, each of which these assertions refuse.
 //
 // Run with: npm test
 
@@ -52,7 +42,6 @@ import {
   readableText,
   registerSurfaceHooks,
   sessions,
-  textOf,
   type HostElement,
   type Surface,
 } from './surface-test-harness.ts';
@@ -106,7 +95,6 @@ const Card = (await load('components/sources/ConsentCard.tsx')).default as Compo
 const flowsRoute = await load('app/api/flows/route.ts');
 const consentRoute = await load('app/api/sources/consent/route.ts');
 const { buildFlowsStatement, statementHash } = await load('lib/flows/statement.ts');
-const { readerSourceName } = await load('lib/sources/source-name.ts');
 const facts = await load('lib/privacy-facts.ts');
 const copy = await load('lib/sources/copy.ts');
 
@@ -124,27 +112,22 @@ async function card(): Promise<Surface> {
 
 // --- The ruled words, written out ------------------------------------------------------------
 
+// UX-2 P4b (D6 B, ASK1 = A, ASK2 = B): above the buttons the heading, T1 and T2 (item 34: the ruled CARD_LEAD), what
+// each answer does (item 37 without its Allow-all half), ASK1's line and T6; below them the link to Data source
+// settings, the analytics line and the cookie sentence. T3, T4, the local-only offer, T5, T8, T10 and T11 left the
+// card with the recipients' disclosure; the privacy page is the card's full layer.
 const HEADING = 'Before your first question';
 const T1 = 'To answer, this site sends your question to a model service, and sends the searches the model writes to the data sources that are On.';
 // Amendment 1 (the owner's rulings after the second research check): T2 is the privacy page's ruled sentence.
 const T2 = 'Your question is not sent beyond this site before you answer.';
-const T3: Record<Config, string> = {
-  six: 'Your question can reach one model service and six data sources. They are Socrata; Data Commons; NYC Charter, Laws and Rules; NYC Checkbook; NYC City Record; and NYS Open Legislation.',
-  three: 'Your question can reach one model service and three data sources. They are Socrata; Data Commons; and NYC Charter, Laws and Rules.',
-  two: 'Your question can reach one model service and two data sources. They are Socrata and Data Commons.',
-};
 const COUNT: Record<Config, { n: number; words: string }> = { six: { n: 14, words: '14' }, three: { n: 5, words: 'five' }, two: { n: 4, words: 'four' } };
-const T4 = (words: string) => `What each of the ${words} recipients says it keeps is listed below, under "Show the ${words} recipients".`;
-const LOCAL_ONLY = 'You can also run this whole system on your own computer, with your own model and data sources. This site does not name a deployment guide.';
-const T5_NO_DB = 'You can set each source to On, Ask first or Off beside the question box at any time. You can withdraw consent there.';
-const T5_DB = "You can set each source to On, Ask first or Off beside the question box at any time. You can withdraw consent there, or on your dashboard's Sources tab if you are signed in.";
+const EFFECT = "Allow: your question is sent to the model service. A data source is used only if it is On, or if it is set to Ask first and you allow it when asked. Don't allow: nothing is sent. You are asked again when you send a question.";
+const ASK1 = 'You can change or withdraw this in Data source settings.';
 const T6 = 'The privacy page has the full statement.';
-const T7 = '"Allow" turns on the sources shown as On and sends your question. "Not now" sends nothing.';
-const T8 = (words: string) => `Show the ${words} recipients and what each says it keeps`;
-const T10 = 'A sandbox is a computer this site creates in the cloud to search a data source. It stops when no one has searched for 10 minutes. This site keeps a saved copy of it for 30 days after its last use.';
-const T11 = 'The searches the model writes can include words from your question.';
+const SETTINGS_LINK = 'Data source settings';
 const ANALYTICS = 'An analytics service counts page visits. The privacy page names it and says how to object.';
 const COOKIE_NO_DB = 'We keep your answer for this browser session in a cookie.';
+const COOKIE_DB = 'We keep your answer for this browser session in a cookie, or on your account if signed in.';
 
 /** The buttons as the base styles them (D4 = A): equal, and unchanged by this phase. */
 const BUTTON_STYLE = {
@@ -183,96 +166,36 @@ async function show(config: Config, extra: Record<string, string> = {}): Promise
   });
 }
 
-/**
- * A line as a reader reads it: `textOf` turns every tag into a space, so "<strong>Socrata</strong>: "
- * reads "Socrata : "; the space before a mark and after an opening parenthesis is the harness's, not
- * the page's (the headless Chrome read in the phase report shows the page's own spacing).
- */
-const tidy = (text: string): string => text.replace(/\s+([:;,.)])/g, '$1').replace(/\(\s+/g, '(');
-
 const recipientsOf = (statement: Mod): Mod[] => [...statement.recipients, ...statement.sources.flatMap((s: Mod) => s.recipients)];
 
-// --- Criterion 1 ---------------------------------------------------------------------------------
+// --- Criterion 1, as UX-2 P4b cuts the card to D6 B ------------------------------------------
 
 for (const config of ['six', 'three', 'two'] as const) {
-  test(`criterion 1 (${config} sources): above the buttons, exactly the short layer, with the statement's count and names`, async () => {
-    const { surface, statement, above, elements, firstButton } = await show(config);
+  test(`criterion 1 (${config} sources; UX-2 P4b D6 B): above the buttons, exactly the cut layer`, async () => {
+    const { surface, statement, above } = await show(config);
     try {
       assert.equal(statement.sources.length, { six: 6, three: 3, two: 2 }[config], 'premise: the configuration\'s sources');
       assert.equal(recipientsOf(statement).length, COUNT[config].n, 'premise: the statement\'s recipient count');
-      assert.deepEqual(statement.sources.map((s: Mod) => readerSourceName(s)).length, statement.sources.length);
-      const expected = [HEADING, T1, T2, T3[config], T4(COUNT[config].words), LOCAL_ONLY, T5_NO_DB, T6, T7].join(' ');
-      assert.equal(above, expected, 'the text above the buttons is not the short layer');
+      assert.equal(above, [HEADING, T1, T2, EFFECT, ASK1, T6].join(' '), 'the text above the buttons is not the cut layer');
       for (const words of KEPT_BY_WORDS) assert.ok(!above.includes(words), `a kept-by line renders above the buttons ("${words}")`);
-      const recipientLines = elements.map((el, i) => [el, i] as const).filter(([el]) => typeof el.props['data-recipient'] === 'string');
-      assert.ok(recipientLines.length > 0, 'premise: the card lists its recipients somewhere');
-      assert.ok(recipientLines.every(([, i]) => i > firstButton), 'a recipient line renders above the buttons');
     } finally {
       surface.unmount();
     }
   });
 
-  test(`criterion 1 (${config} sources): the recipients sit in one disclosure, closed by default, whose summary carries the count`, async () => {
-    const { surface, statement, elements, below } = await show(config);
+  test(`criterion 1 (${config} sources; UX-2 P4b D6 B): no recipient line and no disclosure; below the buttons the settings link, then analytics where on, then the cookie sentence`, async () => {
+    const { surface, elements, below } = await show(config);
     try {
-      const details = elements.filter((el) => el.type === 'details');
-      assert.equal(details.length, 1, 'the card has no disclosure, or more than one');
-      const [disclosure] = details;
-      assert.ok(!disclosure.props.open, 'the disclosure is open by default');
-      assert.ok('data-consent-recipients' in disclosure.props, 'the disclosure is not marked data-consent-recipients');
-      const summaries = elements.filter((el) => el.type === 'summary');
-      assert.equal(summaries.length, 1);
-      assert.equal(textOf(summaries[0]), T8(COUNT[config].words), 'the summary does not carry the statement\'s count');
-      const inside = textOf(disclosure);
-      // Every recipient's line is inside the disclosure, in the statement's order.
-      const inner = elements.slice(elements.indexOf(disclosure));
-      const listed = inner.filter((el) => typeof el.props['data-recipient'] === 'string').map((el) => el.props['data-recipient']);
-      assert.deepEqual(listed, recipientsOf(statement).map((r) => r.id), 'the disclosure does not list exactly the statement\'s recipients, in order');
-      // The lead line first, after the summary.
-      assert.ok(inside.startsWith(`${T8(COUNT[config].words)} ${T11}`), `the disclosure does not open with its lead line: ${inside.slice(0, 200)}`);
-      // The base recipients each as a line, the model's labelled "Model service".
-      for (const r of statement.recipients as Mod[]) {
-        const line = inner.find((el) => el.type === 'li' && el.props['data-recipient'] === r.id);
-        assert.ok(line, `${r.id}: no line of its own`);
-      }
-      const model = inner.find((el) => el.props['data-recipient'] === 'model-endpoint');
-      assert.ok(textOf(model!).startsWith('Model service ('), `the model's line is not labelled "Model service": ${textOf(model!)}`);
+      assert.equal(elements.filter((el) => el.type === 'details' || el.type === 'summary').length, 0, 'the card still carries a disclosure');
+      assert.equal(elements.filter((el) => typeof el.props['data-recipient'] === 'string' || typeof el.props['data-recipient-group'] === 'string').length, 0, 'the card still lists recipients');
+      for (const words of KEPT_BY_WORDS) assert.ok(!surface.text().includes(words), `a kept-by line renders on the card ("${words}")`);
       assert.ok(!/model endpoint/i.test(surface.text()), 'the card still says "model endpoint"');
-      // One line per data source, grouping its recipients.
-      const groups = inner.filter((el) => typeof el.props['data-recipient-group'] === 'string');
-      assert.deepEqual(groups.map((g) => g.props['data-recipient-group']), statement.sources.map((s: Mod) => s.sourceId), 'not one line per data source');
-      for (const source of statement.sources as Mod[]) {
-        const group = groups.find((g) => g.props['data-recipient-group'] === source.sourceId)!;
-        const text = tidy(textOf(group));
-        assert.ok(text.startsWith(`${readerSourceName(source)}: `), `${source.sourceId}: the line does not open with its name: ${text}`);
-        for (const r of source.recipients as Mod[]) {
-          const span = elements.find((el) => el.props['data-recipient'] === r.id)!;
-          assert.ok(text.includes(tidy(textOf(span))), `${r.id}: its clause is not on its source's line`);
-          const verb = r.runsAt === 'instance-sandbox' ? "runs in this site's sandbox — " : `reaches ${r.host} — `;
-          assert.ok(textOf(span).toLowerCase().startsWith(verb.toLowerCase()), `${r.id}: the clause reads ${textOf(span)}`);
-        }
-      }
-      // The definition: directly above the per-source lines, and only where a source runs in this site's sandbox.
-      const definitions = inner.filter((el) => el.type === 'p' && textOf(el) === T10);
-      const hosted = statement.sources.some((s: Mod) => s.recipients.some((r: Mod) => r.runsAt === 'instance-sandbox'));
-      assert.equal(definitions.length, hosted ? 1 : 0, hosted ? 'no sandbox definition' : 'a sandbox definition where no source runs in one');
-      if (hosted) {
-        const at = inner.indexOf(definitions[0]);
-        assert.equal(inner[at + 1]?.type, 'ul', 'the definition is not directly above the per-source list');
-        assert.equal(inner.indexOf(groups[0]), at + 2, 'the definition is not directly above the per-source lines');
-        assert.ok(inside.indexOf(T10) > inside.indexOf(textOf(inner.find((el) => el.props['data-recipient'] === statement.recipients.at(-1).id)!)), 'the definition is not after the base recipients');
-      }
-      // Amendment 1: the disclosure sits directly below the two buttons, so opening it cannot move them;
-      // the analytics line where analytics is on and the cookie sentence follow it.
-      const lastButton = elements.map((el) => el.type).lastIndexOf('button');
-      assert.equal(elements[lastButton + 1], disclosure, 'the disclosure is not the element directly below the two buttons');
-      assert.ok(elements.indexOf(disclosure) > lastButton, 'part of the disclosure renders above the buttons');
-      const summaryAt = below.indexOf(T8(COUNT[config].words));
+      const link = below.indexOf(SETTINGS_LINK);
       const cookie = below.indexOf(COOKIE_NO_DB);
-      assert.ok(summaryAt > 0 && cookie > summaryAt, 'the cookie sentence is not below the disclosure');
+      assert.ok(link > 0 && cookie > link, `the cookie sentence is not below the settings link: ${below}`);
       if (config === 'six') {
         const analytics = below.indexOf(ANALYTICS);
-        assert.ok(analytics > summaryAt && analytics < cookie, 'the analytics line is not between the disclosure and the cookie sentence');
+        assert.ok(analytics > link && analytics < cookie, 'the analytics line is not between the settings link and the cookie sentence');
       }
     } finally {
       surface.unmount();
@@ -280,67 +203,28 @@ for (const config of ['six', 'three', 'two'] as const) {
   });
 }
 
-test('criterion 1 (six sources): the sandbox host\'s kept-by line is given in full once; each later sandbox names it "as above"', async () => {
-  const { surface, statement, elements } = await show('six');
+test('criterion 1 (UX-2 P4b): with a database, the card names no dashboard, and the cookie sentence names the account', async () => {
+  const { surface, above, below } = await show('three', { DATABASE_URL: 'fixture' });
   try {
-    const sandboxes = recipientsOf(statement).filter((r) => r.runsAt === 'instance-sandbox');
-    assert.equal(sandboxes.length, 4, 'premise: four sources run in this site\'s sandbox');
-    const holder = sandboxes[0].keptBy[0];
-    assert.ok(sandboxes.every((r) => JSON.stringify(r.keptBy) === JSON.stringify([holder])), 'premise: the four sandboxes have one holder line');
-    const groups = elements.filter((el) => typeof el.props['data-recipient-group'] === 'string');
-    const lines = groups.map((g) => tidy(textOf(g))).join(' ');
-    assert.equal(lines.split(`${holder.holder}: not stated (its statement, read ${holder.readOn})`).length - 1, 1, `the sandbox host's line is not given once: ${lines}`);
-    assert.equal(lines.split(`${holder.holder}, as above`).length - 1, 3, `the later sandboxes do not say "as above": ${lines}`);
-    assert.equal(elements.filter((el) => el.type === 'a' && el.props.href === holder.statementUrl).length, 1, 'the sandbox host\'s statement is linked other than once');
-    // One hosted line, written out: Checkbook, its sandbox "as above", then its upstream host.
-    const checkbook = statement.sources.find((s: Mod) => s.sourceId === 'nyc-checkbook');
-    const upstream = checkbook.recipients[1];
-    const [k] = upstream.keptBy;
-    assert.equal(
-      tidy(textOf(groups.find((g) => g.props['data-recipient-group'] === 'nyc-checkbook')!)),
-      `NYC Checkbook: runs in this site's sandbox — Vercel, as above. Reaches ${upstream.host} — ${k.holder}: not stated (its statement, read ${k.readOn}).`,
-    );
-    assert.equal(
-      tidy(textOf(groups.find((g) => g.props['data-recipient-group'] === 'nyc-charter')!)),
-      `NYC Charter, Laws and Rules: runs in this site's sandbox — Vercel: not stated (its statement, read ${holder.readOn}).`,
-    );
+    assert.ok(!above.includes('dashboard') && !below.includes('dashboard'), `the card names the dashboard: ${above} ${below}`);
+    assert.ok(below.includes(COOKIE_DB), `the cookie sentence with a database: ${below}`);
   } finally {
     surface.unmount();
   }
 });
 
-test('criterion 1: with a database, T5 names the dashboard, in its two sentences', async () => {
-  const { surface, above } = await show('three', { DATABASE_URL: 'fixture' });
-  try {
-    assert.ok(above.includes(`${T5_DB} ${T6}`), `T5 with a database does not render above the buttons: ${above}`);
-  } finally {
-    surface.unmount();
-  }
-});
-
-test('criterion 1: the two buttons are unchanged in size and style, and still read Allow and Not now', async () => {
+test('criterion 1: the two buttons are unchanged in size and style, and read Allow and Don\'t allow (UX-2 P4b, item 8)', async () => {
   const { surface } = await show('six');
   try {
     const [allow] = surface.buttons('Allow');
-    const [notNow] = surface.buttons('Not now');
-    assert.ok(allow && notNow, 'the card does not offer Allow and Not now');
+    const [dontAllow] = surface.buttons("Don't allow");
+    assert.ok(allow && dontAllow, 'the card does not offer Allow and Don\'t allow');
     assert.deepEqual(allow.props.style, BUTTON_STYLE, 'Allow\'s style changed');
-    assert.deepEqual(notNow.props.style, BUTTON_STYLE, 'Not now\'s style changed');
-    assert.equal(allow.props.className, notNow.props.className);
+    assert.deepEqual(dontAllow.props.style, BUTTON_STYLE, 'Don\'t allow\'s style changed');
+    assert.equal(allow.props.className, dontAllow.props.className);
   } finally {
     surface.unmount();
   }
-});
-
-// --- The sandbox definition's figures, pinned to the hosting module (a hypothesis for the check) ----
-
-test('the sandbox definition\'s figures are the hosting module\'s: 10 minutes idle, a snapshot kept 30 days after its last use', () => {
-  const lifecycle = fs.readFileSync(path.join(SRC, 'lib/mcp/hosting/lifecycle.ts'), 'utf8');
-  assert.match(lifecycle, /export const DEFAULT_IDLE_WINDOW_MS = 10 \* 60_000;/, 'the idle window is no longer 10 minutes');
-  assert.match(lifecycle, /const SNAPSHOT_EXPIRATION_MS = 30 \* 24 \* 60 \* 60_000;/, 'the snapshot expiry is no longer 30 days');
-  assert.match(lifecycle, /persistent: true,/, 'a hosted source\'s sandbox is no longer persistent: the definition\'s "stops" and "saved copy" may no longer hold');
-  assert.match(lifecycle, /keepLastSnapshots: \{ count: 1 \}/);
-  assert.equal(copy.CARD_SANDBOX_DEFINITION, T10);
 });
 
 // --- Criterion 2: what this phase leaves byte for byte ---------------------------------------------
@@ -352,22 +236,27 @@ const sha = (value: unknown) => createHash('sha256').update(typeof value === 'st
  * The two `privacy` values were re-captured by the same computation in UX-2 PW2
  * (#729, G0-4 B), whose S4 and S6 move two privacy-page sentences to "analysis";
  * with only those two lines of `privacy-facts.ts` reverted, the base values return.
+ * UX-2 P4b re-captured the two `privacy` values and the consent sections' hash by the
+ * same computation: items 38, 40 and 41 and the seat's W1 re-word the privacy page's
+ * consent sentences, and the privacy golden moves on exactly the five lines H2 names.
+ * The flows statement, its base version and its hash are unchanged, so nobody is
+ * asked again.
  */
 const BASE: Record<'six' | 'three', { statement: string; version: string; hash: string; privacy: string }> = {
   six: {
     statement: 'df07040107fbcf939d9ad594cbdb8f21b22e538c90022b474483f0c2853f4669',
     version: '2489d0dda25a79b3286c380379c6d2c8202e66a77fe5b4f493f558a7ce190f9c',
     hash: '7683b5d59e2b39df3f941420a5ce44ad14539992d2b6850df60f7aa64fe4bc60',
-    privacy: '90ed3e53d6a89174c22a486cfccb0f8fabaefad679c3f6f7ab55f3f267487050',
+    privacy: '1ee0511b3f88a11f333f31df5c2089d45a26c9a8518a50ecb9f68b5f14882dd1',
   },
   three: {
     statement: '522fc92cad73b13f15ede0acaf16ce32b139d4b1438a5ee84dbe0d414c88813a',
     version: 'ce0f4f09dff9d9d998a00cca59b12ee92486752ce9d94ed1eb310eae01c69325',
     hash: '159e0475172c58c49d51f654dec0b74e75d24639452c7b1ff73eaf0558242696',
-    privacy: '416c8106d41d2a896dab22d2123bd573f6c4a8c0130319cc4e89712445e9a135',
+    privacy: 'd07ebfb3bd2c2e59a388d715ec36a7a986313c69dcf8ddb8e30136021dff83d6',
   },
 };
-const BASE_PRIVACY_CONSENT_SECTIONS = 'a33e19a6d21aa7c3ff2e5d806a635fbd5ea5067995057d08b622e4906b1d18d1';
+const BASE_PRIVACY_CONSENT_SECTIONS = '7a5ef839e4dc3ea1d4bad48c51ac0a3ffaaf37ddc902b8b102f10d4c05f2b698';
 
 for (const config of ['six', 'three'] as const) {
   test(`criterion 2 (${config} sources): the flows statement, its base version and hash, and the privacy page's statements are the base's, byte for byte`, async () => {

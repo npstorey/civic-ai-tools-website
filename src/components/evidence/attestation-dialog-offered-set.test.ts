@@ -61,6 +61,8 @@ const candidatesFor = (base: string) => [base, `${base}.ts`, `${base}.tsx`, path
 registerHooks({
   resolve(specifier, context, nextResolve) {
     const parent = (context as { parentURL?: string }).parentURL;
+    // UX-2 P4b: the consent card and the pause link to the Settings overlay with `next/link`, a CommonJS file.
+    if (specifier === 'next/link') return nextResolve('next/link.js', context);
     if (specifier.startsWith('@/')) {
       const found = firstFile(candidatesFor(path.join(SRC, specifier.slice(2))));
       if (found === null) throw new Error(`attestation dialog test hook: cannot resolve ${specifier}`);

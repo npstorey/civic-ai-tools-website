@@ -166,22 +166,16 @@ for (const { sourceId, env } of NEW_SOURCES) {
     });
   });
 
-  test(`R8 W3 criterion 5 (b) (${sourceId}): the card shows "<source>: … Reaches ${host} — …", and the row still runs at this site's sandbox`, async () => {
+  // UX-2 P4b (D6 B): the consent card no longer lists the recipients or their hosts (the flows statement above still
+  // names the upstream host as a recipient of its own). The privacy row names each holder once, as before.
+  test(`R8 W3 criterion 5 (b) (${sourceId}; UX-2 P4b D6 B): the card lists no recipient and names no ${host}; the privacy row names each holder once, and the row still runs at this site's sandbox`, async () => {
     await under(env, async () => {
       const Card = (await load('components/sources/ConsentCard.tsx')).default as ComponentType<Record<string, unknown>>;
       const card = await surface(Card, { onAllow: () => undefined, onNotNow: () => undefined });
-      const line = card.elements().find((el) => el.props['data-recipient'] === `source:${sourceId}:${host}`);
-      assert.ok(line, `the card has no line for ${host}`);
-      const text = textOf(line!);
-      const group = card.elements().find((el) => el.props['data-recipient-group'] === sourceId);
-      const groupText = group ? textOf(group).replace(/\s+:/, ':') : 'none';
+      assert.ok(card.buttons('Allow').length === 1, `premise: the card renders: ${card.text().slice(0, 200)}`);
+      assert.equal(card.elements().filter((el) => typeof el.props['data-recipient'] === 'string' || typeof el.props['data-recipient-group'] === 'string').length, 0, 'the card still lists recipients');
+      assert.ok(!card.text().includes(host), `the card names ${host}`);
       card.unmount();
-      const name = (await load('lib/sources/source-name.ts')).readerSourceName({ sourceId, displayName: CIVIC_MANIFEST.find((e) => e.sourceId === sourceId)!.displayName });
-      // R9 P3 (#660): one line per source groups its recipients; the upstream host is the clause after the sandbox.
-      assert.ok(text.startsWith(`Reaches ${host} \u2014 `), `the card's clause reads: ${text}`);
-      assert.ok(text.includes(holder), `the card's clause does not name ${holder}: ${text}`);
-      // `textOf` reads "<strong>Name</strong>: " as "Name : "; the space is the harness's.
-      assert.ok(groupText.startsWith(`${name}: runs in this site's sandbox \u2014 `) && groupText.includes(text), `the card's line for ${sourceId} reads: ${groupText}`);
       const panel = await surface(Panel);
       const row = panel.elements().find((el) => el.props['data-source'] === sourceId);
       const rowText = textOf(row!);

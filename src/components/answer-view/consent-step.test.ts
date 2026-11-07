@@ -7,7 +7,7 @@
 // "Published by"); each posture row as `KeptByLines` renders it, with its
 // date or "not stated"; the hosts it would reach; the privacy page and the
 // guide's address or the sentence that says this site names none (R6's D10);
-// Allow and Not now, equal in size and style; and after a decision, its
+// Allow and Don't allow (UX-2 P4b), equal in size and style; and after a decision, its
 // outcome. A pause that does not hold says the source can be turned On in
 // the panel for the next question, and shows no buttons.
 //
@@ -190,20 +190,24 @@ test('criterion 3 (a): the hosts it would reach, the privacy page, and the guide
   withGuide.unmount();
 });
 
-test('criterion 3 (a): Allow and Not now, one button each, equal in size and style', async () => {
+// UX-2 P4b (item 8): the decline reads "Don't allow"; the pair stays equal.
+test('criterion 3 (a): Allow and Don\'t allow, one button each, equal in size and style', async () => {
   const card = await mountCard();
   const allow = card.button('Allow');
-  const notNow = card.button('Not now');
-  assert.deepEqual(allow.props.style, notNow.props.style, 'the two buttons are styled differently');
+  const dontAllow = card.button("Don't allow");
+  assert.deepEqual(allow.props.style, dontAllow.props.style, 'the two buttons are styled differently');
   card.unmount();
 });
 
 // --- Fix round 1, item 3: the decision first, in words that say what each choice sends ---------
 
-/** The two halves, equal: what each sends (the research's "sends"; T7's "turns on"). */
-const CHOICES = 'Allow: this question is sent to it, and it is turned On for later questions. Not now: nothing is sent to it for this question.';
+/**
+ * What each choice sends (the research's "sends"; T7's "turns on"), as UX-2 P4b re-words them: item 39's choices
+ * (item 20's Don't-allow half, D7 C) and B4c's third half, with S4's clause.
+ */
+const CHOICES = "Allow: this question is sent to it, and it is turned On for later questions. Don't allow: nothing is sent to it, and it is turned Off for later questions. Allow all data sources: every data source is turned On, and this question goes on without asking again.";
 
-test('item 3: the card says what Allow and Not now each send, in two equal halves', async () => {
+test('item 3: the card says what each choice sends', async () => {
   const card = await mountCard();
   const text = textOf(cardOf(card));
   assert.ok(text.includes(CHOICES), `the card's choices: ${text}`);
@@ -219,7 +223,7 @@ test('item 3: the decision comes before the explanation: Allow precedes "Who hol
   assert.ok(allowAt >= 0 && logsAt >= 0, `premise: Allow at ${allowAt}, "Who holds its logs" at ${logsAt}`);
   assert.ok(allowAt < logsAt, `Allow (element ${allowAt}) comes after "Who holds its logs" (element ${logsAt}): ${textOf(cardOf(card))}`);
   const text = textOf(cardOf(card));
-  assert.ok(text.indexOf('Allow Not now') < text.indexOf('Who holds its logs'), `the buttons read after the explanation: ${text}`);
+  assert.ok(text.indexOf("Allow Don't allow") < text.indexOf('Who holds its logs'), `the buttons read after the explanation: ${text}`);
   card.unmount();
 });
 
@@ -244,7 +248,10 @@ test('criterion 3 (h): the card\'s lines are sourceRowLines\', the panel\'s, and
 
 for (const [label, decision, outcome] of [
   ['Allow', 'allow', 'You chose Allow. It is On now.'],
-  ['Not now', 'not-now', 'You chose Not now. Nothing is sent to it for this question.'],
+  // UX-2 P4b (D7 C, items 13, 21): "Don't allow" posts off, and the outcome says it is Off now.
+  ["Don't allow", 'off', "You chose Don't allow. Nothing is sent to it, and it is Off now."],
+  // ASK2 = B, B4b: the third button posts allow-all.
+  ['Allow all data sources', 'allow-all', 'You chose Allow all data sources. Every data source is On now.'],
 ] as const) {
   test(`criterion 3 (b): after ${label}, the card posts its own key and shows the outcome, with no buttons`, async () => {
     answerStatus = 200;
@@ -253,7 +260,7 @@ for (const [label, decision, outcome] of [
     assert.deepEqual(decisions.map((d) => JSON.parse(d.body)), [{ key: KEY, decision }]);
     const text = textOf(cardOf(card));
     assert.ok(text.includes(outcome), `the card after ${label}: ${text}`);
-    assert.equal(card.buttons('Allow').length + card.buttons('Not now').length, 0, 'the buttons stay after a decision');
+    assert.equal(card.buttons('Allow').length + card.buttons("Don't allow").length + card.buttons('Allow all data sources').length, 0, 'the buttons stay after a decision');
     card.unmount();
   });
 }
@@ -269,14 +276,14 @@ test('criterion 3 (b): a decision the route refuses as gone says the question is
 
 // --- Criterion 4: a pause that does not hold -----------------------------------------------
 
-test('criterion 4: a pause that does not hold says the source can be turned On in the panel for the next question, with no buttons', async () => {
+test('criterion 4: a pause that does not hold says the source can be turned On in Data source settings for the next question, with no buttons', async () => {
   const { key: _key, ...rest } = PAUSE;
   void _key;
   const card = await mountCard({ ...rest, holds: false });
   const text = textOf(cardOf(card));
   assert.ok(text.includes('This question cannot stop to ask you, so it was not used.'), text);
-  assert.ok(text.includes('You can turn it On in the panel for your next question.'), text);
-  assert.equal(card.buttons('Allow').length + card.buttons('Not now').length, 0);
+  assert.ok(text.includes('You can turn it On in Data source settings for your next question.'), text);
+  assert.equal(card.buttons('Allow').length + card.buttons("Don't allow").length, 0);
   card.unmount();
 });
 
@@ -306,11 +313,12 @@ test('criterion 3 (c): while a decision is pending, the panel\'s row for that so
   bus.reportConsentPause(null);
   await panel.settle();
   // R9 P1 (#669 D2): the run moving on ends the hold, not the entry. The row keeps the card, with
-  // the after-hold words and both buttons, for the entry's life (consent-step-after-hold.test.ts).
+  // the after-hold words and both buttons, for the entry's life (consent-step-after-hold.test.ts); no Allow all after
+  // the hold (ruled W2, relay 26: the run has moved on).
   const after = [...within(rowOf('boston-opencontext'))];
   const cardAfter = after.find((el) => el.props['data-part'] === 'consent-step');
   assert.ok(cardAfter, 'the row lost the card when the run moved on, while the entry lives');
   assert.ok(textOf(cardAfter!).includes('The question went on without your answer'), `the row's card after the run moved on: ${textOf(cardAfter!)}`);
-  assert.deepEqual([...within(cardAfter!.props.children)].filter((el) => el.type === 'button').map((el) => textOf(el)), ['Allow', 'Not now'], 'the row\'s card lost its buttons when the run moved on');
+  assert.deepEqual([...within(cardAfter!.props.children)].filter((el) => el.type === 'button').map((el) => textOf(el)), ['Allow', "Don't allow"], 'the row\'s card lost its buttons when the run moved on');
   panel.unmount();
 });

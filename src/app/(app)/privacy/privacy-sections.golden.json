@@ -7,7 +7,7 @@
         {
           "id": "consent-1",
           "trace": "const:src/lib/sources/copy.ts#PRIVACY_CONSENT_SECTIONS",
-          "text": "Before your first question, we ask once whether this site may send questions onward. Your question is not sent beyond this site before you answer. \"Allow\" turns on the sources the panel shows as On and sends your question. \"Not now\" sends nothing. After you allow, you can set each data source to On, Ask first or Off beside the question box. After you withdraw consent, we send no questions until you agree again. Withdrawing cannot take back a question already sent."
+          "text": "Before your first question, we ask once whether this site may send questions onward. Your question is not sent beyond this site before you answer. Allow: your question is sent to the model service. A data source is used only if it is On, or if it is set to Ask first and you allow it when asked. Don't allow: nothing is sent. You are asked again when you send a question. You can set each data source to On, Ask first or Off in Data source settings at any time. After you withdraw consent, we send no questions until you agree again. Withdrawing cannot take back a question already sent."
         },
         {
           "id": "consent-kept",
@@ -22,7 +22,7 @@
         {
           "id": "consent-withdraw",
           "trace": "env:DATABASE_URL const:src/lib/sources/copy.ts#WITHDRAW_WITHOUT_ACCOUNTS",
-          "text": "To withdraw consent, use the panel beside the question box."
+          "text": "To withdraw consent, open Data source settings."
         }
       ]
     },
@@ -240,7 +240,7 @@
         {
           "id": "consent-1",
           "trace": "const:src/lib/sources/copy.ts#PRIVACY_CONSENT_SECTIONS",
-          "text": "Before your first question, we ask once whether this site may send questions onward. Your question is not sent beyond this site before you answer. \"Allow\" turns on the sources the panel shows as On and sends your question. \"Not now\" sends nothing. After you allow, you can set each data source to On, Ask first or Off beside the question box. After you withdraw consent, we send no questions until you agree again. Withdrawing cannot take back a question already sent."
+          "text": "Before your first question, we ask once whether this site may send questions onward. Your question is not sent beyond this site before you answer. Allow: your question is sent to the model service. A data source is used only if it is On, or if it is set to Ask first and you allow it when asked. Don't allow: nothing is sent. You are asked again when you send a question. You can set each data source to On, Ask first or Off in Data source settings at any time. After you withdraw consent, we send no questions until you agree again. Withdrawing cannot take back a question already sent."
         },
         {
           "id": "consent-kept",
@@ -255,7 +255,7 @@
         {
           "id": "consent-withdraw",
           "trace": "env:DATABASE_URL const:src/lib/sources/copy.ts#WITHDRAW_WITH_ACCOUNTS",
-          "text": "To withdraw consent, use the panel beside the question box, or the Sources tab on your dashboard if you are signed in."
+          "text": "To withdraw consent, open Data source settings."
         }
       ]
     },
@@ -271,7 +271,7 @@
         {
           "id": "consent-notify",
           "trace": "env:DATABASE_URL const:src/lib/sources/copy.ts#NOTIFY_WITH_ACCOUNTS",
-          "text": "A recipient may also be removed, or say it keeps less. If your answer is kept on your account, we tell you and do not ask again. If it is kept in a cookie, we may ask again instead. We tell you in the panel beside the question box and on the Sources tab of your dashboard, until you dismiss it."
+          "text": "A recipient may also be removed, or say it keeps less. If your answer is kept on your account, we tell you and do not ask again. If it is kept in a cookie, we may ask again instead. We tell you in Data source settings and in the panel beside the question box, until you dismiss it."
         }
       ]
     },
