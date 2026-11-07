@@ -47,6 +47,7 @@ import {
   mount,
   registerSurfaceHooks,
   sessions,
+  textOf,
   type HostElement,
   type Surface,
 } from '../sources/surface-test-harness.ts';
@@ -109,15 +110,31 @@ function one(surface: Surface, what: string, pick: (el: HostElement) => boolean)
 }
 
 /** Open the dialog, type a key, choose the consistency tab, and run the test. */
+/**
+ * UX-2 P2: the dialog is the page's add-review sheet. It is mounted open (its
+ * open state belongs to the page's review store), on the review path, and the
+ * automated checks sit behind X17's disclosure, "Run an automated check
+ * instead"; the key field renders once that is chosen. This opens it and
+ * chooses the consistency test.
+ */
+async function chooseConsistency(dialog: Surface): Promise<void> {
+  const details = dialog.elements().filter((el) => el.type === 'details' && textOf(el).startsWith('Run an automated check instead'));
+  assert.equal(details.length, 1, `X17's disclosure; the sheet reads: ${dialog.text().slice(0, 300)}`);
+  (details[0].props.onToggle as (e: unknown) => void)({ currentTarget: { open: true }, target: { open: true } });
+  await dialog.settle();
+  const radio = dialog.elements().filter((el) => el.type === 'input' && el.props.type === 'radio' && el.props.value === 'consistency');
+  assert.equal(radio.length, 1, 'the consistency choice');
+  await dialog.check(radio[0]);
+}
+
 async function runConsistency(readAsInForce = true): Promise<{ dialog: Surface; net: ReturnType<typeof answers> }> {
   statusSaysInForce = readAsInForce;
   sessions.server = { user: { id: 'gh-fixture-replayer' } };
   sessions.client = { status: 'authenticated', data: { user: { name: 'Fixture' } } };
   const net = answers();
-  const dialog = await mount(h(AttestationDialog, { slug: SLUG, analysisModel: 'fixture/other-model', promptVisibility: 'full_text', onAttestationCreated: () => undefined }));
-  await dialog.click(dialog.button('+ Add attestation'));
+  const dialog = await mount(h(AttestationDialog, { slug: SLUG, analysisModel: 'fixture/other-model', promptVisibility: 'full_text', open: true, onClose: () => undefined, onAttestationCreated: () => undefined }));
+  await chooseConsistency(dialog);
   await dialog.type(one(dialog, 'key field', (el) => el.type === 'input' && el.props.type === 'password'), 'placeholder-replayer-model-key');
-  await dialog.click(dialog.button('Consistency Test'));
   await dialog.click(dialog.button('Run Consistency Test'));
   return { dialog, net };
 }

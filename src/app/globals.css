@@ -1241,6 +1241,18 @@ footer a:visited {
   margin-top: 4px;
 }
 
+/* UX-2 P2: a review on the analysis page is a P7 list row with its signing
+   line under it; the pair carries the list's rule between rows. */
+.ui-review {
+  padding-bottom: 12px;
+  border-bottom: 1px solid var(--border-color);
+}
+
+.ui-review > .ui-row--list {
+  border-bottom: none;
+  padding-bottom: 0;
+}
+
 @media (max-width: 639px) {
   .ui-row {
     flex-wrap: wrap;

@@ -447,7 +447,9 @@ test('UX-2 P2 (1) signed in: "Add one" and "+ Add review" open the same one shee
   assert.equal(sheetTitle(s), W.sheetTitle);
   addOne(s);
   buttonIn(slot(s, 'reviews-section'), W.addReview);
-  await s.click(buttonIn(sheet(s), 'Close'));
+  const close = within(sheet(s)).filter((el) => el.type === 'button' && attr(el, 'aria-label') === 'Close');
+  assert.equal(close.length, 1, 'the sheet\'s close control');
+  await s.click(close[0]);
   assert.equal(byRole(s, 'dialog').length, 0, 'closed');
   await s.click(buttonIn(slot(s, 'reviews-section'), W.addReview));
   assert.equal(byRole(s, 'dialog').length, 1, 'the section\'s trigger opens one sheet');
@@ -527,7 +529,12 @@ test('UX-2 P2 (8) the rows: X13\'s types and X14\'s "Read the review" on all thr
   s.unmount();
 });
 
-test('UX-2 P2 (8) the sheet: X18, X16, X15, the lead verbatim, the rating cards in EXPERT_RATING_LABELS\'s words, and X17 with its two choices', async () => {
+// The rating cards keep their own words (contract v5, correcting v4): the
+// choice's words from `EXPERT_RATING_OPTIONS`, not `EXPERT_RATING_LABELS`, the
+// display labels the rows and the summary read.
+const CARD_WORDS = ['Endorse', 'Concerns', 'Dispute', 'Neutral'];
+
+test('UX-2 P2 (8) the sheet: X18, X16, X15, the lead verbatim, the rating cards in their own words, and X17 with its two choices', async () => {
   const { s } = await page({ rows: [] }, { signedIn: true });
   const panel = await openFromRow(s);
   assert.equal(sheetTitle(s), W.sheetTitle);
@@ -536,8 +543,8 @@ test('UX-2 P2 (8) the sheet: X18, X16, X15, the lead verbatim, the rating cards 
   fieldNamed(s, W.expertise);
   buttonIn(panel, W.publish);
   const cardWords = ratingCards(s).map(({ card }) => readText(card));
-  EXPERT_RATINGS.forEach((rating: string, i: number) => {
-    assert.ok(cardWords[i].startsWith(EXPERT_RATING_LABELS[rating]), `card ${i + 1} leads with "${EXPERT_RATING_LABELS[rating]}", the page's word for ${rating}: "${cardWords[i]}"`);
+  CARD_WORDS.forEach((word, i) => {
+    assert.ok(cardWords[i].startsWith(`${word} `), `card ${i + 1} leads with its own word "${word}": "${cardWords[i]}"`);
   });
   const summary = within(panel).filter((el) => el.type === 'summary' && readText(el) === W.automated);
   const control = within(panel).filter((el) => el.type === 'button' && readText(el) === W.automated);

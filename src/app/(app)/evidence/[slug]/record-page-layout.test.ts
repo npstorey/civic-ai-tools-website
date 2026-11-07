@@ -2080,6 +2080,14 @@ test('W4 P1 (9) the citation block reads "Analysis: <title> [Published: <date>] 
 // ruling on the card's two values (2026-10-30 21:55Z): the diff is the card's
 // value alone, "all seven parts (A to G) required" on the A-G record and "not
 // all seven parts required" on the legacy one.
+// Re-captured for UX-2 P2 (the reviews on the analysis page): on both records
+// the diff is the trust rows' bottom margin (24 px to 12 px), one inserted
+// empty `data-part="reviews-summary"` row after them (the list is unread on
+// the server's pass, so it states nothing), and the section moved out of the
+// disclosure into its own `data-part="attestations"` part after the steps,
+// `id="reviews"`, headed "Reviews", reading "Loading reviews..." and "Sign in
+// with GitHub to add a review." (R3 B), its loading line's margin 0 to
+// 0 0 12px. The comparison and executed-run goldens are unchanged.
 
 const UNCHANGED_OUT = process.env.W4P1_UNCHANGED_OUT;
 
@@ -2402,7 +2410,9 @@ for (const [name, c] of W4_RECORDS) {
     await assertReviewsPart(await renderWithInstance(c, INSTANCE), `${name}, answer-first`);
     const envelope = await renderWithInstance(c, INSTANCE, instanceWith(ENVELOPE_ORDER));
     await assertReviewsPart(envelope, `${name}, envelope-order`);
-    assert.ok(reviewsPart(envelope).end <= at(envelope, c === AGF ? AGF_ANSWER : OLD_ANSWER), 'envelope-order: before the answer');
+    // By the view's own children: under envelope-order the disclosure (and F, the answer again) comes first.
+    const order = sequence(viewChildren(envelope));
+    assert.ok(order.indexOf('attestations') >= 0 && order.indexOf('attestations') < order.indexOf('answer'), `envelope-order: before the answer (${order.join(', ')})`);
   });
 
   test(`UX-2 P2 (4) ${name}: under the v1 layout read from the committed node file, the reviews still render after the steps, outside the disclosure`, async () => {
