@@ -355,7 +355,8 @@ function blobInput(resolutionFields: Record<string, unknown>, resolvedOutput: st
 
 test('W3 fix (1) the blob note says verified only when the page states the bytes verified', () => {
   const verified = adapter()(blobInput({ outputVerified: true }, 'VERIFIEDTEXT-w3fix'));
-  assert.equal(verified.disclosure.answerNote, 'Output stored as blob (verified) · 1,234 bytes', 'premise: a verified blob carries the note');
+  // UX-2 P5 (X29, RULED): the note's words; it is still carried only when the page states the bytes verified.
+  assert.equal(verified.disclosure.answerNote, 'Answer kept outside the signed record · 1,234 bytes', 'a verified blob carries the note, in X29\'s words');
   assert.deepEqual(verified.answer.content, { kind: 'markdown', markdown: 'VERIFIEDTEXT-w3fix' });
   assert.deepEqual(verified.answer.authors, [{ key: 'answer', text: SECTION_6.answer }], 'the verified bytes render under the model’s line');
 

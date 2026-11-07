@@ -427,3 +427,13 @@ test('unsigned prominence never regresses to Alarm, and signed packages never se
   // (also pinned, unmodified, by the LEGACY_RESULT test above).
   assert.equal(summarizeIntegrity(LEGACY_RESULT), OVERALL_INTEGRITY_SIGNALS.verified);
 });
+
+// UX-2 P5 (X11, RULED; §11 item 7): "Verified" is reserved for the act of
+// verifying, so the green tier's glyph is labelled "Passed". The other three
+// tiers' labels are unchanged (#69 holds the tier words).
+test('UX-2 P5 X11: the verified tier\'s glyph reads "Passed"; the other three are unchanged', () => {
+  assert.deepEqual(
+    Object.fromEntries(Object.entries(TIER_META).map(([tier, meta]) => [tier, meta.ariaLabel])),
+    { verified: 'Passed', normal: 'Informational', attention: 'Attention', alarm: 'Alarm' },
+  );
+});

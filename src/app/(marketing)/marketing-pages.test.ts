@@ -600,3 +600,16 @@ for (const row of KEPT) {
     assert.deepEqual(missing, [], `${row.where}: kept lines missing ${JSON.stringify(missing)}`);
   });
 }
+
+// --- UX-2 P5 (X30, RULED removal; R18 C: no status word on any reader surface) ---------
+// The project page's verification-status prose (`project/page.tsx:234-237` at
+// `71460c3`) leaves with no replacement; the sentence before it (`:232-234`,
+// "A record documents how an answer was produced — it does not certify that the
+// answer is correct.") stays.
+test('UX-2 P5 X30: /project no longer describes a verification status, and keeps the sentence before it', () => {
+  const text = pageText(PAGES['/project']);
+  assert.ok(/A record documents how an answer was produced\W+it does not certify that the answer is correct\./.test(text), 'premise: the sentence that stays');
+  for (const gone of ['Each record page also shows a verification status', 'unverified', 'it is separate from the check of the record']) {
+    assert.ok(!text.toLowerCase().includes(gone.toLowerCase()), `/project still reads "${gone}"`);
+  }
+});
