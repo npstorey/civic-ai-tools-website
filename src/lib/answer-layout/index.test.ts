@@ -262,7 +262,7 @@ test('W4 P1 item 3: absent means the built-in default; blank is absent', () => {
 test('W4 P1 item 3: a configured layout is the default and is offered first, beside the built-ins', () => {
   const reading = resolveAnswerLayouts({ inline: JSON.stringify(VALID) });
   assert.deepEqual(reading.default, VALID);
-  assert.deepEqual(reading.offered.map(layoutId), ['fixture-valid@1', 'answer-first@2', 'envelope-order@2']);
+  assert.deepEqual(reading.offered.map(layoutId), [layoutId(VALID), 'answer-first@2', 'envelope-order@2']);
   const builtIn = resolveAnswerLayouts({ inline: JSON.stringify(ENVELOPE_ORDER) });
   assert.deepEqual(builtIn.offered.map(layoutId), ['envelope-order@2', 'answer-first@2'], 'a built-in, configured, is offered once');
   assert.deepEqual(builtIn.default, ENVELOPE_ORDER);
@@ -280,7 +280,7 @@ test('W4 P1 item 3: both document forms set, a document that is not JSON, and a 
   assert.throws(() => resolveAnswerLayouts({ inline: JSON.stringify(VALID), path: '/x.json' }), /ANSWER_LAYOUT and ANSWER_LAYOUT_PATH are both set/);
   assert.throws(() => resolveAnswerLayouts({ inline: '{"name": "answer-first",' }), /ANSWER_LAYOUT does not contain valid JSON/);
   const twin = { ...structuredClone(ANSWER_FIRST), order: [...ANSWER_FIRST.order].reverse() };
-  assert.throws(() => resolveAnswerLayouts({ inline: JSON.stringify(twin) }), /named answer-first v1, a built-in's name and version, with different fields/);
+  assert.throws(() => resolveAnswerLayouts({ inline: JSON.stringify(twin) }), new RegExp(`named answer-first v${ANSWER_FIRST.version}, a built-in's name and version, with different fields`));
 });
 
 test('W4 P1 reading 6: a configured layout naming an unknown part is accepted, and the reading says so in one server log line', () => {
@@ -458,7 +458,7 @@ test('W4 P1 fix 1 (F1) the instance’s layouts come from the three settings: no
   assert.deepEqual(withLayoutEnv({}, instanceAnswerLayouts), BUILT_IN_INSTANCE_LAYOUTS, 'none: the built-ins');
   const custom = withLayoutEnv({ ANSWER_LAYOUT: JSON.stringify(VALID) }, instanceAnswerLayouts);
   assert.deepEqual(custom.default, VALID, 'inline: the configured layout is the default');
-  assert.deepEqual(custom.offered.map(layoutId), ['fixture-valid@1', 'answer-first@2', 'envelope-order@2']);
+  assert.deepEqual(custom.offered.map(layoutId), [layoutId(VALID), 'answer-first@2', 'envelope-order@2']);
   assert.throws(() => withLayoutEnv({ ANSWER_LAYOUT_URL: 'https://x.test/p' }, instanceAnswerLayouts), /ANSWER_LAYOUT_URL is set/);
   assert.deepEqual(withLayoutEnv({}, instanceAnswerLayouts), BUILT_IN_INSTANCE_LAYOUTS, 'unset again: the built-ins, not a kept value');
 });

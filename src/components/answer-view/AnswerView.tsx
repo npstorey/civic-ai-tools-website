@@ -673,7 +673,6 @@ function Disclosure({ disclosure, answer, answerElement, extras, recordSections,
     'provenance-graph': recordSections?.['provenance-graph'],
     'additional-artifacts': recordSections?.['additional-artifacts'],
     evaluations: recordSections?.evaluations,
-    attestations: recordSections?.attestations,
     verification: recordSections?.verification,
 
     'surface-extras': extras,
@@ -823,6 +822,12 @@ export default function AnswerView({
     ) : null,
 
     steps: model.steps !== null && <StepsPartView steps={model.steps} />,
+
+    // UX-2 P2: the record's reviews, a page part since answer-view/2. A surface
+    // that hands the view none (a run, the comparison) renders nothing here.
+    attestations: recordSections?.attestations ? (
+      <div data-part="attestations">{recordSections.attestations}</div>
+    ) : null,
 
     sources: (
       <>

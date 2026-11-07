@@ -1130,7 +1130,7 @@ for (const [name, renderWith] of W4_SURFACES) {
       const d = requireDisclosure(html);
       assert.ok(at(html, line) > d.end, 'outside the disclosure');
     }
-    assert.ok(renderWith().includes('Shown under layout answer-first v1'), 'with no setting, the default’s line');
+    assert.ok(renderWith().includes('Shown under layout answer-first v2'), 'with no setting, the default’s line (UX-2 P2: v2)');
   });
 
   test(`W4 P1 (8) ${name}: a layout that omits a part renders it at its default place, every part present`, () => {
@@ -1174,10 +1174,10 @@ test('W4 P1 (4) the toggle sits in the foot, offers the instance’s layouts, an
   for (const [name, renderWith] of W4_SURFACES) {
     const foot = viewChildren(renderWith()).at(-1)?.markup ?? '';
     const options = [...foot.matchAll(/<option value="([^"]+)"( selected="")?>([^<]*)<\/option>/g)];
-    assert.deepEqual(options.map((m) => [m[1], m[3]]), [['answer-first@1', 'answer-first v1'], ['envelope-order@1', 'envelope-order v1']], `${name}: the built-ins, the default first`);
-    assert.deepEqual(options.filter((m) => m[2] !== undefined).map((m) => m[1]), ['answer-first@1'], `${name}: the default is the one chosen`);
+    assert.deepEqual(options.map((m) => [m[1], m[3]]), [['answer-first@2', 'answer-first v2'], ['envelope-order@2', 'envelope-order v2']], `${name}: the built-ins, the default first`);
+    assert.deepEqual(options.filter((m) => m[2] !== undefined).map((m) => m[1]), ['answer-first@2'], `${name}: the default is the one chosen`);
     const configured = viewChildren(renderWith(instanceWith(ENVELOPE_ORDER))).at(-1)?.markup ?? '';
-    assert.match(configured, /<option value="envelope-order@1" selected="">/, `${name}: an instance’s default is the one chosen`);
+    assert.match(configured, /<option value="envelope-order@2" selected="">/, `${name}: an instance’s default is the one chosen`);
   }
 });
 

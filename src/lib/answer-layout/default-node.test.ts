@@ -175,7 +175,7 @@ test('W4 P3 (F4) a verified URL node that reuses a committed node’s name and v
 
   assert.equal(await defaultLayoutNodeId({ ...ENV, ANSWER_LAYOUT_URL: controlUrl }, { committed: [held.node], urlDeps: control.urlDeps }), control.nodeId, 'the control is named');
   assert.equal(await defaultLayoutNodeId({ ...ENV, ANSWER_LAYOUT_URL: twinUrl }, { committed: [held.node], urlDeps: twin.urlDeps }), undefined, 'the twin of the committed node is not named');
-  assert.throws(() => resolveAnswerLayouts({ url: twinUrl }, { committed: [held.node] }), /the layout is named w4p3-held v1, the name and version of the committed layout node/, 'the pages refuse it');
+  assert.throws(() => resolveAnswerLayouts({ url: twinUrl }, { committed: [held.node] }), new RegExp(`the layout is named w4p3-held v${ENVELOPE_ORDER.version}, the name and version of the committed layout node`), 'the pages refuse it');
 });
 
 // --- UX-2 P2 (5): the first measurement (leg A), kept as a test ---------------------------------
