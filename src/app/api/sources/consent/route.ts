@@ -19,6 +19,9 @@ import {
   type SourceState,
 } from '@/lib/sources/consent';
 import { errorLogFacts } from '@/lib/streaming';
+import { canAsk } from '@/lib/sources/consent-gate';
+import { sourceRoutingMode } from '@/lib/mcp/source-routing-mode';
+import { decisionStoreFromEnv } from '@/lib/sources/decision';
 
 /**
  * /api/sources/consent — the reader's consent to send a question onward
@@ -32,8 +35,7 @@ import { errorLogFacts } from '@/lib/streaming';
  *           a row, the current statement's for a cookie in force. `accounts`
  *           says whether this instance keeps consents on accounts (a
  *           database), so a surface says "on your account" only where true. `defaults` are the
- *           states a first consent gives (each configured source's manifest
- *           `consentDefault`, D6). For a row, `notices` are the changes since
+ *           states a first consent gives (`defaultStates`, below). For a row, `notices` are the changes since
  *           the statement it holds that ask nothing (D2 = A). Sets no cookie.
  *           `keptFromCookie: true` on the one read that kept a consent given
  *           signed out on the account (below); absent on every other read.
@@ -79,13 +81,27 @@ const json = (body: unknown, status: number, setCookie?: string) =>
 /** Whether this instance keeps consents on accounts at all: a session carries a `dbId` only with a database (`auth.ts`). */
 const accounts = () => Boolean(process.env.DATABASE_URL);
 
+/**
+ * The states a first consent gives (D6; UX-2 P4b, Part E, D8 = A in relay
+ * 14's variant). Where this instance can ask the reader at a pause (in-loop
+ * routing and the decision store set: the consent gate's own `canAsk`), every
+ * configured source starts Ask first. Anywhere else a run could not ask, so
+ * each source starts at its manifest `consentDefault`, Ask first where the
+ * manifest names none. The route passes no `ask` to the gate, so it reads the
+ * routing mode and the store itself. A reader with stored states is not asked
+ * again by a change here: the flows statement does not carry the defaults.
+ */
+function defaultStates(configured: readonly string[]): Record<string, SourceState> {
+  const asks = canAsk({ routing: sourceRoutingMode(), store: decisionStoreFromEnv() !== null });
+  return Object.fromEntries(
+    configured.map((id) => [id, (asks ? 'ask-first' : (CIVIC_MANIFEST.find((e) => e.sourceId === id)?.consentDefault ?? 'ask-first')) as SourceState]),
+  );
+}
+
 async function current(): Promise<{ statement: FlowsStatement; hash: string; configured: string[]; defaults: Record<string, SourceState> }> {
   const statement = await buildFlowsStatement();
   const configured = statement.sources.map((s) => s.sourceId);
-  const defaults = Object.fromEntries(
-    configured.map((id) => [id, (CIVIC_MANIFEST.find((e) => e.sourceId === id)?.consentDefault ?? 'ask-first') as SourceState]),
-  );
-  return { statement, hash: statementHash(statement), configured, defaults };
+  return { statement, hash: statementHash(statement), configured, defaults: defaultStates(configured) };
 }
 
 async function sessionOf(): Promise<Session | null> {

@@ -344,7 +344,8 @@ function configured(): string[] {
  * The states a reader has, as the panel shows them and Allow writes them
  * (T7, so the card's "the sources the panel shows as On" is what Allow turns
  * on): with nothing stored, the defaults a first consent gives (each
- * configured source's manifest `consentDefault`, D6); otherwise each
+ * configured source's default as the consent route serves it, D6: Ask first
+ * where the instance can ask, else the manifest's `consentDefault`); otherwise each
  * source's stored state, and Ask first for a configured source with none,
  * whether the consent is in force or asked again.
  */
@@ -403,7 +404,7 @@ async function write(method: 'PUT' | 'PATCH' | 'DELETE', body?: unknown): Promis
  * Allow: the states the panel shows (`panelStates`, R9 P2): each state the
  * reader set before the consent, and elsewhere what `currentStates` gives —
  * a first consent each configured source's default (D6, the manifest's
- * `consentDefault`), a consent asked again the reader's stored states, and
+ * `consentDefault`, or Ask first where the instance can ask), a consent asked again the reader's stored states, and
  * Ask first for a source with none. On a 409 the statement is read again,
  * the reader's states stay pending, and the answer is false, so the card
  * asks again.
