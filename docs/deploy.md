@@ -1574,9 +1574,13 @@ these are `NEXT_PUBLIC_*`, and none may become so: client inlining is
 exactly what would break runtime container configuration for the dynamic
 pages.
 
-The favicon is a file, not a variable: replace
-[`src/app/favicon.ico`](../src/app/favicon.ico) in your checkout (the
-App Router serves it at `/favicon.ico`) and rebuild.
+The browser icon is three files, not a variable: replace all three in
+your checkout and rebuild. [`src/app/icon.svg`](../src/app/icon.svg) is
+the one browsers use first wherever they support SVG icons;
+[`src/app/apple-icon.png`](../src/app/apple-icon.png) (180 × 180) is the
+home-screen icon on a phone; [`src/app/favicon.ico`](../src/app/favicon.ico)
+serves browsers that ask for `/favicon.ico`. Replacing only
+`favicon.ico` leaves the reference deployment's icon in the browser tab.
 
 ### Content sources (directory and roadmap)
 
