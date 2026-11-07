@@ -80,6 +80,7 @@ import {
   type RecordSectionView,
 } from '@/lib/answer-layout';
 import { layoutFootLine, type PublishedLayout } from '@/lib/answer-layout/published-line';
+import { RECORD_DEFINED } from '@/lib/evidence/trust-words';
 import {
   type AnswerPart,
   type AnswerViewModel,
@@ -387,6 +388,11 @@ function Disclosure({ disclosure, answer, answerElement, extras, recordSections,
       <>
         {recordInstructions && (
           <Section level={level} title="B · System prompts" author={<AuthorLine part="instructions" text={recordInstructions.author} />}>
+            {/* S28 (UX-2 P5): the record page's first "record" in the
+                standard's sense is this section's, so it is defined here, once. */}
+            <p data-part="noun-defined" style={{ fontSize: '13px', color: 'var(--text-secondary)', margin: '0 0 10px', lineHeight: 1.6 }}>
+              {RECORD_DEFINED}
+            </p>
             <SkillSection section={recordInstructions} />
           </Section>
         )}
@@ -756,10 +762,16 @@ export interface AnswerViewProps {
   afterDisclosure?: ReactNode;
   /** The level of the disclosure's section headings. */
   sectionHeading?: HeadingLevel;
+  /**
+   * What a surface states under the status row, outside the disclosure (UX-2
+   * P5: a record's trust rows). It travels with the status row's part, so a
+   * layout that places the status row places these with it.
+   */
+  statusArea?: ReactNode;
 }
 
 export default function AnswerView({
-  model, actions, notices, disclosureExtras, recordSections, citationBlock, afterDisclosure, sectionHeading = 'h3',
+  model, actions, notices, disclosureExtras, recordSections, citationBlock, afterDisclosure, sectionHeading = 'h3', statusArea,
 }: AnswerViewProps) {
   const layouts = useAnswerLayouts();
   const [layout, choose] = useChosenLayout(layouts);
@@ -769,7 +781,12 @@ export default function AnswerView({
   // belongs to: the heading over the answer with the answer, the notices with
   // the sources line, Status History with the disclosure.
   const parts: Record<PagePartView, ReactNode> = {
-    'status-row': model.status !== null && <StatusRow status={model.status} />,
+    'status-row': (
+      <>
+        {model.status !== null && <StatusRow status={model.status} />}
+        {statusArea}
+      </>
+    ),
 
     answer: (
       <>

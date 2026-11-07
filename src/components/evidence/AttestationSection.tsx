@@ -10,6 +10,7 @@ import type { ReviewSignatureStatus } from '@/lib/evidence/trust-signal';
 import type { TrustTier } from '@/lib/evidence/trust-signal';
 import { describeToolCallKeyPolicy } from '@/lib/evidence/tool-call-identity';
 import { loadAttestationPackage } from '@/lib/evidence/attestation-content';
+import { EXPERT_RATING_LABELS } from '@/lib/evidence/expert-attestation';
 import TrustSignal from './TrustSignal';
 import AttestationDialog from './AttestationDialog';
 
@@ -469,10 +470,10 @@ function formatCriterionLabel(key: string): string {
 // --- Expert attestation card (human-submitted review) ---
 
 const RATING_STYLES: Record<ExpertRating, { label: string; bg: string; color: string }> = {
-  endorse: { label: 'Endorsed', bg: 'rgba(0, 183, 3, 0.10)', color: 'var(--success)' },
-  concerns: { label: 'Concerns', bg: 'rgba(255, 183, 0, 0.15)', color: '#8a5a00' },
-  dispute: { label: 'Disputed', bg: 'rgba(236, 19, 30, 0.08)', color: 'var(--error)' },
-  neutral: { label: 'Neutral note', bg: 'rgba(0, 0, 0, 0.06)', color: 'var(--text-secondary)' },
+  endorse: { label: EXPERT_RATING_LABELS.endorse, bg: 'rgba(0, 183, 3, 0.10)', color: 'var(--success)' },
+  concerns: { label: EXPERT_RATING_LABELS.concerns, bg: 'rgba(255, 183, 0, 0.15)', color: '#8a5a00' },
+  dispute: { label: EXPERT_RATING_LABELS.dispute, bg: 'rgba(236, 19, 30, 0.08)', color: 'var(--error)' },
+  neutral: { label: EXPERT_RATING_LABELS.neutral, bg: 'rgba(0, 0, 0, 0.06)', color: 'var(--text-secondary)' },
 };
 
 function ExpertAttestationCard({ attestation, payload }: {

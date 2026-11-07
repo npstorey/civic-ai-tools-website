@@ -13,6 +13,19 @@
 export const EXPERT_RATINGS = ['endorse', 'concerns', 'dispute', 'neutral'] as const;
 export type ExpertRating = (typeof EXPERT_RATINGS)[number];
 
+/**
+ * Each rating's reader label, as the analysis page shows it on a review
+ * (`AttestationSection`). The registry's reviews line uses the same label,
+ * lowercased (UX-2 P5, research check 2 C2b, ruled). One home for the four
+ * words; the stored value stays the vocabulary above.
+ */
+export const EXPERT_RATING_LABELS: Record<ExpertRating, string> = {
+  endorse: 'Endorsed',
+  concerns: 'Concerns',
+  dispute: 'Disputed',
+  neutral: 'Neutral note',
+};
+
 export const EXPERT_BODY_MAX_CHARS = 10_000;
 export const EXPERT_EXPERTISE_MAX_CHARS = 300;
 

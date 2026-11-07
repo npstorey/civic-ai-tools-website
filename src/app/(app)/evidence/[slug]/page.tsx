@@ -32,6 +32,11 @@ import { fromDbValue } from '@/lib/evidence/visibility';
 import { loadEvaluationViews } from '@/lib/evidence/adversarial-eval';
 import EvaluationAttestationsSection from '@/components/evidence/EvaluationAttestationsSection';
 import EvidenceActions from '@/components/evidence/EvidenceActions';
+import { Card } from '@/components/ui/Card';
+import { Page } from '@/components/ui/Page';
+import { Signal } from '@/components/ui/Signal';
+import { dataReadLine } from '@/lib/evidence/data-read-date';
+import { SIGNED_BY, TIMESTAMPED } from '@/lib/evidence/trust-words';
 import CitationBlock from '@/components/evidence/CitationBlock';
 import AttestationSection from '@/components/evidence/AttestationSection';
 import DashboardLink from '@/components/evidence/DashboardLink';
@@ -189,26 +194,6 @@ export async function generateMetadata({ params }: PageProps): Promise<Metadata>
   };
 }
 
-function StatusBadge({ status }: { status: string }) {
-  const colors: Record<string, { bg: string; text: string }> = {
-    unverified: { bg: 'rgba(0,0,0,0.06)', text: 'var(--text-muted)' },
-    consistency_tested: { bg: 'rgba(var(--accent-rgb), 0.1)', text: 'var(--accent)' },
-    evaluated: { bg: 'rgba(0, 183, 3, 0.1)', text: 'var(--success)' },
-    fully_attested: { bg: 'rgba(0, 183, 3, 0.15)', text: 'var(--success)' },
-  };
-  const c = colors[status] || colors.unverified;
-  const label = status.replace(/_/g, ' ');
-  return (
-    <span style={{
-      display: 'inline-block', padding: '3px 10px', borderRadius: '12px',
-      fontSize: '12px', fontWeight: 600, backgroundColor: c.bg, color: c.text,
-      textTransform: 'capitalize',
-    }}>
-      {label}
-    </span>
-  );
-}
-
 function Section({ title, children }: { title: string; children: React.ReactNode }) {
   return (
     <section style={{ marginBottom: '32px' }}>
@@ -321,6 +306,49 @@ export default async function EvidencePage({ params }: PageProps) {
   // tooling read to date a work, so emitting seal time there is a
   // machine-readable false claim. Absent on purpose, not an oversight; the
   // reasoning and the regression tests live in lib/evidence/page-metadata.ts.
+  // The trust rows (UX-2 P5; R18 C as §11 items 6 and 8 correct it; X6): in
+  // the status area, under the status row and outside the disclosure, each a
+  // fact the record carries; an absent fact is an absent row (Principle 3).
+  //   - the signer: the site's own key (`site-config.ts`, the platform
+  //     signer); the author is the database's, unsigned; no tier until #69;
+  //   - the data date: the day the analysis read its data, from the signed
+  //     trace's calls (`data-read-date.ts`); none for a trace stored as a
+  //     BlobRef (relay 13, ruling 4a: no extra read);
+  //   - the two anchors: an RFC 3161 token and a transparency-log entry.
+  const dataRead = dataReadLine(pkg?.trace);
+  const trustSignals = [
+    !isUnsignedRecord && <Signal key="signed" tier="neutral" label={SIGNED_BY(creator?.displayName || 'Unknown')} />,
+    dataRead !== null && <Signal key="data-read" tier="neutral" label={dataRead} />,
+    !!record.basePackageRfc3161Timestamp && !!record.basePackageRekorEntryId && <Signal key="timestamped" tier="neutral" label={TIMESTAMPED} />,
+  ].filter(Boolean);
+  const trustRows = trustSignals.length > 0 ? (
+    <div data-part="trust-rows" style={{ display: 'flex', flexDirection: 'column', gap: '4px', margin: '0 0 24px' }}>
+      {trustSignals}
+    </div>
+  ) : null;
+
+  // "About this package" (X9): what "Verification Status" held besides its
+  // badge (R18 C retires the badge), and the package hash. A P1 disclosure in
+  // the actions block (`EvidenceActions`).
+  const aboutPackage = (
+    <div style={{ display: 'flex', flexDirection: 'column', gap: '6px', fontSize: '13px', color: 'var(--text-muted)' }}>
+      {renderPkg?.producerProfile && (
+        <ProducerProfileLabel producerProfile={renderPkg.producerProfile} />
+      )}
+      {record.consistencyClassification && (
+        <span>Consistency: {record.consistencyClassification.replace(/_/g, ' ')}</span>
+      )}
+      {renderPkg?.type && (
+        <span style={{ fontFamily: 'monospace' }}>{renderPkg.type}</span>
+      )}
+      {record.basePackageHash && (
+        <span style={{ fontSize: '12px', fontFamily: 'monospace', wordBreak: 'break-all' }}>
+          Package hash: {record.basePackageHash}
+        </span>
+      )}
+    </div>
+  );
+
   const jsonLdOrigin = getEvidenceSiteOrigin();
   const jsonLd = buildEvidenceJsonLd({
     title: record.title,
@@ -335,7 +363,7 @@ export default async function EvidencePage({ params }: PageProps) {
         type="application/ld+json"
         dangerouslySetInnerHTML={{ __html: JSON.stringify(jsonLd) }}
       />
-      <div style={{ maxWidth: '800px', margin: '0 auto', padding: '40px 24px 64px' }}>
+      <Page width="record">
         {/* Unsigned-package banner (S3a P3, #166; ADR-0020 §Consequences
             guard 2 — mandatory labeling wherever an unsigned package appears).
             A record persisted without a signature carries no cryptographic
@@ -345,12 +373,8 @@ export default async function EvidencePage({ params }: PageProps) {
             historical row is not migrated or relabeled, it renders with this
             prominent label (and cannot be published — the per-record gate). */}
         {isUnsignedRecord && (
-          <div style={{
-            padding: '16px 20px', marginBottom: '24px',
-            backgroundColor: 'rgba(255, 179, 32, 0.12)',
-            border: '1px solid var(--caution)',
-            borderRadius: '6px',
-          }}>
+          <div style={{ marginBottom: '24px' }}>
+          <Card variant="tinted" tone="caution">
             <div style={{ fontSize: '15px', fontWeight: 600, color: 'var(--text-primary)', marginBottom: '6px' }}>
               Unsigned package — no cryptographic commitment
             </div>
@@ -361,6 +385,7 @@ export default async function EvidencePage({ params }: PageProps) {
               confirmed. An unsigned package can reach neither the sealed nor
               the public state.
             </div>
+          </Card>
           </div>
         )}
 
@@ -370,12 +395,8 @@ export default async function EvidencePage({ params }: PageProps) {
             The proof sentence is signature-conditional: a historical unsigned
             row registered no commitment, and the banner must not claim one. */}
         {isSealed && (
-          <div style={{
-            padding: '16px 20px', marginBottom: '24px',
-            backgroundColor: 'rgba(var(--accent-rgb), 0.05)',
-            border: '1px solid rgba(var(--accent-rgb), 0.25)',
-            borderRadius: '6px',
-          }}>
+          <div style={{ marginBottom: '24px' }}>
+          <Card variant="tinted" tone="accent">
             <div style={{ fontSize: '15px', fontWeight: 600, color: 'var(--accent)', marginBottom: '6px' }}>
               Sealed — not published
             </div>
@@ -398,6 +419,7 @@ export default async function EvidencePage({ params }: PageProps) {
                 </>
               )}
             </div>
+          </Card>
           </div>
         )}
 
@@ -405,12 +427,8 @@ export default async function EvidencePage({ params }: PageProps) {
             withdrawn (from the signed attestation chain, or the legacy columns
             for pre-PR3 records). */}
         {lifecycle.status === 'withdrawn' && lifecycle.withdrawnAt && (
-          <div style={{
-            padding: '16px 20px', marginBottom: '24px',
-            backgroundColor: 'rgba(236, 19, 30, 0.06)',
-            border: '1px solid rgba(236, 19, 30, 0.2)',
-            borderRadius: '6px',
-          }}>
+          <div style={{ marginBottom: '24px' }}>
+          <Card variant="tinted" tone="error">
             <div style={{ fontSize: '15px', fontWeight: 600, color: 'var(--error)', marginBottom: '6px' }}>
               This analysis was withdrawn by the author on{' '}
               {fmtDate(lifecycle.withdrawnAt)}
@@ -424,6 +442,7 @@ export default async function EvidencePage({ params }: PageProps) {
               The original content and cryptographic proofs are preserved below for transparency.
               {lifecycle.source === 'attestation-chain' && ' This withdrawal is a separately-signed attestation node.'}
             </div>
+          </Card>
           </div>
         )}
 
@@ -465,6 +484,7 @@ export default async function EvidencePage({ params }: PageProps) {
             layout's `disclosure.order` can place each (LAYOUT-WEB W4 P1). */}
         <AnswerView
           model={viewModel}
+          statusArea={trustRows}
           sectionHeading="h2"
           citationBlock={
             // Citation (ruling D3) — beneath the answer, collapsed; the same
@@ -532,29 +552,6 @@ export default async function EvidencePage({ params }: PageProps) {
               </Section>
             ),
 
-            verification: (
-              <Section title="Verification Status">
-                <div style={{ display: 'flex', flexWrap: 'wrap', gap: '12px', alignItems: 'center' }}>
-                  <StatusBadge status={record.verificationStatus} />
-                  {record.consistencyClassification && (
-                    <span style={{ fontSize: '13px', color: 'var(--text-muted)' }}>
-                      Consistency: {record.consistencyClassification.replace(/_/g, ' ')}
-                    </span>
-                  )}
-                  {/* Typed-standards envelope labels (ADR-0006/0009). Read from
-                      the canonical package object — not a DB column. Absent on
-                      pre-v0.1 packages, which simply omit these. */}
-                  {renderPkg?.producerProfile && (
-                    <ProducerProfileLabel producerProfile={renderPkg.producerProfile} />
-                  )}
-                  {renderPkg?.type && (
-                    <span style={{ fontSize: '13px', color: 'var(--text-muted)', fontFamily: 'monospace' }}>
-                      {renderPkg.type}
-                    </span>
-                  )}
-                </div>
-              </Section>
-            ),
           }}
           afterDisclosure={
             <>
@@ -625,18 +622,13 @@ export default async function EvidencePage({ params }: PageProps) {
                 visibility={record.visibility}
                 commitmentUrl={commitmentUrl}
                 brandName={getBrandName()}
+                signed={!isUnsignedRecord}
+                aboutPackage={aboutPackage}
               />
             </Section>
           }
         />
-
-        {/* Package hash */}
-        {record.basePackageHash && (
-          <div style={{ fontSize: '12px', color: 'var(--text-muted)', fontFamily: 'monospace', wordBreak: 'break-all' }}>
-            Package hash: {record.basePackageHash}
-          </div>
-        )}
-      </div>
+      </Page>
     </>
   );
 }

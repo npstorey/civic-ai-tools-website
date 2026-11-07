@@ -100,8 +100,10 @@ const FILES: readonly string[] = [
  * research check's ruling. `keep`: a row the census marks keep. `KEPT`: R19 A's
  * exceptions. `ruled copy`: text a ruling holds verbatim. `sense 2`: rows of a
  * dataset. `sense 4`: the standard's noun. `verb`: "records" as a verb.
+ * `code value`: a value the code reads and no reader sees (UX-2 P5: the P9
+ * frame's `width="record"`, `ui/Page.tsx`).
  */
-type Reason = 'pending' | 'keep' | 'KEPT' | 'ruled copy' | 'sense 2' | 'sense 4' | 'verb';
+type Reason = 'pending' | 'keep' | 'KEPT' | 'ruled copy' | 'sense 2' | 'sense 4' | 'verb' | 'code value';
 
 interface Allowed {
   file: string;
@@ -126,6 +128,10 @@ const ALLOWLIST: readonly Allowed[] = [
   // DashboardTabs.tsx
   { file: 'src/components/dashboard/DashboardTabs.tsx', rows: ':601', reason: 'keep', phrase: 'The prior withdrawal record is preserved', count: 1 },
 
+  // The P9 frame's width name (UX-2 P5, the record frame): a value, never rendered.
+  { file: 'src/app/(app)/evidence/page.tsx', rows: 'UX-2 P5 (`<Page width="record">`)', reason: 'code value', text: 'record', count: 1 },
+  { file: 'src/app/(app)/evidence/[slug]/page.tsx', rows: 'UX-2 P5 (`<Page width="record">`)', reason: 'code value', text: 'record', count: 1 },
+
   // NotebookOutput.tsx: "execution record" (C12).
   { file: 'src/components/notebook/NotebookOutput.tsx', rows: ':241 (C12)', reason: 'keep', text: 'Publishes the executed notebook and its execution record — not a regenerated skeleton.', count: 1 },
 
@@ -148,6 +154,9 @@ const ALLOWLIST: readonly Allowed[] = [
   // Download file names (D6).
   { file: 'src/components/evidence/NotebookSection.tsx', rows: ':96 (D6, file name)', reason: 'keep', text: 'record-', count: 1 },
   { file: 'src/lib/evidence/package-download.ts', rows: ':37 (D6, file name)', reason: 'keep', text: 'record-', count: 1 },
+
+  // adapt-record.ts: X29's note (UX-2 P5, RULED), "record" in the standard's sense.
+  { file: 'src/components/answer-view/adapt-record.ts', rows: ':360 (X29)', reason: 'ruled copy', phrase: 'Answer kept outside the signed record', count: 1 },
 
   // AnswerView.tsx
   { file: 'src/components/answer-view/AnswerView.tsx', rows: ':605', reason: 'verb', text: 'The notebook metadata records the sandbox runtime versions used at execution.', count: 1 },
