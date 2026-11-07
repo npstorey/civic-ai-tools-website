@@ -116,7 +116,8 @@ const ANSWER_FIRST_NODE = heldNode(ANSWER_FIRST);
 // W4 P3 (F1), as UX-2 P2 moves it: `answer-first` at another version. The
 // repository's committed node is answer-first v1; the built-in is v2. They
 // share a name, so a comparison of names alone cannot tell the two apart.
-const REPO_V1_NODE = committedLayoutNodes()[0];
+// By its id, not its place: `--apply` writes the module sorted by id, so a v2 node may come first.
+const REPO_V1_NODE = committedLayoutNodes().find((n) => n.nodeId === '770ed52e2abfc0c7d4626953c9f715c11a50e63bd911fa2bed56b77a76fe0ee7')!;
 const ANSWER_FIRST_V1 = REPO_V1_NODE.layout as typeof ANSWER_FIRST;
 const HELD = [ANSWER_FIRST_NODE, REPO_V1_NODE, ENVELOPE_NODE];
 const NOT_HELD_ID = '9'.repeat(64);

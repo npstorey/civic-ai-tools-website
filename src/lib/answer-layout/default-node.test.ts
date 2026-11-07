@@ -190,8 +190,9 @@ test('W4 P3 (F4) a verified URL node that reuses a committed node’s name and v
 // `console.warn` spy tells the no-match return from the catch.
 
 test('UX-2 P2 (5) with only an answer-first v1 node committed, the built-in names none, by the no-match return; a node equal to the built-in is named', async () => {
-  const [repoNode] = committedLayoutNodes();
-  assert.equal(repoNode.nodeId, '770ed52e2abfc0c7d4626953c9f715c11a50e63bd911fa2bed56b77a76fe0ee7', 'premise: the repository commits the v1 node');
+  // By its id, not its place: `--apply` writes the module sorted by id, so a v2 node may come first.
+  const repoNode = committedLayoutNodes().find((n) => n.nodeId === '770ed52e2abfc0c7d4626953c9f715c11a50e63bd911fa2bed56b77a76fe0ee7');
+  assert.ok(repoNode, 'premise: the repository commits the v1 node');
   assert.equal(repoNode.layout.version, 1, 'premise: answer-first v1');
   const v1 = committed(repoNode.layout, INSTANCE.priv, KID, 'ux2-p2-v1');
   const decoy = committed(ANSWER_FIRST, INSTANCE.priv, KID, 'ux2-p2-built-in');
