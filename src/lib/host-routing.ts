@@ -254,8 +254,19 @@ export const APP_PRIVATE_PATHS = [
  *
  * `/privacy` (#516 P7, owner ruling G0-4): what this instance does with what a
  * reader sends, which a reader on either host is owed.
+ *
+ * `/settings` (UX-2 P4b, S1): the Settings overlay, where a reader sets each
+ * data source and withdraws consent. The consent card that links it mounts on
+ * the marketing host too (the home page, `/explore`, the record pages), so it
+ * is served on both. An unlisted path would serve on both as well, as
+ * `'other'`; listing it makes that a decision, which the route walker in
+ * `host-routing.paths.test.ts` then holds against `(app)/settings/page.tsx`.
+ * The overlay's intercepting route (`src/app/@modal/(.)settings`) sits in a
+ * root slot, outside both route groups, so the walker does not read it; the
+ * proxy sees the address `/settings` either way, since interception is a
+ * rewrite that runs after it.
  */
-export const DUAL_SERVED_PATHS = ['/evidence', '/records', '/privacy'] as const;
+export const DUAL_SERVED_PATHS = ['/evidence', '/records', '/privacy', '/settings'] as const;
 
 export type PathClass = 'root' | 'marketing' | 'app-private' | 'dual-served' | 'other';
 
