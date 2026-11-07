@@ -1206,6 +1206,10 @@ footer a:visited {
 .ui-row-trailing {
   display: flex;
   flex-shrink: 0;
+  /* UX-2 P5: the column's signals wrap inside it rather than squeezing the
+     title and summary (measured: at 640 px a row's main column fell to 58 px
+     under two one-line signals; planning temp/ux-2/p5-measure/, assertion D). */
+  max-width: 40%;
   align-items: flex-start;
   gap: var(--space-xs);
 }
@@ -1244,6 +1248,7 @@ footer a:visited {
 
   .ui-row-trailing {
     flex-basis: 100%;
+    max-width: none;
   }
 }
 

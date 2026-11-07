@@ -1,7 +1,20 @@
 'use client';
 
-import { useState, useEffect, type CSSProperties } from 'react';
+import { useState, useEffect } from 'react';
 import Link from 'next/link';
+import { Row } from '@/components/ui/Row';
+import { Signal } from '@/components/ui/Signal';
+import { formatModelName } from '@/lib/models';
+import { reviewsLine, type RecordReviews } from '@/lib/evidence/review-summary';
+import { LIST_LOAD_FAILED, MADE_BY } from '@/lib/evidence/trust-words';
+import { DEFAULT_REGISTRY_FILTERS, RegistryFilters, type RegistryFilterState } from './RegistryFilters';
+
+// The registry (UX-2 P5; R18 C, R18b C). Each row is a P7 row stating facts,
+// not a verdict: how the analysis was made and its reviews, as P6 `line`
+// signals in the neutral tier. No `verificationStatus` word reaches a reader
+// (R18 C), and the row carries no "Sources used" in P5 (relay 13, ruling 1:
+// it waits for a phase that adds a column). A failed request says so (X8),
+// and a response that arrives after a newer request's is dropped (#701 item 1).
 
 interface EvidenceRecord {
   id: string;
@@ -9,11 +22,11 @@ interface EvidenceRecord {
   title: string;
   summary: string;
   model: string;
-  verificationStatus: string;
   withdrawnAt: string | null;
   reinstatedAt: string | null;
   createdAt: string;
   creatorName: string;
+  reviews?: RecordReviews;
 }
 
 interface ListResponse {
@@ -23,64 +36,12 @@ interface ListResponse {
   totalPages: number;
 }
 
-const STATUS_OPTIONS = [
-  { value: '', label: 'All statuses' },
-  { value: 'unverified', label: 'Unverified' },
-  { value: 'consistency_tested', label: 'Consistency tested' },
-  { value: 'evaluated', label: 'Evaluated' },
-  { value: 'fully_attested', label: 'Fully attested' },
-];
-
-const RANGE_OPTIONS = [
-  { value: 'all', label: 'All time' },
-  { value: '7d', label: 'Last 7 days' },
-  { value: '30d', label: 'Last 30 days' },
-  { value: '90d', label: 'Last 90 days' },
-];
-
-const SORT_OPTIONS = [
-  { value: 'newest', label: 'Newest first' },
-  { value: 'attested', label: 'Most attested' },
-  { value: 'alpha', label: 'Alphabetical' },
-];
-
-function StatusBadge({ status }: { status: string }) {
-  const colors: Record<string, { bg: string; text: string }> = {
-    unverified: { bg: 'rgba(0,0,0,0.06)', text: 'var(--text-muted)' },
-    consistency_tested: { bg: 'rgba(var(--accent-rgb), 0.1)', text: 'var(--accent)' },
-    evaluated: { bg: 'rgba(0, 183, 3, 0.1)', text: 'var(--success)' },
-    fully_attested: { bg: 'rgba(0, 183, 3, 0.15)', text: 'var(--success)' },
-    withdrawn: { bg: 'rgba(236, 19, 30, 0.08)', text: 'var(--error)' },
-  };
-  const c = colors[status] || colors.unverified;
-  return (
-    <span style={{
-      display: 'inline-block', padding: '2px 8px', borderRadius: '10px',
-      fontSize: '11px', fontWeight: 600, backgroundColor: c.bg, color: c.text,
-      textTransform: 'capitalize',
-    }}>
-      {status.replace(/_/g, ' ')}
-    </span>
-  );
-}
-
-const selectStyle: CSSProperties = {
-  padding: '6px 10px',
-  border: '1px solid var(--border-color)',
-  borderRadius: '4px',
-  fontSize: '13px',
-  backgroundColor: 'white',
-  color: 'var(--text-secondary)',
-};
-
 export default function EvidenceIndex() {
-  const [query, setQuery] = useState('');
-  const [status, setStatus] = useState('');
-  const [range, setRange] = useState('all');
-  const [sort, setSort] = useState('newest');
-  const [includeWithdrawn, setIncludeWithdrawn] = useState(false);
+  const [filters, setFilters] = useState<RegistryFilterState>(DEFAULT_REGISTRY_FILTERS);
+  const { query, reviews, range, sort, includeWithdrawn } = filters;
   const [page, setPage] = useState(1);
   const [data, setData] = useState<ListResponse | null>(null);
+  const [failed, setFailed] = useState(false);
   const [loading, setLoading] = useState(true);
 
   // Debounced search
@@ -91,7 +52,7 @@ export default function EvidenceIndex() {
   }, [query]);
 
   // Reset page when filters change (during render, not in an effect)
-  const filterKey = JSON.stringify([debouncedQuery, status, range, sort, includeWithdrawn]);
+  const filterKey = JSON.stringify([debouncedQuery, reviews, range, sort, includeWithdrawn]);
   const [pageFilterKey, setPageFilterKey] = useState(filterKey);
   if (filterKey !== pageFilterKey) {
     setPageFilterKey(filterKey);
@@ -99,7 +60,7 @@ export default function EvidenceIndex() {
   }
 
   // Loading starts when the request changes (during render); the effect fetches
-  const requestKey = JSON.stringify([debouncedQuery, status, range, sort, includeWithdrawn, page]);
+  const requestKey = JSON.stringify([debouncedQuery, reviews, range, sort, includeWithdrawn, page]);
   const [loadingKey, setLoadingKey] = useState(requestKey);
   if (requestKey !== loadingKey) {
     setLoadingKey(requestKey);
@@ -107,83 +68,53 @@ export default function EvidenceIndex() {
   }
 
   useEffect(() => {
-    const fetchData = async () => {
-      const params = new URLSearchParams();
-      if (debouncedQuery) params.set('q', debouncedQuery);
-      if (status) params.set('status', status);
-      if (range !== 'all') params.set('range', range);
-      if (sort !== 'newest') params.set('sort', sort);
-      if (includeWithdrawn) params.set('withdrawn', 'include');
-      if (page > 1) params.set('page', String(page));
+    // A newer request supersedes this one: its cleanup runs first, and this
+    // response, whenever it lands, sets nothing (#701 item 1).
+    let superseded = false;
+    const params = new URLSearchParams();
+    if (debouncedQuery) params.set('q', debouncedQuery);
+    if (reviews) params.set('reviews', reviews);
+    if (range !== 'all') params.set('range', range);
+    if (sort !== 'newest') params.set('sort', sort);
+    if (includeWithdrawn) params.set('withdrawn', 'include');
+    if (page > 1) params.set('page', String(page));
 
-      try {
-        const res = await fetch(`/api/records/list?${params}`);
-        if (res.ok) {
-          setData(await res.json());
-        }
-      } catch {
-        // Silently fail
-      } finally {
-        setLoading(false);
-      }
-    };
-    fetchData();
-  }, [debouncedQuery, status, range, sort, includeWithdrawn, page]);
+    fetch(`/api/records/list?${params}`)
+      .then(async (res) => {
+        if (!res.ok) throw new Error(String(res.status));
+        const body = (await res.json()) as ListResponse;
+        if (superseded) return;
+        setData(body);
+        setFailed(false);
+      })
+      .catch(() => {
+        if (superseded) return;
+        setData(null);
+        setFailed(true);
+      })
+      .finally(() => {
+        if (!superseded) setLoading(false);
+      });
+    return () => { superseded = true; };
+  }, [debouncedQuery, reviews, range, sort, includeWithdrawn, page]);
+
+  const filtered = !!debouncedQuery || !!reviews || range !== 'all';
 
   return (
     <>
-      {/* Search + Filters */}
-      <div style={{ marginBottom: '20px' }}>
-        <input
-          type="text"
-          value={query}
-          onChange={(e) => setQuery(e.target.value)}
-          placeholder="Search analyses by title or summary..."
-          style={{
-            width: '100%', padding: '10px 14px',
-            border: '1px solid var(--border-color)', borderRadius: '6px',
-            fontSize: '14px', boxSizing: 'border-box', marginBottom: '12px',
-          }}
-        />
-        <div style={{ display: 'flex', gap: '10px', flexWrap: 'wrap' }}>
-          <select value={status} onChange={(e) => setStatus(e.target.value)} style={selectStyle}>
-            {STATUS_OPTIONS.map(o => <option key={o.value} value={o.value}>{o.label}</option>)}
-          </select>
-          <select value={range} onChange={(e) => setRange(e.target.value)} style={selectStyle}>
-            {RANGE_OPTIONS.map(o => <option key={o.value} value={o.value}>{o.label}</option>)}
-          </select>
-          <select value={sort} onChange={(e) => setSort(e.target.value)} style={selectStyle}>
-            {SORT_OPTIONS.map(o => <option key={o.value} value={o.value}>{o.label}</option>)}
-          </select>
-          <label style={{
-            display: 'flex', alignItems: 'center', gap: '4px',
-            fontSize: '13px', color: 'var(--text-muted)', cursor: 'pointer',
-          }}>
-            <input
-              type="checkbox"
-              checked={includeWithdrawn}
-              onChange={(e) => setIncludeWithdrawn(e.target.checked)}
-            />
-            Include withdrawn
-          </label>
-          {(query || status || range !== 'all' || sort !== 'newest' || includeWithdrawn) && (
-            <button
-              onClick={() => { setQuery(''); setStatus(''); setRange('all'); setSort('newest'); setIncludeWithdrawn(false); }}
-              style={{
-                ...selectStyle, cursor: 'pointer', border: 'none',
-                color: 'var(--accent)', backgroundColor: 'transparent', padding: '6px 4px',
-              }}
-            >
-              Clear filters
-            </button>
-          )}
-        </div>
-      </div>
+      <RegistryFilters value={filters} onChange={setFilters} searchPlaceholder="Search analyses by title or summary..." />
 
       {/* Results */}
       {loading ? (
         <div style={{ padding: '32px', textAlign: 'center', color: 'var(--text-muted)', fontSize: '14px' }}>
           Loading...
+        </div>
+      ) : failed ? (
+        <div style={{
+          padding: '32px', border: '1px solid var(--border-color)', borderRadius: '6px',
+          textAlign: 'center', color: 'var(--text-muted)',
+        }}>
+          <p style={{ fontSize: '16px', margin: 0 }}>{LIST_LOAD_FAILED}</p>
         </div>
       ) : !data || data.records.length === 0 ? (
         <div style={{
@@ -191,11 +122,11 @@ export default function EvidenceIndex() {
           textAlign: 'center', color: 'var(--text-muted)',
         }}>
           <p style={{ fontSize: '16px', margin: '0 0 8px' }}>
-            {debouncedQuery || status || range !== 'all'
+            {filtered
               ? 'No analyses match your filters.'
               : 'No analyses published yet.'}
           </p>
-          {!debouncedQuery && !status && range === 'all' && (
+          {!filtered && (
             <p style={{ fontSize: '14px', margin: 0 }}>
               {/* Topology-stale copy fixed in #229 P1 — the second instance
                   of the "home page" noun the dashboard carried. `/records`
@@ -218,54 +149,28 @@ export default function EvidenceIndex() {
             {data.totalPages > 1 && ` \u00b7 page ${data.page} of ${data.totalPages}`}
           </div>
 
-          <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
+          <div>
             {data.records.map((r) => {
               const dateStr = new Date(r.createdAt).toLocaleDateString('en-US', { year: 'numeric', month: 'short', day: 'numeric' });
-              // Only currently-withdrawn (withdrawn but not reinstated) gets the muted treatment.
+              const modelName = formatModelName(r.model);
+              // Only currently-withdrawn (withdrawn but not reinstated) gets the withdrawn treatment.
               const isWithdrawn = !!r.withdrawnAt && !r.reinstatedAt;
               return (
-                <Link
+                <Row
                   key={r.id}
+                  as="article"
+                  title={r.title}
                   href={`/records/${r.slug}`}
-                  style={{
-                    display: 'block', padding: '16px 20px',
-                    border: '1px solid var(--border-color)', borderRadius: '6px',
-                    textDecoration: 'none', color: 'inherit',
-                    transition: 'border-color 0.15s, box-shadow 0.15s',
-                    opacity: isWithdrawn ? 0.6 : 1,
-                  }}
-                  onMouseOver={(e) => {
-                    e.currentTarget.style.borderColor = 'var(--accent)';
-                    e.currentTarget.style.boxShadow = '0 2px 8px rgba(var(--accent-rgb), 0.1)';
-                  }}
-                  onMouseOut={(e) => {
-                    e.currentTarget.style.borderColor = 'var(--border-color)';
-                    e.currentTarget.style.boxShadow = 'none';
-                  }}
-                >
-                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: '12px', marginBottom: '6px' }}>
-                    <h2 style={{
-                      fontSize: '16px', fontWeight: 600, margin: 0, color: 'var(--text-primary)',
-                      textDecoration: isWithdrawn ? 'line-through' : 'none',
-                    }}>
-                      {r.title}
-                    </h2>
-                    {isWithdrawn
-                      ? <StatusBadge status="withdrawn" />
-                      : <StatusBadge status={r.verificationStatus} />
-                    }
-                  </div>
-                  <p style={{ fontSize: '14px', color: 'var(--text-secondary)', margin: '0 0 8px', lineHeight: 1.5 }}>
-                    {r.summary}
-                  </p>
-                  <div style={{ fontSize: '12px', color: 'var(--text-muted)', display: 'flex', gap: '8px', flexWrap: 'wrap' }}>
-                    <span>{r.creatorName}</span>
-                    <span>{'\u00b7'}</span>
-                    <span>{dateStr}</span>
-                    <span>{'\u00b7'}</span>
-                    <span>{r.model}</span>
-                  </div>
-                </Link>
+                  summary={r.summary}
+                  meta={[dateStr, r.creatorName, modelName]}
+                  withdrawn={isWithdrawn}
+                  signals={
+                    <>
+                      <Signal tier="neutral" label={MADE_BY(modelName)} />
+                      {r.reviews && <Signal tier="neutral" label={reviewsLine(r.reviews)} />}
+                    </>
+                  }
+                />
               );
             })}
           </div>

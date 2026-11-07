@@ -6,9 +6,13 @@ import { TIER_META, type TrustTier, type TrustIconName } from '@/lib/evidence/tr
 /**
  * Presentational trust-signal row (civic-ai-tools-website#110, Wave 0).
  *
- * Renders one `{ tier, icon, plain-language one-liner }` signal — the shared
- * primitive that the verify panel and provenance surfaces will consume (#111+).
- * It is NOT yet imported by any live panel; this is the standalone foundation.
+ * Renders one `{ tier, icon, plain-language one-liner }` signal. Live at four
+ * mounts: the integrity glance (`EvidenceActions.tsx`), the notebook's two
+ * readings (`NotebookSection.tsx`) and each review's signature
+ * (`AttestationSection.tsx`). UX-2 P5 left it beside the P6 `Signal`
+ * primitive rather than folding it in: folding moves these four tiers onto
+ * `Signal`'s glyphs and drops the glyph's `aria-label`, the tier word #69
+ * holds; that belongs to the phase that rules the tier words.
  *
  * Severity is conveyed three ways so it never depends on color alone (WCAG /
  * design-principles accessibility): a distinct icon SILHOUETTE per tier, the

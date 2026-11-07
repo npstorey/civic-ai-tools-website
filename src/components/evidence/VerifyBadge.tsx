@@ -72,8 +72,7 @@ export default function VerifyBadge({ commitmentUrl }: { commitmentUrl: string }
         }}
       >
         Re-runs the integrity, signature, timestamp, and transparency-log checks
-        in your own browser on a neutral site. It confirms how this analysis was
-        recorded and that it has not changed — not that the analysis is correct.
+        in your own browser on a neutral site.
       </div>
     </div>
   );
