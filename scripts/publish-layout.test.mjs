@@ -169,7 +169,9 @@ test('W4 P2 (9) DRY, the default: the timestamp and the key check run; no log re
     assert.equal(result.code, 0, `${result.stdout}\n${result.stderr}`);
     assert.deepEqual(doubles.seen, ['timestamp', 'registry'], 'the doubles were reached in this order, and the log never');
     assert.deepEqual(files, [], 'nothing was written');
-    const id = /node from answer-first v1: ([0-9a-f]{64})/.exec(result.stdout)?.[1];
+    // UX-2 P2 (5): the built-in is answer-first v2 (the spec's §8.14.1 example,
+    // a v1, is informative: index.test.ts).
+    const id = /node from answer-first v2: ([0-9a-f]{64})/.exec(result.stdout)?.[1];
     assert.ok(id, result.stdout);
     assert.deepEqual(doubles.imprints, [id], 'the timestamp request carried the node id and nothing else');
     assert.match(result.stdout, /the signing key matches the key it carries/);
@@ -212,10 +214,11 @@ test('W4 P2 (9) the real run: timestamp, checks, log, files, in that order; the 
       assert.equal(result2.nodeId, id);
       const { name, version, appliesTo, order, disclosure, steps, rendererVersion } = doc.package;
       assert.deepEqual({ name, version, appliesTo, order, disclosure, steps, rendererVersion }, {
-        name: 'answer-first', version: 1, appliesTo: ['default', 'datHere'],
-        order: ['status', 'answer', 'citation', 'steps', 'sources', 'disclosure', 'actions'],
-        disclosure: { label: 'Learn more about how this analysis was produced', order: ['A', 'B', 'C', 'D', 'E', 'G', 'signers', 'attestations', 'verification'], openByDefault: false },
-        steps: { placement: 'beside', openByDefault: true }, rendererVersion: 'answer-view/1',
+        // UX-2 P2 (5): answer-first v2; the spec's §8.14.1 example (a v1) is informative.
+        name: 'answer-first', version: 2, appliesTo: ['default', 'datHere'],
+        order: ['status', 'answer', 'citation', 'steps', 'attestations', 'sources', 'disclosure', 'actions'],
+        disclosure: { label: 'Learn more about how this analysis was produced', order: ['A', 'B', 'C', 'D', 'E', 'G', 'signers', 'verification'], openByDefault: false },
+        steps: { placement: 'beside', openByDefault: true }, rendererVersion: 'answer-view/2',
       }, 'criterion (2) on the file the script wrote');
       assert.equal('captureMethod' in doc.package.metadata, false, 'the node states no capture method');
       assert.deepEqual(proofs, {

@@ -13,11 +13,13 @@
 
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { h, mount, registerSurfaceHooks } from '../sources/surface-test-harness.ts';
+import { NEXT_LINK_STUB, h, mount, registerSurfaceHooks } from '../sources/surface-test-harness.ts';
 import { attr, byClass, byTag, childrenOf, classesOf, hasClass, one, readText } from './ui-test-helpers.ts';
 
-registerSurfaceHooks();
+// `next/link` as a plain anchor, for the Menu the criterion-7 case mounts.
+registerSurfaceHooks({ 'next/link': NEXT_LINK_STUB });
 const { Disclosure } = await import('@/components/ui/Disclosure');
+const { Menu } = await import('@/components/ui/Menu');
 
 test('Disclosure is a native <details class="ui-disclosure"> whose first child is its <summary>', async () => {
   const s = await mount(h(Disclosure, { summary: 'Fixture summary', children: 'Fixture body' }));
@@ -43,6 +45,36 @@ test('Disclosure closed and open: the open attribute follows the controlled prop
 
   const initiallyOpen = await mount(h(Disclosure, { summary: 'S', children: 'B', defaultOpen: true }));
   assert.equal(attr(one(byTag(initiallyOpen, 'details'), '<details>'), 'open'), '', 'defaultOpen: open on first render');
+});
+
+// UX-2 P2 criterion 7 (#728 line 2): the cases above mount a fresh element for
+// each value of `open`. This one changes `open` on ONE mounted element. A
+// guard, green on the base: `Disclosure.tsx:71` passes `open={open ?? defaultOpen}`.
+//
+// HOW THE PROP CHANGES. The parent reads `open` from `current` each time it is
+// rendered. A test file's own hooks are not the harness's (it replaces `react`
+// for modules under `src/` only), so the re-render is caused by a primitive
+// with state of its own, mounted beside it: a click on a P2 Menu's trigger
+// sets the Menu's state, and the harness renders the whole tree again.
+test('UX-2 P2 (7) Disclosure: changing `open` on a mounted element moves its open attribute, both ways', async () => {
+  const current = { open: false };
+  function Parent() {
+    return [
+      h(Disclosure, { key: 'd', summary: 'S', children: 'B', open: current.open }),
+      h(Menu, { key: 'm', trigger: 'Re-render', items: [{ id: 'x', label: 'X' }] }),
+    ];
+  }
+  const s = await mount(h(Parent));
+  const pump = () => s.click(one(s.elements().filter((el) => el.type === 'button' && attr(el, 'aria-haspopup') === 'menu'), 'the Menu trigger'));
+  const first = one(byTag(s, 'details'), '<details>');
+  assert.equal(attr(first, 'open'), null, 'open={false}: closed');
+  current.open = true;
+  await pump();
+  assert.equal(attr(one(byTag(s, 'details'), '<details>'), 'open'), '', 'open={true} on the same element: open');
+  current.open = false;
+  await pump();
+  assert.equal(attr(one(byTag(s, 'details'), '<details>'), 'open'), null, 'and closed again');
+  s.unmount();
 });
 
 test('Disclosure renders each size class: inline, section (the default), row', async () => {

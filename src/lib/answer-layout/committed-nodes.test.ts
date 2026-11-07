@@ -2,9 +2,12 @@
 // nodes under `public/.well-known/layouts/`, and how they reach the code.
 //
 // (2) Every committed node document is read from disk here (a test may; the
-// site may not) and its seven fields must equal `answer-first`'s, the layout
-// the instance renders by default: the script builds the node from that
-// built-in and nothing else. The directory holds one node, `770ed52e…`, which
+// site may not) and its seven fields must equal those of the `answer-first`
+// version it names: the script builds the node from that built-in and nothing
+// else. UX-2 P2 (criterion 5) reads each node's OWN version: a node file is
+// never removed, so the v1 node stays committed beside the v2 node `--apply`
+// adds, and v1 is no longer a built-in. Its fields are `ANSWER_FIRST_V1` below,
+// the spec's §8.14.1 example as the site shipped it until UX-2 P2. The directory holds one node, `770ed52e…`, which
 // the script wrote under the instance's key (none is committed under a test
 // key); the per-file assertions run over it, as over every node committed
 // after it, and the module agreement below runs over the same files.
@@ -27,7 +30,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { computeEnvelopeHash, parseStrictJson, CONTENT_LAYOUT } from '@typedstandards/verify-core';
-import { ANSWER_FIRST } from './index.ts';
+import { ANSWER_FIRST, BUILT_IN_LAYOUTS, layoutId, type LayoutPayload } from './index.ts';
 import { layoutFieldsOf } from './node-reading.ts';
 import { COMMITTED_LAYOUT_DOCUMENTS } from './committed-nodes.ts';
 import { committedModuleNodeIds, committedModuleSource } from '../../../scripts/publish-layout.ts';
@@ -37,6 +40,27 @@ const REPO = path.resolve(HERE, '..', '..', '..');
 const LAYOUTS = path.join(REPO, 'public', '.well-known', 'layouts');
 const MODULE = path.join(HERE, 'committed-nodes.ts');
 const NODE_FILE = /^[0-9a-f]{64}\.json$/;
+
+/** `answer-first` v1, the built-in until UX-2 P2 (copied by hand, as `index.test.ts` copies the spec's example). */
+const ANSWER_FIRST_V1: LayoutPayload = {
+  name: 'answer-first',
+  version: 1,
+  appliesTo: ['default', 'datHere'],
+  order: ['status', 'answer', 'citation', 'steps', 'sources', 'disclosure', 'actions'],
+  disclosure: {
+    label: 'Learn more about how this analysis was produced',
+    order: ['A', 'B', 'C', 'D', 'E', 'G', 'signers', 'attestations', 'verification'],
+    openByDefault: false,
+  },
+  steps: { placement: 'beside', openByDefault: true },
+  rendererVersion: 'answer-view/1',
+};
+
+/** Every `answer-first` a committed node may name: the built-in now, and the versions before it. */
+const ANSWER_FIRST_VERSIONS: readonly LayoutPayload[] = [
+  ...BUILT_IN_LAYOUTS.filter((l) => l.name === ANSWER_FIRST.name),
+  ...(ANSWER_FIRST.version === ANSWER_FIRST_V1.version ? [] : [ANSWER_FIRST_V1]),
+];
 
 const nodeFiles = fs.existsSync(LAYOUTS) ? fs.readdirSync(LAYOUTS).filter((f) => NODE_FILE.test(f)).sort() : [];
 
@@ -52,7 +76,7 @@ test('W4 P2 reading 6: committed-nodes.ts imports exactly the node files on disk
   }
 });
 
-test('W4 P2 (2) every committed node’s seven fields equal answer-first’s, read from the file', () => {
+test('W4 P2 (2), as UX-2 P2 (5) reads it: every committed node’s seven fields equal the answer-first version it names, read from the file', () => {
   for (const file of nodeFiles) {
     const doc = parseStrictJson(fs.readFileSync(path.join(LAYOUTS, file))) as Record<string, unknown>;
     const pkg = doc.package as Record<string, unknown>;
@@ -60,7 +84,11 @@ test('W4 P2 (2) every committed node’s seven fields equal answer-first’s, re
     assert.equal(doc.packageHash, id, `${file}: named for its node id`);
     assert.equal(computeEnvelopeHash(pkg), id, `${file}: the package recomputes to it`);
     assert.equal(pkg.type, CONTENT_LAYOUT, file);
-    assert.deepEqual(layoutFieldsOf(pkg), { ...ANSWER_FIRST }, `${file}: the seven fields`);
+    const fields = layoutFieldsOf(pkg);
+    const named = layoutId(fields as Pick<LayoutPayload, 'name' | 'version'>);
+    const own = ANSWER_FIRST_VERSIONS.find((l) => layoutId(l) === named);
+    assert.ok(own, `${file}: names ${named}, which is answer-first's built-in or an earlier answer-first (${ANSWER_FIRST_VERSIONS.map(layoutId).join(', ')})`);
+    assert.deepEqual(fields, { ...own }, `${file}: the seven fields of ${layoutId(own)}`);
     assert.equal('captureMethod' in (pkg.metadata as object), false, `${file}: no capture method (ruling D5 = A)`);
     const proofs = JSON.parse(fs.readFileSync(path.join(LAYOUTS, `${id}.proofs.json`), 'utf8')) as Record<string, unknown>;
     assert.equal(proofs.packageHash, id, `${file}: its proofs file names it`);

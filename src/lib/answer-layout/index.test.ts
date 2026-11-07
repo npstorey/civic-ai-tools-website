@@ -8,9 +8,13 @@
 //       payload breaks one rule of the builder, which the builder's own message
 //       names; a well-formed payload that names an unknown part is accepted by
 //       both (spec §8.14.4).
-//   (3) `answer-first` v1 equals, field by field, a literal copy of the spec's
-//       §8.14.1 example payload.
-//   item 3: `envelope-order` v1, field by field; the reading's three forms.
+//   (3) `answer-first` v1 equalled, field by field, a literal copy of the
+//       spec's §8.14.1 example payload. UX-2 P2 (criterion 5) moves it to v2:
+//       the example is informative (§8.14.4), and is kept below as the v1
+//       it describes.
+//   item 3: `envelope-order` v2, field by field; the reading's three forms.
+//   UX-2 P2 (4): the v1 layout still renders, its unknown name logged.
+//   UX-2 P2 (13, Q3): a stored choice resolves by the layout's name.
 //   ORCH reading 1: the name map, pinned as a table.
 //   item 7 (the W4 amendment): the placement rule.
 //   item 4 and reading 5: the reader's choice and its session key.
@@ -43,12 +47,15 @@ import { AnswerLayoutConfigurationError, checkLayout, instanceAnswerLayouts, res
 import { COMPARISON_STORAGE_KEY, LAYOUT_STORAGE_KEY, MODE_STORAGE_KEY } from '../query-presentation.ts';
 import { DISCLOSURE_LABEL, PART_ORDER } from '../../components/answer-view/view-model.ts';
 
-// --- (3): answer-first v1 is the spec's example ------------------------------------------
+// --- (3), as UX-2 P2 moves it: the spec's example is informative -----------------------
 //
 // A literal copy of the example payload in hub
 // `docs/architecture/typed-standards-specification.md` §8.14.1, as it reads at
 // hub 9a6eff5 (spec v0.1.12, `:1494-1506`). Copied by hand from the spec, not
-// from `index.ts`, so the two can disagree.
+// from `index.ts`, so the two can disagree. The example is INFORMATIVE
+// (§8.14.4): it shows a layout's shape, and binds no site to it. It is the
+// `answer-first` v1 the site shipped until UX-2 P2, and the fields of the
+// committed node `770ed52e…` (`committed-nodes.test.ts`).
 const SPEC_8_14_1_EXAMPLE = {
   name: 'answer-first',
   version: 1,
@@ -63,28 +70,52 @@ const SPEC_8_14_1_EXAMPLE = {
   rendererVersion: 'answer-view/1',
 };
 
-test('W4 P1 (3) answer-first v1 equals the spec’s §8.14.1 example, field by field', () => {
+/**
+ * `answer-first` v2 (UX-2 P2, design Phase 2 (b)): the example's fields with
+ * `attestations` a page part after `steps`, out of the disclosure's order, and
+ * the renderer's vocabulary named `answer-view/2`. Written by hand.
+ */
+const ANSWER_FIRST_V2 = {
+  name: 'answer-first',
+  version: 2,
+  appliesTo: ['default', 'datHere'],
+  order: ['status', 'answer', 'citation', 'steps', 'attestations', 'sources', 'disclosure', 'actions'],
+  disclosure: {
+    label: 'Learn more about how this analysis was produced',
+    order: ['A', 'B', 'C', 'D', 'E', 'G', 'signers', 'verification'],
+    openByDefault: false,
+  },
+  steps: { placement: 'beside', openByDefault: true },
+  rendererVersion: 'answer-view/2',
+};
+
+test('UX-2 P2 (5) answer-first is v2, field by field; the spec’s §8.14.1 example is informative and is the v1 it replaced', () => {
   assert.deepEqual(Object.keys(ANSWER_FIRST), Object.keys(SPEC_8_14_1_EXAMPLE), 'the seven fields, in the example’s order');
-  for (const field of Object.keys(SPEC_8_14_1_EXAMPLE) as Array<keyof typeof SPEC_8_14_1_EXAMPLE>) {
-    assert.deepEqual(ANSWER_FIRST[field], SPEC_8_14_1_EXAMPLE[field], `${field}`);
-  }
-  assert.equal(JSON.stringify(ANSWER_FIRST), JSON.stringify(SPEC_8_14_1_EXAMPLE), 'byte for byte, as JSON');
+  assert.equal(JSON.stringify(ANSWER_FIRST), JSON.stringify(ANSWER_FIRST_V2), 'answer-first v2, byte for byte, as JSON');
+  assert.equal(ANSWER_FIRST.rendererVersion, 'answer-view/2');
+  // The example still reads as the v1 it shows: only the version, the two orders and the renderer moved.
+  const { version, order, disclosure, rendererVersion, ...rest } = ANSWER_FIRST_V2;
+  void version; void order; void rendererVersion;
+  const { version: v1, order: o1, disclosure: d1, rendererVersion: r1, ...exampleRest } = SPEC_8_14_1_EXAMPLE;
+  void v1; void o1; void r1;
+  assert.deepEqual(rest, exampleRest, 'name, appliesTo and steps are the example’s');
+  assert.deepEqual({ ...disclosure, order: [] }, { ...d1, order: [] }, 'the disclosure’s label and openByDefault are the example’s');
   assert.equal(ANSWER_FIRST.disclosure.label, DISCLOSURE_LABEL, 'the disclosure label the site ships');
 });
 
 // --- item 3: envelope-order v1 --------------------------------------------------------------
 
-test('W4 P1 item 3: envelope-order v1, field by field', () => {
+test('UX-2 P2 (5) item 3: envelope-order v2, field by field', () => {
   assert.deepEqual(ENVELOPE_ORDER, {
     name: 'envelope-order',
-    version: 1,
+    version: 2,
     appliesTo: ['default', 'datHere'],
-    order: ['status', 'disclosure', 'steps', 'answer', 'sources', 'citation', 'actions'],
-    disclosure: ANSWER_FIRST.disclosure,
+    order: ['status', 'disclosure', 'steps', 'attestations', 'answer', 'sources', 'citation', 'actions'],
+    disclosure: ANSWER_FIRST_V2.disclosure,
     steps: { placement: 'beside', openByDefault: true },
-    rendererVersion: 'answer-view/1',
+    rendererVersion: 'answer-view/2',
   });
-  assert.deepEqual(ENVELOPE_ORDER.disclosure, SPEC_8_14_1_EXAMPLE.disclosure, 'the same disclosure as answer-first');
+  assert.deepEqual(ENVELOPE_ORDER.disclosure, ANSWER_FIRST.disclosure, 'the same disclosure as answer-first');
 });
 
 test('W4 P1 item 3: both built-ins pass the builder unchanged and name no part the renderer does not know', () => {
@@ -231,9 +262,9 @@ test('W4 P1 item 3: absent means the built-in default; blank is absent', () => {
 test('W4 P1 item 3: a configured layout is the default and is offered first, beside the built-ins', () => {
   const reading = resolveAnswerLayouts({ inline: JSON.stringify(VALID) });
   assert.deepEqual(reading.default, VALID);
-  assert.deepEqual(reading.offered.map(layoutId), ['fixture-valid@1', 'answer-first@1', 'envelope-order@1']);
+  assert.deepEqual(reading.offered.map(layoutId), ['fixture-valid@1', 'answer-first@2', 'envelope-order@2']);
   const builtIn = resolveAnswerLayouts({ inline: JSON.stringify(ENVELOPE_ORDER) });
-  assert.deepEqual(builtIn.offered.map(layoutId), ['envelope-order@1', 'answer-first@1'], 'a built-in, configured, is offered once');
+  assert.deepEqual(builtIn.offered.map(layoutId), ['envelope-order@2', 'answer-first@2'], 'a built-in, configured, is offered once');
   assert.deepEqual(builtIn.default, ENVELOPE_ORDER);
 });
 
@@ -264,12 +295,13 @@ test('W4 P1 reading 6: a configured layout naming an unknown part is accepted, a
 
 // --- reading 1: the name map, pinned ----------------------------------------------------------
 
-test('W4 P1 reading 1: the name map, page parts and disclosure sections, in their default places', () => {
+test('W4 P1 reading 1, as UX-2 P2 (4) moves it: the name map, page parts and disclosure sections, in their default places', () => {
   assert.deepEqual(PAGE_PARTS.map((p) => [p.name, p.view]), [
     ['status', 'status-row'],
     ['answer', 'answer'],
     ['citation', 'citation'],
     ['steps', 'steps'],
+    ['attestations', 'attestations'],
     ['sources', 'sources'],
     [null, 'where-it-went'],
     ['disclosure', 'disclosure'],
@@ -287,24 +319,23 @@ test('W4 P1 reading 1: the name map, page parts and disclosure sections, in thei
     ['provenance-graph', 'provenance-graph'],
     ['additional-artifacts', 'additional-artifacts'],
     ['evaluations', 'evaluations'],
-    ['attestations', 'attestations'],
     ['verification', 'verification'],
     [null, 'surface-extras'],
   ]);
-  assert.deepEqual([...PART_ORDER], ['status-row', 'answer', 'citation', 'steps', 'sources', 'where-it-went', 'disclosure', 'actions'], 'the view’s part order is the table’s');
+  assert.deepEqual([...PART_ORDER], ['status-row', 'answer', 'citation', 'steps', 'attestations', 'sources', 'where-it-went', 'disclosure', 'actions'], 'the view’s part order is the table’s');
 });
 
 // --- item 7: the placement rule -----------------------------------------------------------------
 
-test('W4 P1 item 7: under answer-first, every part and every section sits at its default place', () => {
+test('W4 P1 item 7, as UX-2 P2 (4) moves it: under answer-first, every part and every section sits at its default place', () => {
   assert.deepEqual(pageOrder(ANSWER_FIRST), {
-    order: ['status-row', 'answer', 'citation', 'steps', 'sources', 'where-it-went', 'disclosure', 'actions'],
+    order: ['status-row', 'answer', 'citation', 'steps', 'attestations', 'sources', 'where-it-went', 'disclosure', 'actions'],
     unknown: [],
   });
   assert.deepEqual(disclosureOrder(ANSWER_FIRST), {
     order: [
       'question', 'instructions', 'environment', 'trace', 'notebook', 'answer-again', 'summary', 'signers',
-      'provenance-graph', 'additional-artifacts', 'evaluations', 'attestations', 'verification', 'surface-extras',
+      'provenance-graph', 'additional-artifacts', 'evaluations', 'verification', 'surface-extras',
     ],
     unknown: [],
   }, 'F and the record’s three unnamed sections at their default places');
@@ -317,7 +348,7 @@ test('W4 P1 item 7: a part a layout does not name renders directly after the par
   assert.deepEqual(placeParts(table, []).order, ['A', 'B', 'C', 'X'], 'nothing named: the default places');
   assert.deepEqual(placeParts(table, ['c', 'c', 'b']).order, ['A', 'C', 'X', 'B'], 'a repeated name keeps its first place');
   assert.deepEqual(placeParts(table, ['X', 'zz', 'c', 'zz']), { order: ['A', 'B', 'C', 'X'], unknown: ['X', 'zz'] }, 'an unknown name, and the unnameable part’s view name, render nothing');
-  assert.deepEqual(pageOrder(ENVELOPE_ORDER).order, ['status-row', 'disclosure', 'steps', 'answer', 'sources', 'where-it-went', 'citation', 'actions']);
+  assert.deepEqual(pageOrder(ENVELOPE_ORDER).order, ['status-row', 'disclosure', 'steps', 'attestations', 'answer', 'sources', 'where-it-went', 'citation', 'actions']);
 });
 
 test('W4 P1 item 7: a part appended to the table needs one row and no layout change; the built-ins stay valid', () => {
@@ -326,7 +357,7 @@ test('W4 P1 item 7: a part appended to the table needs one row and no layout cha
   for (const layout of BUILT_IN_LAYOUTS) {
     const placed = placeParts(eighth, layout.order);
     assert.equal(placed.order.at(-1), 'routing', `${layout.name}: the new part renders at its default place`);
-    assert.equal(placed.order.length, 9, `${layout.name}: every part present`);
+    assert.equal(placed.order.length, PAGE_PARTS.length + 1, `${layout.name}: every part present`);
   }
 });
 
@@ -339,8 +370,9 @@ test('W4 P1 item 4: the session key sits beside the mode and comparison keys, an
 
 test('W4 P1 item 4: a stored choice counts only when the instance offers it; otherwise the instance’s default', () => {
   const offered = BUILT_IN_INSTANCE_LAYOUTS.offered;
-  assert.equal(parseStoredLayoutChoice('envelope-order@1', offered), 'envelope-order@1');
-  for (const raw of [null, '', 'envelope-order', 'envelope-order@2', 'fixture-valid@1']) {
+  assert.equal(parseStoredLayoutChoice(layoutId(ENVELOPE_ORDER), offered), layoutId(ENVELOPE_ORDER));
+  // UX-2 P2 (13, Q3): another version of an offered name is a choice now; it is read in the test below.
+  for (const raw of [null, '', 'envelope-order', 'fixture-valid@1']) {
     assert.equal(parseStoredLayoutChoice(raw, offered), null, `${JSON.stringify(raw)} is no choice`);
   }
   assert.equal(selectLayout(BUILT_IN_INSTANCE_LAYOUTS, null), ANSWER_FIRST, 'no choice: the default');
@@ -350,9 +382,54 @@ test('W4 P1 item 4: a stored choice counts only when the instance offers it; oth
   assert.equal(selectLayout(configured, null), VALID, 'the instance’s default is its own');
 });
 
+// --- UX-2 P2 (13, Q3, relay 25): a stored choice resolves by the layout's name -----------------
+//
+// A reader's stored choice names `name@version`. When the instance offers the
+// same name at another version (the v2 bump), the choice resolves to the version
+// offered now, so a reader who chose the envelope order keeps it. The offered set
+// below holds `envelope-order` at a version the stored choice does not name,
+// whatever the built-ins' version is, so the first assertion reads the rule and
+// not an exact match.
+
+test('UX-2 P2 (13) a stored choice resolves by name to the version the instance offers now; an unoffered name is still no choice', () => {
+  const later = { ...ENVELOPE_ORDER, version: ENVELOPE_ORDER.version + 1 };
+  const layouts = { default: ANSWER_FIRST, offered: [ANSWER_FIRST, later] };
+  const stale = `envelope-order@${ENVELOPE_ORDER.version}`;
+  assert.equal(parseStoredLayoutChoice(stale, layouts.offered), layoutId(later), `${stale} resolves to the offered ${layoutId(later)}`);
+  assert.equal(selectLayout(layouts, stale), later, 'and the view renders under it');
+  assert.equal(parseStoredLayoutChoice(layoutId(later), layouts.offered), layoutId(later), 'an exact offered name@version still resolves');
+  assert.equal(selectLayout(layouts, layoutId(later)), later);
+  // The decoy: a name the instance does not offer, at any version, is no choice.
+  for (const raw of ['fixture-unoffered@1', 'fixture-unoffered@2', 'envelope-order', 'envelope-order@', '@1']) {
+    assert.equal(parseStoredLayoutChoice(raw, layouts.offered), null, `${JSON.stringify(raw)} is no choice`);
+    assert.equal(selectLayout(layouts, raw), ANSWER_FIRST, `${JSON.stringify(raw)}: the default`);
+  }
+});
+
+// --- UX-2 P2 (4): the v1 layout still renders, its unknown name logged -------------------------
+
+test('UX-2 P2 (4) the v1 layout (the spec example, the committed node’s fields) places attestations after the steps, and the reading logs its disclosure name', () => {
+  const v1 = structuredClone(SPEC_8_14_1_EXAMPLE);
+  const page = pageOrder(v1);
+  const placed: string[] = page.order;
+  assert.equal(placed.indexOf('attestations'), placed.indexOf('steps') + 1, `attestations directly after the steps: ${placed.join(', ')}`);
+  assert.ok(placed.indexOf('attestations') < placed.indexOf('sources'), 'and before the sources line');
+  assert.equal(disclosureOrder(v1).order.includes('attestations' as never), false, 'not in the disclosure');
+  assert.deepEqual(disclosureOrder(v1).unknown, ['attestations'], 'the disclosure name the renderer no longer knows');
+  const lines: string[] = [];
+  const reading = resolveAnswerLayouts({ inline: JSON.stringify(v1) }, { warn: (line) => lines.push(line), committed: [] });
+  assert.deepEqual(reading.unknownParts, ['attestations']);
+  assert.deepEqual(lines, ['[answer-layout] ANSWER_LAYOUT names a part this renderer does not know, which render nothing: "attestations".']);
+});
+
+test('UX-2 P2 (4) a regression guard (§9 item 5): the default read, with the committed nodes held, does not throw', () => {
+  assert.doesNotThrow(() => resolveAnswerLayouts({}));
+  assert.doesNotThrow(() => withLayoutEnv({}, instanceAnswerLayouts));
+});
+
 test('W4 P1 (5) the foot line, word for word', () => {
-  assert.equal(layoutLine(ANSWER_FIRST), 'Shown under layout answer-first v1');
-  assert.equal(layoutLine(ENVELOPE_ORDER), 'Shown under layout envelope-order v1');
+  assert.equal(layoutLine(ANSWER_FIRST), 'Shown under layout answer-first v2');
+  assert.equal(layoutLine(ENVELOPE_ORDER), 'Shown under layout envelope-order v2');
 });
 
 // --- fix 1 (F1, F5): the environment binding ------------------------------------------------
@@ -381,7 +458,7 @@ test('W4 P1 fix 1 (F1) the instance’s layouts come from the three settings: no
   assert.deepEqual(withLayoutEnv({}, instanceAnswerLayouts), BUILT_IN_INSTANCE_LAYOUTS, 'none: the built-ins');
   const custom = withLayoutEnv({ ANSWER_LAYOUT: JSON.stringify(VALID) }, instanceAnswerLayouts);
   assert.deepEqual(custom.default, VALID, 'inline: the configured layout is the default');
-  assert.deepEqual(custom.offered.map(layoutId), ['fixture-valid@1', 'answer-first@1', 'envelope-order@1']);
+  assert.deepEqual(custom.offered.map(layoutId), ['fixture-valid@1', 'answer-first@2', 'envelope-order@2']);
   assert.throws(() => withLayoutEnv({ ANSWER_LAYOUT_URL: 'https://x.test/p' }, instanceAnswerLayouts), /ANSWER_LAYOUT_URL is set/);
   assert.deepEqual(withLayoutEnv({}, instanceAnswerLayouts), BUILT_IN_INSTANCE_LAYOUTS, 'unset again: the built-ins, not a kept value');
 });
