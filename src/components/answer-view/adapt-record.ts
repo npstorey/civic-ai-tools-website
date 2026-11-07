@@ -354,10 +354,11 @@ export function adaptRecord(input: RecordAdapterInput): AnswerViewModel {
         ? { recordNotebook: { notebook, slug: row.slug, assertion: reproductionAssertionFor(notebook), bundleHref: isDatHere ? bundleHref : null } }
         : {}),
       answerAgain: true,
-      // "Verified" only after verify-core's check passed on the bytes the page
-      // renders (the W3 fix); no note for a blob that was not fetched or did not verify.
+      // Only after verify-core's check passed on the bytes the page renders
+      // (the W3 fix); no note for a blob that was not fetched or did not
+      // verify. X29 (UX-2 P5): "verified" is reserved for the act (R18 C).
       ...(input.resolution?.outputIsBlob && input.resolution.outputBlobRef && input.resolution.outputVerified === true
-        ? { answerNote: `Output stored as blob (verified) · ${input.resolution.outputBlobRef.size.toLocaleString()} bytes` }
+        ? { answerNote: `Answer kept outside the signed record · ${input.resolution.outputBlobRef.size.toLocaleString()} bytes` }
         : {}),
       // G: the package's summary, else the row's, under no author line.
       summary: { kind: 'stated', author: null, text: pkg.summary ?? row.summary },

@@ -3,7 +3,8 @@
 // label reads the subtype's display name and links to its guidance bundle.
 //
 // THE LABEL. `page.tsx` prints the package's `producerProfile` in the
-// Verification Status section. On a record declaring the subtype the line
+// "About this package" disclosure (UX-2 P5 moved it there from the retired
+// "Verification Status" section, unchanged). On a record declaring the subtype the line
 // keeps printing the record's own producer profile (fix round 1, W1): it reads
 // "Producer profile: ", then "Civic AI Tools profile, v1" (D2's display name)
 // as a link whose href is the url in verify-core's subtype table row
@@ -207,11 +208,11 @@ async function render(slug: string, contentProfile: string | null, pkg: Pkg): Pr
   return renderToStaticMarkup(createElement(Session, { session: null }, element));
 }
 
-/** The Verification Status section's body: from its heading to the end of the disclosure's sections. */
+/** The "About this package" disclosure's body (UX-2 P5; it holds what "Verification Status" held besides the badge). */
 function verificationSection(html: string): string {
-  const start = html.indexOf('>Verification Status</h2>');
-  assert.ok(start >= 0, 'premise: the page rendered its Verification Status section');
-  return html.slice(start, start + 4000);
+  const start = html.indexOf('>About this package</summary>');
+  assert.ok(start >= 0, 'premise: the page rendered its "About this package" disclosure');
+  return html.slice(start, html.indexOf('</details>', start));
 }
 
 /** Every `<a …>text</a>` in a fragment, as { href, text }. */

@@ -130,6 +130,7 @@ const ALLOWLIST: readonly Allowed[] = [
 
   // The P9 frame's width name (UX-2 P5, the record frame): a value, never rendered.
   { file: 'src/app/(app)/evidence/page.tsx', rows: 'UX-2 P5 (`<Page width="record">`)', reason: 'code value', text: 'record', count: 1 },
+  { file: 'src/app/(app)/evidence/[slug]/page.tsx', rows: 'UX-2 P5 (`<Page width="record">`)', reason: 'code value', text: 'record', count: 1 },
 
   // NotebookOutput.tsx: "execution record" (C12).
   { file: 'src/components/notebook/NotebookOutput.tsx', rows: ':241 (C12)', reason: 'keep', text: 'Publishes the executed notebook and its execution record — not a regenerated skeleton.', count: 1 },
@@ -153,6 +154,9 @@ const ALLOWLIST: readonly Allowed[] = [
   // Download file names (D6).
   { file: 'src/components/evidence/NotebookSection.tsx', rows: ':96 (D6, file name)', reason: 'keep', text: 'record-', count: 1 },
   { file: 'src/lib/evidence/package-download.ts', rows: ':37 (D6, file name)', reason: 'keep', text: 'record-', count: 1 },
+
+  // adapt-record.ts: X29's note (UX-2 P5, RULED), "record" in the standard's sense.
+  { file: 'src/components/answer-view/adapt-record.ts', rows: ':360 (X29)', reason: 'ruled copy', phrase: 'Answer kept outside the signed record', count: 1 },
 
   // AnswerView.tsx
   { file: 'src/components/answer-view/AnswerView.tsx', rows: ':605', reason: 'verb', text: 'The notebook metadata records the sandbox runtime versions used at execution.', count: 1 },

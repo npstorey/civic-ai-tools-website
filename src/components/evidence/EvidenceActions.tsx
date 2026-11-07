@@ -1,8 +1,10 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, type ReactNode } from 'react';
 import TrustSignal from './TrustSignal';
 import VerifyBadge from './VerifyBadge';
+import { Disclosure } from '@/components/ui/Disclosure';
+import { ABOUT_THIS_PACKAGE, CHECKS, SIGNATURE_MEANING } from '@/lib/evidence/trust-words';
 import {
   summarizeIntegrity,
   resolveCaptureMethodLabel,
@@ -52,6 +54,20 @@ interface EvidenceActionsProps {
    *  means the instance has not named itself, and the citation says
    *  "Record Package" with no publisher rather than inventing one. */
   brandName: string | null;
+  /** Whether the record carries a signature: G0-5's sentence (X10) sits beside the glance only then. */
+  signed?: boolean;
+  /** The "About this package" disclosure's body (X9): what the retired "Verification Status" held besides its badge, and the package hash. */
+  aboutPackage?: ReactNode;
+}
+
+/**
+ * The integrity glance as the "Checks" row (UX-2 P5, X6): the tier and the
+ * detail `summarizeIntegrity` computes, the label read as the checks' result
+ * (`CHECKS`, PENDING). No tier word changes.
+ */
+export function checksSignal(result: Parameters<typeof summarizeIntegrity>[0]) {
+  const summary = summarizeIntegrity(result);
+  return { ...summary, label: CHECKS(summary.label) };
 }
 
 /** Exported for render-harness/tests only — the popover mounts on the Cite
@@ -157,7 +173,7 @@ interface VerifyResult {
 
 export default function EvidenceActions({
   slug, title, creatorName, createdAt, captureMethod, visibility, commitmentUrl,
-  brandName,
+  brandName, signed = false, aboutPackage,
 }: EvidenceActionsProps) {
   const [linkCopied, setLinkCopied] = useState(false);
   const [showCite, setShowCite] = useState(false);
@@ -267,7 +283,9 @@ export default function EvidenceActions({
                 the calm "Integrity verified" — never amber/red (the load-bearing
                 calm requirement). Amber/red appear only on a genuine
                 unconfirmed/failed check. */}
-            <TrustSignal {...summarizeIntegrity(verifyResult)} />
+            {/* UX-2 P5 (X6, "Checks: <result>"; PENDING at the gate): the
+                glance's own label, unchanged, read as the checks' result. */}
+            <TrustSignal {...checksSignal(verifyResult)} />
 
             {/* captureMethod label adjacent to the glance — "signed ≠ verbatim"
                 (spec §9.2 #11): the summary's signature check proves the bytes
@@ -311,6 +329,14 @@ export default function EvidenceActions({
           </div>
         )}
 
+        {/* G0-5 A (X10): what the signature shows and does not, beside the
+            glance, on every signed record, sealed or public. */}
+        {signed && (
+          <p data-part="signature-meaning" style={{ margin: '8px 0 0', fontSize: '13px', lineHeight: 1.5, color: 'var(--text-secondary)' }}>
+            {SIGNATURE_MEANING}
+          </p>
+        )}
+
         {/* Verify-independently badge (#114) — the host-side entry point to the
             neutral verifier (ADR-0013 / Q46). Public-state-only: the verifier
             resolves a package through its commitment sidecar, which is redacted
@@ -331,7 +357,7 @@ export default function EvidenceActions({
           Download Package
         </button>
         <button onClick={handleCopyLink} style={{ ...btnStyle, color: linkCopied ? 'var(--success)' : btnStyle.color }}>
-          {linkCopied ? 'Copied' : 'Copy Link'}
+          {linkCopied ? 'Copied' : 'Copy link'}
         </button>
         <button onClick={() => setShowCite(true)} style={btnStyle}>
           Cite
@@ -355,6 +381,15 @@ export default function EvidenceActions({
           >
             Try again
           </button>
+        </div>
+      )}
+
+      {/* X9: what "Verification Status" held besides its badge (R18 C), and the package hash. Closed by default. */}
+      {aboutPackage && (
+        <div style={{ marginTop: '16px' }}>
+          <Disclosure size="inline" summary={ABOUT_THIS_PACKAGE}>
+            {aboutPackage}
+          </Disclosure>
         </div>
       )}
 

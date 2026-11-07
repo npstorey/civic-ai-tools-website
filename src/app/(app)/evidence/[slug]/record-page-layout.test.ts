@@ -10,7 +10,9 @@
 //   the answer, with no section heading, then the citation block (ruling D3);
 //   one <details>, closed, summary "Learn more about how this analysis was
 //     produced" (ruling D4), holding A-G, then Provenance Graph, Additional
-//     Artifacts, Adversarial evaluations, Attestations, Verification Status;
+//     Artifacts, Adversarial evaluations, Attestations (UX-2 P5 retired
+//     "Verification Status"; what it held besides its badge is in "About this
+//     package", in the actions);
 //   outside, after it — Status History, Actions, Package hash.
 //
 // HOW IT IS DRIVEN. The page's default export, called with `params`, and the
@@ -533,12 +535,14 @@ const ENVELOPE = [
   'F · Rendered answer',
   'G · Summary',
 ];
+// UX-2 P5 (R18 C): "Verification Status" left the disclosure; the layout's
+// `verification` slot (`answer-layout/index.ts:34`, `:56`, `:127`, a signed
+// layout node's vocabulary) is kept and renders nothing.
 const AFTER_ENVELOPE = [
   'Provenance Graph',
   'Additional Artifacts',
   'Adversarial evaluations',
   'Attestations',
-  'Verification Status',
 ];
 
 // --- Criterion 1: the order, on both formats -----------------------------------
@@ -597,9 +601,9 @@ test('P2 (1) a record whose package cannot be loaded keeps the parts that need n
   // (The JSON-LD block at the top of the page carries the summary too; G is read by its own section.)
   assert.ok(sectionBody(html, 'G · Summary', d.end).includes('NOPKGDBSUMMARY-p2'), 'the database summary renders, as G');
   assert.equal(html.slice(0, d.start).includes(heading('A · Initial prompt')), false, 'no envelope part renders above');
-  for (const t of ['Attestations', 'Verification Status']) assert.ok(at(html, heading(t)) < d.end, `${t} renders inside`);
+  for (const t of ['Attestations']) assert.ok(at(html, heading(t)) < d.end, `${t} renders inside`);
   assert.ok(at(html, heading('Actions')) > d.end, 'Actions renders after the disclosure');
-  assert.ok(at(html, 'Package hash: ') > d.end, 'the package hash renders after the disclosure');
+  assert.ok(at(html, 'Package hash: ') > d.end, 'the package hash renders after the disclosure (in "About this package", UX-2 P5)');
 });
 
 // --- Criterion 2: rule 3, by text ----------------------------------------------
@@ -1200,7 +1204,7 @@ test('W2 P2 (4) section D labels each call by its upstream name and operation ty
 // download) with the refused-request lines under it; the answer; the citation
 // block; the steps; one disclosure, holding A-G and then what W1's G0 placed
 // after the envelope (Provenance Graph, Additional Artifacts, Adversarial
-// evaluations, Attestations, Verification Status); then, outside it, Status
+// evaluations, Attestations); then, outside it, Status
 // History and the actions. The page keeps its banners and header above the
 // view, and the package hash below it.
 //
@@ -1285,7 +1289,8 @@ for (const [name, key, pkg] of [
     const d = requirePart(html, 'disclosure');
     assert.ok(d.markup.includes(`>${DISCLOSURE_LABEL}</summary>`), 'the disclosure is the view’s, under its label');
     assert.ok(at(html, '<h1') < requirePart(html, 'status-row').start, 'the page’s header sits above the view');
-    assert.ok(at(html, 'Package hash: ') > requirePart(html, 'actions').end, 'the package hash sits below the view');
+    // UX-2 P5 (X9): the package hash moved into "About this package", in the actions part.
+    assert.ok(requirePart(html, 'actions').markup.includes('Package hash: '), 'the package hash sits in the actions part');
     assert.ok(requirePart(html, 'answer').markup.includes(key === 'agf' ? AGF_ANSWER : OLD_ANSWER), 'the answer part carries the record’s answer');
     assert.equal(stepsIn(requirePart(html, 'steps').markup).length, pkg.queries.length, 'the steps part carries one step per signed entry');
     assert.ok(requirePart(html, 'actions').markup.includes('https://typedstandards.org/verify?url='), 'the actions part carries the verify action');
@@ -1731,7 +1736,9 @@ for (const [name, marker, c] of NOT_VERIFYING) {
     const url = (c.pkg as { output: { url: string } }).output.url;
     const html = await renderWithInstance(c, INSTANCE);
     assert.equal(BLOB_REQUESTS.get(url), 1, 'premise: the page fetched the bytes, once');
-    assert.match(outsideCitation(await renderWithInstance(OLD, INSTANCE)), /\bverified\b/i, 'premise: the instrument sees the word on a blob that verifies');
+    // UX-2 P5 (X29): the note no longer says "verified"; the instrument reads the note itself.
+    assert.ok(outsideCitation(await renderWithInstance(OLD, INSTANCE)).includes('Answer kept outside the signed record'), 'premise: the instrument sees the note on a blob that verifies');
+    assert.equal(html.includes('Answer kept outside the signed record'), false, 'no note on bytes that did not verify');
     assert.doesNotMatch(html, /\(verified\)/i, 'the blob note’s "(verified)" appears nowhere on the page');
     assert.doesNotMatch(outsideCitation(html), /\bverified\b/i, '"verified" appears nowhere on the page outside the citation block');
     assert.equal(html.includes(marker), false, 'the bytes that did not verify are not rendered');
@@ -1826,7 +1833,8 @@ const instanceWith = (layout: Layout) => ({
 const VIEW_ROOT = '<div style="max-width:900px;margin:0 auto">';
 
 function partOfChild(markup: string): string {
-  if (/^<div data-part="(status-row|refused-requests)"/.test(markup)) return 'status';
+  // UX-2 P5: the trust rows travel with the status row's part.
+  if (/^<div data-part="(status-row|refused-requests|trust-rows)"/.test(markup)) return 'status';
   if (markup.startsWith('<div style="margin-bottom:24px">') || markup.startsWith('<h2')) return 'answer';
   if (markup.startsWith('<div data-part="citation"')) return 'citation';
   if (markup.startsWith('<div data-part="steps"')) return 'steps';
@@ -1927,7 +1935,9 @@ for (const [name, c] of W4_RECORDS) {
       const children = viewChildren(html);
       assert.equal(children.at(-1)?.part, 'foot', 'the foot closes the view');
       assert.ok(at(html, line) > requireDisclosure(html).end, 'outside the disclosure');
-      assert.ok(at(html, line) < at(html, 'Package hash: '), 'above the package hash, the page’s last line');
+      // UX-2 P5 (X9): the package hash moved into "About this package", in the
+      // actions; the foot now closes the view and the page.
+      assert.ok(at(html, line) > at(html, 'Package hash: '), 'after the package hash, which sits in the actions');
     }
     assert.ok((await renderWithInstance(c, INSTANCE)).includes('Shown under layout answer-first v1'), 'with no setting, the default’s line');
   });
@@ -1968,10 +1978,12 @@ test('W4 P1 (8) the record’s own sections are placed by name: one moved first,
   const layout: Layout = {
     ...ANSWER_FIRST,
     name: 'fixture-record-sections',
-    disclosure: { ...ANSWER_FIRST.disclosure, order: ['verification', 'A', 'B', 'C', 'D', 'E', 'G', 'signers'] },
+    // UX-2 P5: `verification` renders nothing now, so `attestations` is the
+    // section moved first; the three the order omits keep their default place.
+    disclosure: { ...ANSWER_FIRST.disclosure, order: ['attestations', 'A', 'B', 'C', 'D', 'E', 'G', 'signers'] },
   };
   const titles = sectionTitles(await renderWithInstance(AGF, INSTANCE, instanceWith(layout)));
-  assert.deepEqual(titles, ['Verification Status', ...ENVELOPE, ...AFTER_ENVELOPE.filter((t) => t !== 'Verification Status')]);
+  assert.deepEqual(titles, ['Attestations', ...ENVELOPE, ...AFTER_ENVELOPE.filter((t) => t !== 'Attestations')]);
 });
 
 test('W4 P1 fix 1 (F7) appliesTo and rendererVersion change nothing yet: a layout for another profile still applies to the record', async () => {
@@ -2163,11 +2175,18 @@ const TRACE_AS_BLOBREF: Case = {
   evaluations: [],
 };
 
-const P5_HTML = {
-  traced: await render(TRACED),
-  blobref: await render(TRACE_AS_BLOBREF),
-  sealedSigned: await render(SEALED_SIGNED),
-};
+// Rendered inside the first test that asks, never at module scope: a render
+// sets the stubs' shared state (`__p2Rows`, `__p2Package`), and a test that
+// node:test has already started would otherwise read another record's rows.
+let p5Cache: { traced: string; blobref: string; sealedSigned: string } | null = null;
+async function p5Html() {
+  p5Cache ??= {
+    traced: await render(TRACED),
+    blobref: await render(TRACE_AS_BLOBREF),
+    sealedSigned: await render(SEALED_SIGNED),
+  };
+  return p5Cache;
+}
 
 /** What a reader reads: script elements dropped, tags removed, entities decoded, whitespace collapsed. */
 function readable(markup: string): string {
@@ -2212,11 +2231,13 @@ function trustRows(html: string): string[] {
   return signalLabels(parts[0].markup);
 }
 
-test('UX-2 P5 C5: a signed record with a trace and both anchors shows three trust rows under the status row, outside the disclosure', () => {
+test('UX-2 P5 C5: a signed record with a trace and both anchors shows three trust rows under the status row, outside the disclosure', async () => {
+  const P5_HTML = await p5Html();
   assert.deepEqual(trustRows(P5_HTML.traced), [signedBy(CREATOR.displayName), DATA_READ_ON('October 16, 2026'), TIMESTAMPED]);
 });
 
-test('UX-2 P5 C5 (relay 13, 4a): the same record with its trace stored as a BlobRef shows no date row', () => {
+test('UX-2 P5 C5 (relay 13, 4a): the same record with its trace stored as a BlobRef shows no date row', async () => {
+  const P5_HTML = await p5Html();
   assert.deepEqual(trustRows(P5_HTML.blobref), [signedBy(CREATOR.displayName), TIMESTAMPED]);
 });
 
@@ -2225,7 +2246,8 @@ test('UX-2 P5 C5: a signed record with no trace and no anchors shows one row; an
   assert.ok(!readable(HTML.skeleton).includes('Signed by'), 'an unsigned record names no signer');
 });
 
-test('UX-2 P5 C5: the "Verification Status" section and its badge are gone from every page', () => {
+test('UX-2 P5 C5: the "Verification Status" section and its badge are gone from every page', async () => {
+  const P5_HTML = await p5Html();
   for (const [name, html] of Object.entries({ ...HTML, ...P5_HTML })) {
     assert.equal(occurrences(html, 'Verification Status').length, 0, `${name}: the heading renders`);
     assert.ok(!/>\s*(unverified|consistency tested|evaluated|fully attested)\s*</i.test(html.replace(/_/g, ' ')), `${name}: a status badge renders`);
@@ -2278,7 +2300,8 @@ test('UX-2 P5 C5: the three banners are P5 tinted cards in the tone each carries
   }
 });
 
-test('UX-2 P5 C6 (G0-5 A, X10): the signature sentence sits beside the integrity glance, once, on every signed record, and on no unsigned one', () => {
+test('UX-2 P5 C6 (G0-5 A, X10): the signature sentence sits beside the integrity glance, once, on every signed record, and on no unsigned one', async () => {
+  const P5_HTML = await p5Html();
   for (const [name, html] of Object.entries({ agf: HTML.agf, old: HTML.old, sealedSigned: P5_HTML.sealedSigned, traced: P5_HTML.traced })) {
     const found = occurrences(html, escaped(X10_SIGNATURE));
     assert.equal(found.length, 1, `${name}: the sentence renders ${found.length} times`);
@@ -2289,7 +2312,8 @@ test('UX-2 P5 C6 (G0-5 A, X10): the signature sentence sits beside the integrity
   assert.equal(occurrences(HTML.skeleton, escaped(X10_SIGNATURE)).length, 0, 'an unsigned record carries no signature sentence');
 });
 
-test('UX-2 P5 S28: "record" is defined once, at the first "record" a reader meets', () => {
+test('UX-2 P5 S28: "record" is defined once, at the first "record" a reader meets', async () => {
+  const P5_HTML = await p5Html();
   for (const [name, html] of Object.entries({ agf: HTML.agf, old: HTML.old, skeleton: HTML.skeleton, traced: P5_HTML.traced })) {
     const text = readable(html);
     const defined = occurrences(text, S28_RECORD);
