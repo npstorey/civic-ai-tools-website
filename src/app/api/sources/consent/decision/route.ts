@@ -7,19 +7,22 @@ import { sourceRoutingMode } from '@/lib/mcp/source-routing-mode';
  * /api/sources/consent/decision — the reader's answer to a pause (#644 W2,
  * D4 (iii)).
  *
- *   POST  `{ key, decision }`, `decision` one of `allow` and `not-now`, the
- *         key a pause minted and carried on its `consent_pause` event.
- *         200 `{ decision, sourceId }` on each decision; `allow` also moves
- *         that one source to On in the reader's consent (the row, or the
- *         cookie set on this response). 400 for a body it cannot read; 404
+ *   POST  `{ key, decision }`, `decision` one of `allow`, `off`, `allow-all`
+ *         and `not-now` (UX-2 P4b), the key a pause minted and carried on its
+ *         `consent_pause` event. 200 `{ decision, sourceId }` on each
+ *         decision; `allow` also moves that one source to On in the reader's
+ *         consent (the row, or the cookie set on this response), `off` moves
+ *         it to Off, `allow-all` moves every configured source to On, and
+ *         `not-now` (a page's from before P4b) moves nothing. 400 for a body
+ *         it cannot read; 404
  *         for a key the store does not hold or no longer holds; 403 for a key
  *         minted under another account, checked before 409 for a key already
  *         decided; 503 when the store fails, or with `RATE_LIMIT_SECRET`
  *         unset (the streaming routes' refusal, before any key is read).
  *         The decision is written before the consent is moved, so a refused
  *         write moves nothing. 200 `{ decision: 'allow', sourceId, moved:
- *         false }` when the decision was saved but the consent could not be
- *         moved; `moved` is absent otherwise.
+ *         false }` (any moving decision) when the decision was saved but the
+ *         consent could not be moved; `moved` is absent otherwise.
  *   GET   `{ routing, store }`, uncached: `routing` is this instance's
  *         `SOURCE_ROUTING` mode (`in-loop` or `all-sources`), so the Sources
  *         panel says a question may stop to ask only where one can (fix round

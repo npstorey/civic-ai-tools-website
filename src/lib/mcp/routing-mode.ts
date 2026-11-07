@@ -168,8 +168,14 @@ export class SourceNotLoadedError extends Error {
  *  client's, told the loaded set as it stands at each call. */
 export type InLoopToolTransport = (name: string, args: Record<string, unknown>, options: McpToolCallOptions) => Promise<string>;
 
-/** How a pause ended (#644 W2): the reader's decision, or none. */
-export type PauseDecision = 'allow' | 'not-now' | 'no-answer';
+/**
+ * How a pause ended (#644 W2): the reader's decision, or none. UX-2 P4b (L10)
+ * adds `off` ("Don't allow" at the pause: declined, and the source is Off for
+ * later questions) and `allow-all` ("Allow all data sources": this source
+ * loads, and no later load in the run pauses). `not-now` is a page's from
+ * before P4b, declined as before.
+ */
+export type PauseDecision = 'allow' | 'off' | 'allow-all' | 'not-now' | 'no-answer';
 
 /**
  * The just-in-time pause (#644 W2, D4): what a load of an Ask-first source
@@ -259,10 +265,16 @@ export interface InLoopRecord {
  *     configured) is `not-offered`: nothing is loaded and the reader is not
  *     asked;
  *   - an Ask-first source asks the reader when the run holds a pause
- *     (#644 W2): `loaded` on Allow, as an On source loads; `declined` on Not
- *     now; `no-answer` when no decision arrived, or the reader could not be
- *     asked. A second load of the same source asks nothing and repeats the
- *     first outcome. With no pause it is `declined`, as before W2;
+ *     (#644 W2): `loaded` on Allow, as an On source loads; `declined` on Don't
+ *     allow (`off`, UX-2 P4b) or a page's older `not-now`; `no-answer` when no
+ *     decision arrived, or the reader could not be asked. A second load of the
+ *     same source asks nothing and repeats the first outcome. With no pause it
+ *     is `declined`, as before W2;
+ *   - after Allow all (`allow-all`, UX-2 P4b, S4) at any pause, every later
+ *     load of an Ask-first source in the run loads as an On source does, with
+ *     no pause and no entry: the run is marked (`allowedAll`), since the
+ *     directory it lists is fixed at its start and the stored consent is not
+ *     read again mid-run. Another run of the same reader holds its own mark;
  *   - an On source is `loaded`: the next request's system prompt is the
  *     in-loop prompt over the loaded set, then the lock section, and its
  *     tools are `load_source` and the loaded sources' tools; a second load
@@ -283,6 +295,8 @@ export async function createInLoopRouting(input: InLoopRoutingInput): Promise<In
   const loadedIds: string[] = [];
   // How each Ask-first source's pause ended, so a second load asks nothing.
   const asked = new Map<string, PauseDecision>();
+  // Allow all at a pause of this run (UX-2 P4b, S4): no later load pauses.
+  let allowedAll = false;
   const loadedNow = (): string[] => directoryIds.filter((id) => loadedIds.includes(id));
 
   let current: { systemPrompt: string; tools: ChatCompletionTool[]; components: CompositionComponent[] } = {
@@ -297,7 +311,7 @@ export async function createInLoopRouting(input: InLoopRoutingInput): Promise<In
     async load(alias, context) {
       const entry = alias === undefined ? undefined : directory.find((candidate) => candidate.alias === alias);
       if (!entry) return { outcome: 'not-offered', text: LOAD_RESULT_TEXT.notOffered };
-      if (entry.state !== 'on') {
+      if (entry.state !== 'on' && !allowedAll) {
         if (!pause) return { outcome: 'declined', text: LOAD_RESULT_TEXT.declined(entry.alias) };
         let decision = asked.get(entry.sourceId);
         if (decision === undefined) {
@@ -309,9 +323,10 @@ export async function createInLoopRouting(input: InLoopRoutingInput): Promise<In
           }
           asked.set(entry.sourceId, decision);
         }
-        if (decision === 'not-now') return { outcome: 'declined', text: LOAD_RESULT_TEXT.declined(entry.alias) };
+        if (decision === 'off' || decision === 'not-now') return { outcome: 'declined', text: LOAD_RESULT_TEXT.declined(entry.alias) };
         if (decision === 'no-answer') return { outcome: 'no-answer', text: LOAD_RESULT_TEXT.noAnswer(entry.alias) };
-        // Allow: the source loads as an On source does.
+        if (decision === 'allow-all') allowedAll = true;
+        // Allow, or Allow all: the source loads as an On source does.
       }
       if (loadedIds.includes(entry.sourceId)) {
         return { outcome: 'loaded', text: LOAD_RESULT_TEXT.alreadyLoaded(entry.alias), systemPrompt: current.systemPrompt, tools: current.tools };

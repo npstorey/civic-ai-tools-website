@@ -13,8 +13,9 @@
  *      flows statement, its hosts, the links, `expiresAt` and `holds: true`),
  *      so no surface shows buttons whose answer would find no entry;
  *   3. it reads the entry every `CONSENT_PAUSE_POLL_MS` for at most
- *      `CONSENT_PAUSE_BOUND_MS`, and answers `allow`, `not-now` or
- *      `no-answer`.
+ *      `CONSENT_PAUSE_BOUND_MS`, and answers the decision the entry holds
+ *      (`allow`, `off`, `allow-all`, or `not-now` from a page loaded before
+ *      UX-2 P4b), or `no-answer`.
  * The event also carries `entryExpiresAt`, the hold's start plus the entry's
  * life (R9 P1, #669 D2): the card keeps its buttons until then, since an
  * answer the entry still takes moves the source On for later questions.
@@ -53,15 +54,24 @@
  * THE DECISION (`answerConsentDecision`, `POST /api/sources/consent/decision`).
  * A key minted under another account is refused (403) before a decided key
  * (409), so a stranger learns nothing from the status. The decision is
- * written first, and only once it is written does `allow` move that one
- * source to On (fix round 2, item 2): a write that fails or finds no entry
- * leaves the consent as it was. The move goes through R6's store, from its
+ * written first, and only once it is written does the consent move (fix round
+ * 2, item 2): a write that fails or finds no entry leaves the consent as it
+ * was. The four values (UX-2 P4b, L10):
+ *   - `allow` moves that one source On;
+ *   - `off`, "Don't allow" at the pause (D7 C), moves that one source Off,
+ *     and the run declines it;
+ *   - `allow-all`, "Allow all data sources" (ASK2 B, S4), moves every
+ *     configured source On, and the run loads every later Ask-first source
+ *     with no further pause (`routing-mode.ts`);
+ *   - `not-now` moves nothing, and the run declines the source. No surface
+ *     sends it since P4b; it is kept for a page loaded before the deploy.
+ * Each move goes through one writer (`moveSources`), from R6's store's
  * exported pieces, as `PUT /api/sources/consent` composes them: the row (kept
  * with its `flowsHash` and `flowsStatement`) for a session with a `dbId`,
- * else the cookie (kept with its `flows` and every other source's entry). A
- * move that fails after the decision was written answers 200 with
- * `moved: false`: the run goes on with the source, and the consent did not
- * change. `not-now` moves nothing. The decision is written with `XX KEEPTTL`:
+ * else the cookie (kept with its `flows` and every other source's entry), in
+ * one write and one `Set-Cookie`. A move that fails after the decision was
+ * written answers 200 with `moved: false`: the run goes on as decided, and
+ * the consent did not change. The decision is written with `XX KEEPTTL`:
  * a plain `SET` would clear the entry's expiry, and `KEEPTTL` alone would
  * re-create an entry that had expired, so neither the privacy page's "expire
  * 10 minutes after it is made" nor a 404 for an expired key would hold.
@@ -105,12 +115,20 @@ const KEY_SHAPE = /^[0-9a-f]{32}$/;
 
 // --- The store ---------------------------------------------------------------------
 
+/** The answers the decision route takes (UX-2 P4b, L10): see the module's header. */
+export type ConsentDecisionValue = 'allow' | 'off' | 'allow-all' | 'not-now';
+export const CONSENT_DECISION_VALUES: readonly ConsentDecisionValue[] = ['allow', 'off', 'allow-all', 'not-now'];
+
+function isDecisionValue(value: unknown): value is ConsentDecisionValue {
+  return typeof value === 'string' && (CONSENT_DECISION_VALUES as readonly string[]).includes(value);
+}
+
 /** What the pause writes, and the decision route adds `decision` to. */
 export interface DecisionEntry {
   sourceId: string;
   /** The reader code, only under a `dbId`. */
   reader?: string;
-  decision?: 'allow' | 'not-now';
+  decision?: ConsentDecisionValue;
 }
 
 /** The two commands the pause and the decision route send. */
@@ -129,7 +147,7 @@ function isEntry(value: unknown): value is DecisionEntry {
   const entry = value as Record<string, unknown>;
   return typeof entry.sourceId === 'string'
     && (entry.reader === undefined || typeof entry.reader === 'string')
-    && (entry.decision === undefined || entry.decision === 'allow' || entry.decision === 'not-now');
+    && (entry.decision === undefined || isDecisionValue(entry.decision));
 }
 
 // --- The key and the reader code -----------------------------------------------------
@@ -318,33 +336,67 @@ const json = (body: unknown, status: number, setCookie?: string) =>
   });
 
 /**
- * Move one source to On in the requester's consent, as `PUT
- * /api/sources/consent` would write it, changing nothing else. Returns the
- * cookie to set, or undefined (a row was written, or there is nothing to
- * merge into: no row, or no cookie on the request).
+ * Move each of `sourceIds` to `state` in the requester's consent, as `PUT
+ * /api/sources/consent` would write it, changing nothing else, in one write.
+ * A source whose state does not change keeps the date it was given. Returns
+ * the cookie to set, or undefined (a row was written, or there is nothing to
+ * merge into: no row, or no cookie on the request). On the cookie path a
+ * source the statement in force does not carry, and the cookie never held, is
+ * left out (it has no version to keep).
  */
-async function moveSourceOn(request: Request, session: DecisionSession | null | undefined, sourceId: string): Promise<string | undefined> {
+async function moveSources(
+  request: Request,
+  session: DecisionSession | null | undefined,
+  sourceIds: readonly string[],
+  state: 'on' | 'off',
+  statement?: FlowsStatement,
+): Promise<string | undefined> {
   const today = consentDate();
   const dbId = session?.user?.dbId;
   if (dbId) {
     const row = await readConsentRow(dbId);
     if (!row) return undefined;
-    const prior = row.states[sourceId];
-    const states = { ...row.states, [sourceId]: { state: 'on' as const, since: prior?.state === 'on' ? prior.since : today } };
+    const states = { ...row.states };
+    for (const id of sourceIds) {
+      const prior = row.states[id];
+      states[id] = { state, since: prior?.state === state ? prior.since : today };
+    }
     await writeConsentRow(dbId, { states, flowsHash: row.flowsHash, flowsStatement: row.flowsStatement });
     return undefined;
   }
   const cookie = readConsentCookie(request);
   if (!cookie) return undefined;
-  const statement = await buildFlowsStatement();
-  const prior = cookie.states[sourceId];
-  const version = statement.sources.find((s) => s.sourceId === sourceId)?.version ?? prior?.version;
-  if (!version) return undefined;
-  const states = { ...cookie.states, [sourceId]: { state: 'on' as const, since: prior?.state === 'on' ? prior.since : today, version } };
+  const inForce = statement ?? (await buildFlowsStatement());
+  const states = { ...cookie.states };
+  let moved = 0;
+  for (const id of sourceIds) {
+    const prior = cookie.states[id];
+    const version = inForce.sources.find((s) => s.sourceId === id)?.version ?? prior?.version;
+    if (!version) continue;
+    states[id] = { state, since: prior?.state === state ? prior.since : today, version };
+    moved += 1;
+  }
+  if (moved === 0) return undefined;
   return consentCookieHeader(encodeConsentCookie({ v: 1, flows: cookie.flows, states }), isSecureRequest(request));
 }
 
-/** `POST /api/sources/consent/decision`: `{ key, decision }`, `decision` one of `allow` and `not-now`. */
+/** The move a decision makes once it is written: none for `not-now`. */
+async function moveFor(
+  decision: ConsentDecisionValue,
+  request: Request,
+  session: DecisionSession | null | undefined,
+  sourceId: string,
+): Promise<string | undefined> {
+  if (decision === 'allow') return moveSources(request, session, [sourceId], 'on');
+  if (decision === 'off') return moveSources(request, session, [sourceId], 'off');
+  if (decision === 'allow-all') {
+    const statement = await buildFlowsStatement();
+    return moveSources(request, session, statement.sources.map((s) => s.sourceId), 'on', statement);
+  }
+  return undefined;
+}
+
+/** `POST /api/sources/consent/decision`: `{ key, decision }`, `decision` one of `allow`, `off`, `allow-all` and `not-now`. */
 export async function answerConsentDecision(
   request: Request,
   session: DecisionSession | null | undefined,
@@ -364,8 +416,8 @@ export async function answerConsentDecision(
     body = null;
   }
   const { key, decision } = (body && typeof body === 'object' ? body : {}) as { key?: unknown; decision?: unknown };
-  if (typeof key !== 'string' || (decision !== 'allow' && decision !== 'not-now')) {
-    return json({ error: 'The answer could not be read: send the key and allow or not-now.', code: 'invalid_decision' }, 400);
+  if (typeof key !== 'string' || !isDecisionValue(decision)) {
+    return json({ error: 'The answer could not be read: send the key and one of allow, off, allow-all or not-now.', code: 'invalid_decision' }, 400);
   }
   const unknown = () => json({ error: 'This question is no longer waiting for that answer.', code: 'decision_unknown' }, 404);
   if (!KEY_SHAPE.test(key)) return unknown();
@@ -399,11 +451,11 @@ export async function answerConsentDecision(
     return unsaved();
   }
   if (written === null) return unknown();
-  if (decision !== 'allow') return json({ decision, sourceId: entry.sourceId }, 200);
+  if (decision === 'not-now') return json({ decision, sourceId: entry.sourceId }, 200);
 
   let setCookie: string | undefined;
   try {
-    setCookie = await moveSourceOn(request, session, entry.sourceId);
+    setCookie = await moveFor(decision, request, session, entry.sourceId);
   } catch {
     // The run polls the decision, which is saved; only the consent did not move. No error's text (errors-out-of-logs.test.ts).
     console.error('[consent-decision] the decision was saved, but the consent could not be moved');

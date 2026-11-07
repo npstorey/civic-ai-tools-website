@@ -113,8 +113,8 @@ export interface PendingPause {
   payload: ConsentPausePayload;
   /** An answer is being posted. */
   deciding: boolean;
-  /** The answer the decision route accepted. */
-  decision?: 'allow' | 'not-now';
+  /** The answer the decision route accepted (UX-2 P4b: Allow, Don't allow as `off`, Allow all). */
+  decision?: PauseAnswer;
   /** `false` when the route saved Allow but could not turn the source On (fix round 2, item 2); absent otherwise. */
   moved?: false;
   /** Why the route did not accept one: the question no longer waits, it was answered already, or anything else. */
@@ -299,8 +299,15 @@ export function cancelConsentPauses(): void {
   if (ended) set({ pauses: ended });
 }
 
-/** Post the reader's answer to a pause, and keep what the route said. Allow also reads the consent again, so the panel shows the source On. */
-export async function decideConsentPause(key: string, decision: 'allow' | 'not-now'): Promise<void> {
+/** A reader's answer at a pause (UX-2 P4b, L10): Allow, "Don't allow" (`off`) or "Allow all data sources" (`allow-all`). */
+export type PauseAnswer = 'allow' | 'off' | 'allow-all' | 'not-now';
+
+/**
+ * Post the reader's answer to a pause, and keep what the route said. Each
+ * answer moves the consent (one source On or Off, or every source On), so the
+ * consent is read again, and the panel and the Settings overlay show it.
+ */
+export async function decideConsentPause(key: string, decision: PauseAnswer): Promise<void> {
   // Given after the hold: the run went on without it, and it applies to later questions (#669 D2).
   const afterHold = pauseEntry(snapshot.pauses, key)?.holdEnded === true ? { afterHold: true as const } : {};
   updatePause(key, { deciding: true });
@@ -322,7 +329,7 @@ export async function decideConsentPause(key: string, decision: 'allow' | 'not-n
   }
   if (status === 200) {
     updatePause(key, { deciding: false, decision, ...(moved === false ? { moved: false as const } : {}), ...afterHold });
-    if (decision === 'allow') void refreshConsent();
+    void refreshConsent();
     return;
   }
   updatePause(key, { deciding: false, failure: status === 404 ? 'gone' : status === 409 ? 'decided' : 'other', ...afterHold });
