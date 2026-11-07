@@ -1,4 +1,4 @@
-// UX-2 P5 (X6's "Checks: <result>", relay 13 question 1; PENDING words): the
+// UX-2 P5 (X6's "Checks: <result>"; ruled by research check 2, C3): the
 // integrity glance reads as the checks row once the verify result arrives.
 // `<result>` is the label the glance already computes (`summarizeIntegrity`,
 // `trust-signal.ts:770`), its tier unchanged, so no tier word is new. Driven
@@ -39,7 +39,7 @@ function answer(body: unknown, status = 200) {
   globalThis.fetch = (async () => new Response(JSON.stringify(body), { status, headers: { 'Content-Type': 'application/json' } })) as typeof fetch;
 }
 
-test('UX-2 P5 (X6, pending): the glance reads "Checks: <its own label>", for a passing result and a failing one', async () => {
+test('UX-2 P5 (X6, C3 ruled): the glance reads "Checks: <its own label>", for a passing result and a failing one', async () => {
   const labels: string[] = [];
   for (const result of [PASSING, MISMATCH]) {
     answer(result);

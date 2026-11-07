@@ -63,7 +63,7 @@ interface EvidenceActionsProps {
 /**
  * The integrity glance as the "Checks" row (UX-2 P5, X6): the tier and the
  * detail `summarizeIntegrity` computes, the label read as the checks' result
- * (`CHECKS`, PENDING). No tier word changes.
+ * (`CHECKS`, ruled: research check 2, C3). No tier word changes.
  */
 export function checksSignal(result: Parameters<typeof summarizeIntegrity>[0]) {
   const summary = summarizeIntegrity(result);
@@ -283,7 +283,7 @@ export default function EvidenceActions({
                 the calm "Integrity verified" — never amber/red (the load-bearing
                 calm requirement). Amber/red appear only on a genuine
                 unconfirmed/failed check. */}
-            {/* UX-2 P5 (X6, "Checks: <result>"; PENDING at the gate): the
+            {/* UX-2 P5 (X6, "Checks: <result>"; ruled, research check 2 C3): the
                 glance's own label, unchanged, read as the checks' result. */}
             <TrustSignal {...checksSignal(verifyResult)} />
 

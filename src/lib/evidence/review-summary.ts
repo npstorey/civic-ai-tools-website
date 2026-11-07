@@ -4,13 +4,14 @@
 // expert review's own rating word, read from that review's stored payload.
 //
 // RULED words (X5): "No reviews yet"; "N reviews: 1 expert review (concerns),
-// 1 evaluation, 1 consistency test". PENDING (the research check): the forms
-// the ruled example does not show: "1 review" in the singular, the plural
-// kinds ("2 expert reviews", "2 evaluations", "2 consistency tests"), two
-// rating words in one pair of parentheses, joined by ", ". They are the
-// `count` and `ratings` rules below, and nowhere else.
+// 1 evaluation, 1 consistency test". The forms that example does not show
+// were ruled by the second research check (P5_words = A): "1 review" in the
+// singular and the plural kinds (C2a), each rating word as the analysis page
+// labels it, lowercased ("endorsed", "concerns", "disputed", "neutral note";
+// C2b), joined by ", " in one pair of parentheses, and an unread rating left
+// out (C2c). They are the `count` and `ratings` rules below, and nowhere else.
 
-import type { ExpertRating } from './expert-attestation.ts';
+import { EXPERT_RATING_LABELS, type ExpertRating } from './expert-attestation.ts';
 
 /** What the list route reports about one record's reviews. */
 export interface RecordReviews {
@@ -34,9 +35,9 @@ function count(n: number, one: string, many: string): string {
   return `${n} ${n === 1 ? one : many}`;
 }
 
-/** The rating words that were read, in parentheses; nothing when none was. */
+/** The rating words that were read, as the page labels them, lowercased, in parentheses; nothing when none was. */
 function ratings(words: Array<ExpertRating | null>): string {
-  const read = words.filter((w): w is ExpertRating => w !== null);
+  const read = words.filter((w): w is ExpertRating => w !== null).map((w) => EXPERT_RATING_LABELS[w].toLowerCase());
   return read.length > 0 ? ` (${read.join(', ')})` : '';
 }
 

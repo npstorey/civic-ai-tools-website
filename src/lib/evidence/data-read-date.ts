@@ -18,7 +18,7 @@
 /** X6, ruled: one date. */
 export const DATA_READ_ON = (date: string): string => `Data read on ${date}`;
 
-/** PENDING (the research check): the range form, used only when the calls fall on two UTC dates. */
+/** The range form (research check 2, C1, KEEP), used only when the calls fall on two UTC dates. */
 export const DATA_READ_RANGE = (first: string, last: string): string => `Data read from ${first} to ${last}`;
 
 interface SpanLike { name?: unknown; startTimeUnixNano?: unknown; attributes?: unknown }

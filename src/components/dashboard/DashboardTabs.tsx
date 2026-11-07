@@ -302,7 +302,8 @@ function MyEvidenceTab({ rows, signingConfigured, sealOnly }: { rows: EvidenceRo
                 <div style={{ display: 'flex', gap: '6px', flexShrink: 0, alignItems: 'center' }}>
                   {/* UX-2 P5 (R18 C): the verification-status verdict is gone; the
                       two lifecycle facts the badge carried stay, as P6 signals
-                      in the words the badge rendered. The row itself is P4's. */}
+                      in the words the badge rendered (research check 2, C5:
+                      interim, until P4's row). The row itself is P4's. */}
                   {normalizeVisibility(r.visibility) === 'sealed' && <Signal tier="neutral" label="Sealed" />}
                   {isCurrentlyWithdrawn && <Signal tier="neutral" label="Withdrawn" />}
                 </div>

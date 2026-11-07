@@ -2,7 +2,7 @@
 // place (#729 words table; G0-10's research ruling, #729 comment 6690939748;
 // relay 11 and relay 13). Pure, and safe in a client bundle.
 //
-// RULED unless marked PENDING. The reviews line's own forms live in
+// All RULED (the first research check, and the second, P5_words = A). The reviews line's own forms live in
 // `review-summary.ts`, the data date's in `data-read-date.ts`.
 
 /** X5: the registry row's first signal. */
@@ -25,9 +25,8 @@ export const SIGNED_BY = (author: string): string => `Signed by this site's key 
 export const TIMESTAMPED = 'Timestamped · registered on the public transparency log';
 
 /**
- * X6: the checks row. PENDING (relay 13, question 1): `<result>` is the label
- * the integrity glance already computes (`summarizeIntegrity`), for the seat
- * to rule at the gate.
+ * X6: the checks row (research check 2, C3, KEEP): `<result>` is the label
+ * the integrity glance already computes (`summarizeIntegrity`).
  */
 export const CHECKS = (result: string): string => `Checks: ${result}`;
 

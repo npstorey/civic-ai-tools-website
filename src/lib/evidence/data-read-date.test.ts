@@ -17,7 +17,7 @@
 //   - The process runs in a zone west of UTC, so a call at 02:00Z on October 17
 //     falls on October 16 locally: a line built from the local date is wrong.
 //
-// The range form is a pending word (relay 13, 4b): it is read through
+// The range form (relay 13, 4b; ruled by research check 2, C1) is read through
 // `DATA_READ_RANGE`, its one home.
 //
 // Run with: npm test
