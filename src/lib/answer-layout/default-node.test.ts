@@ -7,8 +7,8 @@
 // nothing at all fails here rather than passing every "none".
 //
 // Keys are throwaway Ed25519 keys generated for this run (fixtures). The
-// committed nodes are handed in as data: the repository commits one node
-// (`770ed52e…`, under the instance's key), and these tests use their own
+// committed nodes are handed in as data: the repository commits two nodes
+// (`770ed52e…` and `c1ed3951…`, under the instance's key), and these tests use their own
 // fixtures rather than it. The URL node is served by an injected fetcher,
 // with the fixture registry handed in as the instance's.
 //

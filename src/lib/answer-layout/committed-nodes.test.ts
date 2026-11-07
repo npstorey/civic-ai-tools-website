@@ -7,10 +7,12 @@
 // else. UX-2 P2 (criterion 5) reads each node's OWN version: a node file is
 // never removed, so the v1 node stays committed beside the v2 node `--apply`
 // adds, and v1 is no longer a built-in. Its fields are `ANSWER_FIRST_V1` below,
-// the spec's §8.14.1 example as the site shipped it until UX-2 P2. The directory holds one node, `770ed52e…`, which
-// the script wrote under the instance's key (none is committed under a test
-// key); the per-file assertions run over it, as over every node committed
-// after it, and the module agreement below runs over the same files.
+// the spec's §8.14.1 example as the site shipped it until UX-2 P2. The directory holds two nodes, `770ed52e…` (v1)
+// and `c1ed3951…` (v2), which the script wrote under the instance's key (none
+// is committed under a test key); the per-file assertions run over them, as
+// over every node committed after them, and the module agreement below runs
+// over the same files. UX-2 P2 (5), after `--apply`: some committed node is
+// the current built-in's, so a publish has a node to name (the last test).
 //
 // Reading 6: `committed-nodes.ts` is the script's output form over exactly the
 // node files on disk, so a node file that no import names (it would never
@@ -108,4 +110,12 @@ test('W4 P2 (11) no non-test source reads public/.well-known/layouts through the
   assert.deepEqual([...script.matchAll(/fs\.(read\w*|opendir\w*|createReadStream)\(([^)]*)\)/g)].map((m) => `${m[1]}(${m[2]})`), [
     "readFileSync(modulePath, 'utf8')",
   ], 'the script reads the module, never the directory');
+});
+
+test('UX-2 P2 (5), after --apply: a committed node names the current built-in, so a publish has a node to name', () => {
+  const named = nodeFiles.map((file) => {
+    const doc = parseStrictJson(fs.readFileSync(path.join(LAYOUTS, file))) as Record<string, unknown>;
+    return layoutId(layoutFieldsOf(doc.package as Record<string, unknown>) as Pick<LayoutPayload, 'name' | 'version'>);
+  });
+  assert.ok(named.includes(layoutId(ANSWER_FIRST)), `a committed node names ${layoutId(ANSWER_FIRST)}; the committed nodes name ${named.join(', ') || 'nothing'}`);
 });

@@ -11,9 +11,10 @@
 // Ed25519 key generated for this run (a fixture); a second is built from
 // `answer-first`, the shown layout's. A held set is handed in as data. Since
 // UX-2 P2 the built-ins are v2, and the set also holds the repository's own
-// committed node (`770ed52e…`, answer-first v1, under the instance's key), as
-// the site holds it: a record published under it still names it (design
-// Phase 2 (d)).
+// committed nodes, both under the instance's key, as the site holds them:
+// `770ed52e…` (answer-first v1), which a record published under it still
+// names (design Phase 2 (d)), and `c1ed3951…` (answer-first v2), which one
+// published under it does not name while v2 is the layout shown.
 //
 // Each case differs from the one that shows the line in one property: the
 // node the attestation names, the attestation's signature verdict, its signer
@@ -114,12 +115,18 @@ function heldNode(layout: typeof ANSWER_FIRST) {
 const ENVELOPE_NODE = heldNode(ENVELOPE_ORDER);
 const ANSWER_FIRST_NODE = heldNode(ANSWER_FIRST);
 // W4 P3 (F1), as UX-2 P2 moves it: `answer-first` at another version. The
-// repository's committed node is answer-first v1; the built-in is v2. They
+// repository commits an answer-first v1 node; the built-in is v2. They
 // share a name, so a comparison of names alone cannot tell the two apart.
 // By its id, not its place: `--apply` writes the module sorted by id, so a v2 node may come first.
 const REPO_V1_NODE = committedLayoutNodes().find((n) => n.nodeId === '770ed52e2abfc0c7d4626953c9f715c11a50e63bd911fa2bed56b77a76fe0ee7')!;
 const ANSWER_FIRST_V1 = REPO_V1_NODE.layout as typeof ANSWER_FIRST;
-const HELD = [ANSWER_FIRST_NODE, REPO_V1_NODE, ENVELOPE_NODE];
+// UX-2 P2 (5), after `--apply`: the repository's answer-first v2 node, found
+// by its id as the v1 node is. It joins the held set only when committed, so
+// that without it the case naming it fails at its assertion, not every case
+// at the lookup.
+const REPO_V2_NODE_ID = 'c1ed395142ed4c8be33f39608d2c89ca42c95f7f57db676727892ea5bf06c4b2';
+const REPO_V2_NODE = committedLayoutNodes().find((n) => n.nodeId === REPO_V2_NODE_ID);
+const HELD = [ANSWER_FIRST_NODE, REPO_V1_NODE, ...(REPO_V2_NODE ? [REPO_V2_NODE] : []), ENVELOPE_NODE];
 const NOT_HELD_ID = '9'.repeat(64);
 
 /** The record's publication attestation view, as `lifecycle.ts` builds it: verified and signer-matched unless a case says otherwise. */
@@ -196,4 +203,11 @@ test('W4 P3 (F1), as UX-2 P2 moves it: a record published under the committed an
 test('W4 P3 (F1) one naming answer-first v1, shown under answer-first v1, shows W4 P1’s line', () => {
   assert.equal(footLine([publishesView(ANSWER_FIRST_NODE.nodeId)], SHOWN_V1), 'Published under layout answer-first v2; shown under layout answer-first v1');
   assert.equal(footLine([publishesView(REPO_V1_NODE.nodeId)], SHOWN_V1), 'Shown under layout answer-first v1');
+});
+
+test('UX-2 P2 (5), after --apply: a record published under the repository’s v2 node, shown under the v2 built-in, shows W4 P1’s line', () => {
+  assert.equal(footLine([publishesView(REPO_V2_NODE_ID)]), 'Shown under layout answer-first v2', 'held and the layout shown: no published-under part, and no not-held sentence');
+  assert.equal(footLine([publishesView(REPO_V2_NODE_ID)], SHOWN_V1), 'Published under layout answer-first v2; shown under layout answer-first v1', 'shown under v1, it is named');
+  assert.ok(REPO_V2_NODE, 'premise: the repository commits the v2 node');
+  assert.deepEqual([REPO_V2_NODE.layout.name, REPO_V2_NODE.layout.version], [ANSWER_FIRST.name, ANSWER_FIRST.version], 'premise: answer-first v2, the built-in');
 });
