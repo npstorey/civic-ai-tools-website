@@ -152,7 +152,9 @@ test('D3 (UX-2 P4b D6 B): unset, the card lists no endpoint row, and the privacy
 
 // --- D4, and correction 5 -----------------------------------------------------------------------
 
-test('D4: the analytics line and the cookie sentence render below Allow and Don\'t allow (UX-2 P4b, item 8); the full-statement pointer stays above; the buttons are alike', async () => {
+// The owner's card ruling (#729 comment 6727853028, D4 = A) moves the full-statement pointer below the buttons, after
+// the change line and above the analytics line; it stood above the buttons before.
+test('D4: the analytics line and the cookie sentence render below Allow and Don\'t allow (UX-2 P4b, item 8); the full-statement pointer sits below the buttons, above the analytics line; the buttons are alike', async () => {
   await under({ NEXT_PUBLIC_ANALYTICS_SERVICE: 'plausible', NEXT_PUBLIC_ANALYTICS_ID: 'pa-fixture', DATABASE_URL: 'fixture' }, async () => {
     const shown = await card();
     const markup = shown.text();
@@ -164,8 +166,10 @@ test('D4: the analytics line and the cookie sentence render below Allow and Don\
     assert.ok(markup.indexOf(analytics) > buttons, 'the analytics line is not below the buttons');
     assert.ok(markup.indexOf(cookie) > buttons, 'the cookie sentence is not below the buttons');
     const full = 'The privacy page has the full statement.';
-    // The effect sentence above the buttons opens "Allow:" (item 37), so the buttons are read as the pair's text.
-    assert.ok(markup.indexOf(full) >= 0 && markup.indexOf(full) < markup.indexOf("Allow Don't allow"), 'the full-statement pointer is not above the buttons');
+    // The buttons are read as the pair's text, since the effect sentence below them opens "Allow".
+    const pair = markup.indexOf("Allow Don't allow");
+    assert.ok(pair >= 0, 'premise: the buttons read as the pair');
+    assert.ok(markup.indexOf(full) > pair && markup.indexOf(full) < markup.indexOf(analytics), 'the full-statement pointer is not below the buttons and above the analytics line');
     const [allow] = shown.buttons('Allow');
     const [dontAllow] = shown.buttons("Don't allow");
     assert.deepEqual(allow.props.style, dontAllow.props.style, 'Allow and Don\'t allow differ in size or style');

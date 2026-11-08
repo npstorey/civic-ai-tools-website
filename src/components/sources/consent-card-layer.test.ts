@@ -1,11 +1,11 @@
 // R9 P3 (#680; #660, D2 = A of the UX pass): the first-consent card as a decision layer.
 //
-// CRITERION 1, AS UX-2 P4b CUTS THE CARD TO D6 B (ASK1 = A, ASK2 = B). Above its two buttons the card
-// renders exactly, in order: the heading, T1, T2 (item 34: the ruled CARD_LEAD), what each answer does
-// (item 37 without its Allow-all half), ASK1's line and T6 (the privacy link). No kept-by line, no
-// recipient line and no disclosure render anywhere on the card: the privacy page is its full layer.
-// Below the buttons: the link to Data source settings, the analytics line where analytics is on, and
-// the cookie sentence. The two buttons keep their size and style. R9 P3's T3, T4, T5, T8, T10 and T11
+// CRITERION 1, AS UX-2 P4b CUTS THE CARD TO D6 B (ASK1 = A, ASK2 = B) AND THE OWNER'S CARD RULING
+// (#729 comment 6727853028) MOVES ITS WORDS. Above its two buttons the card renders exactly the heading,
+// a question. No kept-by line, no recipient line and no disclosure render anywhere on the card: the
+// privacy page is its full layer. Below the buttons: the effect, ASK1's line with its link to Data
+// source settings, T6 (the privacy link), the analytics line where analytics is on, and the cookie
+// sentence. The two buttons keep their size and style. R9 P3's T3, T4, T5, T8, T10 and T11
 // and the local-only offer left the card (D6 B); the sandbox definition's lifecycle pins left with T10.
 //
 // CRITERION 2 (the parts this file asserts). The flows statement, its base version and its hash, and
@@ -112,18 +112,15 @@ async function card(): Promise<Surface> {
 
 // --- The ruled words, written out ------------------------------------------------------------
 
-// UX-2 P4b (D6 B, ASK1 = A, ASK2 = B): above the buttons the heading, T1 and T2 (item 34: the ruled CARD_LEAD), what
-// each answer does (item 37 without its Allow-all half), ASK1's line and T6; below them the link to Data source
-// settings, the analytics line and the cookie sentence. T3, T4, the local-only offer, T5, T8, T10 and T11 left the
-// card with the recipients' disclosure; the privacy page is the card's full layer.
-const HEADING = 'Before your first question';
-const T1 = 'To answer, this site sends your question to a model service, and sends the searches the model writes to the data sources that are On.';
-// Amendment 1 (the owner's rulings after the second research check): T2 is the privacy page's ruled sentence.
-const T2 = 'Your question is not sent beyond this site before you answer.';
-const COUNT: Record<Config, { n: number; words: string }> = { six: { n: 14, words: '14' }, three: { n: 5, words: 'five' }, two: { n: 4, words: 'four' } };
-const EFFECT = "Allow: your question is sent to the model service. A data source is used only if it is On, or if it is set to Ask first and you allow it when asked. Don't allow: nothing is sent. You are asked again when you send a question.";
+// UX-2 P4b (D6 B, ASK1 = A, ASK2 = B; then the owner's card ruling, #729 comment 6727853028): above the buttons the
+// heading alone; below them the effect, ASK1's line with the link to Data source settings, T6, the analytics line and
+// the cookie sentence. The ruling removed T1, T2 and the earlier effect sentence from the card; T3, T4, the local-only
+// offer, T5, T8, T10 and T11 had left it with the recipients' disclosure. The privacy page is the card's full layer.
+const HEADING = 'Allow this site to send your question to a model service?';
+const EFFECT = 'Allow sends your question to the model service. It sends the searches the model writes to data sources that are On or that you allow when asked.';
 const ASK1 = 'You can change or withdraw this in Data source settings.';
 const T6 = 'The privacy page has the full statement.';
+const COUNT: Record<Config, { n: number; words: string }> = { six: { n: 14, words: '14' }, three: { n: 5, words: 'five' }, two: { n: 4, words: 'four' } };
 const SETTINGS_LINK = 'Data source settings';
 const ANALYTICS = 'An analytics service counts page visits. The privacy page names it and says how to object.';
 const COOKIE_NO_DB = 'We keep your answer for this browser session in a cookie.';
@@ -172,11 +169,14 @@ const recipientsOf = (statement: Mod): Mod[] => [...statement.recipients, ...sta
 
 for (const config of ['six', 'three', 'two'] as const) {
   test(`criterion 1 (${config} sources; UX-2 P4b D6 B): above the buttons, exactly the cut layer`, async () => {
-    const { surface, statement, above } = await show(config);
+    const { surface, statement, above, below } = await show(config);
     try {
       assert.equal(statement.sources.length, { six: 6, three: 3, two: 2 }[config], 'premise: the configuration\'s sources');
       assert.equal(recipientsOf(statement).length, COUNT[config].n, 'premise: the statement\'s recipient count');
-      assert.equal(above, [HEADING, T1, T2, EFFECT, ASK1, T6].join(' '), 'the text above the buttons is not the cut layer');
+      // The owner's card ruling: only the heading stands above the buttons (it was the heading, T1, T2, the effect, ASK1 and T6).
+      assert.equal(above, HEADING, 'the text above the buttons is not the cut layer');
+      // The sentences that stood above the buttons, each where the ruling puts it: right after the two buttons.
+      assert.ok(below.startsWith(['Allow', "Don't allow", EFFECT, ASK1, T6].join(' ')), `the buttons are not followed by the effect, ASK1's line and T6: ${below.slice(0, 400)}`);
       for (const words of KEPT_BY_WORDS) assert.ok(!above.includes(words), `a kept-by line renders above the buttons ("${words}")`);
     } finally {
       surface.unmount();

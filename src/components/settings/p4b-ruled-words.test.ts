@@ -57,12 +57,13 @@ const TAB_SENTENCE = 'Your data sources are set in Data source settings.'; // 41
 // Part C: the card.
 const DONT_ALLOW = "Don't allow"; // 8
 const ALLOW_ALL = 'Allow all data sources'; // 9
-const CARD_LEAD = [
-  'To answer, this site sends your question to a model service, and sends the searches the model writes to the data sources that are On.',
-  'Your question is not sent beyond this site before you answer.',
-]; // 34: the ruled CARD_LEAD, byte for byte
+// The card's own words since the owner's ruling (#729 comment 6727853028: D1 = A, D2 = A with the owner's
+// note): the heading is a question, the lead (item 34) is gone, and the effect is D2's, without item 11's words.
+const CARD_HEADING = 'Allow this site to send your question to a model service?'; // D1 = A
+const CARD_EFFECT = 'Allow sends your question to the model service. It sends the searches the model writes to data sources that are On or that you allow when asked.'; // D2 = A, the owner's note
+// The privacy page keeps item 37's words (items 38/49), apart from the card since that ruling.
 const EFFECT = 'Allow: your question is sent to the model service. A data source is used only if it is On, or if it is set to Ask first and you allow it when asked. Don\'t allow: nothing is sent. You are asked again when you send a question.'; // 37/48, without the Allow-all half
-const ITEM_11 = "Don't allow: nothing is sent. You are asked again when you send a question."; // 11, carried by 37 (M3)
+const ITEM_11 = "Don't allow: nothing is sent. You are asked again when you send a question."; // 11
 const ASK1_LINE = 'You can change or withdraw this in Data source settings.'; // ASK1 = A
 const DONT_ALLOW_LINE = "You chose Don't allow. Nothing was sent. Edit this question or write a new one, and you will be asked again before it is sent."; // 46
 
@@ -120,12 +121,15 @@ test('criterion 3 (B, L6): item 43 is new constants: KEPT_* and the privacy page
 
 // --- Part C ------------------------------------------------------------------------------------
 
-test('criterion 3 (C): the card\'s lead, effect, ASK1 line, decline word, pointer and after-line equal the ruled text', () => {
+// The owner's card ruling (#729 comment 6727853028) moves the heading, removes the lead and re-words the effect;
+// the ASK1 line, the decline word, the pointer and the after-line are as before.
+test('criterion 3 (C): the card\'s heading, effect, ASK1 line, decline word, pointer and after-line equal the ruled text', () => {
   const card = copy.CONSENT_CARD as Mod;
-  assert.deepEqual([...card.lead], CARD_LEAD, 'item 34: CARD_LEAD, byte for byte');
-  assert.equal(card.effect, EFFECT, 'items 37/48: CARD_EFFECT');
+  assert.equal(card.heading, CARD_HEADING, 'D1 = A: the heading');
+  assert.equal(card.lead, undefined, 'D2 = A: the card carries no lead (item 34\'s T1 and T2 are removed)');
+  assert.equal(card.effect, CARD_EFFECT, 'D2 = A: the card\'s effect');
   assert.ok(!String(card.effect).includes(ALLOW_ALL), 'item 37: the card shows no Allow-all control, so its effect carries no Allow-all half');
-  assert.ok(String(card.effect).includes(ITEM_11), 'M3: item 11\'s words are carried by item 37\'s Don\'t-allow half');
+  assert.ok(!String(card.effect).includes(ITEM_11), 'the owner\'s note on D2: the card\'s effect carries no Don\'t-allow sentences');
   assert.equal(card.changeLine, ASK1_LINE, 'ASK1 = A: the line above the buttons');
   assert.equal(card.decline, DONT_ALLOW, 'item 8: the decline button');
   assert.equal(card.settingsLink, POINTER, 'item 10: the card\'s link');

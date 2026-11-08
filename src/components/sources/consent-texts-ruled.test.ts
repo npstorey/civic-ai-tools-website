@@ -158,6 +158,11 @@ const CARD_T7 = '"Allow" turns on the sources shown as On and sends your questio
 // T5 and T7 above the buttons; R9 P3's T1 and T2 stay (item 34).
 const CARD_EFFECT_P4B = "Allow: your question is sent to the model service. A data source is used only if it is On, or if it is set to Ask first and you allow it when asked. Don't allow: nothing is sent. You are asked again when you send a question.";
 const CARD_ASK1 = 'You can change or withdraw this in Data source settings.';
+// The owner's card ruling (#729 comment 6727853028: D1 = A, D2 = A with the owner's note): the heading is a
+// question and stands alone above the buttons; the effect is re-worded and moves below them with ASK1's line. T1, T2
+// and the earlier effect sentence leave the card (the privacy page keeps T2 and, as T7, the earlier effect).
+const CARD_HEADING_RULED = 'Allow this site to send your question to a model service?';
+const CARD_EFFECT_RULED = 'Allow sends your question to the model service. It sends the searches the model writes to data sources that are On or that you allow when asked.';
 /** R6's replaced wording that R9 P3's ruling puts back on the card, and only there: "at any time" (T5). */
 const RULED_BACK_ON_THE_CARD = ['at any time'];
 // UX-2 P4b, item 41 (X2b): the privacy page's sentence on where to set each source.
@@ -173,7 +178,8 @@ const T4_KEEP = [
 // UX-2 P4b, item 46: the line after the card's "Don't allow".
 const T5 = "You chose Don't allow. Nothing was sent. Edit this question or write a new one, and you will be asked again before it is sent.";
 const T6 = 'Ask first: nothing is sent to this source until you turn it On.';
-// UX-2 P4b, items 38/49: the privacy page's effect sentence is item 37's words, byte for byte.
+// UX-2 P4b, items 38/49: the privacy page's effect sentence is item 37's words, byte for byte (the card's own
+// effect was re-worded apart from it by the owner's card ruling).
 const T7 = CARD_EFFECT_P4B;
 const T8_DB = 'We keep your answer for this browser session in a cookie, or on your account if signed in.';
 const T8_NO_DB = 'We keep your answer for this browser session in a cookie.';
@@ -296,22 +302,25 @@ const CARD_CONFIGS: Array<{ name: string; config: Config }> = [
   { name: 'both set', config: { s1: true, s2: true } },
 ];
 
-// UX-2 P4b (D6 B): the card is cut to T1, T2, the effect sentence, ASK1's line and T6 above its buttons, and the
-// settings link, the analytics line and T8 below them. The recipients (T11, T13 on the source lines), T5 and T7 left
-// it; T11 and T13 are read on the privacy page's source rows below.
+// UX-2 P4b (D6 B), as the owner's card ruling moves it: the heading above the buttons; the effect sentence, ASK1's
+// line with the settings link, T6, the analytics line and T8 below them. The recipients (T11, T13 on the source
+// lines), T5 and T7 left it, and the ruling took T1, T2 and the earlier effect sentence off it; T11 and T13 are read
+// on the privacy page's source rows below.
 for (const { name, config } of CARD_CONFIGS) {
-  test(`criterion 1, the card (${name}; UX-2 P4b D6 B): T1, T2, the effect sentence and ASK1's line above the buttons, T8 below, and no recipient line`, async () => {
+  test(`criterion 1, the card (${name}; UX-2 P4b D6 B): the heading above the buttons, the effect sentence and ASK1's line below, T8 below, and no recipient line`, async () => {
     await under(config, async () => {
       const card = await mountCard();
       const text = card.text();
       const buttons = text.indexOf("Allow Don't allow");
       assert.ok(buttons > 0, `premise: the card has its buttons: ${text.slice(0, 300)}`);
-      for (const [label, sentence] of [['T1', CARD_T1], ['T2', CARD_T2], ['the effect', CARD_EFFECT_P4B], ['ASK1', CARD_ASK1]] as const) {
+      const heading = text.indexOf(CARD_HEADING_RULED);
+      assert.ok(heading >= 0 && heading < buttons, `the heading does not render above the buttons: "${CARD_HEADING_RULED}" in ${text.slice(0, buttons)}`);
+      for (const [label, sentence] of [['the effect', CARD_EFFECT_RULED], ['ASK1', CARD_ASK1]] as const) {
         const at = text.indexOf(sentence);
-        assert.ok(at >= 0 && at < buttons, `${label} does not render above the buttons: "${sentence}" in ${text.slice(0, buttons)}`);
+        assert.ok(at > buttons, `${label} does not render below the buttons: "${sentence}" in ${text.slice(buttons)}`);
       }
-      assert.ok(text.indexOf(CARD_T1) < text.indexOf(CARD_T2) && text.indexOf(CARD_EFFECT_P4B) < text.indexOf(CARD_ASK1), 'the layer is out of order');
-      for (const old of [CARD_T5_DB, CARD_T5_NO_DB, CARD_T7, ...R6_CARD_ONLY]) assert.ok(!text.includes(old), `the card still renders "${old}"`);
+      assert.ok(text.indexOf(CARD_EFFECT_RULED) < text.indexOf(CARD_ASK1), 'the layer is out of order');
+      for (const old of [CARD_T1, CARD_T2, CARD_EFFECT_P4B, CARD_T5_DB, CARD_T5_NO_DB, CARD_T7, ...R6_CARD_ONLY]) assert.ok(!text.includes(old), `the card still renders "${old}"`);
       assert.ok(!text.includes('To withdraw consent, use the panel'), 'the card still adds the privacy page\'s withdraw sentence beside its own');
       assert.ok(text.indexOf(T8_DB) > buttons, `T8 (with a database) does not render below the buttons: ${text.slice(buttons)}`);
       assert.equal(card.elements().filter((el) => typeof el.props['data-recipient'] === 'string' || typeof el.props['data-recipient-group'] === 'string').length, 0, 'the card still lists recipients');

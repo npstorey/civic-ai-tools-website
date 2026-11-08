@@ -1,16 +1,19 @@
 // UX-2 P4b, criteria 3, 5 and 6 on the consent card (D6 = B, ASK1 = A,
 // ASK2 = B, D7 = C on the card).
 //
-// THE CARD, IN THIS ORDER (Task C, M2): the heading; `CARD_LEAD` (item 34);
-// `CARD_EFFECT` (item 37 without its Allow-all half); ASK1's line; the
-// privacy link; "Allow" and "Don't allow" (item 8); "Data source settings"
-// (item 10), opening `/settings`; the analytics line; the cookie line.
+// THE CARD, IN THIS ORDER (Task C, M2, as the owner's card ruling moves it,
+// #729 comment 6727853028): the heading; "Allow" and "Don't allow" (item 8);
+// the effect; ASK1's line, whose "Data source settings" (item 10) opens
+// `/settings`; the privacy link; the analytics line; the cookie line. The
+// ruling removed `CARD_LEAD` (item 34) and, by the owner's note on D2, item
+// 11's words from the card.
 //
 // WHAT D6 B DROPS: `cardReachSentence`, `cardPointerSentence`,
 // `<LocalOnlyOffer>`, the `<details>` recipients block and `CARD_CONTROLS_*`.
-// No "Allow all data sources" on the card (S3). Item 11's words render once,
-// carried by item 37's Don't-allow half (M3). "Don't allow" on the card sends
-// nothing and stores nothing (criterion 5's last line).
+// No "Allow all data sources" on the card (S3). Item 11's words no longer
+// render on it (the owner's note on D2; they rendered once before, M3).
+// "Don't allow" on the card sends nothing and stores nothing (criterion 5's
+// last line).
 //
 // WHAT IS DRIVEN. The real card on the surface harness, with the real flows and
 // consent routes behind it, on an instance with analytics configured (so its
@@ -19,6 +22,8 @@
 // WHAT MAKES IT ABLE TO FAIL. At the base the card renders the reach and
 // pointer sentences, the local-only offer, `CARD_CONTROLS_*` and the
 // disclosure, says "Not now", and has no ASK1 line and no settings link.
+// Before the owner's card ruling it opened with "Before your first question"
+// and the lead, and put the effect and the privacy link above the buttons.
 //
 // Run with: npm test
 
@@ -66,12 +71,9 @@ const { readerSourceName } = await load('lib/sources/source-name.ts');
 const copy = await load('lib/sources/copy.ts');
 
 // The ruled words (the research check's text; `p4b-ruled-words.test.ts` pins the constants).
-const HEADING = 'Before your first question';
-const LEAD = [
-  'To answer, this site sends your question to a model service, and sends the searches the model writes to the data sources that are On.',
-  'Your question is not sent beyond this site before you answer.',
-];
-const EFFECT = 'Allow: your question is sent to the model service. A data source is used only if it is On, or if it is set to Ask first and you allow it when asked. Don\'t allow: nothing is sent. You are asked again when you send a question.';
+// The owner's card ruling (#729 comment 6727853028): D1 = A's heading, D2 = A's effect with the owner's note.
+const HEADING = 'Allow this site to send your question to a model service?';
+const EFFECT = 'Allow sends your question to the model service. It sends the searches the model writes to data sources that are On or that you allow when asked.';
 const ITEM_11 = "Don't allow: nothing is sent. You are asked again when you send a question.";
 const ASK1_LINE = 'You can change or withdraw this in Data source settings.';
 const DONT_ALLOW = "Don't allow";
@@ -97,18 +99,19 @@ async function card(): Promise<{ shown: Surface; net: ReturnType<typeof installF
 const at = (els: HostElement[], pick: (el: HostElement) => boolean): number => els.findIndex(pick);
 const count = (haystack: string, needle: string): number => haystack.split(needle).length - 1;
 
-test('UX-2 P4b criterion 3 (Task C, M2): the card renders heading, lead, effect, ASK1\'s line, privacy link, Allow and Don\'t allow, Data source settings, analytics, cookie, in that order', async () => {
+// The owner's card ruling moves the order: the lead is gone, the buttons follow the heading, and the settings link
+// sits inside ASK1's line (it was a line of its own below the buttons).
+test('UX-2 P4b criterion 3 (Task C, M2): the card renders heading, Allow and Don\'t allow, effect, ASK1\'s line with Data source settings, privacy link, analytics, cookie, in that order', async () => {
   const { shown } = await card();
   const els = shown.elements();
   const order: Record<string, number> = {
     heading: at(els, (el) => /^h[1-3]$/.test(el.type) && textOf(el) === HEADING),
-    lead: at(els, (el) => el.type === 'p' && textOf(el).startsWith(LEAD.join(' '))),
-    effect: at(els, (el) => el.type === 'p' && textOf(el) === EFFECT),
-    ask1: at(els, (el) => el.type === 'p' && textOf(el) === ASK1_LINE),
-    privacy: at(els, (el) => el.type === 'a' && el.props.href === '/privacy'),
     allow: at(els, (el) => el.type === 'button' && textOf(el) === 'Allow'),
     dontAllow: at(els, (el) => el.type === 'button' && textOf(el) === DONT_ALLOW),
+    effect: at(els, (el) => el.type === 'p' && textOf(el) === EFFECT),
+    ask1: at(els, (el) => el.type === 'p' && textOf(el) === ASK1_LINE),
     settings: at(els, (el) => el.type === 'a' && el.props.href === '/settings' && textOf(el) === SETTINGS_LINK),
+    privacy: at(els, (el) => el.type === 'a' && el.props.href === '/privacy'),
     analytics: at(els, (el) => el.type === 'p' && textOf(el) === ANALYTICS),
     cookie: at(els, (el) => el.type === 'p' && textOf(el) === COOKIE),
   };
@@ -144,9 +147,11 @@ test('UX-2 P4b criterion 6 (S3): the consent card renders no "Allow all data sou
   shown.unmount();
 });
 
-test('UX-2 P4b criterion 3 (M3): item 11\'s words render once on the card', async () => {
+// The owner's note on D2 (#729 comment 6727853028) drops item 11's words from the card: the form's after-line says
+// what "Don't allow" did, and the privacy page keeps the full sentence. This test asserted they rendered once (M3).
+test('UX-2 P4b criterion 3 (the owner\'s note on D2): item 11\'s words do not render on the card', async () => {
   const { shown } = await card();
-  assert.equal(count(shown.text(), ITEM_11), 1, `item 11's words render ${count(shown.text(), ITEM_11)} times`);
+  assert.equal(count(shown.text(), ITEM_11), 0, `item 11's words render ${count(shown.text(), ITEM_11)} times`);
   shown.unmount();
 });
 
