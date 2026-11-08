@@ -173,56 +173,52 @@ export const KEPT_FOR_OPERATOR = "what it keeps is for this site's operator to s
 // --- Text 2: the first-consent card ---
 
 /**
- * The card as a decision layer (R9 P3, #660; D2 = A of the UX pass), cut to
- * D6 B by UX-2 P4b (ASK1 = A, ASK2 = B). In order: the heading; `lead` (T1, T2;
- * item 34, the ruled bytes); `effect` (item 37 without its Allow-all half,
- * since the card shows no Allow-all control; its Don't-allow half carries
- * item 11's words, rendered once, M3); `changeLine` (ASK1 = A); the privacy
- * page's link (`fullStatement`, T6); the two buttons, "Allow" and `decline`
- * (item 8); the link to Data source settings (`settingsLink`, item 10); then,
- * unchanged (D4 = A), the analytics line and the cookie sentence
- * (`CARD_ANALYTICS`, `CARD_COOKIE_*`). D6 B drops the reach and pointer
- * sentences, the local-only offer, the controls sentence and the recipients'
- * disclosure: the privacy page carries the full statement. `sentences` lists
- * every sentence the card renders on every instance, for the tests.
+ * The card as the owner ruled it (UX-2 P4b; #729 comment 6727853028: D1 = A,
+ * D2 = A with the owner's note, D3 = A, D4 = A). In render order: the heading,
+ * a question (`heading`, the card's accessible name); while the statement
+ * loads, the loading line; the two buttons, "Allow" and `decline` (item 8);
+ * `effect`; `changeLine`, whose "Data source settings" is the link to the
+ * Settings overlay (`settingsLink`); the privacy page's link
+ * (`fullStatement`); then, unchanged, the analytics line and the cookie
+ * sentence (`CARD_ANALYTICS`, `CARD_COOKIE_*`). The privacy page carries the
+ * full statement, so the card states no more than this; after "Don't allow"
+ * the form says what happened (`DONT_ALLOW_LINE`). `sentences` lists every
+ * sentence the card renders on every instance besides the heading, in order,
+ * for the tests.
  */
-const CARD_LEAD = [
-  'To answer, this site sends your question to a model service, and sends the searches the model writes to the data sources that are On.',
-  'Your question is not sent beyond this site before you answer.',
-] as const;
+const CARD_HEADING = 'Allow this site to send your question to a model service?';
 const CARD_FULL_STATEMENT = 'The privacy page has the full statement.';
 
-/**
- * Fact 10's effect, above the card's buttons (items 37/48): what each answer
- * does, true on both kinds of instance. The card shows no Allow-all control
- * (ASK2 = B), so its Allow-all half is left out.
- */
-const CARD_EFFECT = "Allow: your question is sent to the model service. A data source is used only if it is On, or if it is set to Ask first and you allow it when asked. Don't allow: nothing is sent. You are asked again when you send a question.";
+/** D2 = A, with the owner's note: what Allow does, below the buttons. */
+const CARD_EFFECT = 'Allow sends your question to the model service. It sends the searches the model writes to data sources that are On or that you allow when asked.';
 
-/** ASK1 = A: the line above the buttons that names where to change or withdraw. */
+/** ASK1 = A, D3 = A: the one line that names where to change or withdraw; its "Data source settings" is the link. */
 const CARD_CHANGE_LINE = 'You can change or withdraw this in Data source settings.';
 
-/** Fact 10's effect as the privacy page's "How consent works" states it: item 37's words, byte for byte (items 38/49). */
-const ALLOW_EFFECT = CARD_EFFECT;
+/**
+ * Fact 10's effect as the privacy page's "How consent works" states it: item
+ * 37's words, byte for byte (items 38/49). Its own literal since the card's
+ * words were ruled apart from it (UX-2 P4b): the privacy page does not move.
+ */
+const ALLOW_EFFECT = "Allow: your question is sent to the model service. A data source is used only if it is On, or if it is set to Ask first and you allow it when asked. Don't allow: nothing is sent. You are asked again when you send a question.";
 
 /** Item 9: the pause's third button (never on the card, S3). */
 export const ALLOW_ALL_SOURCES = 'Allow all data sources';
 
 export const CONSENT_CARD = {
-  heading: 'Before your first question',
-  /** T1 and T2, the first two sentences of the short layer (item 34). */
-  lead: CARD_LEAD,
-  /** T6, the link to the privacy page. */
+  /** D1 = A: the heading, a question, and the card's accessible name. */
+  heading: CARD_HEADING,
+  /** T6, the link to the privacy page (D4 = A). */
   fullStatement: CARD_FULL_STATEMENT,
-  /** Items 37/48, above the two buttons. */
+  /** D2 = A, below the two buttons. */
   effect: CARD_EFFECT,
-  /** ASK1 = A. */
+  /** ASK1 = A, D3 = A. */
   changeLine: CARD_CHANGE_LINE,
   /** Item 8, the decline button. */
   decline: "Don't allow",
-  /** Item 10, the link below the buttons. */
+  /** Item 10: the change line's link text. */
   settingsLink: SETTINGS_TEXT.link,
-  sentences: [...CARD_LEAD, CARD_EFFECT, CARD_CHANGE_LINE, CARD_FULL_STATEMENT],
+  sentences: [CARD_EFFECT, CARD_CHANGE_LINE, CARD_FULL_STATEMENT],
 } as const;
 
 /**

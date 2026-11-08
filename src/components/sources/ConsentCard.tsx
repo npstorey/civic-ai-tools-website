@@ -9,14 +9,15 @@
  * nothing, and the reader is asked again on the next question (item 11). The
  * two are equal in size and style (D4 = A).
  *
- * A decision layer cut to D6 B (UX-2 P4b; ASK1 = A, ASK2 = B), in order: the
- * heading, the owner's two sentences (`CONSENT_CARD.lead`), what each answer
- * does (`CONSENT_CARD.effect`), ASK1's line, the privacy page's link, the two
- * buttons, the link to Data source settings (the Settings overlay, a
- * client-side link so a page beneath stays mounted), then the analytics line
- * and the cookie sentence. No "Allow all data sources" here (S3): it is the
- * pause's. The recipients and what each says it keeps are the privacy page's,
- * the card's full layer.
+ * The card as the owner ruled it (UX-2 P4b; #729 comment 6727853028), in
+ * order: the heading, a question and the card's accessible name; while the
+ * statement loads, the loading line; the two buttons; what Allow does
+ * (`CONSENT_CARD.effect`); the change line, whose "Data source settings" is
+ * the link to the Settings overlay (a client-side link, so a page beneath
+ * stays mounted); the privacy page's link; then the analytics line and the
+ * cookie sentence. No "Allow all data sources" here (S3): it is the pause's.
+ * The recipients and what each says it keeps are the privacy page's, the
+ * card's full layer.
  *
  * Every sentence that is true only on some instances renders only there:
  * "on your account" with a database, the analytics line with analytics.
@@ -54,6 +55,11 @@ export default function ConsentCard({ onAllow, onNotNow }: ConsentCardProps) {
   const accounts = consent.status?.accounts === true;
   const analytics = statement?.recipients.some((r) => r.role === 'analytics') ?? false;
 
+  // The change line's "Data source settings" is the link (D3 = A), as `NoSourcesOnLine` splits its sentence.
+  const at = CONSENT_CARD.changeLine.indexOf(CONSENT_CARD.settingsLink);
+  const changeBefore = CONSENT_CARD.changeLine.slice(0, at);
+  const changeAfter = CONSENT_CARD.changeLine.slice(at + CONSENT_CARD.settingsLink.length);
+
   const allow = async () => {
     setAnswering(true);
     try {
@@ -80,14 +86,8 @@ export default function ConsentCard({ onAllow, onNotNow }: ConsentCardProps) {
       <h2 id="consent-card-heading" style={{ fontSize: '16px', fontWeight: 700, margin: '0 0 8px' }}>
         {CONSENT_CARD.heading}
       </h2>
-      <p style={{ margin: '0 0 8px' }}>{CONSENT_CARD.lead.join(' ')}</p>
       {!statement && <p style={{ margin: '0 0 8px', color: 'var(--text-secondary)' }}>Reading where a question can go…</p>}
-      <p style={{ margin: '0 0 8px' }}>{CONSENT_CARD.effect}</p>
-      <p style={{ margin: '0 0 8px' }}>{CONSENT_CARD.changeLine}</p>
-      <p style={{ margin: '0 0 12px' }}>
-        <a href="/privacy">{CONSENT_CARD.fullStatement}</a>
-      </p>
-      <div style={{ display: 'flex', gap: '12px', flexWrap: 'wrap', marginBottom: '8px' }}>
+      <div style={{ display: 'flex', gap: '12px', flexWrap: 'wrap', margin: '4px 0 12px' }}>
         <button type="button" style={BUTTON} onClick={allow} disabled={answering || !statement}>
           Allow
         </button>
@@ -95,8 +95,14 @@ export default function ConsentCard({ onAllow, onNotNow }: ConsentCardProps) {
           {CONSENT_CARD.decline}
         </button>
       </div>
-      <p style={{ margin: '0 0 12px' }}>
+      <p style={{ margin: '0 0 8px' }}>{CONSENT_CARD.effect}</p>
+      <p style={{ margin: '0 0 8px' }}>
+        {changeBefore}
         <Link href={SETTINGS_HREF}>{CONSENT_CARD.settingsLink}</Link>
+        {changeAfter}
+      </p>
+      <p style={{ margin: '0 0 12px' }}>
+        <a href="/privacy">{CONSENT_CARD.fullStatement}</a>
       </p>
       {analytics && <p style={{ margin: '0 0 4px', color: 'var(--text-secondary)' }}>{CARD_ANALYTICS}</p>}
       <p style={{ margin: 0, color: 'var(--text-secondary)' }}>{accounts ? CARD_COOKIE_WITH_ACCOUNTS : CARD_COOKIE_WITHOUT_ACCOUNTS}</p>
