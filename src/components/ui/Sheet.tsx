@@ -22,6 +22,7 @@ import { ActionButton, useModalFocus, type DialogAction } from './Dialog';
  *   - opening focuses the first enabled control;
  *   - a focus trap keeps focus inside the sheet;
  *   - Escape closes it, unless busy;
+ *   - with another modal open over it, only the top one answers these keys;
  *   - closing returns focus to where it was;
  *   - a click on the backdrop (`rgba(0,0,0,0.5)`) closes it, unless busy.
  *

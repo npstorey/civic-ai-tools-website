@@ -32,7 +32,7 @@
  * instance (new constants; `KEPT_*` stay the privacy page's), the privacy link.
  */
 
-import { useState } from 'react';
+import { useRef, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { Dialog } from '@/components/ui/Dialog';
 import { Tabs } from '@/components/ui/Tabs';
@@ -169,7 +169,17 @@ function About() {
 export default function SettingsOverlay({ mount = 'intercepted', initialTab = 'data-sources' }: SettingsOverlayProps) {
   const router = useRouter();
   const [tab, setTab] = useState<'data-sources' | 'about'>(initialTab);
+  // One navigation per opening. A soft navigation is asynchronous: until it
+  // unmounts the overlay, the overlay is still open and still the top modal, so
+  // a second quick Escape or close click would call `back()` again and leave
+  // the page beneath. A reopen is a new mount, with a fresh flag.
+  // THE RISK, stated: a navigation that never unmounted the overlay would leave
+  // it unable to close. Both do unmount it: `back()` leaves `/settings`, which
+  // `InterceptedSettings` renders on alone, and `push('/')` leaves the page.
+  const closing = useRef(false);
   const close = () => {
+    if (closing.current) return;
+    closing.current = true;
     if (mount === 'intercepted') router.back();
     else router.push('/');
   };
