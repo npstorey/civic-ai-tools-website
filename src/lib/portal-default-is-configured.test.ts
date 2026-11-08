@@ -259,12 +259,6 @@ const EXCEPTIONS: readonly Exception[] = [
     why: "The evaluation's question set: each question names its city in its own text and carries that city's portal beside it, so a harness run for that question starts on the portal the question is about; it is the harness's input data, not an instance's default, and nothing in the app runs from it.",
   },
   {
-    path: 'scripts/eval-models.mjs',
-    classification: 'reference-table',
-    hits: 7,
-    why: "Worked examples of the `portal` argument in the harness's own copy of the tool description and its `portal` parameter description — shapes offered to the model, as the router package's Socrata tools offer them (`dist/civic/socrata.js` below).",
-  },
-  {
     path: 'scripts/rehearse-instance-identity.ts',
     classification: 'fixture',
     hits: 2,

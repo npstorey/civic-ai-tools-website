@@ -22,6 +22,12 @@
 // against stand-in endpoints (`fakeEndpoints` below), so the results file the
 // owner's run will write is read here first.
 //
+// AND THE APP'S OFFER (#609). The tests at the foot hold the harness to what
+// the app offers a model: the tools and the system prompt of every request,
+// read from what the harness sent and set against the app's own functions at
+// two configurations, and the tool names the live captures call. Q3's portal
+// moved with San Francisco's (#587), as a named delta on the query pin.
+//
 // Run with: npm test
 
 import { test } from 'node:test';
@@ -32,9 +38,11 @@ import { mkdtempSync, readdirSync, readFileSync, rmSync, writeFileSync } from 'n
 import { tmpdir } from 'node:os';
 import path from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
+import { isDeepStrictEqual } from 'node:util';
 
 import {
   ALL_MODELS,
+  LIVE_CAPTURES,
   PROBE,
   QUOTE_MODELS,
   TEST_QUERIES,
@@ -51,6 +59,9 @@ import {
   runEnvProblem,
 } from './eval-models.mjs';
 import { BUILT_IN_CATALOG, modelRequestSettings } from '../src/lib/model-catalog.ts';
+import { mcpTools } from '../src/lib/mcp/tools.ts';
+import { HOSTED_SOURCE_KEY_VARIABLE, routedSourceId } from '../src/lib/mcp/registry.ts';
+import { CIVIC_MANIFEST, HOSTING_SANDBOX, readMcpEnv } from '@typedstandards/civic-typed-router';
 
 const SCRIPT = path.resolve(
   path.dirname(fileURLToPath(import.meta.url)),
@@ -184,27 +195,32 @@ const chatRequests = (log) => log.filter((e) => e.path === '/api/v1/chat/complet
  *
  * OpenRouter: the model list (FAKE_OPENROUTER_LIST, a file in the list's
  * shape), the key endpoint (status FAKE_KEY_STATUS, default 200), and chat
- * completions. A "model" calls the one tool it is offered on its first turn
- * and, once a tool result has come back, answers with that result echoed
- * whole. A `google/` model is first given what the chooser spike found Google
+ * completions. A "model" calls the first tool it is offered on its first turn
+ * (Socrata's `get_data`, in either spelling, with a dataset; any other tool
+ * with no arguments) and, once a tool result has come back, answers with that
+ * result echoed whole. A `google/` model is first given what the chooser spike found Google
  * models receive through OpenRouter (#573 premise 6): a result whose text
  * holds a JSON object, reduced to that object. So the tool-result check meets
  * one model that loses the text and one that does not.
  *
- * MCP (the two fake hosts `fakeEnv` names): the legacy exchange — the modern
- * discovery probe is answered 404 — with `get_data` returning a two-row
- * envelope and Data Commons' `search_indicators` returning text with a JSON
- * object inside it.
+ * MCP (the fake hosts `fakeEnv` names, and Boston OpenContext's when a test
+ * configures it): the legacy exchange — the modern discovery probe is
+ * answered 404 — with `get_data` returning a two-row envelope and Data
+ * Commons' `search_indicators` returning text with a JSON object inside it.
+ * The server is called by its own tool name, so these are the upstream names.
  *
  * FAKE_LOG receives one JSON line per request: host, path, method, and the
- * model or MCP method. Never a header, so never the key.
+ * model or MCP method; for a model request, also the system message, the
+ * question and the tool schemas it carried. Never a header, so never the key.
  */
 async function fakeEndpoints() {
   const { appendFileSync, readFileSync } = await import('node:fs');
   const LOG = process.env.FAKE_LOG;
   const LIST = process.env.FAKE_OPENROUTER_LIST;
   const KEY_STATUS = Number(process.env.FAKE_KEY_STATUS || 200);
-  const MCP_HOSTS = [process.env.SOCRATA_MCP_URL, process.env.DATA_COMMONS_MCP_URL].map((u) => new URL(u).host);
+  const MCP_HOSTS = [process.env.SOCRATA_MCP_URL, process.env.DATA_COMMONS_MCP_URL, process.env.BOSTON_OPENCONTEXT_MCP_URL]
+    .filter(Boolean)
+    .map((u) => new URL(u).host);
 
   const log = (entry) => appendFileSync(LOG, `${JSON.stringify(entry)}\n`);
   const json = (status, body, headers = {}) =>
@@ -248,7 +264,9 @@ async function fakeEndpoints() {
       message = { role: 'assistant', content: `I received: ${seen}` };
     } else {
       const user = messages.find((m) => m.role === 'user')?.content ?? '';
-      const args = tool === 'get_data' ? { type: 'query', dataset_id: /Chicago/.test(user) ? '4ijn-s7e5' : 'erm2-nwe9', limit: 5 } : {};
+      const args = ['get_data', 'socrata__get_data'].includes(tool)
+        ? { type: 'query', dataset_id: /Chicago/.test(user) ? '4ijn-s7e5' : 'erm2-nwe9', limit: 5 }
+        : {};
       message = {
         role: 'assistant',
         content: null,
@@ -314,7 +332,19 @@ async function fakeEndpoints() {
     } catch {
       parsed = undefined;
     }
-    log({ host: url.host, path: url.pathname, method, model: parsed?.model, rpc: parsed?.method });
+    const entry = { host: url.host, path: url.pathname, method, model: parsed?.model, rpc: parsed?.method };
+    // A model request also logs what it offered and the prompt it carried: the
+    // system message, the question, and the tool schemas whole.
+    if (url.pathname === '/api/v1/chat/completions' && parsed) {
+      const messages = parsed.messages ?? [];
+      Object.assign(entry, {
+        messages: messages.length,
+        system: messages.find((m) => m.role === 'system')?.content,
+        user: messages.find((m) => m.role === 'user')?.content,
+        tools: parsed.tools,
+      });
+    }
+    log(entry);
 
     if (url.host === 'openrouter.ai') {
       if (method === 'GET' && url.pathname === '/api/v1/models') return json(200, JSON.parse(readFileSync(LIST, 'utf-8')));
@@ -420,14 +450,25 @@ test('#573: the controls are the catalog, each carrying its entry\'s own request
   });
 });
 
-test('#573: the queries are March\'s fifteen, unchanged', () => {
-  // Pinned from TEST_QUERIES at website main ff3254c, so this run's results
-  // compare with March's. A changed query is a different evaluation.
+test('#609: the queries are March\'s fifteen, with one change: Q3\'s portal is San Francisco\'s current address', () => {
+  // Pinned from TEST_QUERIES at website main ff3254c, so a run's results
+  // compare with March's. A changed query is a different evaluation, so the
+  // one change is a named delta, not a new hash alone. San Francisco's portal
+  // moved, and in October the old address downloaded a whole dataset and
+  // restarted the hosted server (docs/model-evaluation-2026-10.md); the site
+  // has offered the new one since #587. Q3's question, dataset and category
+  // stay March's.
+  const hashOf = (queries) => createHash('sha256').update(JSON.stringify(queries)).digest('hex');
+  const MARCH = 'e620889c47f1804e8bac844caef8687bde06f5e9420c47777b7486da013edb4d';
   assert.equal(TEST_QUERIES.length, 15);
-  assert.equal(
-    createHash('sha256').update(JSON.stringify(TEST_QUERIES)).digest('hex'),
-    'e620889c47f1804e8bac844caef8687bde06f5e9420c47777b7486da013edb4d',
-  );
+
+  // The delta: with Q3's portal set back, the set is March's byte for byte,
+  // so no other field of any query moved. The spread keeps the key order.
+  const reverted = TEST_QUERIES.map((q) => (q.id === 'Q3' ? { ...q, portal: 'data.sfgov.org' } : q));
+  assert.equal(hashOf(reverted), MARCH, 'apart from Q3\'s portal, the queries are March\'s');
+
+  assert.equal(TEST_QUERIES.find((q) => q.id === 'Q3').portal, 'data.sf.gov');
+  assert.equal(hashOf(TEST_QUERIES), '8a418b01d06c331c175f3bc34a490a4ecc4dd33bb984c1a7f40ac6b82884faed');
 });
 
 test('#573: --probe is two models on two queries, one of them off the NYC portal, then the tool-result check', () => {
@@ -770,4 +811,172 @@ test('#573: the recorded tool results are what they claim, and each verdict is r
     'Found 2 indicators for NYC.',
     'Use get_observations next please.',
   ]);
+});
+
+// --- #609: the harness offers what the app offers ---
+//
+// Each row's request is read from what the harness actually sent (the
+// stand-in's log of every model request), and the expectation is computed by
+// the app's own functions — `offeredMcpTools(mcpToolsFor(lockedPortal),
+// configured, selection)` and `composeSystemPrompt({ portal, configured,
+// selection })`, the two calls `src/app/api/compare-stream/route.ts` makes
+// under all-sources — in a second process given the same environment, the
+// same stand-in transport and the run's own clock. The harness is never
+// portal-locked (its questions span five portals) and passes no selection, so
+// the expectation is computed at no lock and no selection too.
+//
+// Two configurations, because a hand copy can equal one of them: none of the
+// optional sources configured, and every one. Each optional source is read
+// from the router's manifest, so a source added there is configured here
+// without an edit; the test checks that each configuration offers exactly the
+// sources it claims, so a configuration that silently configured nothing
+// would fail rather than pass.
+
+const MCP_DIR = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../src/lib/mcp');
+
+/** The environment that configures every optional source the manifest has. */
+function everyOptionalSource() {
+  const env = {};
+  for (const entry of CIVIC_MANIFEST) {
+    if (entry.configuration.requirement !== 'optional') continue;
+    const variable = entry.configuration.addressVariable;
+    env[variable] = variable.endsWith('_HOSTING') ? HOSTING_SANDBOX : `https://fake-${entry.alias}.test/mcp`;
+    if (Object.hasOwn(HOSTED_SOURCE_KEY_VARIABLE, entry.sourceId)) env[HOSTED_SOURCE_KEY_VARIABLE[entry.sourceId]] = 'fixture';
+  }
+  return env;
+}
+
+const CONFIGURATIONS = {
+  'no optional source': {},
+  'every optional source': everyOptionalSource(),
+};
+
+const REQUIRED_ALIASES = CIVIC_MANIFEST.filter((e) => e.configuration.requirement !== 'optional').map((e) => e.alias);
+const ALL_ALIASES = CIVIC_MANIFEST.map((e) => e.alias);
+
+/** What the app's functions give for this process's environment, written to REF_OUT. */
+const REFERENCE_SOURCE = `
+import { writeFileSync } from 'node:fs';
+import { mcpToolsFor, offeredMcpTools } from ${JSON.stringify(pathToFileURL(path.join(MCP_DIR, 'tools.ts')).href)};
+import { composeSystemPrompt } from ${JSON.stringify(pathToFileURL(path.join(MCP_DIR, 'socrata-skill.ts')).href)};
+import { readMcpEnvFromProcess } from ${JSON.stringify(pathToFileURL(path.join(MCP_DIR, 'registry.ts')).href)};
+const configured = readMcpEnvFromProcess();
+const lockedPortal = undefined;
+const selection = undefined;
+const now = new Date(process.env.REF_NOW);
+const prompts = {};
+for (const portal of JSON.parse(process.env.REF_PORTALS)) {
+  prompts[portal] = (await composeSystemPrompt({ portal, configured, selection, now })).prompt;
+}
+writeFileSync(process.env.REF_OUT, JSON.stringify({ tools: offeredMcpTools(mcpToolsFor(lockedPortal), configured, selection), prompts }));
+`;
+
+const DRIVE_QUERIES = ['Q1', 'Q2']; // NYC and Chicago: two portals, so a prompt that ignores the row's portal fails
+const drives = new Map();
+
+/**
+ * One run of the harness (one model, two queries) against the stand-in at a
+ * configuration, and the app's tools and prompts for the same environment and
+ * clock. Memoized: the tool and prompt tests read the same two runs.
+ */
+function driveAt(configuration) {
+  if (drives.has(configuration)) return drives.get(configuration);
+  const dir = scratchDir();
+  try {
+    const preload = writeFakeEndpoints(dir);
+    const indices = DRIVE_QUERIES.map((id) => TEST_QUERIES.findIndex((q) => q.id === id) + 1).join(',');
+    const env = fakeEnv(dir, { EVAL_MODELS: 'openai/gpt-4o', EVAL_QUERIES: indices, ...CONFIGURATIONS[configuration] });
+    const run = runHarness(['--cap', '3', '--out-dir', dir], { env, preload });
+    assert.equal(run.status, 0, `${configuration}\nstdout:\n${run.stdout}\nstderr:\n${run.stderr}`);
+    const out = JSON.parse(resultsFile(dir).text);
+    const requests = chatRequests(fakeLog(path.join(dir, 'requests.jsonl')));
+
+    const refOut = path.join(dir, 'reference.json');
+    const portals = [...new Set(TEST_QUERIES.filter((q) => DRIVE_QUERIES.includes(q.id)).map((q) => q.portal))];
+    const ref = spawnSync(process.execPath, ['--import', pathToFileURL(preload).href, '--input-type=module', '-e', REFERENCE_SOURCE], {
+      encoding: 'utf-8',
+      timeout: 60_000,
+      env: {
+        PATH: process.env.PATH,
+        HOME: process.env.HOME,
+        ...env,
+        FAKE_LOG: path.join(dir, 'reference.jsonl'),
+        REF_OUT: refOut,
+        REF_NOW: out.metadata.startedAt,
+        REF_PORTALS: JSON.stringify(portals),
+      },
+    });
+    assert.equal(ref.status, 0, `reference at ${configuration}\nstdout:\n${ref.stdout}\nstderr:\n${ref.stderr}`);
+    const reference = JSON.parse(readFileSync(refOut, 'utf-8'));
+    const drive = { configuration, out, requests, reference };
+    drives.set(configuration, drive);
+    return drive;
+  } finally {
+    rmSync(dir, { recursive: true, force: true });
+  }
+}
+
+const toolNames = (tools) => (tools ?? []).map((t) => t.function?.name);
+const aliasesOf = (names) => [...new Set(names.map((n) => CIVIC_MANIFEST.find((e) => n.startsWith(`${e.alias}__`))?.alias))];
+
+test('#609: every model request offers the tools the app offers, with no optional source configured and with every one', () => {
+  const drives = Object.keys(CONFIGURATIONS).map(driveAt);
+
+  // The instrument: each configuration offers exactly the sources it claims,
+  // and the two lists differ, so no one fixed list can equal both.
+  const [none, every] = drives.map((d) => toolNames(d.reference.tools));
+  assert.deepEqual(aliasesOf(none), REQUIRED_ALIASES);
+  assert.deepEqual(aliasesOf(every), ALL_ALIASES);
+  assert.notDeepEqual(none, every);
+
+  for (const drive of drives) {
+    // Two rows, each a tool call and an answer: four model requests.
+    assert.equal(drive.requests.length, 4, `${drive.configuration}: ${drive.requests.length} model requests`);
+    for (const request of drive.requests) {
+      assert.deepEqual(
+        toolNames(request.tools),
+        toolNames(drive.reference.tools),
+        `${drive.configuration}: the harness offered ${JSON.stringify(toolNames(request.tools))}`,
+      );
+      // By schema too; compared whole, so a failure names the configuration
+      // rather than printing every schema.
+      assert.ok(
+        isDeepStrictEqual(request.tools, drive.reference.tools),
+        `${drive.configuration}: the names are the app's and the schemas are not`,
+      );
+    }
+  }
+});
+
+test('#609: every model request carries the app\'s composed prompt for its row\'s portal, configuration and clock', () => {
+  for (const drive of Object.keys(CONFIGURATIONS).map(driveAt)) {
+    const { prompts } = drive.reference;
+    // The instrument: the two portals compose two prompts, and each states the run's date.
+    assert.equal(Object.keys(prompts).length, 2);
+    assert.notEqual(...Object.values(prompts));
+    for (const prompt of Object.values(prompts)) assert.ok(prompt.includes(drive.out.metadata.startedAt.slice(0, 10)));
+
+    for (const request of drive.requests) {
+      const query = TEST_QUERIES.find((q) => q.query === request.user);
+      assert.ok(query, `a model request carried a question the run did not ask: ${request.user}`);
+      assert.ok(
+        request.system === prompts[query.portal],
+        `${drive.configuration} ${query.id}: the harness's system prompt is not the app's composition ` +
+          `(it begins ${JSON.stringify(String(request.system).slice(0, 120))})`,
+      );
+    }
+  }
+});
+
+test('#609: every live capture names a tool the app offers, and the name routes to the capture\'s own source', () => {
+  const offered = new Set(toolNames(mcpTools));
+  for (const capture of LIVE_CAPTURES) {
+    assert.ok(offered.has(capture.tool), `${capture.id}: "${capture.tool}" is not a name mcpTools holds`);
+  }
+  // What the client routes each name to (`routeToolCall`, through the same
+  // registry), with every source configured: the capture's own source.
+  const configured = readMcpEnv({ SOCRATA_MCP_URL: 'https://fake-socrata.test', ...everyOptionalSource() });
+  for (const capture of LIVE_CAPTURES) {
+    assert.equal(routedSourceId(capture.tool, configured), capture.source, capture.id);
+  }
 });
