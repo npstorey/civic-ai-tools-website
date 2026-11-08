@@ -271,7 +271,7 @@
         {
           "id": "consent-notify",
           "trace": "env:DATABASE_URL const:src/lib/sources/copy.ts#NOTIFY_WITH_ACCOUNTS",
-          "text": "A recipient may also be removed, or say it keeps less. If your answer is kept on your account, we tell you and do not ask again. If it is kept in a cookie, we may ask again instead. We tell you in Data source settings and in the panel beside the question box, until you dismiss it."
+          "text": "A recipient may also be removed, or say it keeps less. If your answer is kept on your account, we tell you and do not ask again. If it is kept in a cookie, we may ask again instead. We tell you in Data source settings, until you dismiss it."
         }
       ]
     },

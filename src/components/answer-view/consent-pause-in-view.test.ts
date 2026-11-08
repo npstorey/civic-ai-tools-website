@@ -6,7 +6,10 @@
 // `behavior: 'auto'` when the reader asked for reduced motion) and renders a
 // compact prompt with the two equal buttons while the pause is open and
 // unanswered: gone after a decision, after the hold ends, and when no pause
-// is open. The Sources panel row's own copy does not change.
+// is open. The source row's own copy does not change. Since UX-2 P4b the
+// row is the Settings overlay's (the owner removed the Sources panel, #729
+// comment 6728493444): the tests that read a row mount the overlay over the
+// page, as its intercepted route mounts it.
 //
 // WHERE THE PROMPT SITS, measured (local dev server, headless Chrome, a held
 // stream, at main ce77dcf): on the home page the submit scroll
@@ -27,7 +30,7 @@
 // condition.
 //
 // CRITERION 3 (#668), the client half: on /explore, Cancel during a hold ends
-// the step card and the panel row's card (the server half, a hold that ends
+// the step card and the source row's card (the server half, a hold that ends
 // when its reader's stream is gone, is `src/app/api/consent-pause-driven.test.ts`).
 //
 // WHAT IS DRIVEN. The three real feeds, each through the real page component
@@ -131,6 +134,9 @@ const load = async (rel: string): Promise<Mod> => (await import(pathToFileURL(pa
 const Home = (await load('app/(marketing)/page.tsx')).default as ComponentType;
 const QuerySurface = (await load('components/shared/QuerySurface.tsx')).default as ComponentType<Record<string, unknown>>;
 const McpFlowDiagram = (await load('components/explore/McpFlowDiagram.tsx')).default as ComponentType;
+const SettingsOverlay = (await load('components/settings/SettingsOverlay.tsx')).default as ComponentType<Record<string, unknown>>;
+/** The page with the Settings overlay open over it: since the panel's removal, the overlay holds the source rows. */
+const withSettings = (page: ReturnType<typeof h>) => h('div', null, page, h(SettingsOverlay, { mount: 'intercepted' }));
 const flowsRoute = await load('app/api/flows/route.ts');
 const consentRoute = await load('app/api/sources/consent/route.ts');
 const { buildFlowsStatement, statementHash } = await load('lib/flows/statement.ts');
@@ -330,7 +336,7 @@ for (const [reduced, out] of [[false, false], [false, true], [true, true]] as co
     reducedMotion = reduced;
     if (out) { viewportHeight = 852; promptBox = { top: -237, bottom: -203 }; }
     await consentWith({ 'boston-opencontext': 'ask-first' });
-    const p = await mountPage(h(Home));
+    const p = await mountPage(withSettings(h(Home)));
     await askOnQueryForm(p);
     const stream = streams[0];
     assert.ok(stream, 'premise: the question was sent');
@@ -352,7 +358,7 @@ for (const [reduced, out] of [[false, false], [false, true], [true, true]] as co
     // Near the question box: after it in the page, and before the run's steps.
     assert.ok(before(p, questionBox(p), prompt), 'the prompt comes before the question box');
     assert.ok(before(p, prompt, stepCards(p)[0]), 'the prompt comes after the run\'s step card');
-    // The Sources panel row's own copy is byte-identical (the card is the only addition).
+    // The source row's own copy (the Settings overlay's row since UX-2 P4b) is byte-identical (the card is the only addition).
     assert.equal(rowCopy(p), rowBefore, 'the row\'s copy changed when the pause arrived');
     // A decision from the prompt posts the pause's own key; then the prompt goes and the card shows the outcome.
     await p.click(buttonsIn(prompt)[0]);
@@ -417,7 +423,7 @@ test('criterion 1, /explore: a holding pause shows the prompt under the running 
   ANON();
   answers();
   await consentWith({ 'boston-opencontext': 'ask-first' });
-  const p = await mountPage(h(McpFlowDiagram));
+  const p = await mountPage(withSettings(h(McpFlowDiagram)));
   await askOnExplore(p);
   const stream = streams[0];
   assert.ok(stream, 'premise: the question was sent');
@@ -440,8 +446,8 @@ test('criterion 1, /explore: a holding pause shows the prompt under the running 
   await settle(p);
   assert.equal(prompts(p).length, 0, `the prompt stays after Cancel: ${summary(p)}`);
   for (const card of stepCards(p)) assert.deepEqual(labels(card), [], `a step card keeps its buttons after Cancel: ${summary(p)}`);
-  // /explore shows its Sources panel again once cancelled: the row carries no card that can still be answered.
-  assert.ok(p.elements().some((el) => el.props['data-source'] === 'boston-opencontext'), 'premise: the Sources panel is not shown after Cancel');
+  // The Settings overlay's row (it was /explore's Sources panel, shown again once cancelled) carries no card that can still be answered.
+  assert.ok(p.elements().some((el) => el.props['data-source'] === 'boston-opencontext'), 'premise: the Settings overlay shows no Boston row after Cancel');
   for (const card of rowCards(p)) assert.deepEqual(labels(card), [], `the row's card keeps its buttons after Cancel: ${summary(p)}`);
   assert.equal(decisions.length, 0, 'Cancel posted a decision');
   stream.close();
@@ -487,7 +493,7 @@ test('criterion 3, /explore on the browser\'s abort path (Amendment 3, the owner
   answers();
   abortLikeABrowser();
   await consentWith({ 'boston-opencontext': 'ask-first' });
-  const p = await mountPage(h(McpFlowDiagram));
+  const p = await mountPage(withSettings(h(McpFlowDiagram)));
   await askOnExplore(p);
   const stream = streams[0];
   assert.ok(stream, 'premise: the question was sent');
@@ -504,7 +510,7 @@ test('criterion 3, /explore on the browser\'s abort path (Amendment 3, the owner
     assert.deepEqual(labels(card), [], `a step card keeps its buttons after Cancel: ${summary(p)}`);
     assert.ok(textOf(card).includes('This question is no longer waiting for an answer.'), `the step card after Cancel: ${textOf(card)}`);
   }
-  assert.ok(p.elements().some((el) => el.props['data-source'] === 'boston-opencontext'), 'premise: the Sources panel is not shown after Cancel');
+  assert.ok(p.elements().some((el) => el.props['data-source'] === 'boston-opencontext'), 'premise: the Settings overlay shows no Boston row after Cancel');
   assert.deepEqual(rowCards(p).map((c) => labels(c)).flat(), [], `the row's card offers an answer after Cancel: ${summary(p)}`);
   assert.equal(decisions.length, 0, 'Cancel posted a decision');
 });
@@ -527,7 +533,7 @@ async function pausedOnExplore(): Promise<{ p: Surface; stream: Held }> {
   answers();
   abortLikeABrowser();
   await consentWith({ 'boston-opencontext': 'ask-first' });
-  const p = await mountPage(h(McpFlowDiagram));
+  const p = await mountPage(withSettings(h(McpFlowDiagram)));
   await askOnExplore(p);
   const stream = streams[0];
   assert.ok(stream, 'premise: the question was sent');

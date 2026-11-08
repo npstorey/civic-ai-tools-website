@@ -97,6 +97,10 @@ const load = async (rel: string): Promise<Mod> => (await import(pathToFileURL(pa
 const Home = (await load('app/(marketing)/page.tsx')).default as ComponentType;
 const QuerySurface = (await load('components/shared/QuerySurface.tsx')).default as ComponentType<Record<string, unknown>>;
 const McpFlowDiagram = (await load('components/explore/McpFlowDiagram.tsx')).default as ComponentType;
+// UX-2 P4b (#729 comment 6728493444): the Sources panel is removed from the pages, so the controls these tests drive
+// beside the question form are the Settings overlay's, mounted over the page as its intercepted route mounts it.
+const SettingsOverlay = (await load('components/settings/SettingsOverlay.tsx')).default as ComponentType<Record<string, unknown>>;
+const homeWithSettings = () => h('div', null, h(Home), h(SettingsOverlay, { mount: 'intercepted' }));
 const flowsRoute = await load('app/api/flows/route.ts');
 const consentRoute = await load('app/api/sources/consent/route.ts');
 const { consentInForce } = await load('lib/sources/consent-gate.ts');
@@ -310,31 +314,33 @@ test('criterion 15 (Q2); UX-2 P4b criterion 5: nothing is stored after Don\'t al
   again.unmount();
 });
 
-// --- Criterion 1: the panel's revoke, then the next submit -------------------------------
+// --- Criterion 1: the revoke, then the next submit ---------------------------------------
+// The withdraw control and the radios were the panel's beside the form; since the panel's removal they are the
+// Settings overlay's, opened over the same page. The assertions are as before.
 
-test('criterion 1: for a session without a dbId, after the panel\'s revoke the next submit shows the card', async () => {
+test('criterion 1: for a session without a dbId, after the Settings overlay\'s revoke the next submit shows the card', async () => {
   ANON();
   const net = answers();
-  const page = await mount(h(Home));
+  const page = await mount(homeWithSettings());
   await askOnQueryForm(page);
   assert.deepEqual(queryRequests(net.sent), [], 'the question was sent before the reader answered the card');
   assertCardShown(page, 'the home page');
   await page.click(page.button('Allow'));
   assert.equal(queryRequests(net.sent).length, 1, 'premise: after Allow the question was sent');
   const revoke = page.elements().filter((el) => el.type === 'button' && /withdraw/i.test(textOf(el)));
-  assert.equal(revoke.length, 1, `the panel shows no withdraw control: ${page.text().slice(0, 400)}`);
+  assert.equal(revoke.length, 1, `the Settings overlay shows no withdraw control: ${page.text().slice(0, 400)}`);
   await page.click(revoke[0]);
-  assert.equal(net.sent.filter((r) => r.path === '/api/sources/consent' && r.method === 'DELETE').length, 1, 'the panel\'s revoke did not call DELETE');
+  assert.equal(net.sent.filter((r) => r.path === '/api/sources/consent' && r.method === 'DELETE').length, 1, 'the Settings overlay\'s revoke did not call DELETE');
   await askOnQueryForm(page);
   assert.equal(queryRequests(net.sent).length, 1, 'after the revoke the next question was sent without asking');
   assertCardShown(page, 'after the revoke, the next submit');
   page.unmount();
 });
 
-test('criterion 1: the panel awaits its write before the form can submit', async () => {
+test('criterion 1: a write from the Settings overlay holds the form\'s submit until it is answered', async () => {
   ANON();
   const net = answers();
-  const page = await mount(h(Home));
+  const page = await mount(homeWithSettings());
   await askOnQueryForm(page);
   assertCardShown(page, 'the home page');
   await page.click(page.button('Allow'));
@@ -344,12 +350,12 @@ test('criterion 1: the panel awaits its write before the form can submit', async
   try {
     const off = page.elements().filter((el) => el.type === 'input' && el.props.type === 'radio' && el.props.value === 'off'
       && String(el.props.name ?? '').includes('data-commons'));
-    assert.equal(off.length, 1, 'the panel offers no Off choice for Data Commons');
+    assert.equal(off.length, 1, 'the Settings overlay offers no Off choice for Data Commons');
     // The change is made, and its write has not been answered yet.
     void page.check(off[0]);
     await new Promise((resolve) => setImmediate(resolve));
     await askOnQueryForm(page);
-    assert.equal(queryRequests(net.sent).length, 1, 'the form sent a question while the panel\'s write was still pending');
+    assert.equal(queryRequests(net.sent).length, 1, 'the form sent a question while the Settings overlay\'s write was still pending');
   } finally {
     holdWrites = null;
     release();
@@ -441,16 +447,21 @@ test('criterion 15 (Q2); UX-2 P4b criterion 5: after Don\'t allow, the next ques
   page.unmount();
 });
 
-// --- Flag 9: /explore mounts the Sources panel beside its input ------------------------------
+// --- Flag 9, as the panel's removal turns it: /explore mounts no Sources panel ------------------
+// Flag 9 asserted the panel beside /explore's live input, with its rows and control. The owner removed the panel
+// everywhere (#729 comment 6728493444); the rows and controls are the Settings overlay's. This is UX-2 P4b's
+// criterion 1 on /explore.
 
-test('flag 9 (/explore): the Sources panel is beside the live question input, with its rows and its control', async () => {
+test('flag 9 (/explore), UX-2 P4b: no Sources panel beside the live question input, and no source rows or controls', async () => {
   ANON();
   answers();
   const page = await mount(h(McpFlowDiagram));
   await page.click(page.button('Try your own'));
+  assert.ok(page.buttons('Run').length >= 1 || page.text().includes('Run'), `premise: /explore's live input is shown: ${page.text().slice(0, 300)}`);
   const rows = page.elements().filter((el) => typeof el.props['data-source'] === 'string');
-  assert.ok(rows.length >= 1, `/explore shows no Sources panel: ${page.text().slice(0, 300)}`);
-  assert.ok(page.elements().some((el) => el.props.role === 'radiogroup'), '/explore\'s panel has no control');
+  assert.equal(rows.length, 0, `/explore shows source rows: ${page.text().slice(0, 300)}`);
+  assert.ok(!page.elements().some((el) => el.props.role === 'radiogroup'), '/explore shows a source control');
+  assert.ok(!page.text().includes('Data sources this site can use'), '/explore names "Data sources this site can use"');
   page.unmount();
 });
 

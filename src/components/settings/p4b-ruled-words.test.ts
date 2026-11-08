@@ -87,9 +87,9 @@ const NO_SOURCES_ON = 'Every data source is set to Off or Ask first, so nothing 
 
 // Part F: the panel and privacy sentences.
 const WITHDRAW = 'To withdraw consent, open Data source settings.'; // 40 (X2c): one sentence for both
-// Ruled W1 (relay 26): item 40's place word plus today's ruled panel phrase, true while the panel still shows the
-// notices; P3b drops "and in the panel beside the question box" when it removes the panel.
-const NOTIFY_LAST = 'We tell you in Data source settings and in the panel beside the question box, until you dismiss it.'; // 40 (X2d), W1
+// Item 40's form (X2d). W1 (relay 26) added "and in the panel beside the question box" while the panel still showed
+// the notices; the panel's removal (#729 comment 6728493444) drops that clause, as W1 left it to.
+const NOTIFY_LAST = 'We tell you in Data source settings, until you dismiss it.'; // 40 (X2d)
 const NOTIFY_FIRST = 'A recipient may also be removed, or say it keeps less. If your answer is kept on your account, we tell you and do not ask again. If it is kept in a cookie, we may ask again instead.';
 const X2B = 'You can set each data source to On, Ask first or Off in Data source settings at any time.'; // 41 (X2b)
 
