@@ -95,8 +95,11 @@ async function signedInWithCookie(flows?: string): Promise<{ net: ReturnType<typ
 }
 
 const keptLines = (panel: Surface): HostElement[] => panel.elements().filter((el) => el.props.role === 'status' && textOf(el) === LINE);
+// The radios' name is `source-state-<sourceId>-<mount id>` since UX-2 P4b (one group per mounted
+// control), so a source's radios are read by the `source-state-<sourceId>-` prefix, not the exact name.
+const ofSource = (el: HostElement, sourceId: string): boolean => el.type === 'input' && String(el.props.name).startsWith(`source-state-${sourceId}-`);
 const checked = (panel: Surface, sourceId: string): string | undefined =>
-  panel.elements().find((el) => el.type === 'input' && el.props.name === `source-state-${sourceId}` && el.props.checked === true)?.props.value as string | undefined;
+  panel.elements().find((el) => ofSource(el, sourceId) && el.props.checked === true)?.props.value as string | undefined;
 
 test('R9 P4 criterion 3: the line is the ruled sentence, exactly', () => {
   assert.ok(copy, `${COPY} does not load`);
@@ -124,7 +127,7 @@ test('R9 P4 criterion 1: the first signed-in read keeps the cookie\'s choice on 
 
   // The next read on the same page (after a state change) finds the row: no line.
   const firstId = Object.keys(states)[0];
-  const on = panel.elements().find((el) => el.type === 'input' && el.props.name === `source-state-${firstId}` && el.props.value === 'on');
+  const on = panel.elements().find((el) => ofSource(el, firstId) && el.props.value === 'on');
   assert.ok(on, 'premise: an On choice for the first source');
   await panel.check(on!);
   assert.equal(keptLines(panel).length, 0, 'the line is still shown after the next read');

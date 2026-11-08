@@ -4,11 +4,18 @@
  * One source's state control (UX-1 PC, #719 leg 1): the three-state radio
  * group and the status line that confirms a change, as the Sources panel has
  * shown them since R6 PL and the UX pass's row 5. The panel and the
- * dashboard's Sources tab both mount this one implementation.
+ * Settings overlay both mount this one implementation, through `SourceRow`.
  *
  * THE CONTROL is a radio group, named for the source, of three native radios:
  * arrow keys move within it, the checked choice is what a screen reader
- * announces, and the group's label names the source. A choice goes through
+ * announces, and the group's label names the source.
+ *
+ * ONE GROUP PER MOUNT (UX-2 P4b). The name is `source-state-<sourceId>-<id>`,
+ * the id React's `useId` gives this mount. A browser keeps one checked radio
+ * per name per document (and form owner), and the Settings overlay opens over
+ * the page that holds the Sources panel: with one name per source, checking a
+ * choice in one surface unchecked the other's, and a second mount in the same
+ * state cleared the first. A choice goes through
  * the consent hook's `setState`: with a consent in force it is written
  * through the consent endpoint; before one it is kept on the page and nothing
  * is confirmed (R9 P2). While a write is in flight every radio is held.
@@ -27,6 +34,7 @@
  * unchanged.
  */
 
+import { useId } from 'react';
 import { PANEL_STATE_CHANGED } from '@/lib/sources/copy';
 import type { SourceStateValue } from './useSourceConsent';
 
@@ -62,13 +70,14 @@ export interface SourceStateControlProps {
 
 /** The radio group: the row's control. */
 export function SourceStateRadios({ sourceId, name, state, inForce, writing, setState, setConfirmed }: SourceStateControlProps) {
+  const group = `source-state-${sourceId}-${useId()}`;
   return (
     <div role="radiogroup" aria-label={`${name}: On, Ask first or Off`} style={{ display: 'flex', gap: '12px', marginTop: '4px' }}>
       {STATES.map((choice) => (
         <label key={choice.value} style={{ display: 'inline-flex', alignItems: 'center', gap: '4px', color: 'var(--text-primary)' }}>
           <input
             type="radio"
-            name={`source-state-${sourceId}`}
+            name={group}
             value={choice.value}
             checked={state === choice.value}
             disabled={writing}

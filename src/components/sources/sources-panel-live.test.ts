@@ -346,7 +346,12 @@ for (const config of ['three', 'six'] as const) {
       assert.equal(children[2].props.role, 'radiogroup', `${id}'s third element is not its control`);
       // The control, byte for byte as at the base.
       assert.equal(children[2].props['aria-label'], `${NAME[id]}: On, Ask first or Off`, `${id}'s control's accessible name moved`);
-      assert.deepEqual(radiosOf(page, id).map((r) => [r.props.type, r.props.name, r.props.value]), [['radio', `source-state-${id}`, 'on'], ['radio', `source-state-${id}`, 'ask-first'], ['radio', `source-state-${id}`, 'off']], `${id}'s radios moved`);
+      // Since UX-2 P4b each mounted control is its own group, named `source-state-<id>-<mount id>`: the pin is
+      // one shared name per group, beginning `source-state-<id>-`, with the types and values as at the base.
+      const group = radiosOf(page, id);
+      assert.deepEqual(group.map((r) => [r.props.type, r.props.value]), [['radio', 'on'], ['radio', 'ask-first'], ['radio', 'off']], `${id}'s radios moved`);
+      assert.equal(new Set(group.map((r) => r.props.name)).size, 1, `${id}'s radios do not share one name`);
+      assert.ok(String(group[0].props.name).startsWith(`source-state-${id}-`), `${id}'s group name ${String(group[0].props.name)} does not begin source-state-${id}-`);
       // The drawer.
       const drawers = [...within(row)].filter((el) => el.type === 'details');
       assert.equal(drawers.length, 1, `${id}'s row has ${drawers.length} drawers`);
