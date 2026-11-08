@@ -32,6 +32,22 @@
 // (its runs, each one request), beginning with one request; before Allow, the
 // one refused request is all that was sent.
 //
+// UX-2 P4b, item 42 in the review dialog. A replay cannot pause, so a
+// consent in force with no source On is refused `no_sources_on`
+// (`consent-gate.ts:156`). That reaches the dialog when the guard runs the
+// replay: here every source Ask first, stored through the real consent route,
+// with the instance's mode unread (the guard runs it, `useSourceConsent.ts`).
+// The dialog answers it as home and `/explore` do: item 42's sentence through
+// `NoSourcesOnLine`, its "Data source settings" a link to the Settings
+// overlay, and no error. The route's payload carries the same sentence as its
+// `error` (`consent-gate.ts:123`), so one case swaps that text for a marker:
+// the dialog renders the refusal from its code, not from the route's text.
+// THE DECOY: a 403 with any other code still takes the error path, unchanged.
+// The same refusal answered in the browser (3b): with every source Off the
+// guard returns 'none-on' (`useSourceConsent.ts:463-464`) and sends no replay;
+// the dialog shows `NoSourcesOnLine` as home does. Its decoy: with a source
+// On, Run sends the replay.
+//
 // Run with: npm test
 
 import { test } from 'node:test';
@@ -77,11 +93,18 @@ const { consentInForce } = await load('lib/sources/consent-gate.ts');
 const { friendlyStreamError } = await load('lib/streaming.ts');
 const { buildFlowsStatement, statementHash } = await load('lib/flows/statement.ts');
 const BARE_REFUSAL: string = friendlyStreamError({ code: 'consent_required' });
+const NO_SOURCES_ON: string = friendlyStreamError({ code: 'no_sources_on' });
+const { SETTINGS_HREF, SETTINGS_TEXT } = await load('lib/sources/copy.ts');
 
 const REPLAY_PATH = `/api/records/${SLUG}/replay`;
 
 /** When set, the status read says a consent is in force, whatever the request carries. */
 let statusSaysInForce = false;
+
+/** When set, the replay stand-in answers through this, given the real gate's decision. */
+let replayAnswer: ((decision: { ok: boolean; payload?: Record<string, unknown> }) => Response) | null = null;
+/** The real gate's last refusal payload, as the stand-in answered it. */
+let lastRefusal: Record<string, unknown> | null = null;
 
 function answers() {
   return installFetch(ORIGIN, {
@@ -97,6 +120,8 @@ function answers() {
     },
     [REPLAY_PATH]: async (request: Request) => {
       const decision = await consentInForce(request, sessions.server);
+      if (!decision.ok) lastRefusal = decision.payload;
+      if (replayAnswer) return replayAnswer(decision);
       if (!decision.ok) return new Response(JSON.stringify(decision.payload), { status: 403, headers: { 'Content-Type': 'application/json' } });
       return new Response(JSON.stringify({ toolCalls: [], output: 'An answer.', tokenUsage: { promptTokens: 1, completionTokens: 1, totalTokens: 2 }, durationMs: 1, offeredSet: { from: 'sourcesOffered', sources: ['socrata'], lacking: [] } }), { status: 200, headers: { 'Content-Type': 'application/json' } });
     },
@@ -179,5 +204,113 @@ test('criterion 7 (the guard): with no consent in force, Run shows the card befo
   assert.ok(dialog.buttons('Allow').length === 1 && dialog.buttons("Don't allow").length === 1, `the dialog shows no consent card: ${dialog.text().slice(0, 500)}`);
   await dialog.click(dialog.button('Allow'));
   assert.equal(replays(net).length, 5, 'after Allow the dialog did not run the five replays it was asked for');
+  dialog.unmount();
+});
+
+// --- UX-2 P4b, item 42: the no_sources_on refusal in the review dialog -------------
+
+const json403 = (body: unknown) => new Response(JSON.stringify(body), { status: 403, headers: { 'Content-Type': 'application/json' } });
+
+/** The consistency tab's error box: where the dialog's error status shows its message (`status === 'error'`). */
+const errorBoxes = (dialog: Surface) => dialog.elements().filter((el) => (el.props.style as { color?: string } | undefined)?.color === 'var(--error)');
+
+/**
+ * Store a consent in force, through the real consent route (the cookie path),
+ * each configured source in the state `stateOf` gives it, then open the dialog
+ * and run the consistency test.
+ */
+async function runAfterConsent(stateOf: (sourceId: string, index: number) => string, answer: typeof replayAnswer = null): Promise<{ dialog: Surface; net: ReturnType<typeof answers> }> {
+  statusSaysInForce = false;
+  replayAnswer = answer;
+  lastRefusal = null;
+  sessions.server = { user: { id: 'gh-fixture-replayer' } };
+  sessions.client = { status: 'authenticated', data: { user: { name: 'Fixture' } } };
+  const net = answers();
+  const statement = await buildFlowsStatement();
+  const states = Object.fromEntries(statement.sources.map((s: { sourceId: string }, i: number) => [s.sourceId, stateOf(s.sourceId, i)]));
+  const stored = await fetch('/api/sources/consent', { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ states, flowsVersion: statementHash(statement) }) });
+  assert.equal(stored.status, 200, `premise: the consent was not stored: ${await stored.text()}`);
+  const dialog = await mount(h(AttestationDialog, { slug: SLUG, analysisModel: 'fixture/other-model', promptVisibility: 'full_text', open: true, onClose: () => undefined, onAttestationCreated: () => undefined }));
+  await chooseConsistency(dialog);
+  await dialog.type(one(dialog, 'key field', (el) => el.type === 'input' && el.props.type === 'password'), 'placeholder-replayer-model-key');
+  await dialog.click(dialog.button('Run Consistency Test'));
+  replayAnswer = null;
+  return { dialog, net };
+}
+
+/**
+ * Every source Ask first: the guard runs the replay (no source Off, the mode
+ * unread), and the real gate refuses it `no_sources_on`, since a replay cannot ask.
+ */
+const runAfterAskFirstConsent = (answer: typeof replayAnswer = null) => runAfterConsent(() => 'ask-first', answer);
+
+/** The premise every case below rests on: one replay was sent, and the real gate refused it `no_sources_on` with item 42's sentence. */
+function assertRefusedNoneOn(net: ReturnType<typeof answers>): void {
+  assert.equal(replays(net).length, 1, 'premise: the dialog sent one replay request, and stopped at its refusal');
+  assert.equal(lastRefusal?.code, 'no_sources_on', `premise: the real gate did not refuse no_sources_on: ${JSON.stringify(lastRefusal)}`);
+  assert.equal(lastRefusal?.error, NO_SOURCES_ON, 'premise: the route\'s error text is item 42\'s sentence');
+}
+
+test('UX-2 P4b item 42: a replay refused no_sources_on shows item 42\'s sentence, byte for byte, and no error', async () => {
+  const { dialog, net } = await runAfterAskFirstConsent();
+  assertRefusedNoneOn(net);
+  assert.equal(dialog.buttons('Allow').length, 0, 'premise: the consent card is not shown');
+  const lines = dialog.elements().filter((el) => textOf(el) === NO_SOURCES_ON);
+  assert.ok(lines.length >= 1, `the dialog does not render item 42's sentence on its own: ${dialog.text().slice(-700)}`);
+  assert.equal(errorBoxes(dialog).length, 0, `the dialog shows the refusal as an error (status 'error'): ${errorBoxes(dialog).map((el) => textOf(el)).join(' | ')}`);
+  dialog.unmount();
+});
+
+test('UX-2 P4b item 42: the dialog\'s refusal links "Data source settings" to the Settings overlay', async () => {
+  const { dialog, net } = await runAfterAskFirstConsent();
+  assertRefusedNoneOn(net);
+  assert.equal(dialog.buttons('Allow').length, 0, 'premise: the consent card (which has its own link) is not shown');
+  const links = dialog.elements().filter((el) => el.type === 'a' && el.props.href === SETTINGS_HREF && textOf(el) === SETTINGS_TEXT.link);
+  assert.equal(links.length, 1, `the dialog's refusal does not link ${SETTINGS_TEXT.link} to ${SETTINGS_HREF}: ${dialog.text().slice(-700)}`);
+  dialog.unmount();
+});
+
+test('UX-2 P4b item 42: the dialog renders the refusal from its code, not the route\'s error text', async () => {
+  const ROUTE_TEXT = 'Fixture route text for a no_sources_on refusal.';
+  const { dialog, net } = await runAfterAskFirstConsent((decision) => {
+    assert.ok(!decision.ok, 'premise: the real gate refused the replay');
+    return json403({ ...decision.payload, error: ROUTE_TEXT });
+  });
+  assertRefusedNoneOn(net);
+  assert.ok(!dialog.text().includes(ROUTE_TEXT), `the dialog renders the route's error text: ${dialog.text().slice(-700)}`);
+  assert.ok(dialog.text().includes(NO_SOURCES_ON), `the dialog does not render item 42's sentence: ${dialog.text().slice(-700)}`);
+  assert.equal(errorBoxes(dialog).length, 0, 'the dialog shows the refusal as an error');
+  dialog.unmount();
+});
+
+test('UX-2 P4b item 42, decoy: a 403 with any other code still takes the error path, unchanged', async () => {
+  const DECOY_TEXT = 'Fixture refusal with another code.';
+  const { dialog, net } = await runAfterAskFirstConsent(() => json403({ error: DECOY_TEXT, code: 'fixture_other_refusal' }));
+  assert.equal(replays(net).length, 1, 'premise: the dialog sent one replay request');
+  const boxes = errorBoxes(dialog);
+  assert.equal(boxes.length, 1, `the decoy does not reach the error path: ${dialog.text().slice(-700)}`);
+  assert.equal(textOf(boxes[0]), DECOY_TEXT, 'the error path does not show the route\'s error text');
+  assert.ok(!dialog.text().includes(NO_SOURCES_ON), 'the decoy shows item 42\'s sentence');
+  assert.equal(dialog.elements().filter((el) => el.type === 'a' && el.props.href === SETTINGS_HREF).length, 0, 'the decoy shows a Settings link');
+  dialog.unmount();
+});
+
+test('UX-2 P4b item 42 (3b): with every source Off, Run sends no replay and the dialog shows NoSourcesOnLine', async () => {
+  const { dialog, net } = await runAfterConsent(() => 'off');
+  assert.equal(replays(net).length, 0, 'premise: the guard sent a replay with every source Off');
+  assert.equal(dialog.buttons('Allow').length, 0, 'premise: the consent card (which has its own link) is not shown');
+  const lines = dialog.elements().filter((el) => textOf(el) === NO_SOURCES_ON);
+  assert.ok(lines.length >= 1, `the dialog does not render item 42's sentence: ${dialog.text().slice(-700)}`);
+  const links = dialog.elements().filter((el) => el.type === 'a' && el.props.href === SETTINGS_HREF && textOf(el) === SETTINGS_TEXT.link);
+  assert.equal(links.length, 1, `the dialog's refusal does not link ${SETTINGS_TEXT.link} to ${SETTINGS_HREF}: ${dialog.text().slice(-700)}`);
+  assert.equal(errorBoxes(dialog).length, 0, 'the dialog shows the refusal as an error');
+  dialog.unmount();
+});
+
+test('UX-2 P4b item 42 (3b), decoy: with a source On, Run sends the replay', async () => {
+  const { dialog, net } = await runAfterConsent((_id, i) => (i === 0 ? 'on' : 'off'));
+  assert.ok(replays(net).length >= 1, `with a source On the dialog sent no replay: ${dialog.text().slice(-700)}`);
+  assert.equal(lastRefusal, null, `the real gate refused a replay with a source On: ${JSON.stringify(lastRefusal)}`);
+  assert.ok(!dialog.text().includes(NO_SOURCES_ON), 'the dialog shows item 42\'s sentence with a source On');
   dialog.unmount();
 });
