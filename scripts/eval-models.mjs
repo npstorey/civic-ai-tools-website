@@ -40,7 +40,21 @@
  * here, because the census that found the class and the guard that measured it
  * were both scoped to `src/` and to `.ts`. What remains in this file is what is
  * genuinely its own: the models it compares, the queries it runs them against,
- * its tool schema, and how it writes results up for scoring.
+ * and how it writes results up for scoring.
+ *
+ * A ROW IS OFFERED WHAT THE APP OFFERS (#609). The tools and the system prompt
+ * of every row come from the code the app composes from — the two calls
+ * `src/app/api/compare-stream/route.ts` makes when it offers every source at
+ * once: `offeredMcpTools(mcpToolsFor(lockedPortal), configured, selection)` and
+ * `composeSystemPrompt({ portal, configured, selection })` — so a row is one
+ * the app could have produced. Until #609 this file carried a hand copy of one
+ * Socrata tool under its bare name `get_data` and a prompt template of its own,
+ * while the app had offered every tool as `<alias>__<name>` since #599 W3. The
+ * harness is never portal-locked, since its questions span five portals, and
+ * passes no source selection, so every source the environment configures is
+ * offered (below). It does not reproduce the app's load-on-demand mode
+ * (`SOURCE_ROUTING=in-loop`), where the first request offers `load_source`
+ * alone; a row here is the app's all-sources shape.
  *
  * THE MCP TRANSPORT IS THE SITE'S (#573). This file used to carry its own: one
  * legacy session, opened once, with no recovery. The hosted server redeployed
@@ -108,10 +122,17 @@
  * Optional env vars:
  *   EVAL_MODELS      — comma-separated model IDs to test (default: all; full run only)
  *   EVAL_QUERIES     — comma-separated query indices to test, 1-based (default: all; full run only)
- *   DATA_COMMONS_API_KEY, BOSTON_OPENCONTEXT_MCP_URL — read by the site's client
- *                      in the probe's tool-result check, which captures one live
- *                      result from each source it can reach; a source it cannot
- *                      reach is recorded as such and skipped.
+ *   The site's source configuration (`readMcpEnvFromProcess`): DATA_COMMONS_MCP_URL,
+ *                      DATA_COMMONS_API_KEY, BOSTON_OPENCONTEXT_MCP_URL and the
+ *                      hosted sources' `*_HOSTING` switches. Read once per run,
+ *                      they decide which sources every row is offered — tools
+ *                      and guidance — exactly as on an instance that sets the
+ *                      same variables. A hosted source switched on is offered
+ *                      too, and a model's call to it starts that source's
+ *                      sandbox as the app's would. The probe's tool-result
+ *                      check also captures one live result from each source
+ *                      the client can reach; one it cannot reach is recorded
+ *                      as such and skipped.
  *
  * Output: scripts/eval-results-<run|probe>-<UTC timestamp>.json (gitignored),
  * rewritten after every row so a partial run survives a stop.
@@ -125,7 +146,10 @@ import { execFileSync } from 'node:child_process';
 import OpenAI from 'openai';
 
 import { runToolLoop } from '../src/lib/model-loop/run-tool-loop.ts';
-import { callMcpPrompt, callMcpTool } from '../src/lib/mcp/client.ts';
+import { callMcpTool } from '../src/lib/mcp/client.ts';
+import { readMcpEnvFromProcess } from '../src/lib/mcp/registry.ts';
+import { composeSystemPrompt, DEFAULT_SOURCE_SELECTION } from '../src/lib/mcp/socrata-skill.ts';
+import { mcpToolsFor, offeredMcpTools } from '../src/lib/mcp/tools.ts';
 import { rejectedRequestCount, summaryDataSources } from '../src/lib/evidence/summary-sources.ts';
 import {
   BUILT_IN_CATALOG,
@@ -229,7 +253,10 @@ export const TEST_QUERIES = [
   {
     id: 'Q3',
     query: 'Show me the 5 most recent fire incidents in San Francisco',
-    portal: 'data.sfgov.org',
+    // San Francisco's current address, the one the site offers (#587); March
+    // and October ran the old one, which in October downloaded a whole dataset
+    // and restarted the hosted server (docs/model-evaluation-2026-10.md).
+    portal: 'data.sf.gov',
     category: 'simple-lookup',
     expectedDataset: 'wr8u-xric',
   },
@@ -354,19 +381,21 @@ export const QUOTE_MODELS = ['google/gemini-3.5-flash-lite', 'google/gemini-3.8-
 /**
  * One live result per other source the site has, captured through the site's
  * own client in the probe — the text the site would send as the tool message.
+ * Each tool is named as the app offers it, `<alias>__<name>` (#609): the client
+ * routes the name to its source and calls that server by its own name.
  * Socrata's results are recorded in the fixture file instead: they need no key.
  */
 export const LIVE_CAPTURES = [
   {
     id: 'data-commons-live',
     source: 'data-commons',
-    tool: 'search_indicators',
+    tool: 'data_commons__search_indicators',
     args: { query: 'median household income', places: ['New York City, USA'] },
   },
   {
     id: 'boston-opencontext-live',
     source: 'boston-opencontext',
-    tool: 'ckan__search_datasets',
+    tool: 'boston__ckan__search_datasets',
     args: { query: 'building permits', limit: 3 },
   },
 ];
@@ -385,83 +414,37 @@ const QUOTE_TOOL = {
 
 const GENERIC_QUOTE_QUESTION = 'Quote exactly the first line of the text that contains words, and its last such line.';
 
-// --- Tool definitions (must match website's socrataMcpTools exactly) ---
-// Copied from src/lib/mcp/tools.ts — the examples and property descriptions
-// are critical for getting models to actually invoke the tool.
+// --- What a row is offered (#609) ---
 
-const tools = [
-  {
-    type: 'function',
-    function: {
-      name: 'get_data',
-      description: `Unified Socrata open data access tool. Supports multiple operation types:
-- catalog: Search the catalog for datasets matching a query on a Socrata portal
-- metadata: Get detailed metadata about a specific dataset
-- query: Execute a SoQL query against a dataset to fetch and filter data
-- metrics: Get row count, view count, last-updated timestamps for a dataset
+/**
+ * The harness is never portal-locked: its questions name five portals, and a
+ * locked instance serves one. With no lock, `mcpToolsFor` is the aliased
+ * vocabulary itself and the composed prompt carries no lock section, as the
+ * app's are on an unlocked instance (`withPortalLockGuidance` returns the
+ * prompt unchanged without a lock).
+ */
+const LOCKED_PORTAL = undefined;
 
-IMPORTANT TIPS:
-1. For type=metadata and type=metrics, pass the dataset ID in "dataset_id"
-2. For type=query, ALWAYS start by fetching a sample with no WHERE clause to see actual column values
-3. NYC 311 data uses field names like: complaint_type, descriptor, created_date, community_board
-4. Field values are case-sensitive - fetch sample data first to see exact formats
+/** No source selection: every source the configuration offers, as the app's default. */
+const SELECTION = DEFAULT_SOURCE_SELECTION;
 
-Examples:
-- Search catalog: { "type": "catalog", "portal": "data.cityofnewyork.us", "query": "311 complaints" }
-- Get metadata: { "type": "metadata", "portal": "data.cityofnewyork.us", "dataset_id": "erm2-nwe9" }
-- Get metrics: { "type": "metrics", "portal": "data.cityofnewyork.us", "dataset_id": "erm2-nwe9" }
-- Fetch sample data first: { "type": "query", "portal": "data.cityofnewyork.us", "dataset_id": "erm2-nwe9", "limit": 5 }
-- Query with filter: { "type": "query", "portal": "data.cityofnewyork.us", "dataset_id": "erm2-nwe9", "select": "complaint_type, COUNT(*) as count", "group": "complaint_type", "order": "count DESC", "limit": 10 }`,
-      parameters: {
-        type: 'object',
-        properties: {
-          type: {
-            type: 'string',
-            enum: ['catalog', 'metadata', 'query', 'metrics'],
-            description: 'The type of operation to perform',
-          },
-          portal: {
-            type: 'string',
-            description: 'Socrata portal domain (e.g., data.cityofnewyork.us, data.sfgov.org)',
-          },
-          query: {
-            type: 'string',
-            description: 'For type=catalog: search query. For type=metadata: the dataset ID. For type=query: optional full-text search within data.',
-          },
-          dataset_id: {
-            type: 'string',
-            description: 'Dataset identifier (required for type=query, metadata, and metrics)',
-          },
-          limit: {
-            type: 'number',
-            description: 'Maximum number of rows to return (default: 10)',
-          },
-          offset: {
-            type: 'number',
-            description: 'Number of rows to skip (for pagination)',
-          },
-          select: {
-            type: 'string',
-            description: 'SoQL select clause (for type=query)',
-          },
-          where: {
-            type: 'string',
-            description: 'SoQL where clause (for type=query)',
-          },
-          order: {
-            type: 'string',
-            description: 'SoQL order clause (for type=query)',
-          },
-          group: {
-            type: 'string',
-            description: 'SoQL group clause (for type=query)',
-          },
-        },
-        required: ['type'],
-      },
-    },
-  },
-];
+/** The tools a row is offered at `configured`: the app's own call, with every schema as the app sends it. */
+function offeredTools(configured) {
+  return offeredMcpTools(mcpToolsFor(LOCKED_PORTAL), configured, SELECTION);
+}
+
+/**
+ * A row's system prompt, and what the app records about it: the app's own
+ * composition for the query's portal at `configured`, with the run's clock.
+ * The Socrata guidance is fetched from the server through the app's cache, and
+ * a failed fetch composes the app's fallback text as the app does; each row
+ * records which (`components[].guidanceOrigin`). Every row of a run states the
+ * date the run started, so a run that crosses midnight UTC asks every question
+ * as of one date.
+ */
+function systemPromptFor(query, configured, now) {
+  return composeSystemPrompt({ portal: query.portal, configured, selection: SELECTION, now });
+}
 
 // --- Guardrails ---
 
@@ -941,7 +924,7 @@ function rowCost(requests, pricing) {
   return requests.reduce((sum, r) => sum + (r.usage ? requestCostUsd(r.usage, pricing) : worstRequestUsd(pricing)), 0);
 }
 
-async function runQuery(client, row, query, model, systemPrompt) {
+async function runQuery(client, row, query, model, systemPrompt, tools) {
   const result = await runToolLoop({
     client,
     endpointModel: model.id,
@@ -951,9 +934,7 @@ async function runQuery(client, row, query, model, systemPrompt) {
     requestSettings: model.requestSettings,
     prompt: query.query,
     systemPrompt,
-    // This harness's own one-tool array, above — not the app's tool set.
-    // Widening it would change what the evaluation measures, which is a
-    // separate decision from where the loop lives.
+    // The app's tools at this run's configuration (#609, above).
     tools,
     executeToolCall: (name, args) => {
       if (row.closed) throw new Error(`Row ${row.label} was closed after its timeout; tool call not sent`);
@@ -961,10 +942,12 @@ async function runQuery(client, row, query, model, systemPrompt) {
     },
     // Default portal for a `get_data` call whose arguments omit one. The copy
     // this file used to carry injected into EVERY tool call, guarded only on
-    // `!args.portal`; with the one-tool array above that was the same
-    // behaviour, and the loop's `get_data` guard keeps it the same behaviour if
-    // that array ever grows. The loop injects above the tool-call record and
-    // above the trace span, so what is written out below is what was sent.
+    // `!args.portal`; with the one-tool array it then offered that was the same
+    // behaviour. The loop injects into Socrata's `get_data` alone, in either
+    // spelling, as it does for the app, so another source's call is sent with
+    // the arguments the model chose. The loop injects above the tool-call
+    // record and above the trace span, so what is written out below is what
+    // was sent.
     portal: query.portal,
     maxIterations: MAX_ITERATIONS,
     maxTokens: MAX_TOKENS,
@@ -996,21 +979,6 @@ async function runQuery(client, row, query, model, systemPrompt) {
     budgetExceeded: result.tokenLimitExceeded,
     timestamp: new Date().toISOString(),
   };
-}
-
-function systemPromptFor(query, skillGuidance) {
-  // Same as the website's buildSystemPrompt.
-  const today = new Date().toISOString().split('T')[0];
-  return `You are a helpful assistant with access to Socrata open data portals via the get_data tool.
-
-Today's date is ${today}. Always use this as the current date for interpreting relative time expressions like "last year" or "past two months."
-
-${skillGuidance}
-
-## PORTAL-SPECIFIC GUIDANCE
-Default portal: ${query.portal}
-
-When you get results, summarize clearly and cite the dataset ID used.`;
 }
 
 async function runQuoteCheck(model, fixture, apiKey, pricing) {
@@ -1335,10 +1303,11 @@ async function main(argv = process.argv.slice(2)) {
   }
 
   console.log(`\nMCP server: ${process.env.SOCRATA_MCP_URL}`);
-  console.log('Fetching skill guidance...');
-  const skillGuidance = await callMcpPrompt('skill-guidance', { modality: 'web' });
-  meta.skillGuidanceLength = skillGuidance.length;
-  console.log(`Skill guidance: ${skillGuidance.length} chars\n`);
+  // The configuration every row is offered, read once (#609).
+  const configured = readMcpEnvFromProcess();
+  const tools = offeredTools(configured);
+  meta.toolsOffered = tools.map((t) => t.function.name);
+  console.log(`Tools offered: ${tools.length}, as the app offers them at this configuration\n`);
 
   const total = plan.models.length * plan.queries.length;
   let completed = 0;
@@ -1358,10 +1327,16 @@ async function main(argv = process.argv.slice(2)) {
 
       const row = newRow(`${model.id} ${query.id}`);
       try {
+        const composition = await systemPromptFor(query, configured, startedAt);
         const result = await withTimeout(
-          runQuery(clientFor(row, apiKey), row, query, model, systemPromptFor(query, skillGuidance)),
+          runQuery(clientFor(row, apiKey), row, query, model, composition.prompt, tools),
           QUERY_TIMEOUT_MS,
         );
+        result.systemPrompt = {
+          sha256: createHash('sha256').update(composition.prompt, 'utf8').digest('hex'),
+          assertedDate: composition.assertedDate,
+          components: composition.components,
+        };
         result.requests = row.requests;
         result.costUsd = rowCost(row.requests, pricing);
         result.checks = rowChecks(query, result, row.requests);
