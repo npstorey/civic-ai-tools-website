@@ -148,8 +148,14 @@ export const metadata: Metadata = {
 
 export default function RootLayout({
   children,
+  modal,
 }: Readonly<{
   children: React.ReactNode;
+  /**
+   * The root `@modal` slot (UX-2 P4b): the Settings overlay when a client-side
+   * navigation opens `/settings` over a page, else nothing (`src/app/@modal`).
+   */
+  modal: React.ReactNode;
 }>) {
   /**
    * Cross-host link targets (P4c), derived once per render from the
@@ -313,6 +319,7 @@ export default function RootLayout({
                 instance has no signing key AND is outside a dev environment. */}
             <RunningUnsignedBanner />
             <main>{children}</main>
+            {modal}
             <footer className="border-t py-8 text-center" style={{ borderColor: 'var(--border-color)' }}>
               <div style={{ maxWidth: '600px', margin: '0 auto' }}>
                 {/* Footer identity lines. EVERY line in this block is now

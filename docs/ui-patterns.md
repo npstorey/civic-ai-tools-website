@@ -95,10 +95,9 @@ lists (UX-1 P7); later phases convert the other surfaces named under "Replaces",
 - **Behaviour:** `role="dialog"` with `aria-modal` and `aria-labelledby` (the title). Opening focuses
   the first control and a focus trap holds it there. Escape and a backdrop click close the sheet
   unless it is busy, and focus returns where it was.
-- **Uses:** the Sources panel, the add-review flow, the per-source sign-in step, the mobile navigation
-  drawer.
-- **Replaces:** the inline Sources `<details>` mounts (`QueryForm.tsx`, `TraceControls.tsx`) and the
-  inline mobile menu (`Header.tsx`).
+- **Uses:** the add-review flow, the per-source sign-in step, the mobile navigation drawer.
+- **Replaces:** the inline mobile menu (`Header.tsx`). The inline Sources `<details>` mounts it was to
+  replace (`QueryForm.tsx`, `TraceControls.tsx`) were removed with the Sources panel (UX-2 P4b).
 
 ### P4 · Dialog (`ui-dialog`)
 
@@ -229,8 +228,8 @@ lists (UX-1 P7); later phases convert the other surfaces named under "Replaces",
 
 ## Not primitives
 
-The composer is one component, not a primitive. The consent card, the Sources panel and the pause card
-are not primitives either: their words and order were ruled after research checks, so they move as
+The composer is one component, not a primitive. The consent card and the pause card are not
+primitives either: their words and order were ruled after research checks, so they move as
 blocks.
 
 ## Not in this phase (UX-1 P0's non-goals)

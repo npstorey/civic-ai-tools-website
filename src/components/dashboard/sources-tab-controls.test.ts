@@ -22,6 +22,16 @@
 // coincidence; and more than one source is configured, so a write of the one
 // changed state alone is told apart from a write of every state.
 //
+// UX-2 P4b (criterion 2, M7; the v2 check's M1). The control moves to the
+// Settings overlay's "Data sources" sub-page, so these tests mount the overlay
+// (`src/components/settings/SettingsOverlay.tsx`). The in-force assertions carry
+// unchanged. The no-consent one changes, for a reason: the overlay opens from
+// the consent card before any consent, and behaves as the panel does there
+// (R9 P2), so it now asserts the panel's before-consent rule: the controls are
+// live, a choice is kept on the page (pending) and nothing is written, and
+// "Withdraw consent" is absent while nothing is consented. The base form
+// asserted no control and `SOURCES_TAB_NO_CONSENT`.
+//
 // Run with: npm test
 
 import { test } from 'node:test';
@@ -61,11 +71,11 @@ Object.assign(globalThis as Record<string, unknown>, {
 
 type Mod = Record<string, any>; // eslint-disable-line @typescript-eslint/no-explicit-any
 const load = async (rel: string): Promise<Mod> => (await import(pathToFileURL(path.join(SRC, rel)).href)) as Mod;
-const DashboardTabs = (await load('components/dashboard/DashboardTabs.tsx')).default as ComponentType<Record<string, unknown>>;
+const SettingsOverlay = (await load('components/settings/SettingsOverlay.tsx')).default as ComponentType<Record<string, unknown>>;
 const flowsRoute = await load('app/api/flows/route.ts');
 const consentRoute = await load('app/api/sources/consent/route.ts');
 const { buildFlowsStatement, statementHash } = await load('lib/flows/statement.ts');
-const { PANEL_STATE_CHANGED, SOURCES_TAB_NO_CONSENT } = await load('lib/sources/copy.ts');
+const { PANEL_STATE_CHANGED } = await load('lib/sources/copy.ts');
 const { readerSourceName } = await load('lib/sources/source-name.ts');
 
 function answers() {
@@ -100,13 +110,9 @@ function within(node: HostElement): HostElement[] {
   return found;
 }
 
-/** The dashboard, on its Sources tab. */
+/** The Settings overlay, on its Data sources sub-page (UX-2 P4b, M7). */
 async function openTab(): Promise<Surface> {
-  const tab = await mount(h(DashboardTabs, { myEvidence: [], myEvaluations: [], activity: [], tokens: [], signingConfigured: true, sealOnly: false }));
-  const buttons = tab.buttons('Sources');
-  assert.equal(buttons.length, 1, `premise: the dashboard has a Sources tab: ${tab.text().slice(0, 300)}`);
-  await tab.click(buttons[0]);
-  return tab;
+  return mount(h(SettingsOverlay, {}));
 }
 
 /** A consent on the account, the first source On and the rest Off, written through the real endpoint; then the tab. */
@@ -121,7 +127,6 @@ async function tabInForce(): Promise<{ tab: Surface; net: ReturnType<typeof answ
   assert.ok(sessions.rows.has(DB_ID), 'premise: the consent is kept on the account');
   net.clear();
   const tab = await openTab();
-  assert.ok(!tab.text().includes(SOURCES_TAB_NO_CONSENT), `premise: the tab reads the consent as in force: ${tab.text().slice(0, 300)}`);
   return { tab, net, statement, stored };
 }
 
@@ -182,13 +187,25 @@ test('PC criterion 1: a choice on the tab writes every configured source\'s stat
   tab.unmount();
 });
 
-test('PC criterion 2: with no consent in force the tab renders as before, with no control', async () => {
+test('PC criterion 2 (UX-2 P4b, the panel\'s before-consent rule): with no consent in force the controls are live, a choice is kept on the page and written by nothing, and there is no "Withdraw consent"', async () => {
   signedIn();
   sessions.rows.clear();
-  answers();
+  const net = answers();
+  const statement = await buildFlowsStatement();
+  const sources = statement.sources as Mod[];
   const tab = await openTab();
-  assert.ok(tab.text().includes(SOURCES_TAB_NO_CONSENT), `premise: the tab says no consent is in force: ${tab.text().slice(0, 300)}`);
-  assert.deepEqual(tab.elements().filter((el) => el.props.role === 'radiogroup' || (el.type === 'input' && el.props.type === 'radio')).map((el) => el.type), [], 'the tab shows a control with no consent in force');
-  assert.equal(tab.buttons('Withdraw consent').length, 0, 'the tab offers a withdrawal with no consent in force');
+  const groups = tab.elements().filter((el) => el.props.role === 'radiogroup');
+  assert.equal(groups.length, sources.length, `with no consent in force the overlay has ${groups.length} radio group(s) for ${sources.length} configured sources: ${tab.text().slice(0, 300)}`);
+  const changed = sources[0];
+  const choice = within(rowOf(tab, changed.sourceId)).filter((el) => el.type === 'input' && el.props.type === 'radio' && el.props.value === 'off');
+  assert.equal(choice.length, 1, `no Off choice for ${changed.sourceId}`);
+  assert.ok(choice[0].props.disabled !== true, 'the control is not live before a consent');
+  net.clear();
+  await tab.check(choice[0]);
+  await tab.settle();
+  assert.deepEqual(net.sent.filter((r) => r.method !== 'GET').map((r) => `${r.method} ${r.path}`), [], 'a choice before a consent wrote something');
+  const checked = within(rowOf(tab, changed.sourceId)).filter((el) => el.type === 'input' && el.props.type === 'radio' && el.props.checked === true).map((el) => el.props.value);
+  assert.deepEqual(checked, ['off'], 'the choice is not kept on the page (pending)');
+  assert.equal(tab.buttons('Withdraw consent').length, 0, 'the overlay offers a withdrawal with no consent in force');
   tab.unmount();
 });

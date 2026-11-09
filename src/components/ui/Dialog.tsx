@@ -19,6 +19,7 @@ import { useEffect, useId, useRef, type MouseEvent, type ReactNode, type RefObje
  *   - opening focuses the first enabled control;
  *   - Tab and Shift+Tab stay inside the dialog (a focus trap);
  *   - Escape closes it, unless busy;
+ *   - with another modal open over it, only the top one answers these keys;
  *   - closing returns focus to the element that had it when the dialog opened;
  *   - a click on the backdrop closes it, unless busy.
  *
@@ -72,9 +73,28 @@ const FOCUSABLE =
   'a[href], button:not([disabled]), input:not([disabled]), select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex="-1"])';
 
 /**
+ * The open modals, oldest first. Every open modal keeps its own `keydown`
+ * listener on `document`, and `stopPropagation()` does not stop another
+ * listener on the same target, so each listener acts only while its modal is
+ * the last entry here: with the Settings overlay open over the review sheet,
+ * one Escape closes the overlay alone, and Tab stays in the overlay.
+ */
+const openModals: object[] = [];
+
+/**
  * The modal behaviour the Dialog and the Sheet share: initial focus, a focus
  * trap, Escape, and focus returned on close. Effects only; a no-op where there
  * is no `document`, and while the panel's ref is unattached.
+ *
+ * Only the topmost open modal answers Escape and Tab (`openModals`); a second
+ * Escape closes the next one down, and each close returns focus to what had it
+ * when that modal opened.
+ *
+ * ORDERING LIMIT, stated. A modal joins the stack when its effect runs, that
+ * is, when it opens. Two modals that open in the same render join child first
+ * (React runs a child's effects before its parent's), so the parent would be
+ * on top. No surface opens two at once today; one that does must open them in
+ * turn.
  */
 export function useModalFocus(open: boolean, panelRef: RefObject<HTMLElement | null>, onEscape: () => void): void {
   const onEscapeRef = useRef(onEscape);
@@ -89,7 +109,11 @@ export function useModalFocus(open: boolean, panelRef: RefObject<HTMLElement | n
     const focusable = () =>
       Array.from(panel.querySelectorAll<HTMLElement>(FOCUSABLE)).filter((el) => !el.closest('[inert]'));
     (focusable()[0] ?? panel).focus();
+    const self = {};
+    openModals.push(self);
     const onKeyDown = (event: KeyboardEvent) => {
+      // A modal under another answers nothing: the one on top owns the keys.
+      if (openModals[openModals.length - 1] !== self) return;
       if (event.key === 'Escape') {
         event.stopPropagation();
         onEscapeRef.current();
@@ -116,6 +140,8 @@ export function useModalFocus(open: boolean, panelRef: RefObject<HTMLElement | n
     document.addEventListener('keydown', onKeyDown);
     return () => {
       document.removeEventListener('keydown', onKeyDown);
+      const at = openModals.indexOf(self);
+      if (at !== -1) openModals.splice(at, 1);
       previous?.focus();
     };
   }, [open, panelRef]);

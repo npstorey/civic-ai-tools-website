@@ -158,7 +158,8 @@ const CODE_TEXT = `${LEAD} Signed in, it also holds a code. The site makes the c
 const NO_CODE_TEXT = `${LEAD} It holds no code for you. ${EXPIRY}`;
 const MEMORY_TEXT = 'A question may need a data source set to Ask first. ' +
   'Then the site cannot stop to ask you, because it has no store to keep your answer in. ' +
-  'The source is not used for that question. You can turn it On in the panel for your next question.';
+  // UX-2 P4b (item 40): "in the panel" becomes "in Data source settings".
+  'The source is not used for that question. You can turn it On in Data source settings for your next question.';
 
 // --- The settings ----------------------------------------------------------------------------
 

@@ -422,13 +422,13 @@ for (const [route, d] of NONE_ON) {
   });
 }
 
-test('criterion 9: the refusal has its own kind, whose reader text points to the panel', async () => {
+test('criterion 9: the refusal has its own kind, whose reader text points to Data source settings (UX-2 P4b, items 42/50)', async () => {
   const streaming = (await import('@/lib/streaming')) as Mod;
   const kinds = streaming.STREAM_ERROR_KINDS as readonly string[];
   assert.ok(kinds.includes('no_sources_on'), 'no_sources_on is not a stream error kind');
   const text: string = streaming.friendlyStreamError({ code: 'no_sources_on' });
   assert.notEqual(text, streaming.friendlyStreamError({ code: 'generic' }), 'no_sources_on reads as the generic failure');
-  assert.match(text, /beside the question box|panel/i, `the reader text does not point to the panel: ${text}`);
+  assert.match(text, /in Data source settings/, `the reader text does not point to Data source settings: ${text}`);
   const [, d] = NONE_ON[0];
   const refusal = refusalOf(d) as { message?: unknown } | null;
   assert.equal(refusal?.message, text, 'the stream refusal does not carry the kind\'s reader text');

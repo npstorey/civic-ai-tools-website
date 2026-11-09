@@ -219,7 +219,8 @@ function assertCard(card: HostElement, where: string): void {
     if (el.type === 'button') yield el;
     yield* walk((el.props as { children?: unknown }).children);
   })(card.props.children);
-  assert.deepEqual([...buttons].map((b) => textOf(b)), ['Allow', 'Not now'], `${where}: the card's buttons`);
+  // UX-2 P4b: the pair, then Allow all data sources while the pause asks.
+  assert.deepEqual([...buttons].map((b) => textOf(b)), ['Allow', "Don't allow", 'Allow all data sources'], `${where}: the card's buttons`);
 }
 
 const ANON = () => {

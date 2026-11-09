@@ -81,8 +81,9 @@ const { buildFlowsStatement, statementHash } = await load('lib/flows/statement.t
 // --- The text the cards must read -------------------------------------------------------------
 
 const ALLOWED = 'You chose Allow. It is On now.';
-const DECLINED = 'You chose Not now. Nothing is sent to it for this question.';
-const ALLOWED_NOT_MOVED = 'You chose Allow. This question is sent to it, but it could not be turned On for later questions. You can turn it On in the panel.';
+// UX-2 P4b: item 21's outcome, with item 13's one pointer; item 40's "in Data source settings".
+const DECLINED = "You chose Don't allow. Nothing is sent to it, and it is Off now. You can change this in Data source settings.";
+const ALLOWED_NOT_MOVED = 'You chose Allow. This question is sent to it, but it could not be turned On for later questions. You can turn it On in Data source settings.';
 
 // --- The stream, the route answers, the pauses -----------------------------------------------
 
@@ -212,7 +213,7 @@ const loadDone = (label: string, iteration: number): Json => ({ type: 'progress'
  * with `choice`, A's load completes, and B pauses. Returns the page and the
  * stream, at B's pause.
  */
-async function twoPauses(choice: 'Allow' | 'Not now', beside?: (page: Surface) => Promise<Surface>): Promise<{ page: Surface; stream: Held; panel?: Surface }> {
+async function twoPauses(choice: 'Allow' | "Don't allow", beside?: (page: Surface) => Promise<Surface>): Promise<{ page: Surface; stream: Held; panel?: Surface }> {
   sessions.server = null;
   sessions.client = { status: 'unauthenticated', data: null };
   answers();
@@ -231,7 +232,7 @@ async function twoPauses(choice: 'Allow' | 'Not now', beside?: (page: Surface) =
   assert.ok(cardsFor(page, A).length > 0, `premise: the page shows A's card: ${summary(page)}`);
   await page.click(buttonOf(page, A, choice));
   await settle(...all);
-  assert.deepEqual(decisions, [{ key: KEY_A, decision: choice === 'Allow' ? 'allow' : 'not-now' }], 'premise: A\'s answer was posted with A\'s key');
+  assert.deepEqual(decisions, [{ key: KEY_A, decision: choice === 'Allow' ? 'allow' : 'off' }], 'premise: A\'s answer was posted with A\'s key');
   stream.push(loadDone('Boston OpenContext', 1));
   stream.push(loadStart('data_commons', 'Data Commons', 2));
   stream.push(pauseLine(B, KEY_B, 'Data Commons'));
@@ -241,7 +242,7 @@ async function twoPauses(choice: 'Allow' | 'Not now', beside?: (page: Surface) =
 
 // --- (a), (b): each card keeps its own outcome ----------------------------------------------
 
-for (const [choice, sentence] of [['Allow', ALLOWED], ['Not now', DECLINED]] as const) {
+for (const [choice, sentence] of [['Allow', ALLOWED], ["Don't allow", DECLINED]] as const) {
   test(`item 1 (${choice === 'Allow' ? 'a' : 'b'}): after ${choice} on source A and a pause from source B in the same run, A's card reads its own outcome and B's card offers both buttons`, async () => {
     const { page } = await twoPauses(choice);
     const a = cardsFor(page, A);
@@ -253,7 +254,7 @@ for (const [choice, sentence] of [['Allow', ALLOWED], ['Not now', DECLINED]] as 
     }
     for (const card of b) {
       assert.equal(card.outcome, null, `card B shows an outcome before any answer: ${card.outcome}`);
-      assert.deepEqual(card.buttons, ['Allow', 'Not now'], `card B's buttons: ${card.buttons.join(', ')}`);
+      assert.deepEqual(card.buttons, ['Allow', "Don't allow", 'Allow all data sources'], `card B's buttons: ${card.buttons.join(', ')}`);
     }
   });
 }
@@ -275,7 +276,7 @@ test('item 1 (c): the Sources panel beside the page: after pause B only B\'s row
   assert.ok(panel);
   const bRow = rowCards(panel!, B);
   assert.equal(bRow.length, 1, `B's row shows ${bRow.length} cards: ${summary(panel!)}`);
-  assert.deepEqual(bRow[0].buttons, ['Allow', 'Not now'], `B's row card: ${bRow[0].buttons.join(', ')}`);
+  assert.deepEqual(bRow[0].buttons, ['Allow', "Don't allow", 'Allow all data sources'], `B's row card: ${bRow[0].buttons.join(', ')}`);
   assert.equal(rowCards(panel!, A).length, 0, `A's row still shows a card once the run moved past A: ${summary(panel!)}`);
 
   // B answered from the panel's own row, then a later line of the run.

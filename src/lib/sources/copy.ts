@@ -41,8 +41,12 @@ export const NO_GUIDE_SENTENCE = 'This site does not name a deployment guide.';
 
 /** What Ask first means in R6, in literal words (Q1): the pause is R8's. */
 export const ASK_FIRST_MEANS = 'Ask first: nothing is sent to this source until you turn it On.';
-/** The same, where a question can stop to ask (`SOURCE_ROUTING=in-loop`, R8 W2): the owner's card F; the panel renders it only there. */
-export const ASK_FIRST_MEANS_WITH_PAUSE = 'Ask first: nothing is sent to this source until you turn it On, here or when the site asks you during a question. If you choose Allow then, it stays On for later questions.';
+/**
+ * The same, where a question can stop to ask (`SOURCE_ROUTING=in-loop` with the decision store, R8 W2): the owner's
+ * card F, as UX-2's item 54 re-words it under D7 C. The panel and the Settings overlay's Data sources rows render it
+ * only there, where its "here" names the place it is read (M4).
+ */
+export const ASK_FIRST_MEANS_WITH_PAUSE = "Ask first: nothing is sent to this source until you turn it On, here or when the site asks you during a question. If you choose Allow then, it stays On for later questions. If you choose Don't allow, it is turned Off.";
 
 /** The panel's heading, and its lead sentence. */
 export const PANEL_HEADING = 'Data sources';
@@ -93,11 +97,13 @@ export const PANEL_PRIVACY_LINK = 'Where a question can go, in full';
 export const PANEL_STATE_CHANGED = { middle: ' is now ', end: '. This applies from your next question.' } as const;
 
 /**
- * Under the panel's lead, as a status line, on the one read that kept a
- * consent given signed out on the account (R9 P4, #662; D5 = A of the UX
- * pass). Ruled as written (reading A): the lead, the controls and the account
- * block beside it say how to change the choice. Renders only for a consent
- * kept on an account, which exists only with a database.
+ * In the Settings overlay, under its lede, as a status line, on the one read
+ * that kept a consent given signed out on the account (R9 P4, #662; D5 = A of
+ * the UX pass); it moved there from the Sources panel when the panel was
+ * removed (UX-2 P4b, #729 comment 6728493444). Ruled as written (reading A):
+ * the lede, the controls and the account block beside it say how to change
+ * the choice. Renders only for a consent kept on an account, which exists
+ * only with a database.
  */
 export const PANEL_KEPT_ON_ACCOUNT = 'Your choice is now kept on your account.';
 
@@ -107,7 +113,8 @@ export const PANEL_KEPT_ON_ACCOUNT = 'Your choice is now kept on your account.';
  * notebook mode) + the On sources (or `noSource`) +
  * `.`; then, when any source is not On, `notTo` + each group of the others
  * with `whichAre` / `whichIs` + its state, the groups joined by `orGroup`;
- * then the link that opens the Sources panel, `change`. The names are read
+ * then the link that opens the Settings overlay, `change` (the Sources panel
+ * until its removal, UX-2 P4b). The names are read
  * from the statement (`readerSourceName`), never typed.
  */
 export const JUST_IN_TIME_LINE = {
@@ -122,10 +129,44 @@ export const JUST_IN_TIME_LINE = {
   change: 'Change sources',
 } as const;
 
-// --- The dashboard's Sources tab ---
+// --- The Settings overlay (UX-2 P4b) ---
 
-/** The tab when no consent is in force (T9). */
-export const SOURCES_TAB_NO_CONSENT = 'This site asks before your next question.';
+/**
+ * The overlay at `/settings` and the pointers to it, in the research check's
+ * words (UX-2 research check 2, R1 = A; the first check's X22a, X22b and X22d):
+ *   - `heading`: X22a/X22b, "Settings";
+ *   - `ledeWithAccount`: X22b's signed-in lede; `ledeCookie`: item 19's, for a
+ *     consent kept in the cookie (signed out, or an instance with no accounts);
+ *   - `tabs`: item 45's "Data sources" and items 6-7's "About these settings";
+ *   - `search`: item 17, the search field's accessible name; `noMatch`: item
+ *     22; the count line is `sourcesShownLine`, item 24;
+ *   - `aboutKeptWithAccounts` and `aboutKeptWithoutAccounts`: item 43, new
+ *     words for "About these settings", where `KEPT_*`'s "named below" would
+ *     name nothing (L6); the privacy page keeps `KEPT_*`;
+ *   - `link`: item 10, "Data source settings", every pointer's link text;
+ *   - `tabSentence`: item 41's X22d, the dashboard's Sources tab, whose link is
+ *     `link`.
+ */
+export const SETTINGS_TEXT = {
+  heading: 'Settings',
+  ledeWithAccount: 'Your data sources and your consent, kept on your account. A change applies from your next question.',
+  ledeCookie: 'Your data sources and your consent, kept in a cookie for this browser session. A change applies from your next question.',
+  tabs: { dataSources: 'Data sources', about: 'About these settings' },
+  search: 'Search data sources',
+  noMatch: 'No data source matches.',
+  aboutKeptWithAccounts: 'If you are signed in, your consent is kept on your account. If not, it is kept in a cookie until this browser session ends. The privacy page names the cookie.',
+  aboutKeptWithoutAccounts: 'Your consent is kept in a cookie until this browser session ends. The privacy page names the cookie.',
+  link: 'Data source settings',
+  tabSentence: 'Your data sources are set in Data source settings.',
+} as const;
+
+/** Item 24: how many of the configured sources a search leaves. */
+export function sourcesShownLine(shown: number, total: number): string {
+  return `${shown} of ${total} sources shown`;
+}
+
+/** The overlay's address: served on both hosts (S1); every pointer opens it with a client-side link. */
+export const SETTINGS_HREF = '/settings';
 
 // --- What a holder keeps, when only this site's operator can say (T11) ---
 
@@ -135,154 +176,61 @@ export const KEPT_FOR_OPERATOR = "what it keeps is for this site's operator to s
 // --- Text 2: the first-consent card ---
 
 /**
- * The card as a decision layer (R9 P3, #660; D2 = A of the UX pass). Above
- * its two buttons, the short layer, in order: `CONSENT_CARD.lead` (T1, T2),
- * the reach sentence built from the statement's names (`cardReachSentence`,
- * T3), the pointer to the disclosure with the statement's recipient count
- * (`cardPointerSentence`, T4), the local-only offer, where states are set and
- * consent withdrawn (`CARD_CONTROLS_*`, T5), the privacy page's link
- * (`CONSENT_CARD.fullStatement`, T6) and the effect of the two answers
- * (`CONSENT_CARD.effect`, T7). The words were research-checked and ruled on
- * 2026-10-30 (#680 P3), and the second check's rulings applied (amendment 1:
- * T2 is the privacy page's sentence, T3 names the sources in a sentence of
- * their own, T4 points to the summary by its first words, the sandbox
- * definition). Directly below the buttons, so that opening it cannot move
- * them: the recipients and what each says it keeps, under a disclosure shut
- * by default (design principle 8): its summary (`cardRecipientsSummary`, T8), its lead
- * line (`CONSENT_CARD.disclosureLead`, T11), the base recipients, the sandbox
- * definition (`CARD_SANDBOX_DEFINITION`) and one line per data source
- * (`CARD_SOURCE_LINE`). Then, unchanged (D4 = A), the analytics line and the
- * cookie sentence (`CARD_ANALYTICS`, `CARD_COOKIE_*`). `sentences` lists every
- * sentence the card renders on every instance, for the tests.
+ * The card as the owner ruled it (UX-2 P4b; #729 comment 6727853028: D1 = A,
+ * D2 = A with the owner's note, D3 = A, D4 = A). In render order: the heading,
+ * a question (`heading`, the card's accessible name); while the statement
+ * loads, the loading line; the two buttons, "Allow" and `decline` (item 8);
+ * `effect`; `changeLine`, whose "Data source settings" is the link to the
+ * Settings overlay (`settingsLink`); the privacy page's link
+ * (`fullStatement`); then, unchanged, the analytics line and the cookie
+ * sentence (`CARD_ANALYTICS`, `CARD_COOKIE_*`). The privacy page carries the
+ * full statement, so the card states no more than this; after "Don't allow"
+ * the form says what happened (`DONT_ALLOW_LINE`). `sentences` lists every
+ * sentence the card renders on every instance besides the heading, in order,
+ * for the tests.
  */
-const CARD_LEAD = [
-  'To answer, this site sends your question to a model service, and sends the searches the model writes to the data sources that are On.',
-  'Your question is not sent beyond this site before you answer.',
-] as const;
+const CARD_HEADING = 'Allow this site to send your question to a model service?';
 const CARD_FULL_STATEMENT = 'The privacy page has the full statement.';
 
+/** D2 = A, with the owner's note: what Allow does, below the buttons. */
+const CARD_EFFECT = 'Allow sends your question to the model service. It sends the searches the model writes to data sources that are On or that you allow when asked.';
+
+/** ASK1 = A, D3 = A: the one line that names where to change or withdraw; its "Data source settings" is the link. */
+const CARD_CHANGE_LINE = 'You can change or withdraw this in Data source settings.';
+
 /**
- * Fact 10's effect beside the card's buttons (T7). The privacy page keeps its
- * own wording (`ALLOW_EFFECT`), which this change leaves as it was.
+ * Fact 10's effect as the privacy page's "How consent works" states it: item
+ * 37's words, byte for byte (items 38/49). Its own literal since the card's
+ * words were ruled apart from it (UX-2 P4b): the privacy page does not move.
  */
-const CARD_EFFECT = '"Allow" turns on the sources shown as On and sends your question. "Not now" sends nothing.';
+const ALLOW_EFFECT = "Allow: your question is sent to the model service. A data source is used only if it is On, or if it is set to Ask first and you allow it when asked. Don't allow: nothing is sent. You are asked again when you send a question.";
 
-/** The disclosure's lead line (T11): the scope limit, moved from the short layer. */
-const CARD_DISCLOSURE_LEAD = 'The searches the model writes can include words from your question.';
-
-/** Fact 10's effect as the privacy page's "How consent works" states it (T7 of R6). */
-const ALLOW_EFFECT = '"Allow" turns on the sources the panel shows as On and sends your question. "Not now" sends nothing.';
+/** Item 9: the pause's third button (never on the card, S3). */
+export const ALLOW_ALL_SOURCES = 'Allow all data sources';
 
 export const CONSENT_CARD = {
-  heading: 'Before your first question',
-  /** T1 and T2, the first two sentences of the short layer. */
-  lead: CARD_LEAD,
-  /** T6, the link to the privacy page. */
+  /** D1 = A: the heading, a question, and the card's accessible name. */
+  heading: CARD_HEADING,
+  /** T6, the link to the privacy page (D4 = A). */
   fullStatement: CARD_FULL_STATEMENT,
-  /** T7, beside the two buttons. */
+  /** D2 = A, below the two buttons. */
   effect: CARD_EFFECT,
-  /** T11, the disclosure's lead line. */
-  disclosureLead: CARD_DISCLOSURE_LEAD,
-  sentences: [...CARD_LEAD, CARD_FULL_STATEMENT, CARD_EFFECT, CARD_DISCLOSURE_LEAD],
-} as const;
-
-/** A count as the card writes it: in words up to twelve, then in digits (`COUNT_WORDS`, as the panel's lead). */
-function countWords(n: number): string {
-  return n >= 0 && n < COUNT_WORDS.length ? COUNT_WORDS[n] : String(n);
-}
-
-/**
- * Names in one list: joined with commas and "and"; when a name holds a comma
- * of its own ("NYC Charter, Laws and Rules"), with semicolons and "; and", so
- * the list still reads as the number of names the sentence counts.
- */
-function joinNames(names: readonly string[]): string {
-  if (names.length <= 1) return names.join('');
-  const comma = names.some((name) => name.includes(','));
-  const separator = comma ? '; ' : ', ';
-  const last = comma ? '; and ' : ' and ';
-  return `${names.slice(0, -1).join(separator)}${last}${names[names.length - 1]}`;
-}
-
-/** T3's fixed words: the model service is always one recipient; the sources are counted, then named, from the statement. */
-export const CARD_REACH = {
-  lead: 'Your question can reach one model service and ',
-  one: 'data source',
-  many: 'data sources',
-  none: 'no data source',
-  /** The names' own sentence: "They are Socrata and Data Commons." (one source: "It is Socrata."). */
-  they: 'They are ',
-  it: 'It is ',
+  /** ASK1 = A, D3 = A. */
+  changeLine: CARD_CHANGE_LINE,
+  /** Item 8, the decline button. */
+  decline: "Don't allow",
+  /** Item 10: the change line's link text. */
+  settingsLink: SETTINGS_TEXT.link,
+  sentences: [CARD_EFFECT, CARD_CHANGE_LINE, CARD_FULL_STATEMENT],
 } as const;
 
 /**
- * T3, two sentences (amendment 1): "Your question can reach one model service
- * and six data sources. They are Socrata; Data Commons; …", the count and the
- * names read from the statement. With no source, the first sentence alone.
+ * Fact 4 (Q7, amendment 1 correction 3): the privacy page's statement of where to withdraw, with a database, and
+ * without one. Item 40 (X2c) makes them one sentence, since the Settings overlay opens signed out too and offers
+ * "Withdraw consent" whenever a consent is in force.
  */
-export function cardReachSentence(names: readonly string[]): string {
-  if (names.length === 0) return `${CARD_REACH.lead}${CARD_REACH.none}.`;
-  const noun = names.length === 1 ? CARD_REACH.one : CARD_REACH.many;
-  const naming = names.length === 1 ? CARD_REACH.it : CARD_REACH.they;
-  return `${CARD_REACH.lead}${countWords(names.length)} ${noun}. ${naming}${joinNames(names)}.`;
-}
-
-/**
- * T4: the pointer to the disclosure directly below the buttons, with the
- * statement's recipient count, quoting the summary's first words (amendment 1).
- */
-export function cardPointerSentence(recipients: number): string {
-  const count = countWords(recipients);
-  return `What each of the ${count} recipients says it keeps is listed below, under "Show the ${count} recipients".`;
-}
-
-/** T8: the disclosure's summary, with the same count. */
-export function cardRecipientsSummary(recipients: number): string {
-  return `Show the ${countWords(recipients)} recipients and what each says it keeps`;
-}
-
-/**
- * T5: where states are set and consent withdrawn, with a database, and
- * without one (R9 P3: the controls beside the question box are live before a
- * consent since R9 P2, so the sentence no longer begins "After you allow").
- */
-export const CARD_CONTROLS_WITH_ACCOUNTS =
-  "You can set each source to On, Ask first or Off beside the question box at any time. You can withdraw consent there, or on your dashboard's Sources tab if you are signed in.";
-export const CARD_CONTROLS_WITHOUT_ACCOUNTS =
-  'You can set each source to On, Ask first or Off beside the question box at any time. You can withdraw consent there.';
-
-/**
- * The definition of "sandbox", directly above the per-source lines, rendered
- * only when a source runs in this site's sandbox. The owner's ruling after the
- * second research check (amendment 1). The first ruling said the sandbox is
- * temporary and "deleted after the question", which the hosting module does
- * not do: a hosted source's sandbox is persistent, one per source and pinned
- * version, created on first use and reused by later questions; it stops itself
- * after the idle window (`DEFAULT_IDLE_WINDOW_MS`, 10 minutes, restarted by
- * each call) and keeps one snapshot that expires 30 days after its last use
- * (`src/lib/mcp/hosting/lifecycle.ts`, `getOrCreate`). The figures are pinned
- * to that module by `consent-card-layer.test.ts`.
- */
-export const CARD_SANDBOX_DEFINITION =
-  'A sandbox is a computer this site creates in the cloud to search a data source. It stops when no one has searched for 10 minutes. This site keeps a saved copy of it for 30 days after its last use.';
-
-/**
- * One line per data source inside the disclosure: the source's name, then each
- * of its recipients as "runs in <place>" (a hosted source's sandbox) or
- * "reaches <host>", then `holders` and what each holder says it keeps. A
- * sandbox holder already given in full on an earlier source's line is named
- * again with `asAbove`, so the hosting host's kept-by line is printed once.
- */
-export const CARD_SOURCE_LINE = {
-  runsIn: 'runs in ',
-  reaches: 'reaches ',
-  holders: ' \u2014 ',
-  asAbove: ', as above',
-} as const;
-
-/** Fact 4 (Q7, amendment 1 correction 3): the privacy page's statement of where to withdraw, with a database, and without one. */
-export const WITHDRAW_WITH_ACCOUNTS = 'To withdraw consent, use the panel beside the question box, or the Sources tab on your dashboard if you are signed in.';
-export const WITHDRAW_WITHOUT_ACCOUNTS = 'To withdraw consent, use the panel beside the question box.';
+export const WITHDRAW_WITH_ACCOUNTS = 'To withdraw consent, open Data source settings.';
+export const WITHDRAW_WITHOUT_ACCOUNTS = WITHDRAW_WITH_ACCOUNTS;
 
 /** Below the buttons (D4 = A), only when analytics is configured. */
 export const CARD_ANALYTICS = 'An analytics service counts page visits. The privacy page names it and says how to object.';
@@ -300,8 +248,8 @@ export const CARD_COOKIE_WITHOUT_ACCOUNTS = 'We keep your answer for this browse
 export const ENDPOINT_NO_TRAINING =
   "This site's operator states that the endpoint is set to send questions only to providers that do not train on them. The site cannot read that setting.";
 
-/** After Not now: the form stays disabled for that question (Q2); a new question asks again. */
-export const NOT_NOW_LINE = 'Nothing was sent. Edit this question or write a new one, and you will be asked again before it is sent.';
+/** After the card's "Don't allow" (item 46): the form stays disabled for that question (Q2); a new question asks again. */
+export const DONT_ALLOW_LINE = "You chose Don't allow. Nothing was sent. Edit this question or write a new one, and you will be asked again before it is sent.";
 
 // --- D2 = A: the notice ---
 
@@ -324,7 +272,9 @@ export const KEPT_WITHOUT_ACCOUNTS = 'We keep your answer in a cookie, named bel
 /** "When we ask again": D2's scoped sentences, with a database; without one, the cookie's rule alone. */
 export const NOTIFY_WITH_ACCOUNTS =
   'A recipient may also be removed, or say it keeps less. If your answer is kept on your account, we tell you and do not ask again. If it is kept in a cookie, we may ask again instead. ' +
-  'We tell you in the panel beside the question box and on the Sources tab of your dashboard, until you dismiss it.';
+  // Item 40's form (UX-2 P4b): the notices show in Data source settings only, since the Sources panel was removed
+  // (#729 comment 6728493444; the clause drop W1 (relay 26) left for the panel's removal).
+  'We tell you in Data source settings, until you dismiss it.';
 export const NOTIFY_WITHOUT_ACCOUNTS = 'A recipient may also be removed, or say it keeps less. Your answer is kept in a cookie, so we may ask again instead.';
 
 /** "The model endpoint", only when the operator supplies D3's statement. */
@@ -341,7 +291,8 @@ export const PRIVACY_CONSENT_SECTIONS: readonly PrivacyConsentSection[] = [
       'Before your first question, we ask once whether this site may send questions onward.',
       'Your question is not sent beyond this site before you answer.',
       ALLOW_EFFECT,
-      'After you allow, you can set each data source to On, Ask first or Off beside the question box.',
+      // Item 41 (X2b).
+      'You can set each data source to On, Ask first or Off in Data source settings at any time.',
       'After you withdraw consent, we send no questions until you agree again. Withdrawing cannot take back a question already sent.',
     ],
   },

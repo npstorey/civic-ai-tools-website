@@ -114,6 +114,9 @@ type Mod = Record<string, any>; // eslint-disable-line @typescript-eslint/no-exp
 const load = async (rel: string): Promise<Mod> => (await import(pathToFileURL(path.join(SRC, rel)).href)) as Mod;
 const Home = (await load('app/(marketing)/page.tsx')).default as ComponentType;
 const Panel = (await load('components/sources/SourcesPanel.tsx')).default as ComponentType;
+// UX-2 P4b (#729 comment 6728493444): the Sources panel is removed from the pages; on the home page the rows a reader
+// changes are the Settings overlay's, mounted over the page as its intercepted route mounts it.
+const SettingsOverlay = (await load('components/settings/SettingsOverlay.tsx')).default as ComponentType<Record<string, unknown>>;
 const flowsRoute = await load('app/api/flows/route.ts');
 const consentRoute = await load('app/api/sources/consent/route.ts');
 const { consentInForce } = await load('lib/sources/consent-gate.ts');
@@ -169,14 +172,23 @@ function* within(node: unknown): Generator<HostElement> {
   yield* within((el.props as { children?: unknown }).children);
 }
 
+/** Which surface holds the rows a test reads: the panel itself, or the Settings overlay over the home page. */
+let reading: 'panel' | 'overlay' = 'panel';
+
 function section(surface: Surface): HostElement {
-  const found = surface.elements().filter((el) => el.type === 'section' && el.props['aria-labelledby'] === 'sources-panel-heading');
-  assert.equal(found.length, 1, `expected one Sources panel, found ${found.length}`);
+  const found = reading === 'panel'
+    ? surface.elements().filter((el) => el.type === 'section' && el.props['aria-labelledby'] === 'sources-panel-heading')
+    : surface.elements().filter((el) => el.props.role === 'dialog');
+  assert.equal(found.length, 1, `expected one ${reading === 'panel' ? 'Sources panel' : 'Settings overlay'}, found ${found.length}`);
   return found[0];
 }
 
-/** The panel's lead: its first paragraph, under the heading. */
-const leadOf = (surface: Surface): string => textOf([...within(section(surface))].find((el) => el.type === 'p')!);
+/** The before-consent lead the overlay shows under its lede (`panelLeadBeforeConsent`), or '' when it shows none. */
+const BEFORE_CONSENT_LEAD = 'These are the settings Allow will use';
+/** The panel's lead: its first paragraph, under the heading; in the overlay, its before-consent lead. */
+const leadOf = (surface: Surface): string => (reading === 'panel'
+  ? textOf([...within(section(surface))].find((el) => el.type === 'p')!)
+  : textOf([...within(section(surface))].find((el) => el.type === 'p' && textOf(el).startsWith(BEFORE_CONSENT_LEAD)) ?? '') );
 
 function rowOf(surface: Surface, id: string): HostElement {
   const rows = [...within(section(surface))].filter((el) => el.props['data-source'] === id);
@@ -220,7 +232,12 @@ async function ask(page: Surface): Promise<void> {
 
 // --- Criterion 1: the radios live before a consent; Allow writes what the panel shows --------------
 
+// Since the panel's removal the home page's rows are the Settings overlay's: this test reads them there. One assertion
+// changes meaning: after Allow the panel showed its in-force lead (`PANEL_LEAD`); the overlay shows its lede alone
+// (`PANEL_LEAD` is under "About these settings"), so the test asserts the before-consent lead is gone.
 test('criterion 1 (home, signed out): before a consent a change is kept, not written; it survives a refresh; Allow writes it, the defaults elsewhere', async () => {
+  reading = 'overlay';
+  try {
   configure('six');
   ANON();
   const net = answers();
@@ -230,7 +247,7 @@ test('criterion 1 (home, signed out): before a consent a change is kept, not wri
   assert.equal(status.inForce, false, 'premise: no consent is in force');
   assert.deepEqual(status.defaults, { socrata: 'on', 'data-commons': 'on', 'nyc-charter': 'on', 'nyc-checkbook': 'ask-first', 'nyc-record': 'on', 'nys-legislation': 'ask-first' }, 'premise: the defaults differ by source');
   net.clear();
-  const page = await mount(h(Home));
+  const page = await mount(h('div', null, h(Home), h(SettingsOverlay, { mount: 'intercepted' })));
   assert.deepEqual(shown(page, SIX), status.defaults, 'premise: before a change the panel shows the defaults');
 
   // The radios are live.
@@ -273,7 +290,7 @@ test('criterion 1 (home, signed out): before a consent a change is kept, not wri
   const after = (await (await fetch('/api/sources/consent')).json()) as { inForce: boolean; states: Record<string, { state: string }> };
   assert.equal(after.inForce, true, 'premise: the consent is in force');
   assert.deepEqual(shown(page, SIX), Object.fromEntries(SIX.map((id) => [id, after.states[id].state])), 'after Allow the panel does not show the stored states');
-  assert.equal(leadOf(page), 'Set each data source to On, Ask first or Off. Your choice applies from your next question.', 'after Allow the lead is not the in-force lead');
+  assert.equal(leadOf(page), '', 'after Allow the overlay still shows the before-consent lead');
   assert.deepEqual([...within(section(page))].filter((el) => el.props.role === 'status').map((el) => textOf(el)), [], 'after Allow a pending change is confirmed as if it had been written on its own');
 
   // With a consent in force a change writes at once, as before.
@@ -283,6 +300,9 @@ test('criterion 1 (home, signed out): before a consent a change is kept, not wri
   assert.deepEqual(now.map((r) => r.method), ['PUT'], 'with a consent in force a change did not write at once');
   assert.equal((JSON.parse(now[0].body) as { states: Record<string, string> }).states.socrata, 'ask-first');
   page.unmount();
+  } finally {
+    reading = 'panel';
+  }
 });
 
 // --- Criterion 2: the lead before a consent counts what Allow will use -------------------------------
@@ -346,7 +366,12 @@ for (const config of ['three', 'six'] as const) {
       assert.equal(children[2].props.role, 'radiogroup', `${id}'s third element is not its control`);
       // The control, byte for byte as at the base.
       assert.equal(children[2].props['aria-label'], `${NAME[id]}: On, Ask first or Off`, `${id}'s control's accessible name moved`);
-      assert.deepEqual(radiosOf(page, id).map((r) => [r.props.type, r.props.name, r.props.value]), [['radio', `source-state-${id}`, 'on'], ['radio', `source-state-${id}`, 'ask-first'], ['radio', `source-state-${id}`, 'off']], `${id}'s radios moved`);
+      // Since UX-2 P4b each mounted control is its own group, named `source-state-<id>-<mount id>`: the pin is
+      // one shared name per group, beginning `source-state-<id>-`, with the types and values as at the base.
+      const group = radiosOf(page, id);
+      assert.deepEqual(group.map((r) => [r.props.type, r.props.value]), [['radio', 'on'], ['radio', 'ask-first'], ['radio', 'off']], `${id}'s radios moved`);
+      assert.equal(new Set(group.map((r) => r.props.name)).size, 1, `${id}'s radios do not share one name`);
+      assert.ok(String(group[0].props.name).startsWith(`source-state-${id}-`), `${id}'s group name ${String(group[0].props.name)} does not begin source-state-${id}-`);
       // The drawer.
       const drawers = [...within(row)].filter((el) => el.type === 'details');
       assert.equal(drawers.length, 1, `${id}'s row has ${drawers.length} drawers`);

@@ -11,7 +11,7 @@
  *
  * WHAT IT SAYS, decision first (fix round 1, item 3), so it is read in
  * well under a minute: the source by its reader name, never a tool's exposed
- * name, and that the AI asked; what Allow and Not now each send, that the
+ * name, and that the AI asked; what Allow and Don't allow each send, that the
  * choice can be changed, how long the question waits, and the two buttons,
  * equal in size and style. Then, in the Sources panel's own form (R6 PL),
  * what the source is and whose connector reaches it, running where
@@ -28,10 +28,23 @@
  * A pause that does not hold (no store, or the run's holds spent) shows no
  * buttons: it says the source was not used, and how to turn it On.
  *
+ * THE ANSWERS (UX-2 P4b; items 8, 9, 20, 21, 39, B4b, B4c; D7 = C, ASK2 =
+ * B with S4). "Allow" and "Don't allow" are the equal pair; "Don't allow"
+ * posts `off`, which turns the source Off for later questions too. While the
+ * pause asks, "Allow all data sources" is a lighter, full-width third button
+ * below the pair: it posts `allow-all`, every configured source is turned On,
+ * and the run goes on with no further pause. Both renderings (this card, in
+ * the steps and in a row, and `ConsentPausePrompt`) carry the buttons and the
+ * choices sentence; the outcome sentences are this card's only (L1), each with
+ * item 13's one pointer to Data source settings.
+ *
  * AFTER THE HOLD (R9 P1, #669 D2). The run waits a minute; the entry lives
- * ten (`entryExpiresAt`). Between the two the card keeps Allow and Not now,
- * equal as before, and says the run went on without the answer and that an
- * answer now applies to the reader's next question; once given, it says so.
+ * ten (`entryExpiresAt`). Between the two the card keeps Allow and Don't
+ * allow, equal as before, and says the run went on without the answer and that
+ * an answer now applies to the reader's next question; once given, it says so.
+ * No "Allow all data sources" then (ruled W2, relay 26): the run has moved on,
+ * the card no longer asks, and the button would promise a question that goes
+ * on without asking again, which it cannot do.
  * At the entry's end, on a 404, or on Cancel, the buttons go and the card
  * says the question is no longer waiting. The run's own "moved on" state
  * (`runMovedOn`, the step's `isComplete`) changes the words, never the
@@ -51,9 +64,10 @@
  */
 
 import { useEffect, useRef, type CSSProperties } from 'react';
+import Link from 'next/link';
 import type { FlowsStatement } from '@/lib/flows/statement';
 import type { ConsentPausePayload } from '@/lib/streaming';
-import { PANEL_PRIVACY_LINK } from '@/lib/sources/copy';
+import { ALLOW_ALL_SOURCES, PANEL_PRIVACY_LINK, SETTINGS_HREF, SETTINGS_TEXT } from '@/lib/sources/copy';
 import { readerSourceName, sourceRowLines } from '@/lib/sources/source-name';
 import { KeptByLines } from '@/components/sources/KeptByLine';
 import LocalOnlyOffer from '@/components/sources/LocalOnlyOffer';
@@ -64,25 +78,29 @@ export const CONSENT_STEP_TEXT = {
   heading: (name: string) => `${name} is set to Ask first.`,
   asked: 'The AI asked to use it for this question. Nothing has been sent to it yet.',
   cannotAsk: 'This question cannot stop to ask you, so it was not used.',
-  nextQuestion: 'You can turn it On in the panel for your next question.',
-  choices: 'Allow: this question is sent to it, and it is turned On for later questions. Not now: nothing is sent to it for this question.',
-  change: 'You can change this in the panel at any time.',
+  nextQuestion: 'You can turn it On in Data source settings for your next question.',
+  choices: "Allow: this question is sent to it, and it is turned On for later questions. Don't allow: nothing is sent to it, and it is turned Off for later questions. Allow all data sources: every data source is turned On, and this question goes on without asking again.",
+  change: 'You can change this in Data source settings at any time.',
   wait: 'The question waits up to a minute for your answer.',
   reach: (hosts: readonly string[]) => `It would reach: ${hosts.join(', ')}.`,
   allowed: 'You chose Allow. It is On now.',
   /** Allow was saved, and the question uses the source, but its consent could not be turned On (fix round 2, item 2). */
-  allowedNotMoved: 'You chose Allow. This question is sent to it, but it could not be turned On for later questions. You can turn it On in the panel.',
-  declined: 'You chose Not now. Nothing is sent to it for this question.',
+  allowedNotMoved: 'You chose Allow. This question is sent to it, but it could not be turned On for later questions. You can turn it On in Data source settings.',
+  declined: "You chose Don't allow. Nothing is sent to it, and it is Off now.",
+  /** B4b: after "Allow all data sources". */
+  allowedAll: 'You chose Allow all data sources. Every data source is On now.',
+  /** Item 13: the one pointer, added to an outcome once `change` no longer renders. */
+  pointer: 'You can change this in Data source settings.',
   ended: 'The question went on without your answer, so it did not use this source.',
   gone: 'This question is no longer waiting for an answer.',
   decided: 'An answer was already given for this question.',
-  failed: 'Your answer could not be saved. You can set this source in the panel.',
+  failed: 'Your answer could not be saved. You can set this source in Data source settings.',
   // After the hold (R9 P1, #669 D2): as the research check and the seat ruled them.
   stillAnswer: 'You can still answer for later questions.',
-  afterChoices: 'Allow: it is turned On for later questions. Not now: nothing changes.',
+  afterChoices: "Allow: it is turned On for later questions. Don't allow: it is turned Off for later questions.",
   allowedAfter: 'You chose Allow. It is On for later questions.',
-  allowedAfterNotMoved: 'You chose Allow, but it could not be turned On. You can turn it On in the panel.',
-  declinedAfter: 'You chose Not now. It is still set to Ask first.',
+  allowedAfterNotMoved: 'You chose Allow, but it could not be turned On. You can turn it On in Data source settings.',
+  declinedAfter: "You chose Don't allow. It is Off for later questions.",
 } as const;
 
 /** How every scroll the question surface makes moves: at once when the reader asked for reduced motion. */
@@ -150,6 +168,39 @@ const PROMPT: CSSProperties = {
 const PROMPT_BUTTON: CSSProperties = { ...BUTTON, flex: '0 0 auto', minWidth: '96px', padding: '6px 12px', fontSize: '13px' };
 
 /**
+ * "Allow all data sources" (ASK2 = B, M5): below the pair and the full width
+ * of the card, and lighter than the pair (a neutral border and a regular
+ * weight against the pair's accent border and 600), never filled.
+ */
+const ALL_BUTTON: CSSProperties = {
+  display: 'block',
+  width: '100%',
+  boxSizing: 'border-box',
+  padding: '8px 14px',
+  fontSize: '14px',
+  fontWeight: 400,
+  borderRadius: '6px',
+  border: '1px solid var(--border-color)',
+  backgroundColor: 'var(--white)',
+  color: 'var(--text-primary)',
+  cursor: 'pointer',
+};
+const PROMPT_ALL_BUTTON: CSSProperties = { ...ALL_BUTTON, padding: '6px 12px', fontSize: '13px' };
+
+/** "You can change this in Data source settings…", the pointer's link a client-side one (the page beneath stays mounted). */
+function Pointer({ sentence }: { sentence: string }) {
+  const at = sentence.indexOf(SETTINGS_TEXT.link);
+  if (at === -1) return <>{sentence}</>;
+  return (
+    <>
+      {sentence.slice(0, at)}
+      <Link href={SETTINGS_HREF}>{SETTINGS_TEXT.link}</Link>
+      {sentence.slice(at + SETTINGS_TEXT.link.length)}
+    </>
+  );
+}
+
+/**
  * The compact prompt (R9 P1, #672): while a hold is open and unanswered, the
  * card's heading, what each choice sends, and the same two buttons, posting
  * with the pause's own key. Nothing once the hold ends, an answer is given,
@@ -181,10 +232,13 @@ export function ConsentPausePrompt() {
         <button type="button" style={PROMPT_BUTTON} disabled={entry.deciding} onClick={() => { void decideConsentPause(key, 'allow'); }}>
           Allow
         </button>
-        <button type="button" style={PROMPT_BUTTON} disabled={entry.deciding} onClick={() => { void decideConsentPause(key, 'not-now'); }}>
-          Not now
+        <button type="button" style={PROMPT_BUTTON} disabled={entry.deciding} onClick={() => { void decideConsentPause(key, 'off'); }}>
+          Don&apos;t allow
         </button>
       </div>
+      <button type="button" style={PROMPT_ALL_BUTTON} disabled={entry.deciding} onClick={() => { void decideConsentPause(key, 'allow-all'); }}>
+        {ALLOW_ALL_SOURCES}
+      </button>
     </div>
   );
 }
@@ -216,8 +270,10 @@ export default function ConsentStep({ pause, runMovedOn = false, place = 'steps'
     ? (slot.moved === false
       ? (afterHold ? CONSENT_STEP_TEXT.allowedAfterNotMoved : CONSENT_STEP_TEXT.allowedNotMoved)
       : (afterHold ? CONSENT_STEP_TEXT.allowedAfter : CONSENT_STEP_TEXT.allowed))
-    : slot?.decision === 'not-now'
+    : slot?.decision === 'off'
       ? (afterHold ? CONSENT_STEP_TEXT.declinedAfter : CONSENT_STEP_TEXT.declined)
+    : slot?.decision === 'allow-all'
+      ? CONSENT_STEP_TEXT.allowedAll
       : slot?.failure === 'gone'
         ? CONSENT_STEP_TEXT.gone
         : slot?.failure === 'decided'
@@ -227,6 +283,8 @@ export default function ConsentStep({ pause, runMovedOn = false, place = 'steps'
             : pause.holds && expired
               ? CONSENT_STEP_TEXT.gone
               : null;
+  // Item 13 and B4b: the pointer follows the Off and Allow-all outcomes given while the question waited.
+  const pointed = !afterHold && (slot?.decision === 'off' || slot?.decision === 'allow-all');
   // The buttons stay while the entry takes an answer. With no entry on the bus (none was reported to this
   // page), the run's own state is all the card has, and they go with the hold, as before R9.
   const waiting = pause.holds && pause.key !== undefined && !answered && !expired && (slot !== null || !holdEnded);
@@ -249,16 +307,22 @@ export default function ConsentStep({ pause, runMovedOn = false, place = 'steps'
           ) : (
             <p style={{ margin: '0' }}>{CONSENT_STEP_TEXT.choices}</p>
           )}
-          <p style={{ margin: '2px 0 0' }}>{CONSENT_STEP_TEXT.change}</p>
+          <p style={{ margin: '2px 0 0' }}><Pointer sentence={CONSENT_STEP_TEXT.change} /></p>
           {!holdEnded && <p style={{ margin: '2px 0 0' }}>{CONSENT_STEP_TEXT.wait}</p>}
-          <div style={{ display: 'flex', gap: '12px', flexWrap: 'wrap', margin: '8px 0 10px' }}>
+          <div style={{ display: 'flex', gap: '12px', flexWrap: 'wrap', margin: '8px 0 8px' }}>
             <button type="button" style={BUTTON} disabled={slot?.deciding === true} onClick={() => { void decideConsentPause(key, 'allow'); }}>
               Allow
             </button>
-            <button type="button" style={BUTTON} disabled={slot?.deciding === true} onClick={() => { void decideConsentPause(key, 'not-now'); }}>
-              Not now
+            <button type="button" style={BUTTON} disabled={slot?.deciding === true} onClick={() => { void decideConsentPause(key, 'off'); }}>
+              Don&apos;t allow
             </button>
           </div>
+          {/* While the pause asks only (ruled W2): after the hold the run has moved on. */}
+          {!holdEnded && (
+            <button type="button" style={{ ...ALL_BUTTON, margin: '0 0 10px' }} disabled={slot?.deciding === true} onClick={() => { void decideConsentPause(key, 'allow-all'); }}>
+              {ALLOW_ALL_SOURCES}
+            </button>
+          )}
         </>
       )}
       {lines.what !== null && <div>{lines.what.charAt(0).toUpperCase() + lines.what.slice(1)}</div>}
@@ -287,6 +351,8 @@ export default function ConsentStep({ pause, runMovedOn = false, place = 'steps'
       {outcome !== null && (
         <p data-part="consent-outcome" style={{ margin: '6px 0 0', fontWeight: 600, color: 'var(--text-primary)' }}>
           {outcome}
+          {/* Item 13: the one pointer, since `change` renders only while the card waits. */}
+          {pointed ? <> <Pointer sentence={CONSENT_STEP_TEXT.pointer} /></> : null}
         </p>
       )}
     </div>

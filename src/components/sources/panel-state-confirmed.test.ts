@@ -82,7 +82,8 @@ async function panelInForce(): Promise<Surface> {
 
 const statusLines = (panel: Surface): HostElement[] => panel.elements().filter((el) => el.props.role === 'status');
 const offFor = (panel: Surface, sourceId: string): HostElement => {
-  const found = panel.elements().filter((el) => el.type === 'input' && el.props.value === 'off' && el.props.name === `source-state-${sourceId}`);
+  // The name is `source-state-<sourceId>-<mount id>` since UX-2 P4b (one group per mounted control): read by its prefix.
+  const found = panel.elements().filter((el) => el.type === 'input' && el.props.value === 'off' && String(el.props.name).startsWith(`source-state-${sourceId}-`));
   assert.equal(found.length, 1, `no Off choice for ${sourceId}`);
   return found[0];
 };

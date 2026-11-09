@@ -124,7 +124,7 @@ type Mod = Record<string, any>; // eslint-disable-line @typescript-eslint/no-exp
 const load = async (rel: string): Promise<Mod> => (await import(pathToFileURL(path.join(SRC, rel)).href)) as Mod;
 const Card = (await load('components/sources/ConsentCard.tsx')).default as ComponentType<Record<string, unknown>>;
 const Panel = (await load('components/sources/SourcesPanel.tsx')).default as ComponentType;
-const DashboardTabs = (await load('components/dashboard/DashboardTabs.tsx')).default as ComponentType<Record<string, unknown>>;
+const SettingsOverlay = (await load('components/settings/SettingsOverlay.tsx')).default as ComponentType<Record<string, unknown>>;
 const Home = (await load('app/(marketing)/page.tsx')).default as ComponentType;
 const PrivacyPage = (await load('app/(app)/privacy/page.tsx')).default as ComponentType;
 const flowsRoute = await load('app/api/flows/route.ts');
@@ -154,9 +154,19 @@ const CARD_T2 = T2;
 const CARD_T5_DB = "You can set each source to On, Ask first or Off beside the question box at any time. You can withdraw consent there, or on your dashboard's Sources tab if you are signed in.";
 const CARD_T5_NO_DB = 'You can set each source to On, Ask first or Off beside the question box at any time. You can withdraw consent there.';
 const CARD_T7 = '"Allow" turns on the sources shown as On and sends your question. "Not now" sends nothing.';
+// UX-2 P4b (D6 B, ASK1 = A): the card's effect sentence (item 37 without its Allow-all half) and ASK1's line replace
+// T5 and T7 above the buttons; R9 P3's T1 and T2 stay (item 34).
+const CARD_EFFECT_P4B = "Allow: your question is sent to the model service. A data source is used only if it is On, or if it is set to Ask first and you allow it when asked. Don't allow: nothing is sent. You are asked again when you send a question.";
+const CARD_ASK1 = 'You can change or withdraw this in Data source settings.';
+// The owner's card ruling (#729 comment 6727853028: D1 = A, D2 = A with the owner's note): the heading is a
+// question and stands alone above the buttons; the effect is re-worded and moves below them with ASK1's line. T1, T2
+// and the earlier effect sentence leave the card (the privacy page keeps T2 and, as T7, the earlier effect).
+const CARD_HEADING_RULED = 'Allow this site to send your question to a model service?';
+const CARD_EFFECT_RULED = 'Allow sends your question to the model service. It sends the searches the model writes to data sources that are On or that you allow when asked.';
 /** R6's replaced wording that R9 P3's ruling puts back on the card, and only there: "at any time" (T5). */
 const RULED_BACK_ON_THE_CARD = ['at any time'];
-const T3_TEXT1 = 'After you allow, you can set each data source to On, Ask first or Off beside the question box.';
+// UX-2 P4b, item 41 (X2b): the privacy page's sentence on where to set each source.
+const T3_TEXT1 = 'You can set each data source to On, Ask first or Off in Data source settings at any time.';
 const T4_EACH = [
   "Each source's row gives who publishes its connector, where it runs, who holds its logs and what they say they keep, and how current its data is.",
   "Where we read the holder's own page, the logs line gives that page and the date we read it.",
@@ -165,9 +175,12 @@ const T4_KEEP = [
   'For each recipient, we state what it says it keeps, and for how long when it gives a time.',
   'Where it says so on a page, we give that page and the date we read it.',
 ];
-const T5 = 'Nothing was sent. Edit this question or write a new one, and you will be asked again before it is sent.';
+// UX-2 P4b, item 46: the line after the card's "Don't allow".
+const T5 = "You chose Don't allow. Nothing was sent. Edit this question or write a new one, and you will be asked again before it is sent.";
 const T6 = 'Ask first: nothing is sent to this source until you turn it On.';
-const T7 = '"Allow" turns on the sources the panel shows as On and sends your question. "Not now" sends nothing.';
+// UX-2 P4b, items 38/49: the privacy page's effect sentence is item 37's words, byte for byte (the card's own
+// effect was re-worded apart from it by the owner's card ruling).
+const T7 = CARD_EFFECT_P4B;
 const T8_DB = 'We keep your answer for this browser session in a cookie, or on your account if signed in.';
 const T8_NO_DB = 'We keep your answer for this browser session in a cookie.';
 // R9 P2 (#661, D3 = A of the UX pass): the panel's lead before consent counts the states Allow will use, at the
@@ -176,7 +189,6 @@ const T9_PANEL = 'These are the settings Allow will use: three sources On. Set t
 const T9_TAB = 'This site asks before your next question.';
 const T10 = "A dated log of every change to where a question can go is kept with the site's code.";
 const T11 = (holder: string) => `${holder}: what it keeps is for this site's operator to state`;
-const T11_ENDPOINT = "what it keeps is for this site's operator to state.";
 const T12_PANEL_LINK = 'Where a question can go, in full';
 // UX pass row 14(a), 2026-10-22: the version sentence in words, the date in words and the version's first 8 hex.
 const T12_TAB = (version: string, date: string) => `It refers to the statement of where a question can go as it stood on ${inWords(date)} (version ${version.slice(0, 8)}).`;
@@ -192,8 +204,10 @@ const T12_REMOVED = (label: string) => `${label}: removed from the recipients.`;
 const T12_LESS = (label: string) => `${label}: its holder now says it keeps less.`;
 const T14 = `${REPO}/blob/HEAD/docs/flows-changelog.md`;
 /** The privacy page's own withdraw statement, unchanged by T3. */
-const WITHDRAW_PRIVACY_DB = 'To withdraw consent, use the panel beside the question box, or the Sources tab on your dashboard if you are signed in.';
-const WITHDRAW_PRIVACY_NO_DB = 'To withdraw consent, use the panel beside the question box.';
+const WITHDRAW_PRIVACY_DB = 'To withdraw consent, open Data source settings.';
+const WITHDRAW_PRIVACY_NO_DB = WITHDRAW_PRIVACY_DB;
+/** UX-2 P4b: item 41's X2b puts "at any time" back on the privacy page, in its ruled sentence. */
+const RULED_BACK_ON_THE_PRIVACY_PAGE = ['at any time'];
 
 /** The replaced wordings: none renders on the card, the panel, the tab, the notices or the privacy page's consent sections. */
 const REPLACED = [
@@ -288,55 +302,41 @@ const CARD_CONFIGS: Array<{ name: string; config: Config }> = [
   { name: 'both set', config: { s1: true, s2: true } },
 ];
 
+// UX-2 P4b (D6 B), as the owner's card ruling moves it: the heading above the buttons; the effect sentence, ASK1's
+// line with the settings link, T6, the analytics line and T8 below them. The recipients (T11, T13 on the source
+// lines), T5 and T7 left it, and the ruling took T1, T2 and the earlier effect sentence off it; T11 and T13 are read
+// on the privacy page's source rows below.
 for (const { name, config } of CARD_CONFIGS) {
-  test(`criterion 1, the card (${name}): R9 P3's T1, T2, T5 and T7 above the buttons, T8 below, T11 and T13 in the disclosure`, async () => {
+  test(`criterion 1, the card (${name}; UX-2 P4b D6 B): the heading above the buttons, the effect sentence and ASK1's line below, T8 below, and no recipient line`, async () => {
     await under(config, async () => {
-      const statement = await buildFlowsStatement();
       const card = await mountCard();
       const text = card.text();
-      const buttons = text.indexOf('Allow Not now');
+      const buttons = text.indexOf("Allow Don't allow");
       assert.ok(buttons > 0, `premise: the card has its buttons: ${text.slice(0, 300)}`);
-      const recipients = card.elements().filter((el) => typeof el.props['data-recipient'] === 'string');
-      assert.ok(recipients.length > 0, `premise: the card lists its recipients: ${text.slice(0, 300)}`);
-      const listStart = text.indexOf(textOf(recipients[0]));
-      assert.ok(listStart > buttons, `the recipient list is not below the buttons: ${text.slice(0, 300)}`);
-
-      for (const [label, sentence] of [['T1', CARD_T1], ['T2', CARD_T2], ['T5', CARD_T5_DB], ['T7', CARD_T7]] as const) {
+      const heading = text.indexOf(CARD_HEADING_RULED);
+      assert.ok(heading >= 0 && heading < buttons, `the heading does not render above the buttons: "${CARD_HEADING_RULED}" in ${text.slice(0, buttons)}`);
+      for (const [label, sentence] of [['the effect', CARD_EFFECT_RULED], ['ASK1', CARD_ASK1]] as const) {
         const at = text.indexOf(sentence);
-        assert.ok(at >= 0 && at < buttons, `${label} does not render above the buttons: "${sentence}" in ${text.slice(0, buttons)}`);
+        assert.ok(at > buttons, `${label} does not render below the buttons: "${sentence}" in ${text.slice(buttons)}`);
       }
-      assert.ok(text.indexOf(CARD_T1) < text.indexOf(CARD_T2) && text.indexOf(CARD_T5_DB) < text.indexOf(CARD_T7), 'the short layer is out of order');
-      for (const old of R6_CARD_ONLY) assert.ok(!text.includes(old), `the card still renders R6's "${old}"`);
+      assert.ok(text.indexOf(CARD_EFFECT_RULED) < text.indexOf(CARD_ASK1), 'the layer is out of order');
+      for (const old of [CARD_T1, CARD_T2, CARD_EFFECT_P4B, CARD_T5_DB, CARD_T5_NO_DB, CARD_T7, ...R6_CARD_ONLY]) assert.ok(!text.includes(old), `the card still renders "${old}"`);
       assert.ok(!text.includes('To withdraw consent, use the panel'), 'the card still adds the privacy page\'s withdraw sentence beside its own');
       assert.ok(text.indexOf(T8_DB) > buttons, `T8 (with a database) does not render below the buttons: ${text.slice(buttons)}`);
-
-      // T11: the operator line on Socrata's line, inside the disclosure.
-      const operator = statement.sources.flatMap((s: Mod) => s.recipients.flatMap((r: Mod) => r.keptBy)).find((k: Mod) => k.keeps === 'operator-states');
-      assert.ok(operator, 'premise: the reference configuration has an operator-states line on a source');
-      assert.ok(text.indexOf(T11(operator.holder)) > buttons, `T11 does not render in the disclosure: "${T11(operator.holder)}"`);
-
-      // T13: each source's line is labelled by its one name.
-      for (const source of statement.sources as Mod[]) {
-        const line = card.elements().find((el) => el.props['data-recipient-group'] === source.sourceId);
-        assert.ok(line, `premise: the card lists ${source.sourceId}`);
-        // `textOf` reads "<strong>Name</strong>: " as "Name : "; the space is the harness's.
-        const read = textOf(line!).replace(/\s+:/, ':');
-        assert.ok(read.startsWith(`${NAME[source.sourceId]}: `), `the card names ${source.sourceId} "${read.split(': ')[0]}", not "${NAME[source.sourceId]}"`);
-      }
+      assert.equal(card.elements().filter((el) => typeof el.props['data-recipient'] === 'string' || typeof el.props['data-recipient-group'] === 'string').length, 0, 'the card still lists recipients');
       assertNoneReplaced(readWithLinks(card), `the card (${name})`, RULED_BACK_ON_THE_CARD);
       card.unmount();
     });
   });
 }
 
-test('criterion 1, the card without a database: T5 and T8 render in their no-account forms', async () => {
+test('criterion 1, the card without a database: T8 renders in its no-account form, and nothing names an account', async () => {
   await under({ db: false }, async () => {
     const card = await mountCard();
     const text = card.text();
-    const buttons = text.indexOf('Allow Not now');
-    const t5 = text.indexOf(CARD_T5_NO_DB);
-    assert.ok(t5 >= 0 && t5 < buttons, `T5 (without a database) does not render above the buttons: ${text.slice(0, buttons)}`);
-    assert.ok(!text.includes(CARD_T5_DB), 'without a database, the card names the dashboard');
+    const buttons = text.indexOf("Allow Don't allow");
+    assert.ok(buttons > 0, `premise: the card has its buttons: ${text.slice(0, 300)}`);
+    assert.ok(!text.includes(CARD_T5_DB) && !text.includes(CARD_T5_NO_DB), 'the card still renders T5');
     assert.ok(text.indexOf(T8_NO_DB) > buttons, `T8 (without a database) does not render below the buttons: ${text.slice(buttons)}`);
     assert.ok(!text.includes(T8_DB), 'without a database, the card speaks of an account');
     assertNoneReplaced(readWithLinks(card), 'the card (without a database)', RULED_BACK_ON_THE_CARD);
@@ -344,29 +344,19 @@ test('criterion 1, the card without a database: T5 and T8 render in their no-acc
   });
 });
 
-// --- Criterion 2 (S2): the endpoint row keeps the clause, then gives the statement -----------------
+// --- Criterion 2 (S2): the operator's statement, on the privacy page (UX-2 P4b, D6 B) ------------------
 
-test('criterion 2 (S2): set, the card\'s endpoint row reads the clause and then the operator\'s statement, in that order; unset, the clause alone', async () => {
-  await under({ s2: true }, async () => {
-    const card = await mountCard();
-    const rows = card.elements().filter((el) => el.props['data-recipient'] === 'model-endpoint');
-    assert.equal(rows.length, 1, 'premise: the card lists the model endpoint');
-    const row = textOf(rows[0]);
-    const clause = row.indexOf(T11_ENDPOINT);
-    const statement = row.indexOf(ENDPOINT_NO_TRAINING);
-    assert.ok(clause >= 0, `the endpoint row drops "${T11_ENDPOINT}" when the operator's statement is set: ${row}`);
-    assert.ok(statement > clause, `the endpoint row does not give the operator's statement after the clause: ${row}`);
-    card.unmount();
-  });
-  await under({}, async () => {
-    const card = await mountCard();
-    const rows = card.elements().filter((el) => el.props['data-recipient'] === 'model-endpoint');
-    assert.equal(rows.length, 1, 'premise: the card lists the model endpoint');
-    const row = textOf(rows[0]);
-    assert.ok(row.includes(T11_ENDPOINT), `the endpoint row does not read "${T11_ENDPOINT}": ${row}`);
-    assert.ok(!row.includes(ENDPOINT_NO_TRAINING), 'the endpoint row states what no operator supplied');
-    card.unmount();
-  });
+test('criterion 2 (S2; UX-2 P4b D6 B): the card lists no endpoint row, set or unset; the privacy page states the operator\'s statement when set', async () => {
+  for (const s2 of [true, false]) {
+    await under({ s2 }, async () => {
+      const card = await mountCard();
+      assert.equal(card.elements().filter((el) => el.props['data-recipient'] === 'model-endpoint').length, 0, 'the card still lists the model endpoint');
+      assert.ok(!card.text().includes(ENDPOINT_NO_TRAINING), 'the card states the operator\'s statement');
+      card.unmount();
+      const page = (facts.buildPrivacySections(null) as Section[]).map((x) => sectionText(x)).join(' ');
+      assert.equal(page.includes(ENDPOINT_NO_TRAINING), s2, `the privacy page ${s2 ? 'does not state' : 'states'} the operator's statement`);
+    });
+  }
 });
 
 // --- The panel: no consent; in force; a re-ask with stored states -----------------------------------
@@ -481,15 +471,12 @@ test('criterion 1, the notices on the panel: T12\'s two recipient lines, "This s
   });
 });
 
+/** UX-2 P4b (M7): the tab's states, notices and version line live in the Settings overlay's Data sources sub-page. */
 async function sourcesTab(): Promise<Surface> {
-  const tabs = await mount(h(DashboardTabs, { myEvidence: [], myEvaluations: [], activity: [], tokens: [], signingConfigured: true, sealOnly: false }));
-  const buttons = tabs.buttons('Sources');
-  assert.equal(buttons.length, 1, `premise: the dashboard has a Sources tab: ${tabs.text().slice(0, 300)}`);
-  await tabs.click(buttons[0]);
-  return tabs;
+  return mount(h(SettingsOverlay, {}));
 }
 
-test('criterion 1, the Sources tab with notices: the same lines, and T12\'s version sentence with the held statement\'s base version', async () => {
+test('criterion 1, Data sources in the Settings overlay (UX-2 P4b), with notices: the same lines, and T12\'s version sentence with the held statement\'s base version', async () => {
   await under({}, async () => {
     const { held, statement } = await rowWithNotices();
     answers();
@@ -502,7 +489,7 @@ test('criterion 1, the Sources tab with notices: the same lines, and T12\'s vers
   });
 });
 
-test('criterion 1, the Sources tab in force: T12\'s version sentence and T13\'s names', async () => {
+test('criterion 1, Data sources in the Settings overlay (UX-2 P4b), in force: T12\'s version sentence and T13\'s names', async () => {
   await under({}, async () => {
     SIGNED_IN_DB();
     sessions.rows.clear();
@@ -517,21 +504,24 @@ test('criterion 1, the Sources tab in force: T12\'s version sentence and T13\'s 
   });
 });
 
-test('criterion 1, the Sources tab with no consent: T9\'s line', async () => {
+// UX-2 P4b (M1 of the v2 check): the overlay opens from the card before any consent and behaves as the panel does
+// there, so with no consent it reads the panel's T9 lead, not the tab's T9 line.
+test('criterion 1, Data sources in the Settings overlay with no consent: the panel\'s T9 lead, not the tab\'s T9 line', async () => {
   await under({}, async () => {
     SIGNED_IN_DB();
     sessions.rows.clear();
     answers();
     const tab = await sourcesTab();
-    assert.ok(tab.text().includes(T9_TAB), `the tab with no consent does not read "${T9_TAB}": ${tab.text().slice(0, 400)}`);
-    assertNoneReplaced(readWithLinks(tab), 'the Sources tab (no consent)');
+    assert.ok(tab.text().includes(T9_PANEL), `the overlay with no consent does not read "${T9_PANEL}": ${tab.text().slice(0, 400)}`);
+    assert.ok(!tab.text().includes(T9_TAB), 'the overlay reads the retired tab line');
+    assertNoneReplaced(readWithLinks(tab), 'the Settings overlay (no consent)');
     tab.unmount();
   });
 });
 
 // --- The Not now line --------------------------------------------------------------------------------
 
-test('criterion 1, the Not now line (home): T5', async () => {
+test('criterion 1, the Don\'t allow line (home): T5 as item 46 re-words it (UX-2 P4b)', async () => {
   await under({}, async () => {
     ANON();
     sessions.rows.clear();
@@ -541,10 +531,10 @@ test('criterion 1, the Not now line (home): T5', async () => {
     assert.equal(box.length, 1, 'premise: the home page has its question box');
     await page.type(box[0], 'What was the median household income in the Bronx?');
     await page.submit(page.elements().filter((el) => el.type === 'form')[0]);
-    assert.equal(page.buttons('Not now').length, 1, `premise: the home page shows the card: ${page.text().slice(0, 300)}`);
-    await page.click(page.button('Not now'));
-    assert.ok(page.text().includes(T5), `after Not now the home page does not read T5: ${page.text().slice(0, 600)}`);
-    assert.ok(!page.text().includes('Change your question'), 'after Not now the home page reads the replaced line');
+    assert.equal(page.buttons("Don't allow").length, 1, `premise: the home page shows the card: ${page.text().slice(0, 300)}`);
+    await page.click(page.button("Don't allow"));
+    assert.ok(page.text().includes(T5), `after Don't allow the home page does not read T5: ${page.text().slice(0, 600)}`);
+    assert.ok(!page.text().includes('Change your question'), 'after Don\'t allow the home page reads the replaced line');
     page.unmount();
   });
 });
@@ -599,7 +589,7 @@ for (const db of [true, false]) {
         assert.ok(row, `premise: the privacy page has a row for ${id}`);
         assert.ok(statementText(row!).startsWith(`${NAME[id]}: `), `the privacy page's row for ${id} is not named "${NAME[id]}": ${statementText(row!).slice(0, 80)}`);
       }
-      for (const s of sections) assertNoneReplaced(sectionRead(s), `the privacy page's "${s.heading}"`);
+      for (const s of sections) assertNoneReplaced(sectionRead(s), `the privacy page's "${s.heading}"`, RULED_BACK_ON_THE_PRIVACY_PAGE);
     });
   });
 }

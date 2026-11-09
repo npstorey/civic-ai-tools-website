@@ -25,6 +25,9 @@
 // only (so it is still in force) and has a base version of its own, so "the
 // stored statement's" and "the current statement's" can be told apart.
 //
+// UX-2 P4b (criterion 2, M7): re-pointed at the Settings overlay, where the
+// tab's date and version line now renders; every assertion carries unchanged.
+//
 // Run with: npm test
 
 import { test } from 'node:test';
@@ -95,7 +98,7 @@ Object.assign(globalThis as Record<string, unknown>, {
 
 type Mod = Record<string, any>; // eslint-disable-line @typescript-eslint/no-explicit-any
 const load = async (rel: string): Promise<Mod> => (await import(pathToFileURL(path.join(SRC, rel)).href)) as Mod;
-const DashboardTabs = (await load('components/dashboard/DashboardTabs.tsx')).default as ComponentType<Record<string, unknown>>;
+const SettingsOverlay = (await load('components/settings/SettingsOverlay.tsx')).default as ComponentType<Record<string, unknown>>;
 const flowsRoute = await load('app/api/flows/route.ts');
 const consentRoute = await load('app/api/sources/consent/route.ts');
 const { buildFlowsStatement, statementHash, computeBaseVersion } = await load('lib/flows/statement.ts');
@@ -129,12 +132,9 @@ async function getConsent(): Promise<Mod> {
   return (await response.json()) as Mod;
 }
 
+/** UX-2 P4b (M7): the date and version line moves, verbatim, to the Settings overlay's Data sources sub-page. */
 async function sourcesTab(): Promise<Surface> {
-  const tabs = await mount(h(DashboardTabs, { myEvidence: [], myEvaluations: [], activity: [], tokens: [], signingConfigured: true, sealOnly: false }));
-  const buttons = tabs.buttons('Sources');
-  assert.equal(buttons.length, 1, `premise: the dashboard has a Sources tab: ${tabs.text().slice(0, 300)}`);
-  await tabs.click(buttons[0]);
-  return tabs;
+  return mount(h(SettingsOverlay, {}));
 }
 
 for (const { name, env } of CONFIGS) {

@@ -70,7 +70,7 @@ Object.assign(globalThis as Record<string, unknown>, {
 type Mod = Record<string, any>; // eslint-disable-line @typescript-eslint/no-explicit-any
 const load = async (rel: string): Promise<Mod> => (await import(pathToFileURL(path.join(SRC, rel)).href)) as Mod;
 const Home = (await load('app/(marketing)/page.tsx')).default as ComponentType;
-const DashboardTabs = (await load('components/dashboard/DashboardTabs.tsx')).default as ComponentType<Record<string, unknown>>;
+const SettingsOverlay = (await load('components/settings/SettingsOverlay.tsx')).default as ComponentType<Record<string, unknown>>;
 const flowsRoute = await load('app/api/flows/route.ts');
 const consentRoute = await load('app/api/sources/consent/route.ts');
 const { consentInForce } = await load('lib/sources/consent-gate.ts');
@@ -159,16 +159,16 @@ test('criterion D2: a notify change shows its line in the panel, dated by the ro
   shown.unmount();
 });
 
-test('criterion D2: the dashboard\'s Sources tab shows the same line', async () => {
+// UX-2 P4b (criterion 2): the notice the dashboard's Sources tab showed moves to the Settings overlay's Data sources
+// sub-page, signed in, with its Dismiss.
+test('criterion D2 (UX-2 P4b): the Settings overlay shows the same line, with its Dismiss', async () => {
   const { held, statement } = await withRemovedRecipient();
   rowHolding(held, statement);
   answers();
-  const tabs = await mount(h(DashboardTabs, { myEvidence: [], myEvaluations: [], activity: [], tokens: [] }));
-  const buttons = tabs.buttons('Sources');
-  assert.equal(buttons.length, 1, 'the dashboard has no Sources tab');
-  await tabs.click(buttons[0]);
-  assert.equal(noticeLines(tabs).length, 1, `the tab shows no notice: ${tabs.text().slice(0, 400)}`);
-  tabs.unmount();
+  const overlay = await mount(h(SettingsOverlay, {}));
+  assert.equal(noticeLines(overlay).length, 1, `the overlay shows no notice: ${overlay.text().slice(0, 400)}`);
+  assert.equal(overlay.buttons('Dismiss').length, 1, 'the overlay\'s notice has no Dismiss');
+  overlay.unmount();
 });
 
 test('criterion D2: after dismissal no line remains, and the row holds the statement in force', async () => {
@@ -200,7 +200,7 @@ test('criterion D2: a re-ask change shows the card instead of a line', async () 
   await page.type(box[0], 'What was the median household income in the Bronx?');
   await page.submit(page.elements().filter((el) => el.type === 'form')[0]);
   assert.deepEqual(net.sent.filter((r) => QUERY_ROUTES.includes(r.path)).map((r) => r.path), [], 'the question was sent on a consent that needs asking again');
-  assert.ok(page.buttons('Allow').length === 1 && page.buttons('Not now').length === 1, `a re-ask change shows no card: ${page.text().slice(0, 300)}`);
+  assert.ok(page.buttons('Allow').length === 1 && page.buttons("Don't allow").length === 1, `a re-ask change shows no card: ${page.text().slice(0, 300)}`);
   page.unmount();
   const shown = await mount(h(Panel));
   assert.equal(noticeLines(shown).length, 0, 'a re-ask change shows a notice line in the panel');

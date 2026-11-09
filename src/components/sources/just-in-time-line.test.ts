@@ -21,7 +21,7 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import path from 'node:path';
 import { pathToFileURL } from 'node:url';
-import type { ComponentType, ReactNode } from 'react';
+import type { ComponentType } from 'react';
 import {
   CONSENT_SURFACE_STUBS,
   SRC,
@@ -130,18 +130,27 @@ test('row 11: with no consent in force there is no line', async () => {
   page.unmount();
 });
 
-test('row 11: the link after the line opens the Sources panel', async () => {
+// UX-2 P4b (#729 comment 6728493444): the Sources panel is removed, so "Change sources" opens the Settings overlay,
+// a client-side link to `/settings` (the next/link stub renders it as an <a>). It opened the form's Sources
+// <details> before; that drawer no longer exists.
+test('row 11: the link after the line opens the Settings overlay', async () => {
   const page = await homeWith({ socrata: 'on', 'data-commons': 'on', 'boston-opencontext': 'on', 'nyc-charter': 'on' });
-  // The form's Sources drawer, by its own summary: since R9 P2 each panel row holds a `<details>` of its own.
-  const ownSummary = (el: HostElement): ReactNode => (Array.isArray(el.props.children) ? el.props.children : [el.props.children])
-    .find((c) => (c as { type?: unknown } | null)?.type === 'summary');
-  const details = () => page.elements().filter((el) => el.type === 'details' && textOf(ownSummary(el)) === 'Data sources this site can use');
-  assert.equal(details().length, 1, 'premise: one Sources details');
-  assert.notEqual(details()[0].props.open, true, 'premise: the panel starts closed');
   const link = page.elements().filter((el) => el.type === 'a' && textOf(el) === 'Change sources');
   assert.equal(link.length, 1, 'no link after the line');
-  await page.click(link[0]);
-  assert.equal(details()[0].props.open, true, 'the link did not open the Sources panel');
+  assert.equal(link[0].props.href, '/settings', `"Change sources" links ${String(link[0].props.href)}, not the Settings overlay`);
+  assert.equal(typeof link[0].props.onClick, 'undefined', '"Change sources" still runs its own click handler');
+  page.unmount();
+});
+
+// UX-2 P4b, criterion 1 (driven): the question form the home page and `/ask` share renders no Sources panel.
+const PANEL_SUMMARY = 'Data sources this site can use';
+const panelsIn = (page: Surface): HostElement[] => page.elements().filter((el) => (el.type === 'summary' && textOf(el) === PANEL_SUMMARY) || el.props.id === 'sources-panel-heading');
+
+test('UX-2 P4b: the home page renders no "Data sources this site can use" and no Sources panel', async () => {
+  const page = await homeWith({ socrata: 'on', 'data-commons': 'on', 'boston-opencontext': 'on', 'nyc-charter': 'on' });
+  assert.ok(lineOf(page).length === 1, 'premise: the home page\'s question form is mounted');
+  assert.deepEqual(panelsIn(page).map((el) => el.type), [], 'the home page renders the Sources panel');
+  assert.ok(!page.text().includes(PANEL_SUMMARY), 'the home page names "Data sources this site can use"');
   page.unmount();
 });
 
@@ -177,6 +186,14 @@ test('owner fix: in notebook mode the line names the notebook runner', async () 
 test('owner fix: in notebook mode with none On, the runner is still named', async () => {
   const page = await askWith({ socrata: 'off', 'data-commons': 'off', 'boston-opencontext': 'off', 'nyc-charter': 'ask-first' }, 'notebook');
   assert.deepEqual(lineOf(page), ['This question goes to the model service, the notebook runner and to no data source. Change sources']);
+  page.unmount();
+});
+
+test('UX-2 P4b: /ask renders no "Data sources this site can use" and no Sources panel', async () => {
+  const page = await askWith(MIX, 'standard');
+  assert.ok(lineOf(page).length === 1, 'premise: /ask\'s question form is mounted');
+  assert.deepEqual(panelsIn(page).map((el) => el.type), [], '/ask renders the Sources panel');
+  assert.ok(!page.text().includes(PANEL_SUMMARY), '/ask names "Data sources this site can use"');
   page.unmount();
 });
 

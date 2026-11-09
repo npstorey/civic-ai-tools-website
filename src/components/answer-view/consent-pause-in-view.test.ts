@@ -6,7 +6,10 @@
 // `behavior: 'auto'` when the reader asked for reduced motion) and renders a
 // compact prompt with the two equal buttons while the pause is open and
 // unanswered: gone after a decision, after the hold ends, and when no pause
-// is open. The Sources panel row's own copy does not change.
+// is open. The source row's own copy does not change. Since UX-2 P4b the
+// row is the Settings overlay's (the owner removed the Sources panel, #729
+// comment 6728493444): the tests that read a row mount the overlay over the
+// page, as its intercepted route mounts it.
 //
 // WHERE THE PROMPT SITS, measured (local dev server, headless Chrome, a held
 // stream, at main ce77dcf): on the home page the submit scroll
@@ -27,7 +30,7 @@
 // condition.
 //
 // CRITERION 3 (#668), the client half: on /explore, Cancel during a hold ends
-// the step card and the panel row's card (the server half, a hold that ends
+// the step card and the source row's card (the server half, a hold that ends
 // when its reader's stream is gone, is `src/app/api/consent-pause-driven.test.ts`).
 //
 // WHAT IS DRIVEN. The three real feeds, each through the real page component
@@ -131,6 +134,9 @@ const load = async (rel: string): Promise<Mod> => (await import(pathToFileURL(pa
 const Home = (await load('app/(marketing)/page.tsx')).default as ComponentType;
 const QuerySurface = (await load('components/shared/QuerySurface.tsx')).default as ComponentType<Record<string, unknown>>;
 const McpFlowDiagram = (await load('components/explore/McpFlowDiagram.tsx')).default as ComponentType;
+const SettingsOverlay = (await load('components/settings/SettingsOverlay.tsx')).default as ComponentType<Record<string, unknown>>;
+/** The page with the Settings overlay open over it: since the panel's removal, the overlay holds the source rows. */
+const withSettings = (page: ReturnType<typeof h>) => h('div', null, page, h(SettingsOverlay, { mount: 'intercepted' }));
 const flowsRoute = await load('app/api/flows/route.ts');
 const consentRoute = await load('app/api/sources/consent/route.ts');
 const { buildFlowsStatement, statementHash } = await load('lib/flows/statement.ts');
@@ -260,12 +266,12 @@ function onePrompt(surface: Surface, where: string): HostElement {
   return found[0];
 }
 
-/** The prompt names the source and offers exactly Allow and Not now, equal in style, with the card's own words. */
+/** The prompt names the source and offers Allow and Don't allow, equal in style, then Allow all data sources (UX-2 P4b), with the card's own words. */
 function assertPrompt(prompt: HostElement, where: string): void {
   const text = textOf(prompt);
   assert.ok(text.startsWith('Boston OpenContext is set to Ask first.'), `${where}: the prompt reads: ${text}`);
   const buttons = buttonsIn(prompt);
-  assert.deepEqual(buttons.map((b) => textOf(b)), ['Allow', 'Not now'], `${where}: the prompt's buttons`);
+  assert.deepEqual(buttons.map((b) => textOf(b)), ['Allow', "Don't allow", 'Allow all data sources'], `${where}: the prompt's buttons`);
   assert.deepEqual(buttons[0].props.style, buttons[1].props.style, `${where}: the prompt's two buttons are styled differently`);
 }
 
@@ -330,7 +336,7 @@ for (const [reduced, out] of [[false, false], [false, true], [true, true]] as co
     reducedMotion = reduced;
     if (out) { viewportHeight = 852; promptBox = { top: -237, bottom: -203 }; }
     await consentWith({ 'boston-opencontext': 'ask-first' });
-    const p = await mountPage(h(Home));
+    const p = await mountPage(withSettings(h(Home)));
     await askOnQueryForm(p);
     const stream = streams[0];
     assert.ok(stream, 'premise: the question was sent');
@@ -352,7 +358,7 @@ for (const [reduced, out] of [[false, false], [false, true], [true, true]] as co
     // Near the question box: after it in the page, and before the run's steps.
     assert.ok(before(p, questionBox(p), prompt), 'the prompt comes before the question box');
     assert.ok(before(p, prompt, stepCards(p)[0]), 'the prompt comes after the run\'s step card');
-    // The Sources panel row's own copy is byte-identical (the card is the only addition).
+    // The source row's own copy (the Settings overlay's row since UX-2 P4b) is byte-identical (the card is the only addition).
     assert.equal(rowCopy(p), rowBefore, 'the row\'s copy changed when the pause arrived');
     // A decision from the prompt posts the pause's own key; then the prompt goes and the card shows the outcome.
     await p.click(buttonsIn(prompt)[0]);
@@ -417,7 +423,7 @@ test('criterion 1, /explore: a holding pause shows the prompt under the running 
   ANON();
   answers();
   await consentWith({ 'boston-opencontext': 'ask-first' });
-  const p = await mountPage(h(McpFlowDiagram));
+  const p = await mountPage(withSettings(h(McpFlowDiagram)));
   await askOnExplore(p);
   const stream = streams[0];
   assert.ok(stream, 'premise: the question was sent');
@@ -433,15 +439,15 @@ test('criterion 1, /explore: a holding pause shows the prompt under the running 
   assertPrompt(prompt, '/explore');
   const cancel = p.button('Cancel');
   assert.ok(before(p, cancel, prompt) && before(p, prompt, stepCards(p)[0]), '/explore: the prompt is not between the running question and the run\'s steps');
-  assert.deepEqual(labels(stepCards(p)[0]), ['Allow', 'Not now'], 'premise: the step card offers both during the hold');
+  assert.deepEqual(labels(stepCards(p)[0]), ['Allow', "Don't allow", 'Allow all data sources'], 'premise: the step card offers both during the hold');
 
   // Criterion 3: Cancel during the hold.
   await p.click(cancel);
   await settle(p);
   assert.equal(prompts(p).length, 0, `the prompt stays after Cancel: ${summary(p)}`);
   for (const card of stepCards(p)) assert.deepEqual(labels(card), [], `a step card keeps its buttons after Cancel: ${summary(p)}`);
-  // /explore shows its Sources panel again once cancelled: the row carries no card that can still be answered.
-  assert.ok(p.elements().some((el) => el.props['data-source'] === 'boston-opencontext'), 'premise: the Sources panel is not shown after Cancel');
+  // The Settings overlay's row (it was /explore's Sources panel, shown again once cancelled) carries no card that can still be answered.
+  assert.ok(p.elements().some((el) => el.props['data-source'] === 'boston-opencontext'), 'premise: the Settings overlay shows no Boston row after Cancel');
   for (const card of rowCards(p)) assert.deepEqual(labels(card), [], `the row's card keeps its buttons after Cancel: ${summary(p)}`);
   assert.equal(decisions.length, 0, 'Cancel posted a decision');
   stream.close();
@@ -487,14 +493,14 @@ test('criterion 3, /explore on the browser\'s abort path (Amendment 3, the owner
   answers();
   abortLikeABrowser();
   await consentWith({ 'boston-opencontext': 'ask-first' });
-  const p = await mountPage(h(McpFlowDiagram));
+  const p = await mountPage(withSettings(h(McpFlowDiagram)));
   await askOnExplore(p);
   const stream = streams[0];
   assert.ok(stream, 'premise: the question was sent');
   stream.push({ type: 'progress', panel: 'withMcp', ...LOAD_START });
   stream.push({ type: 'progress', panel: 'withMcp', message: PAUSE_LINE, phase: 'consent_pause', pause: pauseOf(nextKey()) });
   await settle(p, SCROLL_WAIT);
-  assert.deepEqual(labels(stepCards(p)[0]), ['Allow', 'Not now'], `premise: the step card offers both during the hold: ${summary(p)}`);
+  assert.deepEqual(labels(stepCards(p)[0]), ['Allow', "Don't allow", 'Allow all data sources'], `premise: the step card offers both during the hold: ${summary(p)}`);
   await p.click(p.button('Cancel'));
   await settle(p, 200);
   const text = p.text();
@@ -504,7 +510,7 @@ test('criterion 3, /explore on the browser\'s abort path (Amendment 3, the owner
     assert.deepEqual(labels(card), [], `a step card keeps its buttons after Cancel: ${summary(p)}`);
     assert.ok(textOf(card).includes('This question is no longer waiting for an answer.'), `the step card after Cancel: ${textOf(card)}`);
   }
-  assert.ok(p.elements().some((el) => el.props['data-source'] === 'boston-opencontext'), 'premise: the Sources panel is not shown after Cancel');
+  assert.ok(p.elements().some((el) => el.props['data-source'] === 'boston-opencontext'), 'premise: the Settings overlay shows no Boston row after Cancel');
   assert.deepEqual(rowCards(p).map((c) => labels(c)).flat(), [], `the row's card offers an answer after Cancel: ${summary(p)}`);
   assert.equal(decisions.length, 0, 'Cancel posted a decision');
 });
@@ -527,14 +533,14 @@ async function pausedOnExplore(): Promise<{ p: Surface; stream: Held }> {
   answers();
   abortLikeABrowser();
   await consentWith({ 'boston-opencontext': 'ask-first' });
-  const p = await mountPage(h(McpFlowDiagram));
+  const p = await mountPage(withSettings(h(McpFlowDiagram)));
   await askOnExplore(p);
   const stream = streams[0];
   assert.ok(stream, 'premise: the question was sent');
   stream.push({ type: 'progress', panel: 'withMcp', ...LOAD_START });
   stream.push({ type: 'progress', panel: 'withMcp', message: PAUSE_LINE, phase: 'consent_pause', pause: pauseOf(nextKey()) });
   await settle(p, SCROLL_WAIT);
-  assert.deepEqual(labels(stepCards(p)[0]), ['Allow', 'Not now'], `premise: the step card offers both during the hold: ${summary(p)}`);
+  assert.deepEqual(labels(stepCards(p)[0]), ['Allow', "Don't allow", 'Allow all data sources'], `premise: the step card offers both during the hold: ${summary(p)}`);
   return { p, stream };
 }
 
@@ -559,7 +565,7 @@ test('criterion 3, /explore, Amendment 4 (1): Cancel during a hold when abort() 
   assert.deepEqual([...stepCards(p), ...rowCards(p)].map((c) => labels(c)).flat(), [], `a card offers an answer after Cancel: ${summary(p)}`);
 });
 
-test('criterion 3, /explore, Amendment 4 (2): the stream ends on its own during a hold: the hold is over, so the row\'s card reads the after-hold words, and Not now reads the after-hold sentence', async () => {
+test('criterion 3, /explore, Amendment 4 (2): the stream ends on its own during a hold: the hold is over, so the row\'s card reads the after-hold words, and Don\'t allow reads the after-hold sentence', async () => {
   const { p, stream } = await pausedOnExplore();
   stream.close();
   await settle(p, 200);
@@ -568,9 +574,11 @@ test('criterion 3, /explore, Amendment 4 (2): the stream ends on its own during 
   assert.ok(row, `premise: the row shows no card for the pause after the drop: ${summary(p)}`);
   assert.ok(!textOf(row).includes('The question waits up to a minute for your answer.'), `the row's card still reads as the hold being open: ${textOf(row)}`);
   assert.ok(textOf(row).includes('The question went on without your answer, so it did not use this source.'), `the row's card after the drop: ${textOf(row)}`);
-  await p.click(buttonsIn(row).find((b) => textOf(b) === 'Not now')!);
+  // UX-2 P4b (W2): after the hold the row's card offers the pair only.
+  assert.deepEqual(buttonsIn(row).map((b) => textOf(b)), ['Allow', "Don't allow"], 'the row\'s card after the drop');
+  await p.click(buttonsIn(row).find((b) => textOf(b) === "Don't allow")!);
   await settle(p);
   const after = rowCards(p).map((c) => textOf(c)).join(' ') + ' ' + stepCards(p).map((c) => textOf(c)).join(' ');
-  assert.ok(after.includes('You chose Not now. It is still set to Ask first.'), `Not now after the drop: ${after.slice(-300)}`);
-  assert.ok(!after.includes('You chose Not now. Nothing is sent to it for this question.'), 'Not now after the drop reads the in-hold sentence');
+  assert.ok(after.includes("You chose Don't allow. It is Off for later questions."), `Don't allow after the drop: ${after.slice(-300)}`);
+  assert.ok(!after.includes("You chose Don't allow. Nothing is sent to it, and it is Off now."), 'Don\'t allow after the drop reads the in-hold sentence');
 });

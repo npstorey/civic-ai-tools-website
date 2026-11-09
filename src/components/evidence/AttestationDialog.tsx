@@ -39,9 +39,16 @@ import { displayNameForSource } from '@/lib/evidence/data-sources';
 // same consent card the query surfaces show.
 import ConsentCard from '@/components/sources/ConsentCard';
 import { useSourceConsent } from '@/components/sources/useSourceConsent';
+// A consent in force with no source On (item 42): answered as home and
+// `/explore` answer it, through the one component whose "Data source settings"
+// is a client-side link to the Settings overlay.
+import NoSourcesOnLine from '@/components/sources/NoSourcesOnLine';
 
 /** A replay the route refused for want of consent: the card answers it, not an error line. */
 class ConsentRequired extends Error {}
+
+/** A replay the route refused `no_sources_on`: the refusal's line answers it, not an error line. */
+class NoSourcesOn extends Error {}
 
 // --- Types ---
 
@@ -137,6 +144,8 @@ export default function AttestationDialog({
   // The replayer's consent (R6 W3): read when the dialog opens.
   const { guard: guardQuestion, refresh: refreshConsent } = useSourceConsent({ load: open });
   const [consentNeeded, setConsentNeeded] = useState(false);
+  // No source On, from the guard or from the route's refusal: rendered from the code, never the route's text.
+  const [noneOn, setNoneOn] = useState(false);
 
   const canReplay = promptVisibility === 'full_text';
   // `analysisModel` is a DECLARED identity read out of a signed package, while
@@ -224,6 +233,7 @@ export default function AttestationDialog({
         if (!res.ok) {
           const err = await res.json().catch(() => ({ error: `HTTP ${res.status}` }));
           if (err.code === 'consent_required') throw new ConsentRequired();
+          if (err.code === 'no_sources_on') throw new NoSourcesOn();
           throw new Error(err.error || `Replay ${i + 1} failed`);
         }
         const result: ReplayResult = await res.json();
@@ -246,6 +256,15 @@ export default function AttestationDialog({
         void refreshConsent();
         return;
       }
+      if (err instanceof NoSourcesOn) {
+        // Nothing to report as a failure: no source is On, and the line says where to turn one On.
+        setConsistencyStatus('idle');
+        setConsistencyProgress('');
+        setCompletedRuns([]);
+        setNoneOn(true);
+        void refreshConsent();
+        return;
+      }
       setConsistencyStatus('error');
       setConsistencyProgress(err instanceof Error ? err.message : 'Consistency test failed');
     }
@@ -253,8 +272,13 @@ export default function AttestationDialog({
 
   // The guard (stage-A ruling (a)): with no consent in force the card asks
   // before any replay is sent.
+  // With no source On the guard sends nothing and says so ('none-on'), and the
+  // dialog shows the refusal's line, as home does.
   const runConsistencyTest = useCallback(() => {
-    void guardQuestion(() => { void runReplays(); }, () => setConsentNeeded(true));
+    setNoneOn(false);
+    void guardQuestion(() => { void runReplays(); }, () => setConsentNeeded(true)).then((result) => {
+      if (result === 'none-on') setNoneOn(true);
+    });
   }, [guardQuestion, runReplays]);
 
   // --- Adversarial Evaluation ---
@@ -493,6 +517,12 @@ export default function AttestationDialog({
                   onNotNow={() => setConsentNeeded(false)}
                 />
               </div>
+            )}
+
+            {tab === 'consistency' && canReplay && noneOn && !consentNeeded && (
+              <p role="status" style={{ margin: '0 0 16px', fontSize: '13px', lineHeight: 1.5, color: 'var(--text-secondary)' }}>
+                <NoSourcesOnLine />
+              </p>
             )}
 
             {tab === 'consistency' && (

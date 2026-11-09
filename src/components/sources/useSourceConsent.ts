@@ -113,8 +113,8 @@ export interface PendingPause {
   payload: ConsentPausePayload;
   /** An answer is being posted. */
   deciding: boolean;
-  /** The answer the decision route accepted. */
-  decision?: 'allow' | 'not-now';
+  /** The answer the decision route accepted (UX-2 P4b: Allow, Don't allow as `off`, Allow all). */
+  decision?: PauseAnswer;
   /** `false` when the route saved Allow but could not turn the source On (fix round 2, item 2); absent otherwise. */
   moved?: false;
   /** Why the route did not accept one: the question no longer waits, it was answered already, or anything else. */
@@ -299,8 +299,15 @@ export function cancelConsentPauses(): void {
   if (ended) set({ pauses: ended });
 }
 
-/** Post the reader's answer to a pause, and keep what the route said. Allow also reads the consent again, so the panel shows the source On. */
-export async function decideConsentPause(key: string, decision: 'allow' | 'not-now'): Promise<void> {
+/** A reader's answer at a pause (UX-2 P4b, L10): Allow, "Don't allow" (`off`) or "Allow all data sources" (`allow-all`). */
+export type PauseAnswer = 'allow' | 'off' | 'allow-all';
+
+/**
+ * Post the reader's answer to a pause, and keep what the route said. Each
+ * answer moves the consent (one source On or Off, or every source On), so the
+ * consent is read again, and the panel and the Settings overlay show it.
+ */
+export async function decideConsentPause(key: string, decision: PauseAnswer): Promise<void> {
   // Given after the hold: the run went on without it, and it applies to later questions (#669 D2).
   const afterHold = pauseEntry(snapshot.pauses, key)?.holdEnded === true ? { afterHold: true as const } : {};
   updatePause(key, { deciding: true });
@@ -322,7 +329,7 @@ export async function decideConsentPause(key: string, decision: 'allow' | 'not-n
   }
   if (status === 200) {
     updatePause(key, { deciding: false, decision, ...(moved === false ? { moved: false as const } : {}), ...afterHold });
-    if (decision === 'allow') void refreshConsent();
+    void refreshConsent();
     return;
   }
   updatePause(key, { deciding: false, failure: status === 404 ? 'gone' : status === 409 ? 'decided' : 'other', ...afterHold });
@@ -337,7 +344,8 @@ function configured(): string[] {
  * The states a reader has, as the panel shows them and Allow writes them
  * (T7, so the card's "the sources the panel shows as On" is what Allow turns
  * on): with nothing stored, the defaults a first consent gives (each
- * configured source's manifest `consentDefault`, D6); otherwise each
+ * configured source's default as the consent route serves it, D6: Ask first
+ * where the instance can ask, else the manifest's `consentDefault`); otherwise each
  * source's stored state, and Ask first for a configured source with none,
  * whether the consent is in force or asked again.
  */
@@ -396,7 +404,7 @@ async function write(method: 'PUT' | 'PATCH' | 'DELETE', body?: unknown): Promis
  * Allow: the states the panel shows (`panelStates`, R9 P2): each state the
  * reader set before the consent, and elsewhere what `currentStates` gives —
  * a first consent each configured source's default (D6, the manifest's
- * `consentDefault`), a consent asked again the reader's stored states, and
+ * `consentDefault`, or Ask first where the instance can ask), a consent asked again the reader's stored states, and
  * Ask first for a source with none. On a 409 the statement is read again,
  * the reader's states stay pending, and the answer is false, so the card
  * asks again.

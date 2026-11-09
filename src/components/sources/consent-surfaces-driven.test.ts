@@ -8,7 +8,9 @@
 // the defaults of D6 (every configured source On, the manifest's
 // `consentDefault`) and then sends the question; **Not now** sends nothing,
 // and the form stays disabled with the local-only line. Nothing is stored on
-// Not now, so a new session shows the card again (Q2).
+// Not now, so a new session shows the card again (Q2). UX-2 P4b (item 8): the
+// decline reads "Don't allow"; what it does is unchanged on the card (D7 = C
+// changes the pause's decline only).
 //
 // WHAT IS DRIVEN. The home page component (`src/app/(marketing)/page.tsx`),
 // `/explore`'s diagram (`McpFlowDiagram`, with only its BPMN canvas replaced:
@@ -95,6 +97,10 @@ const load = async (rel: string): Promise<Mod> => (await import(pathToFileURL(pa
 const Home = (await load('app/(marketing)/page.tsx')).default as ComponentType;
 const QuerySurface = (await load('components/shared/QuerySurface.tsx')).default as ComponentType<Record<string, unknown>>;
 const McpFlowDiagram = (await load('components/explore/McpFlowDiagram.tsx')).default as ComponentType;
+// UX-2 P4b (#729 comment 6728493444): the Sources panel is removed from the pages, so the controls these tests drive
+// beside the question form are the Settings overlay's, mounted over the page as its intercepted route mounts it.
+const SettingsOverlay = (await load('components/settings/SettingsOverlay.tsx')).default as ComponentType<Record<string, unknown>>;
+const homeWithSettings = () => h('div', null, h(Home), h(SettingsOverlay, { mount: 'intercepted' }));
 const flowsRoute = await load('app/api/flows/route.ts');
 const consentRoute = await load('app/api/sources/consent/route.ts');
 const { consentInForce } = await load('lib/sources/consent-gate.ts');
@@ -193,9 +199,19 @@ async function askOnExplore(surface: Surface): Promise<void> {
   await surface.settle();
 }
 
-/** The card is on the page: its two answers, Allow and Not now, each one button. */
+/** The card's decline (UX-2 P4b, item 8: "Don't allow"; it was "Not now"). */
+const DECLINE = "Don't allow";
+
+/** The card's one decline button, asserted before it is pressed. */
+function declineOf(page: Surface): HostElement {
+  const found = page.buttons(DECLINE);
+  assert.equal(found.length, 1, `the card has no one "${DECLINE}": ${page.text().slice(0, 300)}`);
+  return found[0];
+}
+
+/** The card is on the page: its two answers, Allow and Don't allow, each one button. */
 function assertCardShown(page: Surface, where: string): void {
-  assert.ok(page.buttons('Allow').length === 1 && page.buttons('Not now').length === 1, `${where} shows no consent card (no Allow and Not now): ${page.text().slice(0, 400)}`);
+  assert.ok(page.buttons('Allow').length === 1 && page.buttons(DECLINE).length === 1, `${where} shows no consent card (no Allow and ${DECLINE}): ${page.text().slice(0, 400)}`);
   assert.ok(page.text().includes(cardHeading()), `${where} shows the buttons without the card's heading`);
 }
 
@@ -259,14 +275,14 @@ for (const surface of SURFACES) {
   });
 }
 
-test('criterion 2 (home) and Q2: Not now sends nothing; the form stays disabled and shows the local-only line', async () => {
+test('criterion 2 (home) and Q2; UX-2 P4b criterion 5: Don\'t allow sends nothing; the form stays disabled and shows the local-only line', async () => {
   ANON();
   const net = answers();
   const page = await mount(h(Home));
   await askOnQueryForm(page);
   assert.deepEqual(queryRequests(net.sent), [], 'the question was sent before the reader answered the card');
   assertCardShown(page, 'the home page');
-  await page.click(page.button('Not now'));
+  await page.click(declineOf(page));
   assert.deepEqual(queryRequests(net.sent), [], 'Not now sent the question');
   assert.deepEqual(net.sent.filter((r) => r.method !== 'GET').map((r) => `${r.method} ${r.path}`), [], 'Not now wrote something');
   assert.ok(copy?.LOCAL_ONLY_OFFER && copy?.NO_GUIDE_SENTENCE, `${COPY} exports no LOCAL_ONLY_OFFER / NO_GUIDE_SENTENCE`);
@@ -280,13 +296,13 @@ test('criterion 2 (home) and Q2: Not now sends nothing; the form stays disabled 
   page.unmount();
 });
 
-test('criterion 15 (Q2): nothing is stored after Not now, so a new session shows the card again', async () => {
+test('criterion 15 (Q2); UX-2 P4b criterion 5: nothing is stored after Don\'t allow, so a new session shows the card again', async () => {
   ANON();
   const first = answers();
   const page = await mount(h(Home));
   await askOnQueryForm(page);
   assertCardShown(page, 'the first session');
-  await page.click(page.button('Not now'));
+  await page.click(declineOf(page));
   assert.equal(first.jar.size, 0, 'Not now left a cookie');
   page.unmount();
   // A new browser session: a fresh jar and a fresh page.
@@ -298,31 +314,33 @@ test('criterion 15 (Q2): nothing is stored after Not now, so a new session shows
   again.unmount();
 });
 
-// --- Criterion 1: the panel's revoke, then the next submit -------------------------------
+// --- Criterion 1: the revoke, then the next submit ---------------------------------------
+// The withdraw control and the radios were the panel's beside the form; since the panel's removal they are the
+// Settings overlay's, opened over the same page. The assertions are as before.
 
-test('criterion 1: for a session without a dbId, after the panel\'s revoke the next submit shows the card', async () => {
+test('criterion 1: for a session without a dbId, after the Settings overlay\'s revoke the next submit shows the card', async () => {
   ANON();
   const net = answers();
-  const page = await mount(h(Home));
+  const page = await mount(homeWithSettings());
   await askOnQueryForm(page);
   assert.deepEqual(queryRequests(net.sent), [], 'the question was sent before the reader answered the card');
   assertCardShown(page, 'the home page');
   await page.click(page.button('Allow'));
   assert.equal(queryRequests(net.sent).length, 1, 'premise: after Allow the question was sent');
   const revoke = page.elements().filter((el) => el.type === 'button' && /withdraw/i.test(textOf(el)));
-  assert.equal(revoke.length, 1, `the panel shows no withdraw control: ${page.text().slice(0, 400)}`);
+  assert.equal(revoke.length, 1, `the Settings overlay shows no withdraw control: ${page.text().slice(0, 400)}`);
   await page.click(revoke[0]);
-  assert.equal(net.sent.filter((r) => r.path === '/api/sources/consent' && r.method === 'DELETE').length, 1, 'the panel\'s revoke did not call DELETE');
+  assert.equal(net.sent.filter((r) => r.path === '/api/sources/consent' && r.method === 'DELETE').length, 1, 'the Settings overlay\'s revoke did not call DELETE');
   await askOnQueryForm(page);
   assert.equal(queryRequests(net.sent).length, 1, 'after the revoke the next question was sent without asking');
   assertCardShown(page, 'after the revoke, the next submit');
   page.unmount();
 });
 
-test('criterion 1: the panel awaits its write before the form can submit', async () => {
+test('criterion 1: a write from the Settings overlay holds the form\'s submit until it is answered', async () => {
   ANON();
   const net = answers();
-  const page = await mount(h(Home));
+  const page = await mount(homeWithSettings());
   await askOnQueryForm(page);
   assertCardShown(page, 'the home page');
   await page.click(page.button('Allow'));
@@ -332,12 +350,12 @@ test('criterion 1: the panel awaits its write before the form can submit', async
   try {
     const off = page.elements().filter((el) => el.type === 'input' && el.props.type === 'radio' && el.props.value === 'off'
       && String(el.props.name ?? '').includes('data-commons'));
-    assert.equal(off.length, 1, 'the panel offers no Off choice for Data Commons');
+    assert.equal(off.length, 1, 'the Settings overlay offers no Off choice for Data Commons');
     // The change is made, and its write has not been answered yet.
     void page.check(off[0]);
     await new Promise((resolve) => setImmediate(resolve));
     await askOnQueryForm(page);
-    assert.equal(queryRequests(net.sent).length, 1, 'the form sent a question while the panel\'s write was still pending');
+    assert.equal(queryRequests(net.sent).length, 1, 'the form sent a question while the Settings overlay\'s write was still pending');
   } finally {
     holdWrites = null;
     release();
@@ -414,13 +432,13 @@ for (const surface of SURFACES) {
 
 // --- Amendment 1, correction 2 (Q2): the card returns at the next question --------------------
 
-test('criterion 15 (Q2): after Not now, the next question in the same session shows the card again, and sends nothing', async () => {
+test('criterion 15 (Q2); UX-2 P4b criterion 5: after Don\'t allow, the next question in the same session shows the card again, and sends nothing', async () => {
   ANON();
   const net = answers();
   const page = await mount(h(Home));
   await askOnQueryForm(page);
   assertCardShown(page, 'the home page');
-  await page.click(page.button('Not now'));
+  await page.click(declineOf(page));
   const box = one(page, 'question box', (el) => el.type === 'textarea' && el.props['aria-label'] === 'Ask a question about open data');
   await page.type(box, 'How many 311 complaints were there in Brooklyn in 2024?');
   await page.submit(one(page, 'form', (el) => el.type === 'form'));
@@ -429,16 +447,21 @@ test('criterion 15 (Q2): after Not now, the next question in the same session sh
   page.unmount();
 });
 
-// --- Flag 9: /explore mounts the Sources panel beside its input ------------------------------
+// --- Flag 9, as the panel's removal turns it: /explore mounts no Sources panel ------------------
+// Flag 9 asserted the panel beside /explore's live input, with its rows and control. The owner removed the panel
+// everywhere (#729 comment 6728493444); the rows and controls are the Settings overlay's. This is UX-2 P4b's
+// criterion 1 on /explore.
 
-test('flag 9 (/explore): the Sources panel is beside the live question input, with its rows and its control', async () => {
+test('flag 9 (/explore), UX-2 P4b: no Sources panel beside the live question input, and no source rows or controls', async () => {
   ANON();
   answers();
   const page = await mount(h(McpFlowDiagram));
   await page.click(page.button('Try your own'));
+  assert.ok(page.buttons('Run').length >= 1 || page.text().includes('Run'), `premise: /explore's live input is shown: ${page.text().slice(0, 300)}`);
   const rows = page.elements().filter((el) => typeof el.props['data-source'] === 'string');
-  assert.ok(rows.length >= 1, `/explore shows no Sources panel: ${page.text().slice(0, 300)}`);
-  assert.ok(page.elements().some((el) => el.props.role === 'radiogroup'), '/explore\'s panel has no control');
+  assert.equal(rows.length, 0, `/explore shows source rows: ${page.text().slice(0, 300)}`);
+  assert.ok(!page.elements().some((el) => el.props.role === 'radiogroup'), '/explore shows a source control');
+  assert.ok(!page.text().includes('Data sources this site can use'), '/explore names "Data sources this site can use"');
   page.unmount();
 });
 

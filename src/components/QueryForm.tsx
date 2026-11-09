@@ -16,12 +16,12 @@ import {
   type QueryMode,
 } from '@/lib/query-presentation';
 import { parseModelsResponse, type Model } from '@/lib/model-list';
-import { friendlyStreamError, MODELS_LOAD_ERROR } from '@/lib/streaming';
-import { JUST_IN_TIME_LINE, NOT_NOW_LINE } from '@/lib/sources/copy';
+import { MODELS_LOAD_ERROR } from '@/lib/streaming';
+import { DONT_ALLOW_LINE, JUST_IN_TIME_LINE, SETTINGS_HREF } from '@/lib/sources/copy';
 import { readerSourceName } from '@/lib/sources/source-name';
 import ConsentCard from '@/components/sources/ConsentCard';
-import SourcesPanel from '@/components/sources/SourcesPanel';
 import LocalOnlyOffer from '@/components/sources/LocalOnlyOffer';
+import NoSourcesOnLine from '@/components/sources/NoSourcesOnLine';
 import { currentStates, useSourceConsent, type SourceStateValue } from '@/components/sources/useSourceConsent';
 import RateLimitBanner from './RateLimitBanner';
 import { useDefaultPortalArg, usePortalLocked } from '@/components/DefaultPortalProvider';
@@ -265,7 +265,7 @@ export default function QueryForm({
     return () => document.removeEventListener('mousedown', handleClick);
   }, [modelOpen, portalOpen]);
 
-  // The consent card and the Sources panel (R6 W3, #632; stage-A ruling (a)).
+  // The consent card (R6 W3, #632; stage-A ruling (a); the Sources panel beside it was removed in UX-2 P4b).
   // Both of this form's submit paths go through the guard: with no consent in
   // force the card is shown and nothing is sent; after Allow the question is
   // sent; Not now sends nothing and holds the form for that question (a new
@@ -279,7 +279,6 @@ export default function QueryForm({
   const [cardOpen, setCardOpen] = useState(false);
   // The just-in-time line (UX pass row 11), only while a consent is in force,
   // and the Sources details it opens.
-  const [sourcesOpen, setSourcesOpen] = useState(false);
   const statementSources = consent.statement?.sources ?? [];
   const sourceStates = currentStates(consent.status, statementSources.map((s) => s.sourceId));
   const goesLine = consent.status?.inForce === true && statementSources.length > 0
@@ -426,15 +425,8 @@ export default function QueryForm({
       {goesLine !== null && (
         <p data-part="where-this-question-goes" style={{ margin: 0, fontSize: '13px', lineHeight: 1.5, color: 'var(--text-secondary)' }}>
           {goesLine}{' '}
-          <a
-            href="#sources-panel-heading"
-            onClick={(e) => {
-              e.preventDefault();
-              setSourcesOpen(true);
-            }}
-          >
-            {JUST_IN_TIME_LINE.change}
-          </a>
+          {/* UX-2 P4b: the Settings overlay, a client-side link so the form beneath stays mounted. */}
+          <Link href={SETTINGS_HREF}>{JUST_IN_TIME_LINE.change}</Link>
         </p>
       )}
 
@@ -929,20 +921,14 @@ export default function QueryForm({
       )}
       {declined && !cardOpen && (
         <p role="status" style={{ margin: 0, fontSize: '14px', lineHeight: 1.6, color: 'var(--text-secondary)' }}>
-          {NOT_NOW_LINE} <LocalOnlyOffer statement={consent.statement} />
+          {DONT_ALLOW_LINE} <LocalOnlyOffer statement={consent.statement} />
         </p>
       )}
       {noneOn && !cardOpen && (
         <p role="status" style={{ margin: 0, fontSize: '14px', lineHeight: 1.6, color: 'var(--text-secondary)' }}>
-          {friendlyStreamError({ code: 'no_sources_on' })}
+          <NoSourcesOnLine />
         </p>
       )}
-      <details open={sourcesOpen} onToggle={(e) => setSourcesOpen(e.currentTarget.open)}>
-        <summary style={{ cursor: 'pointer', fontSize: '13px', color: 'var(--text-secondary)' }}>Data sources this site can use</summary>
-        <div style={{ marginTop: '8px' }}>
-          <SourcesPanel />
-        </div>
-      </details>
     </div>
     </>
   );

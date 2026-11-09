@@ -88,8 +88,12 @@ export interface ConsentAsk {
   store: boolean;
 }
 
-/** Whether a run can ask the reader about an Ask-first source: in loop, with the store set. */
-function canAsk(ask: ConsentAsk | undefined): boolean {
+/**
+ * Whether a run can ask the reader about an Ask-first source: in loop, with
+ * the store set. Exported (UX-2 P4b, Part E) so the consent route's defaults
+ * read this same predicate rather than a copy of it.
+ */
+export function canAsk(ask: ConsentAsk | undefined): boolean {
   return ask !== undefined && ask.routing === 'in-loop' && ask.store;
 }
 

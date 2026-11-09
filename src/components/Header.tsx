@@ -15,6 +15,7 @@ import { useCrossHostSession } from '@/hooks/useCrossHostSession';
 import type { SessionAffordanceTarget } from '@/lib/allowed-origins';
 import { Menu, type MenuItem } from '@/components/ui/Menu';
 import { Sheet } from '@/components/ui/Sheet';
+import { SETTINGS_HREF } from '@/lib/sources/copy';
 
 const NAV_LINK_STYLE: React.CSSProperties = {
   color: 'var(--text-secondary)',
@@ -237,6 +238,8 @@ export default function Header({
   const identity = session?.user?.name || session?.user?.email || null;
   const accountItems: MenuItem[] = [
     { id: 'my-analyses', label: 'My analyses', href: dashboardHref },
+    // UX-2 P4b: the Settings overlay, a text item with no icon; relative, since `/settings` is served on both hosts.
+    { id: 'settings', label: 'Settings', href: SETTINGS_HREF },
     ...(publicSiteHref !== null
       ? [{
           id: 'public-site',
@@ -448,6 +451,12 @@ export default function Header({
             ) : (
               renderLink(entry, DRAWER_LINK_STYLE, closeDrawer)
             ),
+          )}
+          {/* UX-2 P4b: signed in only; the drawer does not hold the account menu, so Settings is its own entry here. */}
+          {session && (
+            <Link href={SETTINGS_HREF} className="no-link-style" style={DRAWER_LINK_STYLE} onClick={closeDrawer}>
+              Settings
+            </Link>
           )}
         </div>
       </Sheet>

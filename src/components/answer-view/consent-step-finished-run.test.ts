@@ -13,7 +13,7 @@
 // last listener leaves (`useSourceConsent.ts`, `subscribe`). This file mounts
 // the real `/ask` surface (`QuerySurface`, notebook mode) on R6's surface
 // harness, feeds it a held stream through the real `useNotebookStream`, has
-// the reader answer two pauses in the live view (Allow on one, Not now on the
+// the reader answer two pauses in the live view (Allow on one, Don't allow on the
 // other, each under its own key), then sends the notebook, so the live view
 // unmounts and the finished view mounts, as `NotebookOutput.tsx` swaps them.
 // Each finished card must read its own outcome in `ConsentStep`'s words
@@ -233,7 +233,7 @@ const NOTEBOOK = {
   ],
 };
 
-test('criterion 3 (#667), /ask in notebook mode: after Allow on one pause and Not now on another in the live view, the finished run keeps both consent steps in its steps part, each with its own outcome', async () => {
+test('criterion 3 (#667), /ask in notebook mode: after Allow on one pause and Don\'t allow on another in the live view, the finished run keeps both consent steps in its steps part, each with its own outcome', async () => {
   sessions.server = { user: { id: 'gh-fixture-account', dbId: '99999999-9999-4999-8999-999999999999' } };
   sessions.client = { status: 'authenticated', data: { user: { name: 'Fixture' } } };
   sessions.rows.clear();
@@ -256,13 +256,13 @@ test('criterion 3 (#667), /ask in notebook mode: after Allow on one pause and No
   stream.push(loadLine('tool_start', 'Data Commons', 2));
   stream.push(pauseLine(B, KEY_B, 'Data Commons'));
   await settle(page);
-  await page.click(stepButton(page, B, 'Not now'));
+  await page.click(stepButton(page, B, "Don't allow"));
   await settle(page);
   stream.push(loadLine('tool_complete', 'Data Commons', 2));
   await settle(page);
-  assert.deepEqual(decisions, [{ key: KEY_A, decision: 'allow' }, { key: KEY_B, decision: 'not-now' }], 'premise: each answer was posted under its own key');
+  assert.deepEqual(decisions, [{ key: KEY_A, decision: 'allow' }, { key: KEY_B, decision: 'off' }], 'premise: each answer was posted under its own key');
   const live = cardsIn(page.elements()).filter((c) => c.place === 'steps');
-  assert.deepEqual(live.map((c) => [c.source, c.outcome]), [[A, CONSENT_STEP_TEXT.allowed], [B, CONSENT_STEP_TEXT.declined]], `premise: the live view reads both outcomes: ${summary(page)}`);
+  assert.deepEqual(live.map((c) => [c.source, c.outcome]), [[A, CONSENT_STEP_TEXT.allowed], [B, `${CONSENT_STEP_TEXT.declined} ${CONSENT_STEP_TEXT.pointer}`]], `premise: the live view reads both outcomes: ${summary(page)}`);
 
   // The swap: the run's calls, then the notebook, so the live view unmounts and the finished view mounts.
   stream.push({ type: 'phase_a_tool_call', name: 'load_source', operationType: 'load_source', args: { alias: 'boston' }, duration_ms: 4000 });
@@ -280,7 +280,7 @@ test('criterion 3 (#667), /ask in notebook mode: after Allow on one pause and No
   const finished = cardsIn([...within(steps.props.children)]);
   assert.deepEqual(
     finished.map((c) => [c.source, c.outcome]),
-    [[A, CONSENT_STEP_TEXT.allowed], [B, CONSENT_STEP_TEXT.declined]],
+    [[A, CONSENT_STEP_TEXT.allowed], [B, `${CONSENT_STEP_TEXT.declined} ${CONSENT_STEP_TEXT.pointer}`]],
     `the finished run's consent steps: ${summary(page)}`,
   );
   for (const card of finished) {
