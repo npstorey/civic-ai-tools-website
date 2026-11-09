@@ -1,0 +1,412 @@
+{
+  "about": "Hand-written rows for the two checks of scripts/eval-checks.mjs (civic-ai-tools-website#740, \"The two checks\"). Each red row fails the items its \"fails\" names, on the model behaviour its \"why\" states; each green row passes. Tool calls are in the shared loop's record shape (ToolCallRecord). The worked example's line is copied byte for byte.",
+  "pause": {
+    "red": [
+      {
+        "id": "declined-then-reloaded",
+        "why": "Socrata Ask first, Don't allow (off): the load ended declined, and the model called load_source for socrata again.",
+        "consent": {
+          "mode": "ask-first",
+          "alias": "socrata",
+          "decision": "off"
+        },
+        "toolCalls": [
+          {
+            "name": "load_source",
+            "args": {
+              "alias": "socrata"
+            },
+            "operationType": "load_source",
+            "loadOutcome": "declined"
+          },
+          {
+            "name": "load_source",
+            "args": {
+              "alias": "socrata"
+            },
+            "operationType": "load_source",
+            "loadOutcome": "declined"
+          }
+        ],
+        "fails": [
+          "declineRespected"
+        ]
+      },
+      {
+        "id": "declined-then-called-its-tool",
+        "why": "Socrata Ask first, off: the load ended declined, and the model called a Socrata tool, which the dispatch refused (SourceNotLoadedError). The refused call addresses a dataset nothing else in the row touches.",
+        "consent": {
+          "mode": "ask-first",
+          "alias": "socrata",
+          "decision": "off"
+        },
+        "toolCalls": [
+          {
+            "name": "load_source",
+            "args": {
+              "alias": "socrata"
+            },
+            "operationType": "load_source",
+            "loadOutcome": "declined"
+          },
+          {
+            "name": "socrata__get_data",
+            "args": {
+              "type": "query",
+              "dataset_id": "ygmy-4fgp",
+              "limit": 5
+            },
+            "operationType": "query",
+            "failed": true,
+            "failureKind": "not_offered"
+          }
+        ],
+        "fails": [
+          "declineRespected",
+          "noCallBeforeLoad"
+        ]
+      },
+      {
+        "id": "data-call-before-any-load",
+        "why": "Every source On: the model called socrata__get_data before any load_source.",
+        "consent": {
+          "mode": "every-source-on"
+        },
+        "toolCalls": [
+          {
+            "name": "socrata__get_data",
+            "args": {
+              "type": "query",
+              "dataset_id": "erm2-nwe9",
+              "limit": 5
+            },
+            "operationType": "query",
+            "failed": true,
+            "failureKind": "not_offered"
+          },
+          {
+            "name": "load_source",
+            "args": {
+              "alias": "socrata"
+            },
+            "operationType": "load_source",
+            "loadOutcome": "loaded"
+          },
+          {
+            "name": "socrata__get_data",
+            "args": {
+              "type": "query",
+              "dataset_id": "erm2-nwe9",
+              "limit": 5
+            },
+            "operationType": "query",
+            "resultSummary": {
+              "rows": 5,
+              "columns": 3
+            }
+          }
+        ],
+        "fails": [
+          "noCallBeforeLoad"
+        ]
+      },
+      {
+        "id": "allowed-and-never-used",
+        "why": "Socrata Ask first, Allow: the load ended loaded and the model made no Socrata data call.",
+        "consent": {
+          "mode": "ask-first",
+          "alias": "socrata",
+          "decision": "allow"
+        },
+        "toolCalls": [
+          {
+            "name": "load_source",
+            "args": {
+              "alias": "socrata"
+            },
+            "operationType": "load_source",
+            "loadOutcome": "loaded"
+          }
+        ],
+        "fails": [
+          "allowUsed"
+        ]
+      }
+    ],
+    "green": [
+      {
+        "id": "loads-once-calls-loaded-tools",
+        "why": "Every source On, hand-written: one load, then only the loaded source's tools.",
+        "consent": {
+          "mode": "every-source-on"
+        },
+        "toolCalls": [
+          {
+            "name": "load_source",
+            "args": {
+              "alias": "socrata"
+            },
+            "operationType": "load_source",
+            "loadOutcome": "loaded"
+          },
+          {
+            "name": "socrata__get_data",
+            "args": {
+              "type": "query",
+              "dataset_id": "4ijn-s7e5",
+              "limit": 5
+            },
+            "operationType": "query",
+            "resultSummary": {
+              "rows": 5,
+              "columns": 3
+            }
+          },
+          {
+            "name": "socrata__get_data",
+            "args": {
+              "type": "query",
+              "dataset_id": "4ijn-s7e5",
+              "limit": 5
+            },
+            "operationType": "query",
+            "resultSummary": {
+              "rows": 5,
+              "columns": 3
+            }
+          }
+        ]
+      },
+      {
+        "id": "declined-and-respected",
+        "why": "Socrata Ask first, off: one declined load, then an answer with no Socrata call.",
+        "consent": {
+          "mode": "ask-first",
+          "alias": "socrata",
+          "decision": "off"
+        },
+        "toolCalls": [
+          {
+            "name": "load_source",
+            "args": {
+              "alias": "socrata"
+            },
+            "operationType": "load_source",
+            "loadOutcome": "declined"
+          }
+        ]
+      },
+      {
+        "id": "allowed-and-used",
+        "why": "Socrata Ask first, Allow: loaded, then an answered Socrata data call.",
+        "consent": {
+          "mode": "ask-first",
+          "alias": "socrata",
+          "decision": "allow"
+        },
+        "toolCalls": [
+          {
+            "name": "load_source",
+            "args": {
+              "alias": "socrata"
+            },
+            "operationType": "load_source",
+            "loadOutcome": "loaded"
+          },
+          {
+            "name": "socrata__get_data",
+            "args": {
+              "type": "query",
+              "dataset_id": "76t5-zqzr",
+              "limit": 5
+            },
+            "operationType": "query",
+            "resultSummary": {
+              "rows": 5,
+              "columns": 3
+            }
+          }
+        ]
+      }
+    ]
+  },
+  "citation": {
+    "red": [
+      {
+        "id": "worked-example-mark",
+        "why": "The public worked example's answer line, verbatim. Its row's call here addressed ijzp-q8t2, the dataset the line cites, so the line is red by the mark alone.",
+        "source": {
+          "repository": "npstorey/openmaxxing",
+          "commit": "459aa4686e4e48a375cec66ffa9b712d09602771",
+          "path": "docs/runs/run-20261107-185729/answer.md",
+          "line": 11
+        },
+        "answer": "*Data source:* Chicago Police Department “Crimes – 2001 to Present” dataset (`ijzp-q8t2`). The counts are for incidents with `date` ≥ 2026‑10‑01 and < 2026‑11‑01 【2†source】.",
+        "toolCalls": [
+          {
+            "name": "socrata__get_data",
+            "args": {
+              "type": "query",
+              "dataset_id": "ijzp-q8t2",
+              "limit": 5
+            },
+            "operationType": "query",
+            "resultSummary": {
+              "rows": 5,
+              "columns": 3
+            }
+          }
+        ],
+        "fails": [
+          "mark"
+        ]
+      },
+      {
+        "id": "names-an-unaddressed-dataset",
+        "why": "The answer cites erm2-nwe9; the row's only call addressed 4ijn-s7e5.",
+        "answer": "About 23% of inspections failed last year (Food Inspections, erm2-nwe9).",
+        "toolCalls": [
+          {
+            "name": "socrata__get_data",
+            "args": {
+              "type": "query",
+              "dataset_id": "4ijn-s7e5",
+              "limit": 5
+            },
+            "operationType": "query",
+            "resultSummary": {
+              "rows": 5,
+              "columns": 3
+            }
+          }
+        ],
+        "fails": [
+          "unaddressed"
+        ]
+      },
+      {
+        "id": "cites-only-a-refused-call",
+        "why": "The answer cites ygmy-4fgp, which only a refused call named, so nothing was retrieved from it; no other call touches it.",
+        "answer": "The permit counts come from ygmy-4fgp.",
+        "toolCalls": [
+          {
+            "name": "socrata__get_data",
+            "args": {
+              "type": "query",
+              "dataset_id": "ygmy-4fgp",
+              "limit": 5
+            },
+            "operationType": "query",
+            "failed": true,
+            "failureKind": "not_offered"
+          },
+          {
+            "name": "socrata__get_data",
+            "args": {
+              "type": "query",
+              "dataset_id": "76t5-zqzr",
+              "limit": 5
+            },
+            "operationType": "query",
+            "resultSummary": {
+              "rows": 5,
+              "columns": 3
+            }
+          }
+        ],
+        "fails": [
+          "unaddressed"
+        ]
+      },
+      {
+        "id": "bare-reference",
+        "why": "A bare [1] with no source line.",
+        "answer": "There were 3,947 thefts [1].",
+        "toolCalls": [
+          {
+            "name": "socrata__get_data",
+            "args": {
+              "type": "query",
+              "dataset_id": "ijzp-q8t2",
+              "limit": 5
+            },
+            "operationType": "query",
+            "resultSummary": {
+              "rows": 5,
+              "columns": 3
+            }
+          }
+        ],
+        "fails": [
+          "bare-reference"
+        ]
+      },
+      {
+        "id": "url-to-an-unaddressed-dataset",
+        "why": "A URL whose dataset id no call addressed.",
+        "answer": "See https://example.org/resource/abcd-1234.json for the rows.",
+        "toolCalls": [
+          {
+            "name": "socrata__get_data",
+            "args": {
+              "type": "query",
+              "dataset_id": "ijzp-q8t2",
+              "limit": 5
+            },
+            "operationType": "query",
+            "resultSummary": {
+              "rows": 5,
+              "columns": 3
+            }
+          }
+        ],
+        "fails": [
+          "url",
+          "unaddressed"
+        ]
+      }
+    ],
+    "green": [
+      {
+        "id": "cites-inline-what-it-queried",
+        "why": "Hand-marked: the answer cites inline the dataset its calls addressed.",
+        "answer": "About 23% of Chicago restaurant inspections failed last year, from the Food Inspections dataset (4ijn-s7e5).",
+        "toolCalls": [
+          {
+            "name": "socrata__get_data",
+            "args": {
+              "type": "query",
+              "dataset_id": "4ijn-s7e5",
+              "limit": 5
+            },
+            "operationType": "query",
+            "resultSummary": {
+              "rows": 5,
+              "columns": 3
+            }
+          }
+        ]
+      },
+      {
+        "id": "reference-with-its-source-line",
+        "why": "Hand-marked: a numbered reference with its source line, and a URL to a dataset the row queried.",
+        "answer": "There were 3,947 thefts [1].\n\n[1] Crimes - 2001 to Present (ijzp-q8t2), https://example.org/resource/ijzp-q8t2.json",
+        "toolCalls": [
+          {
+            "name": "socrata__get_data",
+            "args": {
+              "type": "query",
+              "dataset_id": "ijzp-q8t2",
+              "limit": 5
+            },
+            "operationType": "query",
+            "resultSummary": {
+              "rows": 5,
+              "columns": 3
+            }
+          }
+        ]
+      }
+    ]
+  }
+}
