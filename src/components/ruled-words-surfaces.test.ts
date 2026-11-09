@@ -28,7 +28,8 @@
 //
 // UX-2 PW2 (#729) adds the home comparison's two headings (X1, R4) and the
 // dashboard's not-reversible sentence (G0-4 B, S8) at the end of this file,
-// under their own headers.
+// under their own headers. UX-2 P3b-1 adds the docked composer's words (X23,
+// X24's two forms) after them.
 //
 // Run with: npm test
 
@@ -323,4 +324,54 @@ test('PW2 criterion 5 (S8): the dashboard\'s Publish dialog says a withdrawal fl
   const paragraph = tabs.elements().filter((el) => el.type === 'p' && textOf(el).startsWith('Publishing makes the content of')).map((el) => textOf(el));
   assert.deepEqual(paragraph, [S8_PARAGRAPH], `the dialog's paragraph reads ${JSON.stringify(paragraph)}`);
   tabs.unmount();
+});
+
+// --- UX-2 P3b-1, criterion 7 (X23, X24; R1 = A, Q5 = B): the docked composer's words ----------------
+//
+// The research check's X23 (the docked box's placeholder) and X24's two forms (the first-time line under the
+// docked box: the signed-in form on `/ask`, the signed-out form on the home page), each rendered by the real
+// `Composer` and read byte for byte against the ruled words written out here. `composer-dock.test.ts` drives the
+// surfaces that choose the form. At the base `Composer` does not exist; at the red commit it renders nothing.
+
+const X23_PLACEHOLDER = 'Ask another question';
+const X24_SIGNED_IN = 'A new question replaces this answer. To keep this answer, publish it first.';
+const X24_SIGNED_OUT = 'A new question replaces this answer. To keep this answer, sign in and publish it.';
+
+const Composer = (await load('components/composer/Composer.tsx')).default as ComponentType<Record<string, unknown>>;
+
+/** The composer as a mount renders it, with the guard's slots closed. */
+const composerProps = (extra: Record<string, unknown>): Record<string, unknown> => ({
+  value: '',
+  onChange: () => {},
+  onSubmit: () => {},
+  canSubmit: false,
+  isLoading: false,
+  placeholder: 'Fixture undocked placeholder',
+  guard: { cardOpen: false, onAllow: () => {}, onNotNow: () => {}, declined: false, statement: null, noneOn: false },
+  ...extra,
+});
+
+const composerBox = (surface: Surface): HostElement[] => surface.elements().filter((el) => el.type === 'textarea');
+const firstTimeLine = (surface: Surface): string[] =>
+  surface.elements().filter((el) => el.props['data-part'] === 'first-time-line').map((el) => textOf(el));
+
+test('P3b-1 criterion 7 (X23): the docked box\'s placeholder reads "Ask another question"; undocked, the mount\'s own', async () => {
+  installFetch(ORIGIN, {});
+  const docked = await mount(h(Composer, composerProps({ docked: true })));
+  assert.deepEqual(composerBox(docked).map((el) => el.props.placeholder), [X23_PLACEHOLDER], 'the docked placeholder');
+  docked.unmount();
+  const undocked = await mount(h(Composer, composerProps({ docked: false })));
+  assert.deepEqual(composerBox(undocked).map((el) => el.props.placeholder), ['Fixture undocked placeholder'], 'the undocked placeholder');
+  undocked.unmount();
+});
+
+test('P3b-1 criterion 7 (X24, Q5 = B): the first-time line in its signed-in and signed-out forms, byte for byte; none when the mount asks for none', async () => {
+  installFetch(ORIGIN, {});
+  const read: Record<string, string[]> = {};
+  for (const [name, form] of [['signed-in', 'signed-in'], ['signed-out', 'signed-out'], ['none', null]] as const) {
+    const view = await mount(h(Composer, composerProps({ docked: true, firstTimeLine: form })));
+    read[name] = firstTimeLine(view);
+    view.unmount();
+  }
+  assert.deepEqual(read, { 'signed-in': [X24_SIGNED_IN], 'signed-out': [X24_SIGNED_OUT], none: [] }, `the first-time lines read ${JSON.stringify(read)}`);
 });
