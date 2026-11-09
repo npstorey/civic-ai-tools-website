@@ -335,7 +335,8 @@ test('criterion 7: the deployment guide names the cookie, the table, both routes
   for (const sentence of [
     // UX-2 P4b (item 55, M9): the Settings overlay replaces the dashboard's tab as a caller, and the guide names the
     // decision route's moves, which `allow` already made before the off and allow-all values.
-    'Only the consent endpoint below writes either store, with one exception: the decision route moves the states a pause\'s answer names (below). The consent card, the Sources panel and the Settings overlay call the endpoint.',
+    // UX-2 P4b: the Sources panel was removed (#729 comment 6728493444), so it no longer calls the endpoint.
+    'Only the consent endpoint below writes either store, with one exception: the decision route moves the states a pause\'s answer names (below). The consent card and the Settings overlay call the endpoint.',
     '`DELETE` revokes: the row is deleted, or the cookie expired, and the next question is asked again.',
     '**Enforced since #632 W3.**',
   ]) {
