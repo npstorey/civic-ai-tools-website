@@ -191,7 +191,9 @@ async function askOnQueryForm(surface: Surface): Promise<void> {
 /** `/explore`: the "Try your own" tab, the question, submit, and the 400 ms fullscreen beat. */
 async function askOnExplore(surface: Surface): Promise<void> {
   await surface.click(surface.button('Try your own'));
-  const box = one(surface, 'live question input', (el) => el.type === 'input' && el.props.className === 'live-query-input');
+  // UX-2 P3b-1: /explore's question box is the shared composer's (the finder reads its accessible name, as the
+  // other surfaces' do); its submit is the composer's form, the page's only one.
+  const box = one(surface, 'live question box', (el) => el.type === 'textarea' && el.props['aria-label'] === 'Ask a question about open data');
   await surface.type(box, QUESTION);
   const form = one(surface, 'live question form', (el) => el.type === 'form');
   await surface.submit(form);
@@ -457,7 +459,8 @@ test('flag 9 (/explore), UX-2 P4b: no Sources panel beside the live question inp
   answers();
   const page = await mount(h(McpFlowDiagram));
   await page.click(page.button('Try your own'));
-  assert.ok(page.buttons('Run').length >= 1 || page.text().includes('Run'), `premise: /explore's live input is shown: ${page.text().slice(0, 300)}`);
+  // UX-2 P3b-1: the live question box is the shared composer's ("Run" went with the old input).
+  assert.ok(page.elements().some((el) => el.props['data-part'] === 'composer'), `premise: /explore's live question box is shown: ${page.text().slice(0, 300)}`);
   const rows = page.elements().filter((el) => typeof el.props['data-source'] === 'string');
   assert.equal(rows.length, 0, `/explore shows source rows: ${page.text().slice(0, 300)}`);
   assert.ok(!page.elements().some((el) => el.props.role === 'radiogroup'), '/explore shows a source control');

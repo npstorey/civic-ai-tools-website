@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect, useRef, useCallback } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import Link from 'next/link';
 import { signIn, useSession } from 'next-auth/react';
 import { useHostLinks } from '@/components/HostLinksProvider';
@@ -17,11 +17,9 @@ import {
 } from '@/lib/query-presentation';
 import { parseModelsResponse, type Model } from '@/lib/model-list';
 import { MODELS_LOAD_ERROR } from '@/lib/streaming';
-import { DONT_ALLOW_LINE, JUST_IN_TIME_LINE, SETTINGS_HREF } from '@/lib/sources/copy';
+import { JUST_IN_TIME_LINE, SETTINGS_HREF } from '@/lib/sources/copy';
 import { readerSourceName } from '@/lib/sources/source-name';
-import ConsentCard from '@/components/sources/ConsentCard';
-import LocalOnlyOffer from '@/components/sources/LocalOnlyOffer';
-import NoSourcesOnLine from '@/components/sources/NoSourcesOnLine';
+import Composer from '@/components/composer/Composer';
 import { currentStates, useSourceConsent, type SourceStateValue } from '@/components/sources/useSourceConsent';
 import RateLimitBanner from './RateLimitBanner';
 import { useDefaultPortalArg, usePortalLocked } from '@/components/DefaultPortalProvider';
@@ -79,6 +77,16 @@ interface QueryFormProps {
    * in its place. Signed in, nothing changes.
    */
   advancedOptions?: 'always' | 'hidden-signed-out';
+  /**
+   * The composer sits docked below the results (UX-2 P3b-1): the surface says
+   * so once a run on it has finished with an answer (`QuerySurface`).
+   */
+  docked?: boolean;
+  /**
+   * The first-time line (X24) shows under the docked box; the form picks its
+   * signed-in or signed-out form from the session (Q5 = B, relay 57).
+   */
+  showFirstTimeLine?: boolean;
 }
 
 /**
@@ -149,6 +157,8 @@ export default function QueryForm({
   defaultMode = 'standard',
   comparisonControl,
   advancedOptions = 'always',
+  docked = false,
+  showFirstTimeLine = false,
 }: QueryFormProps) {
   // This instance's configured default portal as a wire value, '' when none
   // (#407) — server-resolved, threaded through the root layout.
@@ -204,19 +214,8 @@ export default function QueryForm({
   const [modelOpen, setModelOpen] = useState(false);
   const [portalOpen, setPortalOpen] = useState(false);
   const [advancedOpen, setAdvancedOpen] = useState(false);
-  const textareaRef = useRef<HTMLTextAreaElement>(null);
   const modelDropdownRef = useRef<HTMLDivElement>(null);
   const portalDropdownRef = useRef<HTMLDivElement>(null);
-
-  const autoResize = useCallback(() => {
-    const el = textareaRef.current;
-    if (el) {
-      el.style.height = 'auto';
-      el.style.height = el.scrollHeight + 'px';
-    }
-  }, []);
-
-  useEffect(() => { autoResize(); }, [query, autoResize]);
 
   useEffect(() => {
     let isMounted = true;
@@ -323,11 +322,6 @@ export default function QueryForm({
     });
   };
 
-  const handleSubmit = (e: React.FormEvent) => {
-    e.preventDefault();
-    if (canSubmit) ask();
-  };
-
   const handleExampleClick = (example: ExampleQuery) => {
     setQuery(example.text);
     // '' when this instance configured no default — the "All portals" entry,
@@ -355,118 +349,47 @@ export default function QueryForm({
     gap: '6px',
   });
 
+  // UX-2 P3b-1: the composer lays out the box, the example chips (built here, from the offered list), the line and
+  // the guard's slots; the gear, its region and the status lines stay this form's, beneath.
   return (
-    <>
-    <form onSubmit={handleSubmit} style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
-      {/* Chat-style textarea with inline send button */}
-      <div className="ui-field" style={{ position: 'relative' }}>
-        <textarea
-          id="query"
-          ref={textareaRef}
-          value={query}
-          onChange={(e) => setQuery(e.target.value)}
-          onInput={autoResize}
-          onKeyDown={(e) => {
-            if (e.key === 'Enter' && !e.shiftKey) {
-              e.preventDefault();
-              if (canSubmit) ask();
-            }
-          }}
-          placeholder="What data is available about child care in NYC?"
-          rows={1}
-          disabled={isLoading}
-          aria-label="Ask a question about open data"
-          style={{
-            width: '100%',
-            boxSizing: 'border-box',
-            resize: 'none',
-            minHeight: '48px',
-            maxHeight: '120px',
-            overflow: 'hidden',
-            paddingRight: '48px',
-            borderRadius: '8px',
-          }}
-        />
-        <button
-          type="submit"
-          disabled={!canSubmit}
-          style={{
-            position: 'absolute',
-            right: '8px',
-            bottom: '8px',
-            width: '32px',
-            height: '32px',
-            borderRadius: '6px',
-            border: 'none',
-            // Keyed on the condition that disables the button (UX pass row 3),
-            // so a disabled arrow, as after Not now, never looks live.
-            backgroundColor: canSubmit ? 'var(--accent)' : 'var(--border-color)',
-            color: 'white',
-            cursor: canSubmit ? 'pointer' : 'not-allowed',
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'center',
-            transition: 'background-color 0.15s ease',
-          }}
-          aria-label="Submit query"
-        >
-          {isLoading ? (
-            <svg width="16" height="16" viewBox="0 0 16 16" fill="none" style={{ animation: 'spin 1s linear infinite' }}>
-              <circle cx="8" cy="8" r="6" stroke="white" strokeWidth="2" strokeDasharray="28" strokeDashoffset="8" strokeLinecap="round" />
-            </svg>
-          ) : (
-            <svg width="16" height="16" viewBox="0 0 16 16" fill="none">
-              <path d="M3 8h10M9 4l4 4-4 4" stroke="white" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
-            </svg>
-          )}
-        </button>
-      </div>
-
-      {goesLine !== null && (
+    <Composer
+      value={query}
+      onChange={setQuery}
+      onSubmit={ask}
+      canSubmit={canSubmit}
+      isLoading={isLoading}
+      docked={docked}
+      placeholder="What data is available about child care in NYC?"
+      chips={exampleQueries.map((example, idx) => ({ id: String(idx), label: example.text, onSelect: () => handleExampleClick(example) }))}
+      line={goesLine !== null ? (
         <p data-part="where-this-question-goes" style={{ margin: 0, fontSize: '13px', lineHeight: 1.5, color: 'var(--text-secondary)' }}>
           {goesLine}{' '}
           {/* UX-2 P4b: the Settings overlay, a client-side link so the form beneath stays mounted. */}
           <Link href={SETTINGS_HREF}>{JUST_IN_TIME_LINE.change}</Link>
         </p>
-      )}
-
-      {/* Example queries on one row */}
-      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '6px', flexWrap: 'wrap' }}>
-        {exampleQueries.map((example, idx) => (
-          <span key={idx} style={{ display: 'inline-flex', alignItems: 'center', gap: '6px' }}>
-            {idx > 0 && <span style={{ color: 'var(--text-muted)', fontSize: '13px' }}>·</span>}
-            <button
-              type="button"
-              onClick={() => handleExampleClick(example)}
-              disabled={isLoading}
-              style={{
-                fontSize: '13px',
-                padding: '2px 8px',
-                borderRadius: '4px',
-                backgroundColor: 'transparent',
-                color: 'var(--text-secondary)',
-                border: '1px solid var(--border-color)',
-                cursor: isLoading ? 'not-allowed' : 'pointer',
-                transition: 'all 0.15s ease',
-                whiteSpace: 'nowrap',
-              }}
-              onMouseOver={(e) => {
-                if (!isLoading) {
-                  e.currentTarget.style.backgroundColor = 'var(--accent-light)';
-                  e.currentTarget.style.borderColor = 'var(--accent)';
-                }
-              }}
-              onMouseOut={(e) => {
-                e.currentTarget.style.backgroundColor = 'transparent';
-                e.currentTarget.style.borderColor = 'var(--border-color)';
-              }}
-            >
-              {example.text}
-            </button>
-          </span>
-        ))}
-      </div>
-
+      ) : null}
+      firstTimeLine={showFirstTimeLine ? (isAuthenticated ? 'signed-in' : 'signed-out') : null}
+      guard={{
+        cardOpen,
+        onAllow: () => {
+          setCardOpen(false);
+          setDeclinedQuery(null);
+          const run = pendingRef.current ?? (resendOnAllow ? lastSentRef.current : null);
+          pendingRef.current = null;
+          setResendOnAllow(false);
+          if (run) void consent.guard(run, () => setCardOpen(true));
+        },
+        onNotNow: () => {
+          setCardOpen(false);
+          pendingRef.current = null;
+          setResendOnAllow(false);
+          setDeclinedQuery(query.trim());
+        },
+        declined,
+        statement: consent.statement,
+        noneOn,
+      }}
+    >
       {/* Secondary info row: advanced options + rate limit (after first query) */}
       <div style={{ display: 'flex', justifyContent: queryCount > 0 ? 'space-between' : 'center', alignItems: 'center', flexWrap: 'wrap', gap: '8px', fontSize: '13px', color: 'var(--text-muted)' }}>
         {hideAdvanced ? (
@@ -899,37 +822,6 @@ export default function QueryForm({
           </div>
         </div>
       )}
-    </form>
-    <div style={{ display: 'flex', flexDirection: 'column', gap: '12px', marginTop: '12px' }}>
-      {cardOpen && (
-        <ConsentCard
-          onAllow={() => {
-            setCardOpen(false);
-            setDeclinedQuery(null);
-            const run = pendingRef.current ?? (resendOnAllow ? lastSentRef.current : null);
-            pendingRef.current = null;
-            setResendOnAllow(false);
-            if (run) void consent.guard(run, () => setCardOpen(true));
-          }}
-          onNotNow={() => {
-            setCardOpen(false);
-            pendingRef.current = null;
-            setResendOnAllow(false);
-            setDeclinedQuery(query.trim());
-          }}
-        />
-      )}
-      {declined && !cardOpen && (
-        <p role="status" style={{ margin: 0, fontSize: '14px', lineHeight: 1.6, color: 'var(--text-secondary)' }}>
-          {DONT_ALLOW_LINE} <LocalOnlyOffer statement={consent.statement} />
-        </p>
-      )}
-      {noneOn && !cardOpen && (
-        <p role="status" style={{ margin: 0, fontSize: '14px', lineHeight: 1.6, color: 'var(--text-secondary)' }}>
-          <NoSourcesOnLine />
-        </p>
-      )}
-    </div>
-    </>
+    </Composer>
   );
 }

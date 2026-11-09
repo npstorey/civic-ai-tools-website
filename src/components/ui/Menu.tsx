@@ -287,6 +287,7 @@ export function Menu({
                   href={item.href}
                   role={role}
                   aria-checked={checked}
+                  aria-current={item.current ? 'page' : undefined}
                   className="ui-menu-item"
                   tabIndex={-1}
                   onClick={() => choose(item.id)}

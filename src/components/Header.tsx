@@ -4,6 +4,7 @@ import { useState, useRef, useEffect, useId } from 'react';
 import { signIn, signOut, useSession } from 'next-auth/react';
 import Image from 'next/image';
 import Link from 'next/link';
+import { usePathname } from 'next/navigation';
 import { TYPED_STANDARDS_URL } from '@/lib/site-config';
 import { UNNAMED_WORDMARK } from '@/lib/brand-config';
 import {
@@ -56,8 +57,11 @@ type NavEntry =
   | ({ kind: 'link'; external?: boolean } & NavLink)
   | { kind: 'menu'; id: string; label: string; items: NavLink[] };
 
-/** A bar or drawer link: an external one opens a new tab and carries the ↗ glyph. */
-function renderLink(entry: Extract<NavEntry, { kind: 'link' }>, style: React.CSSProperties, onClick?: () => void) {
+/**
+ * A bar or drawer link: an external one opens a new tab and carries the ↗ glyph. `current` marks the link to the
+ * page being shown (`aria-current="page"`, UX-2 P3b-1, #728 line 13).
+ */
+function renderLink(entry: Extract<NavEntry, { kind: 'link' }>, style: React.CSSProperties, onClick?: () => void, current = false) {
   if (entry.external) {
     return (
       <a
@@ -75,7 +79,7 @@ function renderLink(entry: Extract<NavEntry, { kind: 'link' }>, style: React.CSS
     );
   }
   return (
-    <Link key={entry.id} href={entry.href} className="no-link-style" style={style} onClick={onClick}>
+    <Link key={entry.id} href={entry.href} className="no-link-style" style={style} onClick={onClick} aria-current={current ? 'page' : undefined}>
       {entry.label}
     </Link>
   );
@@ -198,6 +202,10 @@ export default function Header({
   // A non-empty marketing origin means a split-host deployment. Signed out
   // there, Ask is `/` (see `askHref` above).
   const askLink = !session && marketingOrigin ? '/' : askHref;
+  // The page being shown (UX-2 P3b-1, #728 line 13), read from the path, never from a link's href: signed out on a
+  // split topology Ask links to `/`, and the home page is not Ask's page.
+  const pathname = usePathname();
+  const isCurrent = (id: string): boolean => (id === 'ask' && pathname === '/ask') || (id === 'my-analyses' && pathname === '/dashboard');
   const wordmark = brandName ?? UNNAMED_WORDMARK;
 
   const entries: NavEntry[] = [
@@ -237,7 +245,7 @@ export default function Header({
   // UX-1 P3a removed that strip: the name, else the email.
   const identity = session?.user?.name || session?.user?.email || null;
   const accountItems: MenuItem[] = [
-    { id: 'my-analyses', label: 'My analyses', href: dashboardHref },
+    { id: 'my-analyses', label: 'My analyses', href: dashboardHref, ...(isCurrent('my-analyses') ? { current: true } : {}) },
     // UX-2 P4b: the Settings overlay, a text item with no icon; relative, since `/settings` is served on both hosts.
     { id: 'settings', label: 'Settings', href: SETTINGS_HREF },
     ...(publicSiteHref !== null
@@ -300,7 +308,7 @@ export default function Header({
               entry.kind === 'menu' ? (
                 <Menu key={entry.id} trigger={entry.label} items={entry.items} />
               ) : (
-                renderLink(entry, NAV_LINK_STYLE)
+                renderLink(entry, NAV_LINK_STYLE, undefined, isCurrent(entry.id))
               ),
             )}
           </nav>
@@ -449,7 +457,7 @@ export default function Header({
                 ))}
               </div>
             ) : (
-              renderLink(entry, DRAWER_LINK_STYLE, closeDrawer)
+              renderLink(entry, DRAWER_LINK_STYLE, closeDrawer, isCurrent(entry.id))
             ),
           )}
           {/* UX-2 P4b: signed in only; the drawer does not hold the account menu, so Settings is its own entry here. */}

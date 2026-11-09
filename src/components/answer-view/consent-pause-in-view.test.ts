@@ -310,8 +310,9 @@ async function askOnQueryForm(surface: Surface): Promise<HostElement> {
 
 async function askOnExplore(surface: Surface): Promise<void> {
   await surface.click(surface.button('Try your own'));
-  const box = surface.elements().find((el) => el.type === 'input' && el.props.className === 'live-query-input');
-  assert.ok(box, 'premise: no live question input');
+  // UX-2 P3b-1: /explore's question box is the shared composer's, found by its accessible name.
+  const box = surface.elements().find((el) => el.type === 'textarea' && el.props['aria-label'] === 'Ask a question about open data');
+  assert.ok(box, 'premise: no live question box');
   await surface.type(box!, QUESTION);
   await surface.submit(surface.elements().find((el) => el.type === 'form')!);
   await settle(surface, 600);

@@ -18,10 +18,13 @@
 /** X23: the docked box's placeholder. */
 export const DOCKED_PLACEHOLDER = 'Ask another question';
 
-/** X24 (Q5 = B): the first-time line under the docked box, by sign-in state. */
-export const FIRST_TIME_LINE = {
-  signedIn: 'A new question replaces this answer. To keep this answer, publish it first.',
-  signedOut: 'A new question replaces this answer. To keep this answer, sign in and publish it.',
+/**
+ * X24 (Q5 = B), by sign-in state, as its disclosure shows it (relay 57; design version 4): the first sentence is
+ * the closed disclosure's summary, the second its body. Read whole, each form is the ruled sentence pair.
+ */
+export const FIRST_TIME_LINE_PARTS = {
+  signedIn: { summary: 'A new question replaces this answer.', body: 'To keep this answer, publish it first.' },
+  signedOut: { summary: 'A new question replaces this answer.', body: 'To keep this answer, sign in and publish it.' },
 } as const;
 
 /** PENDING: the example row's accessible name. */

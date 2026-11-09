@@ -5,10 +5,7 @@ import type { PreRecordedTrace } from '@/lib/bpmn/traces';
 import type { PlaybackSpeed, ReplayState } from '@/lib/bpmn/animation';
 import type { LiveTraceStatus, SlowQueryMessage } from '@/hooks/useLiveTrace';
 import { MODELS_LOAD_ERROR } from '@/lib/streaming';
-import { DONT_ALLOW_LINE } from '@/lib/sources/copy';
-import ConsentCard from '@/components/sources/ConsentCard';
-import LocalOnlyOffer from '@/components/sources/LocalOnlyOffer';
-import NoSourcesOnLine from '@/components/sources/NoSourcesOnLine';
+import Composer from '@/components/composer/Composer';
 import { useSourceConsent } from '@/components/sources/useSourceConsent';
 import { ConsentPausePrompt } from '@/components/answer-view/ConsentStep';
 
@@ -34,8 +31,8 @@ interface TraceControlsProps {
   liveSlowMessage: SlowQueryMessage | null;
   /**
    * True when this instance's `/api/models` catalog could not be read
-   * (website#30 P7) — the live query has no id to send. Withdraws the Run
-   * control and shows `MODELS_LOAD_ERROR` in its place, rather than letting a
+   * (website#30 P7) — the live query has no id to send. Disables the
+   * question box's arrow and shows `MODELS_LOAD_ERROR` beneath it, rather than letting a
    * click reach `/api/compare-stream` with an empty `model` and land on that
    * route's generic-error fallback. Not a validation state on the query
    * input: per docs/design-principles.md Principle 3's corollary, a list
@@ -152,8 +149,9 @@ export default function TraceControls({
   }
   const declined = declinedQuery !== null && liveQuery.trim() === declinedQuery;
 
-  const handleLiveSubmit = (e: React.FormEvent) => {
-    e.preventDefault();
+  // UX-2 P3b-1: the shared composer's box and arrow; it calls this only when `canSubmitLive` holds.
+  const canSubmitLive = liveQuery.trim().length > 0 && !modelsUnavailable && !declined && !consent.writing;
+  const submitLive = () => {
     const query = liveQuery.trim();
     if (!query || declined || consent.writing) return;
     const run = () => {
@@ -312,73 +310,43 @@ export default function TraceControls({
 
       {mode === 'live' && (
         <>
-          {/* Live query input */}
+          {/* The question box (UX-2 P3b-1): the shared composer, wide, with the box and the arrow only. The
+              consent card, the decline line and the no-source-on line are its slots. No first-time line: a
+              finished run here shows "New query", not a box an answer sits beside, so the box never docks. */}
           {(liveStatus === 'idle' || liveStatus === 'error' || liveStatus === 'cancelled') && !isReplayingCapture && (
-            <form onSubmit={handleLiveSubmit} style={{ display: 'flex', gap: '8px' }}>
-              <input
-                type="text"
-                value={liveQuery}
-                onChange={e => setLiveQuery(e.target.value)}
-                placeholder="e.g. Most common 311 complaints in Brooklyn"
-                className="live-query-input"
-                style={{
-                  flex: 1,
-                  padding: '8px 12px',
-                  fontSize: '14px',
-                  border: '1px solid var(--border-color)',
-                  borderRadius: '4px',
-                  fontFamily: 'inherit',
-                  background: 'var(--background)',
-                  color: 'var(--text-primary)',
-                }}
-              />
-              <button
-                type="submit"
-                disabled={!liveQuery.trim() || modelsUnavailable || declined || consent.writing}
-                className="ui-button ui-button-primary"
-                style={{
-                  padding: '8px 20px',
-                  fontSize: '13px',
-                  opacity: liveQuery.trim() && !modelsUnavailable ? 1 : 0.5,
-                  cursor: liveQuery.trim() && !modelsUnavailable ? 'pointer' : 'not-allowed',
-                }}
-              >
-                Run
-              </button>
-            </form>
-          )}
-
-          {cardOpen && (liveStatus === 'idle' || liveStatus === 'error' || liveStatus === 'cancelled') && (
-            <ConsentCard
-              onAllow={() => {
-                setCardOpen(false);
-                setDeclinedQuery(null);
-                const run = pendingRef.current ?? (resendOnAllow ? lastSentRef.current : null);
-                pendingRef.current = null;
-                setResendOnAllow(false);
-                if (run) void consent.guard(run, () => setCardOpen(true));
-              }}
-              onNotNow={() => {
-                setCardOpen(false);
-                pendingRef.current = null;
-                setResendOnAllow(false);
-                setDeclinedQuery(liveQuery.trim());
+            <Composer
+              placement="wide"
+              value={liveQuery}
+              onChange={setLiveQuery}
+              onSubmit={submitLive}
+              canSubmit={canSubmitLive}
+              isLoading={false}
+              placeholder="e.g. Most common 311 complaints in Brooklyn"
+              guard={{
+                cardOpen,
+                onAllow: () => {
+                  setCardOpen(false);
+                  setDeclinedQuery(null);
+                  const run = pendingRef.current ?? (resendOnAllow ? lastSentRef.current : null);
+                  pendingRef.current = null;
+                  setResendOnAllow(false);
+                  if (run) void consent.guard(run, () => setCardOpen(true));
+                },
+                onNotNow: () => {
+                  setCardOpen(false);
+                  pendingRef.current = null;
+                  setResendOnAllow(false);
+                  setDeclinedQuery(liveQuery.trim());
+                },
+                declined,
+                statement: consent.statement,
+                noneOn,
               }}
             />
           )}
-          {declined && !cardOpen && (
-            <div role="status" style={{ fontSize: '13px', color: 'var(--text-secondary)' }}>
-              {DONT_ALLOW_LINE} <LocalOnlyOffer statement={consent.statement} />
-            </div>
-          )}
-          {noneOn && !cardOpen && (
-            <div role="status" style={{ fontSize: '13px', color: 'var(--text-secondary)' }}>
-              <NoSourcesOnLine />
-            </div>
-          )}
 
           {/* Model-catalog load failure (website#30 P7): disclosed in place
-              of the Run control's helper text, not painted onto the query
+              of the question box's helper text, not painted onto the query
               input — the input didn't fail, the background fetch did (see
               docs/design-principles.md's corollary). */}
           {modelsUnavailable
@@ -621,12 +589,6 @@ export default function TraceControls({
         </>
       )}
       <style jsx>{`
-        .live-query-input:focus-visible {
-          outline: none;
-          border-style: dashed;
-          border-color: var(--accent);
-          background-color: var(--accent-light);
-        }
         .trace-pill:hover {
           border-color: var(--accent) !important;
         }

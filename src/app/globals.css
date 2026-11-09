@@ -1426,3 +1426,29 @@ footer a:visited {
   padding-top: 48px;
   padding-bottom: 48px;
 }
+
+/* The composer (UX-2 P3b-1, `src/components/composer/Composer.tsx`): one
+   component, not a primitive (docs/ui-patterns.md), so no ui- prefix. In the
+   home page's and /ask's column it takes the narrow form width the surface's
+   container gave it before. */
+.composer--form {
+  max-width: 900px;
+  margin: 0 auto 48px;
+  padding: 0 24px;
+}
+
+/* Docked below a finished answer (R1 B): in the page's flow after the results,
+   held at the viewport's bottom while the reader scrolls the answer, and in its
+   own place below the answer's last line at the end. No page padding (the
+   seat's ruling S2). Its z-index stays under the header's 50, a stacking
+   context that holds the drawer, and under every dialog (#728 line 3). */
+.composer--docked {
+  position: sticky;
+  bottom: 0;
+  z-index: 40;
+  margin-bottom: 0;
+  padding-top: 12px;
+  padding-bottom: 12px;
+  background-color: var(--background);
+  border-top: 1px solid var(--border-color);
+}

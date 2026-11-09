@@ -193,9 +193,10 @@ test('criterion 2, the home page: the example row is a ui-chip-row named by the 
   assert.deepEqual(kids.map((el) => textOf(el)), expected, 'the chips\' words, in order');
   for (const chip of kids) assert.equal(attr(chip, 'type'), 'button', `a chip is not type="button": ${textOf(chip)}`);
   assert.ok(!textOf(row).includes('·'), `the row carries a "·": ${textOf(row)}`);
-  // Nothing else of the composer draws a separator between the chips either.
-  const outside = page.elements().filter((el) => !within(row).includes(el) && el.type === 'span' && textOf(el) === '·');
-  assert.equal(outside.length, 0, `"·" separators on the page outside the row: ${outside.length}`);
+  // Nothing else of the composer draws a separator between the chips either (the page's own "·" elsewhere, in the
+  // band beneath the surface, is not the composer's).
+  const outside = within(composer).filter((el) => !within(row).includes(el) && el.type === 'span' && textOf(el) === '·');
+  assert.equal(outside.length, 0, `"·" separators in the composer outside the row: ${outside.length}`);
 });
 
 test('criterion 2: globals.css resolves ui-chip-row to flex-wrap: nowrap and overflow-x: auto', () => {
