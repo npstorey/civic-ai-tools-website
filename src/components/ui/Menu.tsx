@@ -1,7 +1,8 @@
 'use client';
 
-import { useCallback, useEffect, useId, useRef, useState, type KeyboardEvent, type ReactNode } from 'react';
+import { useCallback, useEffect, useId, useLayoutEffect, useRef, useState, type KeyboardEvent, type ReactNode } from 'react';
 import Link from 'next/link';
+import { horizontalShift } from './menu-placement';
 
 /**
  * P2 · Menu (UX-1 P0; design §2 P2). A trigger and a panel for "choose one
@@ -15,7 +16,10 @@ import Link from 'next/link';
  * The panel is 220-360 px wide, at most 60vh tall with its own scroll, and
  * anchored below the trigger. It opens above the trigger when the room below
  * is short. That is measured when the trigger opens it; a caller-controlled
- * open does not flip.
+ * open does not flip. Sideways, an open panel is moved, before it paints, so
+ * its box lies inside the viewport (`menu-placement.ts`): `align` is where it
+ * starts, not where it may end up (UX-2 P4a leg D: an `end` panel on a
+ * trigger near the left edge ran off the screen at 390 px).
  *
  * Behaviour:
  *   - Escape closes the menu and returns focus to the trigger.
@@ -133,6 +137,17 @@ export function Menu({
     if (!panel) return;
     const checked = panel.querySelector<HTMLElement>('[aria-checked="true"]:not([aria-disabled="true"])');
     (checked ?? panel.querySelector<HTMLElement>(ENABLED_ITEM_SELECTOR))?.focus();
+  }, [isOpen]);
+
+  // Opening keeps the panel inside the viewport sideways: its box is read once
+  // it renders, before paint, and moved by the shift `horizontalShift` names.
+  // The panel unmounts on close, so the next open measures it afresh.
+  useLayoutEffect(() => {
+    if (!isOpen || typeof document === 'undefined') return;
+    const panel = panelRef.current;
+    if (!panel) return;
+    const dx = horizontalShift(panel.getBoundingClientRect(), document.documentElement.clientWidth);
+    panel.style.transform = dx === 0 ? '' : `translateX(${dx}px)`;
   }, [isOpen]);
 
   // A click outside the menu closes it; focus stays where the reader clicked.
