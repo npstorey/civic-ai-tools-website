@@ -58,6 +58,7 @@ import {
   PROBE,
   TEST_QUERIES,
   buildOutput,
+  calibrationProfile,
   capRule,
   checkRoster,
   consentStates,
@@ -1404,7 +1405,8 @@ function expectedBound(probe, rowsPerModel) {
     const rows = [...probe.results, ...probe.errors].filter((r) => r.modelId === model.id);
     const prompts = rows.map((r) => r.requests.reduce((s, q) => s + q.usage.prompt, 0));
     const completion = Math.max(...rows.flatMap((r) => r.requests.map((q) => Math.max(q.usage.completion, q.usage.reasoning ?? 0))));
-    const rowPrompt = Math.min(600_000, 2 * Math.max(...prompts));
+    // The seat's ruling (#740, relay 6): twice the probe's largest row, floored at 200,000, capped at 600,000.
+    const rowPrompt = Math.min(600_000, Math.max(200_000, 2 * Math.max(...prompts)));
     const rowRequests = Math.min(22, 2 * Math.max(...rows.map((r) => r.requests.length)));
     const allowance = Math.min(4000, 2 * completion);
     const reservation = reservationPricing(model, SNAPSHOT);
@@ -1590,4 +1592,39 @@ test('EVAL-OW: the automatic checks carry the pause and citation verdicts on an 
   assert.deepEqual(cited.citation.unaddressed, ['erm2-nwe9']);
   const none = rowChecks(q, { response: '', toolsCalled: calls, totalTokens: 0 }, []);
   assert.deepEqual([none.pause, none.citation], [null, null]);
+});
+
+test('EVAL-OW part 10, the seat\'s ruling: a row\'s calibrated prompt is twice the probe\'s largest row, floored at 200,000 and capped at 600,000, and --calibrate names the term that set it', () => {
+  // A probe results file with one row per model at a chosen row prompt (one request).
+  const probeWith = (rowPrompt) => ({
+    metadata: { mode: 'probe', spend: { chargedUsd: 1 } },
+    errors: [],
+    results: ALL_MODELS.map((m) => ({
+      modelId: m.id,
+      requests: [{ sent: { bodyChars: 4000 }, usage: { prompt: rowPrompt, completion: 300, total: rowPrompt + 300 } }],
+    })),
+  });
+  const rowOf = (rowPrompt) => calibrationProfile(probeWith(rowPrompt))['z-ai/glm-5.3-flash'];
+
+  // The floor: under 100,000 billed prompt tokens a row, twice it is under 200,000.
+  assert.deepEqual([rowOf(60_000).rowPromptTokens, rowOf(60_000).rowPromptSetBy], [200_000, 'floor']);
+  assert.deepEqual([rowOf(99_999).rowPromptTokens, rowOf(99_999).rowPromptSetBy], [200_000, 'floor']);
+  // The probe's profile, between them.
+  assert.deepEqual([rowOf(150_000).rowPromptTokens, rowOf(150_000).rowPromptSetBy], [300_000, 'probe']);
+  // The cap: over 300,000, twice it is over 600,000.
+  assert.deepEqual([rowOf(300_001).rowPromptTokens, rowOf(300_001).rowPromptSetBy], [600_000, 'cap']);
+  // The other two terms are as proposed: twice the most requests a row (cap 22), twice the largest completion (cap 4,000).
+  assert.deepEqual([rowOf(60_000).rowRequests, rowOf(60_000).completionAllowance], [2, 600]);
+
+  // --calibrate prints, per model, which term set the row's prompt.
+  for (const [rowPrompt, term] of [[60_000, 'the floor (200,000)'], [150_000, 'the probe\'s profile (twice 150000)'], [400_000, 'the cap (600,000)']]) {
+    const run = calibrateOn(probeWith(rowPrompt));
+    assert.ok([0, 3].includes(run.status), `stdout:\n${run.stdout}\nstderr:\n${run.stderr}`);
+    for (const m of ALL_MODELS) {
+      assert.ok(
+        run.stdout.split('\n').some((line) => line.includes(m.id) && line.includes(`the row's prompt is set by ${term}`)),
+        `${m.id} at ${rowPrompt}: no term line naming ${term}\n${run.stdout}`,
+      );
+    }
+  }
 });
