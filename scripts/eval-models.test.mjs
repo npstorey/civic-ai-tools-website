@@ -22,20 +22,23 @@
 // against stand-in endpoints (`fakeEndpoints` below), so the results file the
 // owner's run will write is read here first.
 //
-// AND THE APP'S OFFER (#609). The tests at the foot hold the harness to what
-// the app offers a model: the tools and the system prompt of every request,
-// read from what the harness sent and set against the app's own functions at
-// two configurations, and the tool names the live captures call. Q3's portal
-// moved with San Francisco's (#587), as a named delta on the query pin.
+// AND THE APP'S OFFER (#609). The tool names the live captures call, and Q3's
+// portal, which moved with San Francisco's (#587), as a named delta on the
+// query pin. #609's comparison of every request with the app's all-sources
+// offer is superseded by the in-loop one below (#740 A1, replaced by A2).
 //
-// AND THE APP'S IN-LOOP SHAPE (EVAL-OW P1, #740). The tests at the very foot
-// hold a row's first request to the one `src/app/api/compare-stream/route.ts`
-// itself sends under `SOURCE_ROUTING=in-loop` (A2), and every open-weight
-// request to the ruled `provider` object (A12).
+// AND THE APP'S IN-LOOP SHAPE (EVAL-OW P1, #740). A row's first request is
+// held to the one `src/app/api/compare-stream/route.ts` itself sends under
+// `SOURCE_ROUTING=in-loop` (A2), and every open-weight request to the ruled
+// `provider` object (A12). Then the scripted pause's self-test, the
+// preflight's stop lines and the run's refusals, each driven on the stand-in
+// with its log showing no model request; `--calibrate` on recorded profiles;
+// and the app's limits, read from what a row hands the loop and driven to
+// each bound. The two checks' fixtures are `scripts/eval-checks.test.mjs`'s.
 //
 // Run with: npm test
 
-import { test } from 'node:test';
+import { after, test } from 'node:test';
 import assert from 'node:assert/strict';
 import { spawnSync } from 'node:child_process';
 import { createHash } from 'node:crypto';
@@ -47,23 +50,36 @@ import { isDeepStrictEqual } from 'node:util';
 
 import {
   ALL_MODELS,
+  APP_LIMITS,
   LIVE_CAPTURES,
+  OPEN_WEIGHT_PROVIDER,
+  OPENROUTER_SNAPSHOT,
+  PAUSE_SET,
   PROBE,
-  QUOTE_MODELS,
   TEST_QUERIES,
   buildOutput,
+  capRule,
   checkRoster,
+  consentStates,
   genericExpectations,
+  goldAskFirst,
+  loopOptions,
   parseArgs,
   planBounds,
   planFor,
   quoteVerdict,
   recordingFetch,
+  reservationPricing,
   resultShape,
   rowChecks,
   runEnvProblem,
+  runVariables,
+  scriptedPause,
+  streamedBody,
 } from './eval-models.mjs';
-import { BUILT_IN_CATALOG, modelRequestSettings } from '../src/lib/model-catalog.ts';
+import { BUILT_IN_CATALOG, modelRequestParameters, modelRequestSettings } from '../src/lib/model-catalog.ts';
+import { createInLoopRouting, directorySet } from '../src/lib/mcp/routing-mode.ts';
+import { CONSENT_GATE_ENFORCED } from '../src/lib/sources/consent-enforced.ts';
 import { mcpTools } from '../src/lib/mcp/tools.ts';
 import { HOSTED_SOURCE_KEY_VARIABLE, routedSourceId } from '../src/lib/mcp/registry.ts';
 import { CIVIC_MANIFEST, HOSTING_SANDBOX, readMcpEnv } from '@typedstandards/civic-typed-router';
@@ -79,13 +95,30 @@ const CORE = path.resolve(
 );
 
 const FIXTURES = path.resolve(path.dirname(fileURLToPath(import.meta.url)), './fixtures/eval-models');
-const SNAPSHOT_PATH = path.join(FIXTURES, 'openrouter-models-2026-10-11.json');
+const SNAPSHOT_PATH = OPENROUTER_SNAPSHOT;
 const SNAPSHOT = JSON.parse(readFileSync(SNAPSHOT_PATH, 'utf-8'));
 const TOOL_RESULTS = JSON.parse(readFileSync(path.join(FIXTURES, 'tool-results-2026-10-11.json'), 'utf-8'));
 const NO_NETWORK = path.join(FIXTURES, 'no-network.mjs');
 
 /** A key that must never appear in anything the harness writes or prints. */
 const FAKE_KEY = 'sk-or-fake-MUST-NOT-APPEAR-5520';
+
+/** The ruled object (#740 D3 = A), stated here, not read from the harness. */
+const RULED_PROVIDER = { max_price: { prompt: 0.15, completion: 0.6 }, require_parameters: true, data_collection: 'deny' };
+
+/** Why a recorded `provider` is not the ruling's, or null when it is. */
+function providerProblem(provider, openWeight) {
+  if (!openWeight) return provider === undefined ? null : `a Claude request carried provider ${JSON.stringify(provider)}`;
+  if (provider === undefined) return 'an open-weight request carried no provider';
+  for (const pin of ['order', 'only', 'ignore']) if (Object.hasOwn(provider, pin)) return `the provider is pinned (${pin})`;
+  return isDeepStrictEqual(provider, RULED_PROVIDER) ? null : `the provider is ${JSON.stringify(provider)}, not the ruled object`;
+}
+
+/** Scratch files a test leaves for a later test to read, removed when the suite ends. */
+const KEPT_SCRATCH = [];
+after(() => {
+  for (const dir of KEPT_SCRATCH) rmSync(dir, { recursive: true, force: true });
+});
 
 test('refuses with a named error when OPENROUTER_API_KEY is unset', () => {
   const env = { ...process.env };
@@ -199,24 +232,28 @@ const chatRequests = (log) => log.filter((e) => e.path === '/api/v1/chat/complet
  * tests, and it is test code.
  *
  * OpenRouter: the model list (FAKE_OPENROUTER_LIST, a file in the list's
- * shape), the key endpoint (status FAKE_KEY_STATUS, default 200), and chat
- * completions. A "model" calls the first tool it is offered on its first turn
- * (Socrata's `get_data`, in either spelling, with a dataset; any other tool
- * with no arguments) and, once a tool result has come back, answers with that
- * result echoed whole. A `google/` model is first given what the chooser spike found Google
- * models receive through OpenRouter (#573 premise 6): a result whose text
- * holds a JSON object, reduced to that object. So the tool-result check meets
- * one model that loses the text and one that does not.
+ * shape), the key endpoint (status FAKE_KEY_STATUS, default 200, with
+ * distinctive balance figures), and chat completions. A "model" offered
+ * `load_source` loads Socrata, then calls Socrata's `get_data` with a dataset
+ * once it is loaded, then answers with the tool result echoed whole; one
+ * offered only another tool calls the first it is offered (`get_data`, in
+ * either spelling, with a dataset; any other with no arguments) and answers
+ * after the result. FAKE_CHAT=always-tool never answers; FAKE_USAGE_TOTAL
+ * sets every response's `total_tokens`. Every response reports `usage.cost`,
+ * and a streamed request (the answering turn) is answered as chunks.
  *
  * MCP (the fake hosts `fakeEnv` names, and Boston OpenContext's when a test
  * configures it): the legacy exchange — the modern discovery probe is
- * answered 404 — with `get_data` returning a two-row envelope and Data
- * Commons' `search_indicators` returning text with a JSON object inside it.
- * The server is called by its own tool name, so these are the upstream names.
+ * answered 404 — with the skill guidance (refused under FAKE_SKILL=refuse,
+ * so a composition falls back), `get_data` returning a two-row envelope and
+ * Data Commons' `search_indicators` returning text with a JSON object inside
+ * it. The server is called by its own tool name, so these are the upstream
+ * names.
  *
  * FAKE_LOG receives one JSON line per request: host, path, method, and the
  * model or MCP method; for a model request, also the system message, the
- * question and the tool schemas it carried. Never a header, so never the key.
+ * question, the tool schemas and the body as sent. Never a header, so never
+ * the key.
  */
 async function fakeEndpoints() {
   const { appendFileSync, readFileSync } = await import('node:fs');
@@ -230,32 +267,6 @@ async function fakeEndpoints() {
   const log = (entry) => appendFileSync(LOG, `${JSON.stringify(entry)}\n`);
   const json = (status, body, headers = {}) =>
     new Response(JSON.stringify(body), { status, headers: { 'content-type': 'application/json', ...headers } });
-
-  const firstJsonObject = (text) => {
-    for (let start = text.indexOf('{'); start !== -1; start = text.indexOf('{', start + 1)) {
-      let depth = 0;
-      for (let i = start; i < text.length; i++) {
-        if (text[i] === '{') depth++;
-        else if (text[i] === '}' && --depth === 0) {
-          try {
-            JSON.parse(text.slice(start, i + 1));
-            return text.slice(start, i + 1);
-          } catch {
-            break;
-          }
-        }
-      }
-    }
-    return undefined;
-  };
-  const asGoogleReceivesIt = (content) => {
-    try {
-      JSON.parse(content);
-      return content; // whole JSON arrives whole
-    } catch {
-      return firstJsonObject(content) ?? content;
-    }
-  };
 
   let serial = 0;
   // FAKE_CHAT picks how the stand-in model behaves: `answer` (the default)
@@ -299,9 +310,7 @@ async function fakeEndpoints() {
     if (MODE === 'always-tool') {
       message = dataTool ? callOf(dataTool, dataArgs(dataTool, user)) : callOf('load_source', { alias: 'socrata' });
     } else if (last?.role === 'tool' && !(dataTool && names.includes('load_source') && !calledData)) {
-      const seen = String(body.model).startsWith('google/') ? asGoogleReceivesIt(String(last.content)) : String(last.content);
-      last.content = seen; // so the prompt count below reflects what was "received"
-      message = { role: 'assistant', content: `I received: ${seen}` };
+      message = { role: 'assistant', content: `I received: ${String(last.content)}` };
     } else if (last?.role === 'tool') {
       // In loop, after a load: the loaded source's first tool.
       message = callOf(dataTool, dataArgs(dataTool, user));
@@ -342,6 +351,8 @@ async function fakeEndpoints() {
       case 'notifications/initialized':
         return new Response(null, { status: 202 });
       case 'prompts/get':
+        // FAKE_SKILL=refuse: the server's guidance does not arrive, so a composition falls back.
+        if (process.env.FAKE_SKILL === 'refuse') return json(200, { jsonrpc: '2.0', id: message.id, error: { code: -32603, message: 'fake: no guidance' } });
         return reply({ messages: [{ role: 'user', content: { type: 'text', text: 'Fake skill guidance: name the portal on every call.' } }] });
       case 'tools/call': {
         const name = message.params?.name;
@@ -430,37 +441,50 @@ function resultsFile(dir) {
   return { name: files[0], text: readFileSync(path.join(dir, files[0]), 'utf-8') };
 }
 
-test('#573: the roster passes the slug check against the recorded list, and each kind of problem fails it', () => {
-  assert.equal(ALL_MODELS.length, 9, 'four controls and five candidates');
+test('#573, EVAL-OW C4: the roster passes the slug check against the recorded list, and each kind of problem fails it', () => {
+  assert.equal(ALL_MODELS.length, 5, 'two catalog controls and three open-weight models');
   assert.deepEqual(checkRoster(ALL_MODELS, SNAPSHOT), []);
 
   const byId = (id) => ALL_MODELS.find((m) => m.id === id);
 
-  // An absent slug — the catalog's own hyphenated Sonnet 4.6, which OpenRouter
-  // resolves but does not list.
-  const absent = checkRoster([...ALL_MODELS, { id: 'anthropic/claude-sonnet-4-6', role: 'candidate' }], SNAPSHOT);
-  assert.equal(absent.length, 1);
-  assert.match(absent[0], /anthropic\/claude-sonnet-4-6: not on OpenRouter's model list/);
+  // An injected absent slug: a guard, green on the roster and red on this shape.
+  const absent = checkRoster([...ALL_MODELS, { id: 'z-ai/glm-5.3-flash-nope', role: 'open-weight', provider: OPEN_WEIGHT_PROVIDER }], SNAPSHOT);
+  assert.deepEqual(absent, ["z-ai/glm-5.3-flash-nope: not on OpenRouter's model list"]);
 
-  // Gemini 3.8 Flash at medium WITHOUT the stated limit name: the request would
-  // carry max_completion_tokens, which the list does not give for it.
-  const undeclared = checkRoster([{ ...byId('google/gemini-3.8-flash'), requestSettings: { reasoningEffort: 'medium' } }], SNAPSHOT);
-  assert.deepEqual(undeclared, [
-    'google/gemini-3.8-flash: would be sent "max_completion_tokens", which the list does not give as supported',
+  // An open-weight model sent max_completion_tokens: GLM at low WITHOUT the
+  // stated limit name, so the catalog's rule would send max_completion_tokens,
+  // which none of the three lists (S1, s1.md:291).
+  for (const id of ['z-ai/glm-5.3-flash', 'openai/gpt-oss-120b']) {
+    const undeclared = checkRoster([{ ...byId(id), requestSettings: { reasoningEffort: 'low' } }], SNAPSHOT);
+    assert.deepEqual(undeclared, [`${id}: would be sent "max_completion_tokens", which the list does not give as supported`]);
+  }
+
+  // An effort the model does not offer, and an effort sent to a model that lists none.
+  const effort = checkRoster([{ ...byId('z-ai/glm-5.3-flash'), requestSettings: { reasoningEffort: 'medium', tokenLimitParameter: 'max_tokens' } }], SNAPSHOT);
+  assert.deepEqual(effort, ['z-ai/glm-5.3-flash: reasoning "medium" is not among the list\'s efforts (max, high, low)']);
+  const none = checkRoster([{ ...byId('xiaomi/mimo-v2.6-flash'), requestSettings: { reasoningEffort: 'low', tokenLimitParameter: 'max_tokens' } }], SNAPSHOT);
+  assert.deepEqual(none, [
+    'xiaomi/mimo-v2.6-flash: would be sent "reasoning_effort", which the list does not give as supported',
+    'xiaomi/mimo-v2.6-flash: reasoning "low" is set and the list gives no reasoning efforts',
   ]);
 
-  // An effort the model does not offer.
-  const effort = checkRoster([{ ...byId('google/gemini-3.5-flash-lite'), requestSettings: { reasoningEffort: 'xhigh' } }], SNAPSHOT);
-  assert.ok(effort.some((p) => /reasoning "xhigh" is not among the list's efforts/.test(p)), effort.join('\n'));
-
-  // A model the list does not give tools for.
-  const noTools = {
+  // A model the list does not give tools or tool_choice for.
+  const without = (param) => ({
     ...SNAPSHOT,
-    data: SNAPSHOT.data.map((m) =>
-      m.id === 'openai/gpt-4o' ? { ...m, supported_parameters: m.supported_parameters.filter((p) => p !== 'tools') } : m,
-    ),
-  };
-  assert.deepEqual(checkRoster([byId('openai/gpt-4o')], noTools), ['openai/gpt-4o: the list does not give "tools" as supported']);
+    data: SNAPSHOT.data.map((m) => (m.id === 'openai/gpt-oss-120b' ? { ...m, supported_parameters: m.supported_parameters.filter((p) => p !== param) } : m)),
+  });
+  assert.deepEqual(checkRoster([byId('openai/gpt-oss-120b')], without('tools')), ['openai/gpt-oss-120b: the list does not give "tools" as supported']);
+  assert.deepEqual(checkRoster([byId('openai/gpt-oss-120b')], without('tool_choice')), ['openai/gpt-oss-120b: the list does not give "tool_choice" as supported']);
+
+  // The provider object is not a model parameter, so the field check neither
+  // refuses it (the green above) nor ignores it: an open-weight model without
+  // the ruled object, with a pinned one, and a control carrying one are refused.
+  const mimo = byId('xiaomi/mimo-v2.6-flash');
+  assert.match(checkRoster([{ ...mimo, provider: undefined }], SNAPSHOT)[0], /its provider object is not the ruled one \(null\)/);
+  assert.match(checkRoster([{ ...mimo, provider: { ...OPEN_WEIGHT_PROVIDER, order: ['Fake'] } }], SNAPSHOT)[0], /not the ruled one/);
+  assert.deepEqual(checkRoster([{ ...byId('anthropic/claude-haiku-5.5'), provider: OPEN_WEIGHT_PROVIDER }], SNAPSHOT), [
+    'anthropic/claude-haiku-5.5: a control model carries a provider object',
+  ]);
 
   // A control whose catalog entry has gone.
   const control = ALL_MODELS.find((m) => m.role === 'control');
@@ -468,32 +492,31 @@ test('#573: the roster passes the slug check against the recorded list, and each
   assert.match(stale[0], /the catalog no longer has an entry "anthropic\/gone"/);
 });
 
-test('#573: the controls are the catalog, each carrying its entry\'s own request settings', () => {
+test('#573, EVAL-OW: the controls are the catalog but Opus 5.5, each with its entry\'s own settings; the open-weight models are at S1\'s rule with the ruled provider', () => {
   const controls = ALL_MODELS.filter((m) => m.role === 'control');
   assert.deepEqual(
     controls.map((m) => m.catalogId),
-    BUILT_IN_CATALOG.map((e) => e.id),
-    'every catalog entry is a control, in catalog order, and nothing else is',
+    BUILT_IN_CATALOG.map((e) => e.id).filter((id) => id !== 'anthropic/claude-opus-5.5'),
+    'every catalog entry but Opus 5.5 is a control, in catalog order, and nothing else is',
   );
   for (const control of controls) {
     const entry = BUILT_IN_CATALOG.find((e) => e.id === control.catalogId);
     assert.deepEqual(control.requestSettings, modelRequestSettings(entry), `${control.id} must send what production sends`);
+    assert.equal(control.provider, undefined);
   }
-  // Every model at the reasoning setting the October 2026 run sent it: the
-  // catalog's three as they were evaluated, the October controls with none,
-  // and the two candidates the catalog did not take.
-  const sent = Object.fromEntries(ALL_MODELS.map((m) => [m.id, [m.role, m.requestSettings?.reasoningEffort ?? null]]));
+  // What each model is sent (the provider object aside): the catalog's two at
+  // their catalog settings, and the open-weight three at S1's rule
+  // (preregistration/s1.md:278-300 at hub 0c4232a).
+  const sent = Object.fromEntries(ALL_MODELS.map((m) => [m.id, [m.role, modelRequestParameters(m.requestSettings, 4000)]]));
   assert.deepEqual(sent, {
-    'anthropic/claude-haiku-5.5': ['control', 'low'],
-    'anthropic/claude-sonnet-5.5': ['control', 'medium'],
-    'anthropic/claude-opus-5.5': ['control', 'medium'],
-    'openai/gpt-4o': ['prior-control', null],
-    'openai/gpt-5.4': ['prior-control', null],
-    'google/gemini-3.5-flash-lite': ['prior-control', null],
-    'anthropic/claude-sonnet-4.6': ['prior-control', null],
-    'google/gemini-3.8-flash': ['candidate', 'medium'],
-    'openai/gpt-6.1-sol': ['candidate', 'medium'],
+    'anthropic/claude-haiku-5.5': ['control', { max_completion_tokens: 4000, reasoning_effort: 'low' }],
+    'anthropic/claude-sonnet-5.5': ['control', { max_completion_tokens: 4000, reasoning_effort: 'medium' }],
+    'z-ai/glm-5.3-flash': ['open-weight', { max_tokens: 4000, reasoning_effort: 'low' }],
+    'openai/gpt-oss-120b': ['open-weight', { max_tokens: 4000, reasoning_effort: 'low' }],
+    'xiaomi/mimo-v2.6-flash': ['open-weight', { max_tokens: 4000 }],
   });
+  assert.deepEqual(OPEN_WEIGHT_PROVIDER, RULED_PROVIDER);
+  for (const m of ALL_MODELS.filter((x) => x.role === 'open-weight')) assert.equal(m.provider, OPEN_WEIGHT_PROVIDER);
 });
 
 test('#609: the queries are March\'s fifteen, with one change: Q3\'s portal is San Francisco\'s current address', () => {
@@ -517,33 +540,64 @@ test('#609: the queries are March\'s fifteen, with one change: Q3\'s portal is S
   assert.equal(hashOf(TEST_QUERIES), '8a418b01d06c331c175f3bc34a490a4ecc4dd33bb984c1a7f40ac6b82884faed');
 });
 
-test('#573: --probe is two models on two queries, one of them off the NYC portal, then the tool-result check', () => {
-  const plan = planFor('probe');
-  assert.deepEqual(plan.models.map((m) => m.id), PROBE.models);
-  assert.equal(plan.queries.length, 2);
-  assert.ok(plan.queries.some((q) => q.portal === 'data.cityofnewyork.us'));
-  assert.ok(plan.queries.some((q) => q.portal !== 'data.cityofnewyork.us'), 'one probe query must test a per-call portal');
-  assert.deepEqual(plan.quoteModels.map((m) => m.id), QUOTE_MODELS);
-  assert.ok(QUOTE_MODELS.includes('openai/gpt-4o'), 'the tool-result check needs a non-Google control');
+test('EVAL-OW C4: the probe is 15 rows and the run 255, with the pause set as ruled', () => {
+  const countBy = (rows, key) => rows.reduce((acc, r) => ({ ...acc, [key(r)]: (acc[key(r)] ?? 0) + 1 }), {});
 
-  const full = planFor('run', {});
-  assert.equal(full.models.length * full.queries.length, 135);
-  assert.deepEqual(full.quoteModels, []);
-  assert.throws(() => planFor('run', { EVAL_MODELS: 'openai/gpt-4o,nope/model' }), /Unknown model ID\(s\): nope\/model/);
+  const probe = planFor('probe');
+  assert.equal(probe.rows.length, 15, 'five models × (two queries + one Ask-first query with off)');
+  assert.deepEqual(probe.queries.map((q) => q.id), ['Q1', 'Q2']);
+  assert.ok(probe.queries.some((q) => q.portal !== TEST_QUERIES[0].portal), 'one probe query must test a per-call portal');
+  assert.deepEqual(countBy(probe.rows, (r) => `${r.queryId} ${r.consent.mode} ${r.consent.decision ?? ''}`), {
+    'Q1 every-source-on ': 5,
+    'Q2 every-source-on ': 5,
+    'Q1 ask-first off': 5,
+  });
+  assert.equal(PROBE.askFirst.decision, 'off');
 
-  const bounds = planBounds(full, SNAPSHOT);
+  const run = planFor('run', {});
+  assert.equal(run.rows.length, 255, '5 × (15 × 3 + 6)');
+  assert.deepEqual(countBy(run.rows, (r) => r.modelId), Object.fromEntries(ALL_MODELS.map((m) => [m.id, 51])));
+  const pause = run.rows.filter((r) => r.consent.mode === 'ask-first');
+  assert.equal(pause.length, 30);
+  assert.deepEqual(PAUSE_SET.queries, ['Q1', 'Q2', 'Q6'], 'the seat\'s ruling, #740 comment 6728891704 point 2');
+  assert.deepEqual(countBy(pause, (r) => `${r.queryId} ${r.consent.decision}`), {
+    'Q1 off': 5, 'Q1 allow': 5, 'Q2 off': 5, 'Q2 allow': 5, 'Q6 off': 5, 'Q6 allow': 5,
+  });
+  for (const r of pause) {
+    assert.deepEqual([r.consent.sourceId, r.consent.alias, r.repeat], ['socrata', 'socrata', 1]);
+  }
+  assert.ok(!run.rows.some((r) => r.consent.decision === 'allow-all'), 'no allow-all row runs');
+  assert.deepEqual(countBy(run.rows.filter((r) => r.consent.mode === 'every-source-on'), (r) => r.repeat), { 1: 75, 2: 75, 3: 75 });
+  // The order: repeat 1, then the pause set, then repeats 2 and 3.
+  assert.deepEqual([...new Set(run.rows.map((r) => (r.consent.mode === 'ask-first' ? 'pause' : `r${r.repeat}`)))], ['r1', 'pause', 'r2', 'r3']);
+  assert.equal(new Set(run.rows.map((r) => r.key)).size, 255, 'every row has its own key');
+
+  // The filters.
+  assert.equal(planFor('run', { EVAL_MODELS: 'openai/gpt-oss-120b', EVAL_QUERIES: '2', EVAL_REPEATS: '1' }).rows.length, 3, 'Q2 On, Q2 off, Q2 allow');
+  assert.equal(planFor('run', { EVAL_QUERIES: '4' }).rows.filter((r) => r.consent.mode === 'ask-first').length, 0);
+  assert.throws(() => planFor('run', { EVAL_MODELS: 'openai/gpt-oss-120b,nope/model' }), /Unknown model ID\(s\): nope\/model/);
+  assert.throws(() => planFor('run', { EVAL_REPEATS: '4' }), /EVAL_REPEATS takes 1 to 3/);
+
+  const bounds = planBounds(run, SNAPSHOT);
   assert.deepEqual(bounds.unpriced, []);
-  assert.ok(bounds.floorUsd > 5 && bounds.floorUsd < 12, `March-profile floor ${bounds.floorUsd}`);
-  assert.ok(bounds.ceilingUsd > bounds.floorUsd);
+  assert.ok(bounds.highUsd > bounds.headlineUsd, `${bounds.highUsd} > ${bounds.headlineUsd}`);
 });
 
 test('#573: flags and environment are refused by name, the key check before anything else', () => {
   assert.deepEqual(parseArgs([]), { mode: 'run', dryRun: false, capUsd: undefined, outDir: path.dirname(SCRIPT) });
   assert.equal(parseArgs(['--probe', '--cap', '3']).capUsd, 3);
+  assert.equal(parseArgs(['--preflight']).mode, 'preflight');
+  assert.deepEqual(
+    (({ mode, calibratePath }) => ({ mode, calibratePath }))(parseArgs(['--calibrate', 'probe.json'])),
+    { mode: 'calibrate', calibratePath: path.resolve('probe.json') },
+  );
   assert.throws(() => parseArgs(['--cap', '0']), /--cap takes a positive number/);
   assert.throws(() => parseArgs(['--cap']), /--cap takes a positive number/);
   assert.throws(() => parseArgs(['--fast']), /Unknown argument: --fast/);
   assert.throws(() => parseArgs(['--check-slugs', '--dry-run']), /no dry-run form/);
+  assert.throws(() => parseArgs(['--preflight', '--dry-run']), /no dry-run form/);
+  assert.throws(() => parseArgs(['--calibrate']), /--calibrate takes the probe's results file/);
+  assert.throws(() => parseArgs(['--probe', '--preflight']), /separate forms/);
 
   const options = { capUsd: 3 };
   assert.match(runEnvProblem({}, options), /OPENROUTER_API_KEY environment variable is required/);
@@ -556,16 +610,27 @@ test('#573: flags and environment are refused by name, the key check before anyt
   assert.equal(runEnvProblem({ OPENROUTER_API_KEY: 'k', SOCRATA_MCP_URL: 'https://x' }, options), null);
 });
 
-test('#573: the dry run makes no network call — and the preload that shows it does stop one', () => {
+test('#573, EVAL-OW C6: the dry run prints each row\'s first request with its provider object, and makes no network call — and the preload that shows it does stop one', () => {
   for (const args of [['--dry-run'], ['--dry-run', '--probe']]) {
     const result = runHarness(args, { preload: NO_NETWORK });
     assert.equal(result.status, 0, `${args.join(' ')}\nstdout:\n${result.stdout}\nstderr:\n${result.stderr}`);
     assert.match(result.stdout, /no network call is made/);
     assert.match(result.stdout, /Roster check against the recorded list: OK\./);
     assert.doesNotMatch(result.stdout + result.stderr, /no-network preload/);
+    const lines = result.stdout.split('\n').filter((l) => /^ {2}\[\d+\] /.test(l));
+    const rows = args.includes('--probe') ? 15 : 255;
+    assert.equal(lines.length, rows, 'one first request a row');
+    assert.match(result.stdout, new RegExp(`\\nRows: ${rows}\\n`));
+    assert.match(result.stdout, /Ceiling, every row at the app's limits, high-priced: \$\d+\.\d\d/);
+    assert.match(result.stdout, /Ceiling, every row at the app's limits, headline: {4}\$\d+\.\d\d/);
+    for (const line of lines) {
+      assert.match(line, /system sha256 [0-9a-f]{12} \(\d+ chars\); tools \[load_source\]; /);
+      const openWeight = /: model (z-ai|openai|xiaomi)\//.test(line);
+      assert.equal(line.includes(`provider ${JSON.stringify(RULED_PROVIDER)}`), openWeight, line);
+      assert.equal(line.endsWith('provider none'), !openWeight, line);
+      assert.match(line, openWeight ? /; max_tokens 4000; / : /; max_completion_tokens 4000; /);
+    }
   }
-  const dry = runHarness(['--dry-run'], { preload: NO_NETWORK });
-  assert.match(dry.stdout, /Rows: 9 models × 15 queries = 135/);
 
   // The red: the live slug check reads the network, and the same preload stops it.
   const live = runHarness(['--check-slugs'], { preload: NO_NETWORK });
@@ -573,77 +638,98 @@ test('#573: the dry run makes no network call — and the preload that shows it 
   assert.match(live.stdout + live.stderr, /no-network preload: fetch https:\/\/openrouter\.ai\/api\/v1\/models was attempted/);
 });
 
-test('#573: a probe against stand-in endpoints writes every row, records what each request carried, and tells a lost tool result from a whole one', () => {
+/** The probe against the stand-in, memoized: several tests read the same run. */
+let standInProbe;
+function probeAgainstStandIn() {
+  if (standInProbe) return standInProbe;
   const dir = scratchDir();
   try {
-    const result = runHarness(['--probe', '--cap', '3', '--out-dir', dir], { env: fakeEnv(dir), preload: writeFakeEndpoints(dir) });
+    const result = runHarness(['--probe', '--cap', '30', '--out-dir', dir], {
+      env: fakeEnv(dir, { EVAL_ROW_GAP_MS: '0' }),
+      preload: writeFakeEndpoints(dir),
+    });
     assert.equal(result.status, 0, `stdout:\n${result.stdout}\nstderr:\n${result.stderr}`);
     const file = resultsFile(dir);
-    assert.match(file.name, /^eval-results-probe-\d{8}T\d{6}Z\.json$/);
-    for (const text of [result.stdout, result.stderr, file.text, readFileSync(path.join(dir, 'requests.jsonl'), 'utf-8')]) {
-      assert.ok(!text.includes(FAKE_KEY), 'the key must never be printed or written');
-    }
-    const out = JSON.parse(file.text);
-
-    // The owner leg's acceptance, in the probe's terms.
-    assert.equal(out.metadata.rowsExpected, 4);
-    assert.equal(out.metadata.rowsWritten, 4);
-    assert.equal(out.metadata.complete, true);
-    assert.equal(out.metadata.spend.stoppedAtCap, false);
-    assert.ok(out.metadata.spend.chargedUsd > 0 && out.metadata.spend.chargedUsd < 3);
-
-    // What each request carried, read from the request itself.
-    const sent = (modelId) => out.results.filter((r) => r.modelId === modelId).flatMap((r) => r.requests.map((q) => q.sent));
-    for (const s of sent('openai/gpt-6.1-sol')) {
-      assert.equal(s.max_completion_tokens, 2000);
-      assert.equal(s.reasoning_effort, 'medium');
-      assert.equal(s.max_tokens, undefined);
-    }
-    for (const s of sent('google/gemini-3.8-flash')) {
-      assert.equal(s.max_tokens, 2000);
-      assert.equal(s.reasoning_effort, 'medium');
-      assert.equal(s.max_completion_tokens, undefined);
-    }
-
-    // The checks, on a row the stand-in answered off the NYC portal.
-    const chicago = out.results.find((r) => r.queryId === 'Q2' && r.modelId === 'openai/gpt-6.1-sol');
-    assert.equal(chicago.checks.portal, 'data.cityofchicago.org');
-    assert.equal(chicago.checks.portalAnswered, true);
-    assert.equal(chicago.checks.expectedDatasetCalled, true);
-    assert.equal(chicago.checks.reasoningCounted, true);
-    assert.equal(chicago.checks.capSumMatches, true);
-
-    // The tool-result check: three models, four recorded results and the one
-    // live capture the stand-in serves (Data Commons); Boston is not configured.
-    const captures = Object.fromEntries(out.quoteChecks.captures.map((c) => [c.source, c]));
-    assert.equal(captures['data-commons'].status, 'captured');
-    assert.equal(captures['data-commons'].shape, 'text-with-json-object');
-    assert.equal(captures['boston-opencontext'].status, 'not-captured');
-    assert.match(captures['boston-opencontext'].reason, /BOSTON_OPENCONTEXT_MCP_URL/);
-
-    const verdict = (model, fixture) => out.quoteChecks.rows.find((r) => r.modelId === model && r.fixtureId === fixture).verdict;
-    assert.equal(out.quoteChecks.rows.length, 15);
-    // The known red: lost on a Google model, whole on the control.
-    assert.equal(verdict('google/gemini-3.8-flash', 'socrata-guidance-with-object'), 'lost');
-    assert.equal(verdict('google/gemini-3.5-flash-lite', 'socrata-guidance-with-object'), 'lost');
-    assert.equal(verdict('openai/gpt-4o', 'socrata-guidance-with-object'), 'whole');
-    // Pure JSON and brace-free text arrive whole everywhere.
-    for (const model of QUOTE_MODELS) {
-      for (const fixture of ['socrata-query-envelope', 'socrata-catalog-array', 'socrata-guidance-cut-no-braces']) {
-        assert.equal(verdict(model, fixture), 'whole', `${model} ${fixture}`);
-      }
-    }
-    assert.equal(verdict('google/gemini-3.8-flash', 'data-commons-live'), 'lost');
-    assert.equal(verdict('openai/gpt-4o', 'data-commons-live'), 'whole');
+    const kept = scratchDir();
+    KEPT_SCRATCH.push(kept);
+    standInProbe = { result, file, out: JSON.parse(file.text), log: fakeLog(path.join(dir, 'requests.jsonl')), path: path.join(kept, file.name) };
+    writeFileSync(standInProbe.path, file.text);
+    return standInProbe;
   } finally {
     rmSync(dir, { recursive: true, force: true });
   }
+}
+
+test('#573, EVAL-OW: a probe against stand-in endpoints writes every row in loop, with each load, what each request carried and cost, and no key or balance', () => {
+  const { result, file, out, log } = probeAgainstStandIn();
+  assert.match(file.name, /^eval-results-probe-\d{8}T\d{6}Z\.json$/);
+  for (const text of [result.stdout, result.stderr, file.text, JSON.stringify(log)]) {
+    assert.ok(!text.includes(FAKE_KEY), 'the key must never be printed or written');
+  }
+
+  // The owner leg's acceptance, in the probe's terms.
+  assert.equal(out.metadata.rowsExpected, 15);
+  assert.equal(out.metadata.rowsWritten, 15);
+  assert.equal(out.metadata.complete, true);
+  assert.equal(out.metadata.totalErrors, 0);
+  assert.equal(out.metadata.spend.stoppedAtCap, false);
+  assert.equal(out.metadata.routing, 'in-loop');
+
+  // Each load and how it ended, with loadAsked: On rows load Socrata with no
+  // question put; the Ask-first rows ask, and `off` declines.
+  for (const row of out.results) {
+    const askFirst = row.consent.mode === 'ask-first';
+    assert.deepEqual(row.loads, [
+      { alias: 'socrata', sourceId: 'socrata', state: askFirst ? 'ask-first' : 'on', outcome: askFirst ? 'declined' : 'loaded', loadAsked: askFirst },
+    ], row.key);
+    assert.deepEqual(row.loaded, askFirst ? [] : ['socrata']);
+    assert.equal(row.checks.pause.pass, true, row.key);
+    assert.equal(row.checks.citation.pass, true, row.key);
+    assert.equal(row.guidanceFallback, false);
+    assert.deepEqual(row.firstRequest.tools, ['load_source']);
+    // Per request: the served provider, what was sent, the tokens and both costs.
+    for (const request of row.requests) {
+      assert.equal(request.provider, 'Fake');
+      assert.ok(request.usage.prompt > 0 && request.usage.completion > 0);
+      assert.equal(request.reportedCostUsd, 0.000001);
+      assert.ok(request.cost.listedUsd > 0);
+      assert.equal(request.cost.ofRecordUsd, Math.max(request.cost.listedUsd, request.cost.reportedUsd));
+    }
+  }
+  const chicago = out.results.find((r) => r.queryId === 'Q2' && r.modelId === 'openai/gpt-oss-120b');
+  assert.equal(chicago.checks.portal, 'data.cityofchicago.org');
+  assert.equal(chicago.checks.portalAnswered, true);
+  assert.equal(chicago.checks.expectedDatasetCalled, true);
+  assert.equal(chicago.checks.reasoningCounted, true);
+  assert.equal(chicago.checks.capSumMatches, true);
+
+  // Part 11: the printed output carries the key check and the balance; the results file never does.
+  assert.match(result.stdout, /Key check: OK \(limit \$123\.45, used \$67\.89, remaining \$55\.56\)/);
+  for (const forbidden of ['Key check', '123.45', '67.89', '55.56', 'limit_remaining']) {
+    assert.ok(!file.text.includes(forbidden), `the results file holds "${forbidden}"`);
+  }
+});
+
+test('EVAL-OW A12 (C2), end to end: every open-weight request on the wire and in sentFacts carries the ruled provider object, and no Claude request one', () => {
+  const { out, log } = probeAgainstStandIn();
+  const openWeight = new Set(ALL_MODELS.filter((m) => m.role === 'open-weight').map((m) => m.id));
+  assert.equal(openWeight.size, 3);
+  const wire = chatRequests(log);
+  assert.equal(wire.filter((r) => openWeight.has(r.model)).length > 0, true, 'premise: open-weight requests were sent');
+  assert.equal(wire.filter((r) => !openWeight.has(r.model)).length > 0, true, 'premise: Claude requests were sent');
+  for (const r of wire) assert.equal(providerProblem(r.body.provider, openWeight.has(r.model)), null, `${r.model}, on the wire`);
+  const recorded = out.results.flatMap((row) => row.requests.map((q) => ({ model: row.modelId, sent: q.sent })));
+  assert.equal(recorded.length, wire.length, 'every request sent was recorded');
+  for (const r of recorded) assert.equal(providerProblem(r.sent.provider, openWeight.has(r.model)), null, `${r.model}, in sentFacts`);
+  // The metadata states the object, and each open-weight model's.
+  assert.deepEqual(out.metadata.openWeightProvider, RULED_PROVIDER);
+  for (const m of out.metadata.models) assert.deepEqual(m.provider, openWeight.has(m.id) ? RULED_PROVIDER : null);
 });
 
 test('#573: a slug missing from the live list stops the run before any model call', () => {
   const dir = scratchDir();
   try {
-    const list = { ...SNAPSHOT, data: SNAPSHOT.data.filter((m) => m.id !== 'google/gemini-3.8-flash') };
+    const list = { ...SNAPSHOT, data: SNAPSHOT.data.filter((m) => m.id !== 'z-ai/glm-5.3-flash') };
     const listPath = path.join(dir, 'list.json');
     writeFileSync(listPath, JSON.stringify(list));
     const result = runHarness(['--probe', '--cap', '3', '--out-dir', dir], {
@@ -651,7 +737,7 @@ test('#573: a slug missing from the live list stops the run before any model cal
       preload: writeFakeEndpoints(dir),
     });
     assert.equal(result.status, 1, `stdout:\n${result.stdout}\nstderr:\n${result.stderr}`);
-    assert.match(result.stderr, /google\/gemini-3\.8-flash: not on OpenRouter's model list/);
+    assert.match(result.stderr, /z-ai\/glm-5\.3-flash: not on OpenRouter's model list/);
     const log = fakeLog(path.join(dir, 'requests.jsonl'));
     assert.equal(chatRequests(log).length, 0, 'no model call before the roster passes');
     assert.equal(log.filter((e) => e.path === '/api/v1/key').length, 0);
@@ -702,22 +788,33 @@ test('#573: a row closed after its timeout sends nothing more, and a request rec
         model: 'm',
         provider: 'P',
         choices: [{ finish_reason: 'length', message: { content: 'abc' } }],
-        usage: { prompt_tokens: 10, completion_tokens: 5, total_tokens: 15, completion_tokens_details: { reasoning_tokens: 3 } },
+        usage: { prompt_tokens: 10, completion_tokens: 5, total_tokens: 15, cost: 0.0002, completion_tokens_details: { reasoning_tokens: 3 } },
       }),
       { headers: { 'content-type': 'application/json' } },
     );
   };
   const fetchFor = recordingFetch(row, base);
+  const body = JSON.stringify({ model: 'm', max_completion_tokens: 2000, reasoning_effort: 'low', messages: [{}], tools: [{ function: { name: 't' } }] });
   await fetchFor('https://openrouter.ai/api/v1/chat/completions', {
     method: 'POST',
     headers: { Authorization: `Bearer ${FAKE_KEY}` },
-    body: JSON.stringify({ model: 'm', max_completion_tokens: 2000, reasoning_effort: 'low', messages: [{}], tools: [{}] }),
+    body,
   });
   assert.equal(sentCount, 1);
   assert.deepEqual(row.requests[0].sent, {
-    model: 'm', max_tokens: undefined, max_completion_tokens: 2000, reasoning_effort: 'low', messages: 1, tools: 1,
+    model: 'm',
+    max_tokens: undefined,
+    max_completion_tokens: 2000,
+    reasoning_effort: 'low',
+    provider: undefined,
+    stream: undefined,
+    messages: 1,
+    tools: 1,
+    toolNames: ['t'],
+    bodyChars: body.length,
   });
   assert.deepEqual(row.requests[0].usage, { prompt: 10, completion: 5, total: 15, reasoning: 3, cachedPrompt: undefined });
+  assert.equal(row.requests[0].reportedCostUsd, 0.0002);
   assert.equal(row.requests[0].finishReason, 'length');
   assert.ok(!JSON.stringify(row.requests).includes(FAKE_KEY));
 
@@ -800,12 +897,12 @@ test('#573: the automatic checks read the calls and requests as recorded, and ea
 });
 
 test('#573: buildOutput counts rows against models × queries and summarizes the checks', () => {
-  const models = ALL_MODELS.filter((m) => m.id === 'openai/gpt-4o');
+  const models = ALL_MODELS.filter((m) => m.id === 'xiaomi/mimo-v2.6-flash');
   const queries = TEST_QUERIES.filter((q) => ['Q1', 'Q2'].includes(q.id));
   const q1 = queries[0];
   const call = { name: 'get_data', args: { dataset_id: 'erm2-nwe9', portal: q1.portal }, resultSummary: { rows: 1, columns: 1 } };
   const result = {
-    modelId: 'openai/gpt-4o',
+    modelId: 'xiaomi/mimo-v2.6-flash',
     queryId: 'Q1',
     portal: q1.portal,
     toolCallCount: 1,
@@ -814,13 +911,17 @@ test('#573: buildOutput counts rows against models × queries and summarizes the
     costUsd: 0.01,
     checks: rowChecks(q1, { response: 'erm2-nwe9', toolsCalled: [call], totalTokens: 1000 }, []),
   };
-  const error = { modelId: 'openai/gpt-4o', queryId: 'Q2', isTimeout: true, costUsd: 0.02 };
+  const error = { modelId: 'xiaomi/mimo-v2.6-flash', queryId: 'Q2', isTimeout: true, costUsd: 0.02 };
   const out = buildOutput({ meta: { mode: 'run' }, models, queries, results: [result], errors: [error] });
   assert.equal(out.metadata.rowsExpected, 2);
   assert.equal(out.metadata.rowsWritten, 2);
   assert.equal(out.metadata.complete, true, 'a timed-out row is a written row');
   assert.equal(out.metadata.totalTimeouts, 1);
-  assert.deepEqual(out.metadata.models[0].requestParameters, { max_tokens: 2000 });
+  assert.deepEqual(out.metadata.models[0].requestParameters, { max_tokens: 4000 });
+  assert.deepEqual(out.metadata.models[0].provider, RULED_PROVIDER);
+  assert.equal(out.metadata.limits.maxCumulativeTokens, 200_000);
+  // A plan's rows, when given, are what a run is counted against.
+  assert.equal(buildOutput({ meta: {}, models, queries, rows: [{}, {}, {}], results: [result], errors: [error] }).metadata.rowsExpected, 3);
   const [s] = out.summary;
   assert.equal(s.expectedDatasetAnswered, '1/1');
   assert.equal(s.timeouts, 1);
@@ -859,26 +960,13 @@ test('#573: the recorded tool results are what they claim, and each verdict is r
   ]);
 });
 
-// --- #609: the harness offers what the app offers ---
+// --- #609: the live captures' names ---
 //
-// Each row's request is read from what the harness actually sent (the
-// stand-in's log of every model request), and the expectation is computed by
-// the app's own functions — `offeredMcpTools(mcpToolsFor(lockedPortal),
-// configured, selection)` and `composeSystemPrompt({ portal, configured,
-// selection })`, the two calls `src/app/api/compare-stream/route.ts` makes
-// under all-sources — in a second process given the same environment, the
-// same stand-in transport and the run's own clock. The harness is never
-// portal-locked (its questions span five portals) and passes no selection, so
-// the expectation is computed at no lock and no selection too.
-//
-// Two configurations, because a hand copy can equal one of them: none of the
-// optional sources configured, and every one. Each optional source is read
-// from the router's manifest, so a source added there is configured here
-// without an edit; the test checks that each configuration offers exactly the
-// sources it claims, so a configuration that silently configured nothing
-// would fail rather than pass.
-
-const MCP_DIR = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../src/lib/mcp');
+// Until EVAL-OW P1 (#740) this section also held the harness's all-sources
+// offer to the app's (A1: every request's tools and composed prompt, at two
+// configurations). The harness now runs every row in loop, as production
+// does, and A2 at the foot of this file holds its first request to the one
+// the route itself sends.
 
 /** The environment that configures every optional source the manifest has. */
 function everyOptionalSource() {
@@ -892,127 +980,7 @@ function everyOptionalSource() {
   return env;
 }
 
-const CONFIGURATIONS = {
-  'no optional source': {},
-  'every optional source': everyOptionalSource(),
-};
-
-const REQUIRED_ALIASES = CIVIC_MANIFEST.filter((e) => e.configuration.requirement !== 'optional').map((e) => e.alias);
-const ALL_ALIASES = CIVIC_MANIFEST.map((e) => e.alias);
-
-/** What the app's functions give for this process's environment, written to REF_OUT. */
-const REFERENCE_SOURCE = `
-import { writeFileSync } from 'node:fs';
-import { mcpToolsFor, offeredMcpTools } from ${JSON.stringify(pathToFileURL(path.join(MCP_DIR, 'tools.ts')).href)};
-import { composeSystemPrompt } from ${JSON.stringify(pathToFileURL(path.join(MCP_DIR, 'socrata-skill.ts')).href)};
-import { readMcpEnvFromProcess } from ${JSON.stringify(pathToFileURL(path.join(MCP_DIR, 'registry.ts')).href)};
-const configured = readMcpEnvFromProcess();
-const lockedPortal = undefined;
-const selection = undefined;
-const now = new Date(process.env.REF_NOW);
-const prompts = {};
-for (const portal of JSON.parse(process.env.REF_PORTALS)) {
-  prompts[portal] = (await composeSystemPrompt({ portal, configured, selection, now })).prompt;
-}
-writeFileSync(process.env.REF_OUT, JSON.stringify({ tools: offeredMcpTools(mcpToolsFor(lockedPortal), configured, selection), prompts }));
-`;
-
-const DRIVE_QUERIES = ['Q1', 'Q2']; // NYC and Chicago: two portals, so a prompt that ignores the row's portal fails
-const drives = new Map();
-
-/**
- * One run of the harness (one model, two queries) against the stand-in at a
- * configuration, and the app's tools and prompts for the same environment and
- * clock. Memoized: the tool and prompt tests read the same two runs.
- */
-function driveAt(configuration) {
-  if (drives.has(configuration)) return drives.get(configuration);
-  const dir = scratchDir();
-  try {
-    const preload = writeFakeEndpoints(dir);
-    const indices = DRIVE_QUERIES.map((id) => TEST_QUERIES.findIndex((q) => q.id === id) + 1).join(',');
-    const env = fakeEnv(dir, { EVAL_MODELS: 'openai/gpt-4o', EVAL_QUERIES: indices, ...CONFIGURATIONS[configuration] });
-    const run = runHarness(['--cap', '3', '--out-dir', dir], { env, preload });
-    assert.equal(run.status, 0, `${configuration}\nstdout:\n${run.stdout}\nstderr:\n${run.stderr}`);
-    const out = JSON.parse(resultsFile(dir).text);
-    const requests = chatRequests(fakeLog(path.join(dir, 'requests.jsonl')));
-
-    const refOut = path.join(dir, 'reference.json');
-    const portals = [...new Set(TEST_QUERIES.filter((q) => DRIVE_QUERIES.includes(q.id)).map((q) => q.portal))];
-    const ref = spawnSync(process.execPath, ['--import', pathToFileURL(preload).href, '--input-type=module', '-e', REFERENCE_SOURCE], {
-      encoding: 'utf-8',
-      timeout: 60_000,
-      env: {
-        PATH: process.env.PATH,
-        HOME: process.env.HOME,
-        ...env,
-        FAKE_LOG: path.join(dir, 'reference.jsonl'),
-        REF_OUT: refOut,
-        REF_NOW: out.metadata.startedAt,
-        REF_PORTALS: JSON.stringify(portals),
-      },
-    });
-    assert.equal(ref.status, 0, `reference at ${configuration}\nstdout:\n${ref.stdout}\nstderr:\n${ref.stderr}`);
-    const reference = JSON.parse(readFileSync(refOut, 'utf-8'));
-    const drive = { configuration, out, requests, reference };
-    drives.set(configuration, drive);
-    return drive;
-  } finally {
-    rmSync(dir, { recursive: true, force: true });
-  }
-}
-
 const toolNames = (tools) => (tools ?? []).map((t) => t.function?.name);
-const aliasesOf = (names) => [...new Set(names.map((n) => CIVIC_MANIFEST.find((e) => n.startsWith(`${e.alias}__`))?.alias))];
-
-test('#609: every model request offers the tools the app offers, with no optional source configured and with every one', () => {
-  const drives = Object.keys(CONFIGURATIONS).map(driveAt);
-
-  // The instrument: each configuration offers exactly the sources it claims,
-  // and the two lists differ, so no one fixed list can equal both.
-  const [none, every] = drives.map((d) => toolNames(d.reference.tools));
-  assert.deepEqual(aliasesOf(none), REQUIRED_ALIASES);
-  assert.deepEqual(aliasesOf(every), ALL_ALIASES);
-  assert.notDeepEqual(none, every);
-
-  for (const drive of drives) {
-    // Two rows, each a tool call and an answer: four model requests.
-    assert.equal(drive.requests.length, 4, `${drive.configuration}: ${drive.requests.length} model requests`);
-    for (const request of drive.requests) {
-      assert.deepEqual(
-        toolNames(request.tools),
-        toolNames(drive.reference.tools),
-        `${drive.configuration}: the harness offered ${JSON.stringify(toolNames(request.tools))}`,
-      );
-      // By schema too; compared whole, so a failure names the configuration
-      // rather than printing every schema.
-      assert.ok(
-        isDeepStrictEqual(request.tools, drive.reference.tools),
-        `${drive.configuration}: the names are the app's and the schemas are not`,
-      );
-    }
-  }
-});
-
-test('#609: every model request carries the app\'s composed prompt for its row\'s portal, configuration and clock', () => {
-  for (const drive of Object.keys(CONFIGURATIONS).map(driveAt)) {
-    const { prompts } = drive.reference;
-    // The instrument: the two portals compose two prompts, and each states the run's date.
-    assert.equal(Object.keys(prompts).length, 2);
-    assert.notEqual(...Object.values(prompts));
-    for (const prompt of Object.values(prompts)) assert.ok(prompt.includes(drive.out.metadata.startedAt.slice(0, 10)));
-
-    for (const request of drive.requests) {
-      const query = TEST_QUERIES.find((q) => q.query === request.user);
-      assert.ok(query, `a model request carried a question the run did not ask: ${request.user}`);
-      assert.ok(
-        request.system === prompts[query.portal],
-        `${drive.configuration} ${query.id}: the harness's system prompt is not the app's composition ` +
-          `(it begins ${JSON.stringify(String(request.system).slice(0, 120))})`,
-      );
-    }
-  }
-});
 
 test('#609: every live capture names a tool the app offers, and the name routes to the capture\'s own source', () => {
   const offered = new Set(toolNames(mcpTools));
@@ -1256,17 +1224,6 @@ test('EVAL-OW P1 A2 (C1): a row\'s first request equals the route\'s first reque
   }
 });
 
-/** The ruled object (#740 D3 = A), stated here, not read from the harness. */
-const RULED_PROVIDER = { max_price: { prompt: 0.15, completion: 0.6 }, require_parameters: true, data_collection: 'deny' };
-
-/** Why a recorded `provider` is not the ruling's, or null when it is. */
-function providerProblem(provider, openWeight) {
-  if (!openWeight) return provider === undefined ? null : `a Claude request carried provider ${JSON.stringify(provider)}`;
-  if (provider === undefined) return 'an open-weight request carried no provider';
-  for (const pin of ['order', 'only', 'ignore']) if (Object.hasOwn(provider, pin)) return `the provider is pinned (${pin})`;
-  return isDeepStrictEqual(provider, RULED_PROVIDER) ? null : `the provider is ${JSON.stringify(provider)}, not the ruled object`;
-}
-
 test('EVAL-OW P1 A12 (C2): an open-weight request carries exactly the ruled provider object, read from sentFacts; a Claude request carries none', async () => {
   const wire = [];
   const base = async (_url, init) => {
@@ -1295,10 +1252,342 @@ test('EVAL-OW P1 A12 (C2): an open-weight request carries exactly the ruled prov
   assert.equal(Object.hasOwn(wire[1], 'provider'), false);
 
   // The check fails on each mutation it exists for.
-  const { data_collection: _dropped, ...withoutDeny } = RULED_PROVIDER;
+  const withoutDeny = { max_price: RULED_PROVIDER.max_price, require_parameters: true };
   assert.match(providerProblem({ ...RULED_PROVIDER, order: ['Fake'] }, true), /pinned \(order\)/);
   assert.match(providerProblem({ ...RULED_PROVIDER, only: ['Fake'] }, true), /pinned \(only\)/);
   assert.match(providerProblem(withoutDeny, true), /not the ruled object/);
   assert.match(providerProblem(undefined, true), /carried no provider/);
   assert.match(providerProblem(RULED_PROVIDER, false), /a Claude request carried provider/);
+});
+
+// --- EVAL-OW P1: the pause self-test, the stops, the bounds and the limits ---
+
+test('EVAL-OW C3: the pause self-test — off ends the load declined; after allow-all no later load pauses; allow, the contrast, pauses again', async () => {
+  // What the scripted decisions fix is the app's code (`createInLoopRouting`,
+  // `src/lib/mcp/routing-mode.ts:326`, `allowedAll` at `:299`, `:314`,
+  // `:328`), driven here through the harness's own scripted pause.
+  assert.equal(CONSENT_GATE_ENFORCED, true, 'the harness states the gate enforced, as the app runs it');
+  const realFetch = globalThis.fetch;
+  // A load composes the source's guidance; offline, it falls back, which this test does not read.
+  globalThis.fetch = async () => {
+    throw new TypeError('fetch failed');
+  };
+  try {
+    const configured = readMcpEnv({ SOCRATA_MCP_URL: 'https://fake-socrata.test', DATA_COMMONS_MCP_URL: 'https://fake-datacommons.test/mcp' });
+    const routed = async (decision, consent) => {
+      const asked = new Set();
+      let asks = 0;
+      const scripted = scriptedPause(decision, asked);
+      const routing = await createInLoopRouting({
+        configured,
+        directory: directorySet(configured, consent),
+        selection: [],
+        pause: { ask: (id, report) => { asks++; return scripted.ask(id, report); } },
+        callTool: async () => 'fixture',
+      });
+      const load = async (alias) => (await routing.loadStep.load(alias, { iteration: 1 })).outcome;
+      return { load, asked, asks: () => asks };
+    };
+    // Both sources Ask first: the gate enforced, no stored state.
+    const bothAskFirst = { enforced: true, states: {} };
+
+    const off = await routed('off', bothAskFirst);
+    assert.equal(await off.load('socrata'), 'declined');
+    assert.equal(await off.load('socrata'), 'declined', 'a second load repeats the first outcome');
+    assert.equal(off.asks(), 1, 'and asks nothing');
+    assert.deepEqual([...off.asked], ['socrata']);
+
+    const allowAll = await routed('allow-all', bothAskFirst);
+    assert.equal(await allowAll.load('socrata'), 'loaded');
+    assert.equal(await allowAll.load('data_commons'), 'loaded');
+    assert.equal(allowAll.asks(), 1, 'after allow-all, no later load pauses');
+
+    const allow = await routed('allow', bothAskFirst);
+    assert.equal(await allow.load('socrata'), 'loaded');
+    assert.equal(await allow.load('data_commons'), 'loaded');
+    assert.equal(allow.asks(), 2, 'the contrast: after allow, the next Ask-first load pauses again');
+
+    // The harness's configuration: the gold source Ask first, every other On.
+    const harness = await routed('off', consentStates(goldAskFirst('off')));
+    assert.equal(await harness.load('data_commons'), 'loaded');
+    assert.equal(harness.asks(), 0, 'an On source asks nothing');
+    assert.equal(await harness.load('socrata'), 'declined');
+    assert.equal(harness.asks(), 1);
+
+    // The decisions a plan scripts are off and allow, and allow-all is this test's only.
+    const scripted = new Set([...planFor('run', {}).rows, ...planFor('probe').rows].map((r) => r.consent.decision ?? 'none'));
+    assert.deepEqual([...scripted].sort(), ['allow', 'none', 'off']);
+  } finally {
+    globalThis.fetch = realFetch;
+  }
+});
+
+/** The preflight against the stand-in, at an environment. */
+function preflightAt(extra, list) {
+  const dir = scratchDir();
+  try {
+    const env = fakeEnv(dir, extra);
+    if (list) {
+      env.FAKE_OPENROUTER_LIST = path.join(dir, 'list.json');
+      writeFileSync(env.FAKE_OPENROUTER_LIST, JSON.stringify(list));
+    }
+    const result = runHarness(['--preflight'], { env, preload: writeFakeEndpoints(dir) });
+    return { result, log: fakeLog(path.join(dir, 'requests.jsonl')), output: result.stdout + result.stderr };
+  } finally {
+    rmSync(dir, { recursive: true, force: true });
+  }
+}
+
+test('EVAL-OW C5: the preflight prints the environment by name, the key check, the roster, every source with its hosting and the guidance\'s origin, and sends no model request', () => {
+  const { result, log, output } = preflightAt({});
+  assert.equal(result.status, 0, output);
+  for (const name of runVariables()) assert.match(result.stdout, new RegExp(`\\n {2}${name} +(set|absent)\\n`), name);
+  assert.match(result.stdout, / {2}OPENROUTER_API_KEY +set\n/);
+  assert.match(result.stdout, / {2}NYC_CHARTER_HOSTING +absent\n/);
+  for (const value of [FAKE_KEY, 'fake-socrata.test', 'fake-datacommons.test']) assert.ok(!output.includes(value), `a value was printed: ${value}`);
+  assert.match(result.stdout, /Key check: OK/);
+  assert.match(result.stdout, /Roster check: OK\./);
+  assert.match(result.stdout, / {2}socrata +remote +\(SOCRATA_MCP_URL\)/);
+  assert.match(result.stdout, / {2}nyc_charter +not configured +\(NYC_CHARTER_HOSTING\)/);
+  assert.match(result.stdout, /Socrata guidance, as a load composes it for data\.cityofnewyork\.us: endpoint/);
+  assert.match(result.stdout, /Preflight OK\. Nothing was sent to a model\./);
+  assert.equal(chatRequests(log).length, 0);
+});
+
+test('EVAL-OW C5: each preflight stop line prints and exits before any model request', () => {
+  const missingGlm = { ...SNAPSHOT, data: SNAPSHOT.data.filter((m) => m.id !== 'z-ai/glm-5.3-flash') };
+  const stops = [
+    { name: 'the key absent', extra: { OPENROUTER_API_KEY: '' }, line: /Error: OPENROUTER_API_KEY environment variable is required/, network: false },
+    { name: 'a 1Password reference', extra: { OPENROUTER_API_KEY: 'op://Private/OpenRouter/key' }, line: /Error: OPENROUTER_API_KEY holds a 1Password reference, not a key/, network: false },
+    { name: 'a hosted source switched on', extra: { NYC_CHARTER_HOSTING: 'sandbox' }, line: /Error: this configuration would start a sandbox for a hosted source \(nyc_charter, NYC_CHARTER_HOSTING\)/, network: false },
+    { name: 'a roster problem', extra: {}, list: missingGlm, line: /z-ai\/glm-5\.3-flash: not on OpenRouter's model list/ },
+    { name: 'the key refused', extra: { FAKE_KEY_STATUS: '401' }, line: /Error: OpenRouter refused the key \(401 from its key endpoint\); nothing was spent/ },
+    { name: 'a fallback composition', extra: { FAKE_SKILL: 'refuse' }, line: /Error: the Socrata guidance fell back to the app's fallback text/ },
+  ];
+  for (const stop of stops) {
+    const { result, log, output } = preflightAt(stop.extra, stop.list);
+    assert.equal(result.status, 1, `${stop.name}\n${output}`);
+    assert.match(output, stop.line, stop.name);
+    assert.doesNotMatch(output, /Preflight OK/, stop.name);
+    assert.equal(chatRequests(log).length, 0, `${stop.name}: a model request was sent`);
+    if (stop.network === false) assert.deepEqual(log, [], `${stop.name}: stopped before any request at all`);
+  }
+});
+
+test('EVAL-OW C5: the run refuses a sandbox-starting configuration and a fallback composition too, before any model request', () => {
+  for (const [extra, line] of [
+    [{ NYC_CHARTER_HOSTING: 'sandbox' }, /would start a sandbox for a hosted source \(nyc_charter, NYC_CHARTER_HOSTING\)/],
+    [{ FAKE_SKILL: 'refuse' }, /the Socrata guidance fell back to the app's fallback text/],
+  ]) {
+    const dir = scratchDir();
+    try {
+      const result = runHarness(['--probe', '--cap', '3', '--out-dir', dir], { env: fakeEnv(dir, extra), preload: writeFakeEndpoints(dir) });
+      assert.equal(result.status, 1, `stdout:\n${result.stdout}\nstderr:\n${result.stderr}`);
+      assert.match(result.stderr, line);
+      assert.equal(chatRequests(fakeLog(path.join(dir, 'requests.jsonl'))).length, 0);
+      assert.deepEqual(readdirSync(dir).filter((f) => f.startsWith('eval-results-')), [], 'no results file');
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
+  }
+});
+
+/**
+ * The calibrated bound by the proposed method, computed here from the
+ * fixture's prices, so the harness's printed figure can disagree with it.
+ */
+function expectedBound(probe, rowsPerModel) {
+  const prices = (id) => SNAPSHOT.data.find((m) => m.id === id).pricing;
+  let high = 0;
+  let headline = 0;
+  for (const model of ALL_MODELS) {
+    const rows = [...probe.results, ...probe.errors].filter((r) => r.modelId === model.id);
+    const prompts = rows.map((r) => r.requests.reduce((s, q) => s + q.usage.prompt, 0));
+    const completion = Math.max(...rows.flatMap((r) => r.requests.map((q) => Math.max(q.usage.completion, q.usage.reasoning ?? 0))));
+    const rowPrompt = Math.min(600_000, 2 * Math.max(...prompts));
+    const rowRequests = Math.min(22, 2 * Math.max(...rows.map((r) => r.requests.length)));
+    const allowance = Math.min(4000, 2 * completion);
+    const reservation = reservationPricing(model, SNAPSHOT);
+    const listed = prices(model.id);
+    const at = (input, output) => (rowPrompt * input + rowRequests * allowance * output) / 1e6;
+    high += rowsPerModel * at(reservation.input, reservation.output);
+    headline += rowsPerModel * at(Number(listed.prompt) * 1e6, Number(listed.completion) * 1e6);
+  }
+  return { high, headline };
+}
+
+function calibrateOn(probe) {
+  const dir = scratchDir();
+  try {
+    const file = path.join(dir, 'eval-results-probe-shaped.json');
+    writeFileSync(file, JSON.stringify(probe));
+    // No preload, and none needed: --calibrate makes no network call, which the no-network preload shows.
+    return runHarness(['--calibrate', file], { preload: NO_NETWORK });
+  } finally {
+    rmSync(dir, { recursive: true, force: true });
+  }
+}
+
+const printedBound = (stdout, which) => Number(stdout.match(new RegExp(`Calibrated bound, ${which}: +\\$(\\d+\\.\\d\\d)`))?.[1]);
+
+test('EVAL-OW C5: --calibrate on the stand-in\'s probe file and on two recorded profiles prints both bounds and the cap rule\'s outcome', () => {
+  // The rule itself, at each of its three branches.
+  assert.equal(capRule(41.2, 3).cap, 42);
+  assert.match(capRule(80, 3).line, /at or under \$80\.00: the cap is the bound rounded up, --cap 80/);
+  assert.deepEqual([capRule(90.5, 10).run, capRule(90.5, 10).cap], [true, 91]);
+  assert.deepEqual([capRule(90.5, 60).run, capRule(90.5, 60).cap], [false, null]);
+
+  // 1. The probe file the stand-in endpoints wrote.
+  const { out } = probeAgainstStandIn();
+  const plain = calibrateOn(out);
+  assert.equal(plain.status, 0, `stdout:\n${plain.stdout}\nstderr:\n${plain.stderr}`);
+  assert.doesNotMatch(plain.stdout + plain.stderr, /no-network preload/);
+  assert.match(plain.stdout, /The run: 255 rows/);
+  const plainExpected = expectedBound(out, 51);
+  assert.equal(printedBound(plain.stdout, 'high-priced'), Number(plainExpected.high.toFixed(2)));
+  assert.equal(printedBound(plain.stdout, 'headline'), Number(plainExpected.headline.toFixed(2)));
+  assert.match(plain.stdout, new RegExp(`Cap rule: the bound is at or under \\$80\\.00: the cap is the bound rounded up, --cap ${Math.ceil(plainExpected.high)}\\n`));
+
+  // 2. The same rows with every prompt at 90,000 billed tokens: the
+  // high-priced bound crosses $80 and the headline bound does not.
+  const shaped = structuredClone(out);
+  for (const row of shaped.results) for (const request of row.requests) request.usage.prompt = 90_000;
+  shaped.metadata.spend.chargedUsd = 2;
+  const expected = expectedBound(shaped, 51);
+  assert.ok(expected.high > 80 && expected.high <= 150 && expected.headline <= 80, `premise: ${JSON.stringify(expected)}`);
+  const runs = calibrateOn(shaped);
+  assert.equal(runs.status, 0, `stdout:\n${runs.stdout}\nstderr:\n${runs.stderr}`);
+  assert.equal(printedBound(runs.stdout, 'high-priced'), Number(expected.high.toFixed(2)));
+  assert.equal(printedBound(runs.stdout, 'headline'), Number(expected.headline.toFixed(2)));
+  assert.match(runs.stdout, /Cap rule: the bound is above \$80\.00; the probe's recorded spend \$2\.00 plus the cap \$\d+\.00 is \$\d+\.00, at or under \$150\.00: --cap \d+/);
+
+  // 3. That profile with a probe that recorded $70: the high-priced bound is
+  // what stops the run (the headline bound plus $70 would be under $150), and
+  // both bounds are printed before the stop.
+  shaped.metadata.spend.chargedUsd = 70;
+  assert.ok(70 + Math.ceil(expected.headline) <= 150 && 70 + Math.ceil(expected.high) > 150, 'premise: only the high-priced bound stops it');
+  const stops = calibrateOn(shaped);
+  assert.equal(stops.status, 3, `stdout:\n${stops.stdout}\nstderr:\n${stops.stderr}`);
+  const at = (pattern) => stops.stdout.search(pattern);
+  assert.ok(at(/Calibrated bound, high-priced/) !== -1 && at(/Calibrated bound, headline/) !== -1);
+  assert.ok(at(/Calibrated bound, headline/) < at(/Cap rule:/), 'both bounds print before the stop');
+  assert.match(stops.stdout, /Cap rule: the bound is above \$80\.00, and the probe's recorded spend \$70\.00 plus the cap \$\d+\.00 would be \$\d+\.00, above \$150\.00: no run; the seat takes it to the owner/);
+
+  // A file that is not a probe's is refused.
+  const notProbe = calibrateOn({ ...out, metadata: { ...out.metadata, mode: 'run' } });
+  assert.equal(notProbe.status, 1);
+  assert.match(notProbe.stderr, /is not a probe's results file \(mode run\)/);
+});
+
+test('EVAL-OW C6: the run\'s limits are 200,000, 4,000 and 20, read from what the harness passes the loop', async () => {
+  const source = readFileSync(SCRIPT, 'utf-8');
+  assert.match(source, /await runToolLoop\(\{\n\s+client,\n\s+\.\.\.loopOptions\(\{/, 'a row hands the loop loopOptions, whole');
+  const configured = readMcpEnv({ SOCRATA_MCP_URL: 'https://fake-socrata.test' });
+  const routing = await createInLoopRouting({ configured, directory: directorySet(configured, consentStates({ mode: 'every-source-on' })), selection: ['socrata'] });
+  const loadStep = { toolName: 'load_source', load: async () => ({ outcome: 'not-offered', text: '' }) };
+  const executeToolCall = async () => '';
+  const model = ALL_MODELS.find((m) => m.id === 'z-ai/glm-5.3-flash');
+  const query = TEST_QUERIES.find((q) => q.id === 'Q6');
+  const options = loopOptions({ model, query, routing, loadStep, executeToolCall });
+  assert.deepEqual(
+    {
+      maxCumulativeTokens: options.maxCumulativeTokens,
+      maxTokens: options.maxTokens,
+      maxIterations: options.maxIterations,
+      maxToolResultChars: options.maxToolResultChars,
+      toolTimeoutMs: options.toolTimeoutMs,
+      finalTurn: options.finalTurn,
+    },
+    { maxCumulativeTokens: 200_000, maxTokens: 4000, maxIterations: 20, maxToolResultChars: 50_000, toolTimeoutMs: 45_000, finalTurn: 'stream' },
+  );
+  assert.deepEqual(APP_LIMITS, { maxIterations: 20, maxTokens: 4000, maxCumulativeTokens: 200_000, maxToolResultChars: 50_000, toolTimeoutMs: 45_000, finalTurn: 'stream' });
+  assert.equal(options.systemPrompt, routing.firstSystemPrompt);
+  assert.equal(options.tools, routing.firstTools);
+  assert.equal(options.loadStep, loadStep);
+  assert.equal(options.executeToolCall, executeToolCall);
+  assert.deepEqual([options.endpointModel, options.requestSettings, options.prompt, options.portal, options.lockedPortal], [
+    model.id, model.requestSettings, query.query, query.portal, undefined,
+  ]);
+});
+
+/** A short run against the stand-in: one model, Q2, one repeat (Q2 On, Q2 off, Q2 allow). */
+function shortRun(extra) {
+  const dir = scratchDir();
+  try {
+    const index = TEST_QUERIES.findIndex((q) => q.id === 'Q2') + 1;
+    const env = fakeEnv(dir, { EVAL_MODELS: 'anthropic/claude-haiku-5.5', EVAL_QUERIES: String(index), EVAL_REPEATS: '1', EVAL_ROW_GAP_MS: '0', ...extra });
+    const result = runHarness(['--cap', '30', '--out-dir', dir], { env, preload: writeFakeEndpoints(dir) });
+    assert.equal(result.status, 0, `stdout:\n${result.stdout}\nstderr:\n${result.stderr}`);
+    return { out: JSON.parse(resultsFile(dir).text), log: fakeLog(path.join(dir, 'requests.jsonl')) };
+  } finally {
+    rmSync(dir, { recursive: true, force: true });
+  }
+}
+
+test('EVAL-OW C6: a model that never answers runs 20 rounds and a streamed answering turn, read and recorded whole; the pause check fires on its reloads', () => {
+  const { out, log } = shortRun({ FAKE_CHAT: 'always-tool' });
+  assert.equal(out.results.length, 3);
+  for (const row of out.results) {
+    assert.equal(row.iterations, 20, row.key);
+    assert.equal(row.requests.length, 22, `${row.key}: the first request, 20 rounds and the answering turn`);
+    assert.equal(row.answeringTurnTaken, true);
+    assert.equal(row.response, 'Streamed answer.');
+    for (const request of row.requests) assert.equal(request.sent.max_completion_tokens, 4000);
+    const last = row.requests.at(-1);
+    assert.equal(last.sent.stream, true, 'the answering turn streams, as the app\'s does');
+    assert.equal(last.streamed, true);
+    assert.equal(last.provider, 'Fake');
+    assert.ok(last.usage?.prompt > 0, 'a streamed body\'s usage is read');
+    assert.equal(last.reportedCostUsd, 0.000001);
+    assert.equal(last.unreadable, undefined);
+  }
+  assert.equal(chatRequests(log).filter((r) => r.body.stream === true).length, 3);
+  // Declined, the stand-in keeps asking for Socrata: the check fires on the model's behaviour.
+  const off = out.results.find((r) => r.consent.decision === 'off');
+  assert.equal(off.checks.pause.pass, false);
+  assert.equal(off.checks.pause.declineRespected.reloads, 19, 'twenty loads ran, the first declined');
+  assert.ok(off.loads.every((l) => l.outcome === 'declined' && l.loadAsked === true));
+  assert.equal(out.results.find((r) => r.consent.mode === 'every-source-on').checks.pause.pass, true);
+});
+
+test('EVAL-OW C6: the 200,000-token cumulative bound stops a row after the round that crosses it, then the answering turn', () => {
+  const { out } = shortRun({ FAKE_CHAT: 'always-tool', FAKE_USAGE_TOTAL: '60000' });
+  for (const row of out.results) {
+    assert.equal(row.budgetExceeded, true, row.key);
+    // 60,000, 120,000, 180,000, then 240,000 crosses it: four requests, and the answering turn.
+    assert.equal(row.requests.length, 5, row.key);
+    assert.equal(row.totalTokens, 300_000);
+    assert.equal(row.checks.capSumMatches, true);
+  }
+});
+
+test('EVAL-OW: a streamed body folds into the fields a JSON body gives', () => {
+  const text =
+    'data: {"id":"g","model":"m","provider":"P","choices":[{"delta":{"content":"Hel"}}]}\n\n' +
+    'data: {"id":"g","model":"m","provider":"P","choices":[{"delta":{"content":"lo"},"finish_reason":"stop","native_finish_reason":"end"}]}\n\n' +
+    ': keep-alive\n\n' +
+    'data: {"id":"g","choices":[],"usage":{"prompt_tokens":7,"completion_tokens":2,"total_tokens":9,"cost":0.5}}\n\n' +
+    'data: [DONE]\n\n';
+  const body = streamedBody(text);
+  assert.deepEqual(
+    { model: body.model, provider: body.provider, content: body.choices[0].message.content, finish: body.choices[0].finish_reason, usage: body.usage },
+    { model: 'm', provider: 'P', content: 'Hello', finish: 'stop', usage: { prompt_tokens: 7, completion_tokens: 2, total_tokens: 9, cost: 0.5 } },
+  );
+});
+
+test('EVAL-OW: the automatic checks carry the pause and citation verdicts on an in-loop row, and none on a row with no consent', () => {
+  const q = TEST_QUERIES.find((x) => x.id === 'Q2');
+  const calls = [
+    { name: 'load_source', args: { alias: 'socrata' }, operationType: 'load_source', loadOutcome: 'loaded' },
+    { name: 'socrata__get_data', args: { type: 'query', dataset_id: '4ijn-s7e5', portal: q.portal }, resultSummary: { rows: 1, columns: 1 } },
+  ];
+  const checks = rowChecks(q, { response: 'From 4ijn-s7e5.', toolsCalled: calls, totalTokens: 0, consent: goldAskFirst('allow') }, []);
+  assert.equal(checks.pause.pass, true);
+  assert.equal(checks.pause.allowUsed.dataCalls, 1);
+  assert.equal(checks.citation.pass, true);
+  const cited = rowChecks(q, { response: 'From erm2-nwe9 【1†source】.', toolsCalled: calls, totalTokens: 0, consent: goldAskFirst('allow') }, []);
+  assert.equal(cited.citation.pass, false);
+  assert.deepEqual(cited.citation.unaddressed, ['erm2-nwe9']);
+  const none = rowChecks(q, { response: '', toolsCalled: calls, totalTokens: 0 }, []);
+  assert.deepEqual([none.pause, none.citation], [null, null]);
 });
