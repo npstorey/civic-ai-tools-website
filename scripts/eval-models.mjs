@@ -1638,12 +1638,29 @@ const floor4 = (x) => Math.floor(x * 1e4) / 1e4;
  *   - the completion allowance: twice the largest billed completion
  *     (reasoning included), and never above the 4,000-token limit (S1 point 2);
  *   - NEW for a multi-round row: the largest number of requests one row made,
- *     and the largest billed prompt tokens one row summed. A row's calibrated
- *     reservation is twice each, never above the row's ceiling (the
- *     answering turn and every round, 22 requests; three times the cumulative
- *     bound, 600,000 prompt tokens): S1's doubling of what was measured,
- *     taken over the row instead of over one request.
+ *     and the largest billed prompt tokens one row summed. A row is reserved
+ *     at twice the requests, never above 22 (the first request, every round
+ *     and the answering turn): S1's doubling of what was measured, taken
+ *     over the row instead of over one request.
+ *   - THE ROW'S PROMPT (the seat's ruling at P1's gate, #740): twice the
+ *     probe's largest row, FLOORED at the cumulative bound, 200,000 tokens,
+ *     and capped at the row's ceiling, three times it, 600,000. The probe's
+ *     rows are two simple lookups and a decline, and the run's queries
+ *     include multi-step ones, so twice the probe's profile can understate a
+ *     run row and set a cap that stops the run early; an overstated bound
+ *     costs nothing, since spend is what the rows bill. `rowPromptSetBy`
+ *     names the term that set it: `probe`, `floor` or `cap`.
  */
+export const ROW_PROMPT_FLOOR = APP_LIMITS.maxCumulativeTokens;
+export const ROW_PROMPT_CAP = 3 * APP_LIMITS.maxCumulativeTokens;
+
+/** A row's calibrated prompt from the probe's largest row, and the term that set it. */
+export function calibratedRowPrompt(largestRowPrompt) {
+  const twice = 2 * largestRowPrompt;
+  if (twice >= ROW_PROMPT_CAP) return { tokens: ROW_PROMPT_CAP, setBy: 'cap' };
+  if (twice <= ROW_PROMPT_FLOOR) return { tokens: ROW_PROMPT_FLOOR, setBy: 'floor' };
+  return { tokens: twice, setBy: 'probe' };
+}
 export function calibrationProfile(probe) {
   const byModel = {};
   for (const row of [...(probe.results ?? []), ...(probe.errors ?? [])]) {
@@ -1673,11 +1690,19 @@ export function calibrationProfile(probe) {
       largestRowRequests: m.largestRowRequests,
       largestRowPromptTokens: m.largestRowPrompt,
       rowRequests: Math.min(APP_LIMITS.maxIterations + 2, 2 * m.largestRowRequests),
-      rowPromptTokens: Math.min(3 * APP_LIMITS.maxCumulativeTokens, 2 * m.largestRowPrompt),
+      rowPromptTokens: calibratedRowPrompt(m.largestRowPrompt).tokens,
+      rowPromptSetBy: calibratedRowPrompt(m.largestRowPrompt).setBy,
     };
   }
   return profile;
 }
+
+/** The term that set a row's prompt, as `--calibrate` prints it. */
+const ROW_PROMPT_TERM = {
+  probe: (p) => `the probe's profile (twice ${p.largestRowPromptTokens})`,
+  floor: () => `the floor (${ROW_PROMPT_FLOOR.toLocaleString('en-US')})`,
+  cap: () => `the cap (${ROW_PROMPT_CAP.toLocaleString('en-US')})`,
+};
 
 /** One row's calibrated reservation at `pricing`. */
 function calibratedRowUsd(p, pricing) {
@@ -1756,7 +1781,8 @@ function calibrate(options) {
   for (const [id, p] of Object.entries(profile)) {
     console.log(
       `  ${id.padEnd(28)} ${p.charsPerToken ?? '—'} characters a token; largest completion ${p.largestCompletion}, allowance ${p.completionAllowance}; ` +
-        `largest row ${p.largestRowRequests} requests, ${p.largestRowPromptTokens} prompt tokens; a row reserved at ${p.rowRequests} requests, ${p.rowPromptTokens} prompt tokens`,
+        `largest row ${p.largestRowRequests} requests, ${p.largestRowPromptTokens} prompt tokens; a row reserved at ${p.rowRequests} requests, ${p.rowPromptTokens} prompt tokens; ` +
+        `the row's prompt is set by ${ROW_PROMPT_TERM[p.rowPromptSetBy](p)}`,
     );
   }
   const bound = calibratedBound(profile, plan, list);
