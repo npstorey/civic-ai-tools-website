@@ -118,7 +118,9 @@ lists (UX-1 P7); later phases convert the other surfaces named under "Replaces",
 - **Behaviour:** `role="dialog"` with `aria-modal` and `aria-labelledby` (the title), and a focus trap.
   Escape closes it, and so does a backdrop click unless it is busy; focus returns where it was.
 - **Replaces:** `PublishEvidenceDialog` (its action is today inside the scroll), `AttestationDialog`'s
-  modal, the dashboard's four overlays (`DashboardTabs.tsx`), and the Cite modal in `EvidenceActions`.
+  modal, and the Cite modal in `EvidenceActions`. The dashboard's four confirmations (publish,
+  withdraw, reinstate, revoke token; `DashboardTabs.tsx`) are `short` dialogs since UX-2 P4a; each
+  opens with focus on the close control, its first enabled control.
 
 ### P5 · Card (`ui-card`)
 
@@ -168,8 +170,9 @@ lists (UX-1 P7); later phases convert the other surfaces named under "Replaces",
 - **Reference implementation:** `src/components/evidence/TrustSignal.tsx` (tiers
   `verified | normal | attention | alarm`). It is live and is not replaced in this phase; whether it
   becomes `Signal` is a later phase's decision, and the tier words go through a research check first.
-- **Replaces:** the three `StatusBadge`s, `TypeBadge` (`DashboardTabs.tsx`), the type and rating pills
-  in `AttestationSection`, and the "Unverified" pill (`EvidenceIndex.tsx`).
+- **Replaces:** the three `StatusBadge`s, the type and rating pills in `AttestationSection`, and the
+  "Unverified" pill (`EvidenceIndex.tsx`). `TypeBadge` (`DashboardTabs.tsx`) became a `neutral` signal
+  in UX-2 P4a, reading "Expert review", "Evaluation" or "Consistency test".
 
 ### P7 · List row (`ui-row`)
 
@@ -186,10 +189,11 @@ lists (UX-1 P7); later phases convert the other surfaces named under "Replaces",
   wraps under the meta line.
 - **States:** idle; hover (`--card-background`); withdrawn (`ui-row--withdrawn`: the title struck,
   the row at 0.65 opacity); selected (`ui-row--selected`, a focus ring).
-- **Used by:** `/records`, My chats, Reviews I wrote, Activity, the directory's servers at narrow
+- **Used by:** `/records`, My chats, My reviews and checks, Activity, the directory's servers at narrow
   width, the "+" menu's source rows, the attestations list.
-- **Replaces:** the registry row (`EvidenceIndex.tsx`), the dashboard record card, and the Evaluations
-  and Activity cards (`DashboardTabs.tsx`).
+- **Replaces:** the registry row (`EvidenceIndex.tsx`). The dashboard's analysis, review and activity
+  rows are `Row`s since UX-2 P4a (`DashboardTabs.tsx`); an analysis row's menu is an `icon` `Menu`
+  named "Actions for" and the row's title.
 
 ### P8 · Tabs (`ui-tabs`)
 
@@ -202,8 +206,8 @@ lists (UX-1 P7); later phases convert the other surfaces named under "Replaces",
   `ui-tab-reason`).
 - **Behaviour:** the arrow keys, Home and End move among the enabled tabs and select them. The
   selection is the caller's, so a page that syncs it to `?tab=` keeps doing so.
-- **Replaces:** `DirectoryWrapper`'s tab bar, `TraceControls`' mode tabs, `AttestationDialog`'s
-  `TabButton`, and `DashboardTabs`' row.
+- **Replaces:** `DirectoryWrapper`'s tab bar, `TraceControls`' mode tabs, and `AttestationDialog`'s
+  `TabButton`. `DashboardTabs`' row became `Tabs` in UX-2 P4a, named "Dashboard".
 
 ### P9 · Page frame (`ui-page`)
 
