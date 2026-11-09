@@ -131,6 +131,7 @@ const ALLOWLIST: readonly Allowed[] = [
   // The P9 frame's width name (UX-2 P5, the record frame): a value, never rendered.
   { file: 'src/app/(app)/evidence/page.tsx', rows: 'UX-2 P5 (`<Page width="record">`)', reason: 'code value', text: 'record', count: 1 },
   { file: 'src/app/(app)/evidence/[slug]/page.tsx', rows: 'UX-2 P5 (`<Page width="record">`)', reason: 'code value', text: 'record', count: 1 },
+  { file: 'src/app/(app)/dashboard/page.tsx', rows: 'UX-2 P4a (`<Page width="record">`; relay 46, R1)', reason: 'code value', text: 'record', count: 1 },
 
   // NotebookOutput.tsx: "execution record" (C12).
   { file: 'src/components/notebook/NotebookOutput.tsx', rows: ':241 (C12)', reason: 'keep', text: 'Publishes the executed notebook and its execution record — not a regenerated skeleton.', count: 1 },

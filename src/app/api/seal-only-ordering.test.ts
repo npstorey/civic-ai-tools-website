@@ -209,26 +209,43 @@ test('#552 C3: the dialog\'s sealed-state sentences come from the module, on the
 test('#552 C3: the dashboard shows Publish disabled with the reason, from the page\'s props', () => {
   const tabs = read('../../components/dashboard/DashboardTabs.tsx');
   const where = 'DashboardTabs.tsx';
+  // UX-2 P4a (relay 46, R2) moved the row's actions into a P2 menu, whose items
+  // carry their reason as `disabledReason`, so this test pins the property, not
+  // the inline button's shape: (1) the module is asked once; (2) there is one
+  // enabled Publish path; (3) the seal-only item's reason is the module's
+  // explanation; (4) the unsigned item carries its reason. Each part was shown
+  // red on a mutation at that phase's gate.
   assert.ok(tabs.includes("import { sealedRecordPublishAffordance } from '@/lib/evidence/seal-only';"), `${where} decides the affordance itself`);
   assert.match(tabs, /signingConfigured = true, sealOnly = false \}: DashboardTabsProps\)/, `${where}: a mount that passes no setting must be unchanged`);
   assert.ok(tabs.includes('signingConfigured={signingConfigured} sealOnly={sealOnly}'), `${where} does not hand the setting to the records tab`);
-  assert.equal(count(tabs, 'sealedRecordPublishAffordance('), 1);
+
+  // (1) The module is asked once, on the page's props.
+  assert.equal(count(tabs, 'sealedRecordPublishAffordance('), 1, `${where} asks the module more than once`);
   assert.ok(tabs.includes('const publishAffordance = sealedRecordPublishAffordance({ signingConfigured, sealOnly });'), `${where} does not ask the module`);
   assert.ok(!tabs.includes('{signingConfigured ? ('), `${where} still branches on signing alone`);
 
-  // One enabled Publish, inside the `available` branch; then the unsigned
-  // tier's disabled action as before; then the seal-only one, disabled, with
-  // the reason and the label.
+  // (2) One enabled Publish path: one place opens the publish dialog, and one
+  // Publish item carries no reason, in the \`available\` branch.
   assert.equal(count(tabs, 'setPublishTarget(r)'), 1, `${where} offers Publish from more than one place`);
-  const available = at(tabs, "{publishAffordance.kind === 'available' ? (", where);
-  const enabled = at(tabs, 'setPublishTarget(r)', where);
-  const unsigned = at(tabs, "publishAffordance.kind === 'unsigned' ? (", where);
-  const unsignedLabel = at(tabs, 'Publish unavailable (unsigned)', where);
-  const reason = at(tabs, 'title={publishAffordance.explanation}', where);
-  const label = at(tabs, '{publishAffordance.label}', where);
-  assert.ok(available < enabled && enabled < unsigned && unsigned < unsignedLabel && unsignedLabel < reason && reason < label, `${where}: the three branches are out of order`);
-  const sealOnlyButton = tabs.slice(tabs.lastIndexOf('<button', reason), label);
-  assert.match(sealOnlyButton, /^<button\s+disabled\b/, `${where}: the seal-only action is not a disabled button`);
+  const item = tabs.slice(at(tabs, 'function publishItem(', where), tabs.indexOf('\n}\n', at(tabs, 'function publishItem(', where)));
+  const enabled = "if (publishAffordance.kind === 'available') return { id: 'publish', label: 'Publish' };";
+  assert.ok(item.includes(enabled), `${where}: the enabled Publish item is not the \`available\` branch`);
+  assert.equal(count(tabs, "label: 'Publish' }"), 1, `${where} has a second Publish item without a reason`);
+  assert.equal(count(tabs, "id: 'publish'"), 3, `${where}: the Publish item is not the three branches of publishItem`);
+
+  // (3) On a seal-only instance, the item's reason is the module's explanation.
+  assert.ok(
+    item.trimEnd().endsWith("return { id: 'publish', label: 'Publish', disabledReason: publishAffordance.explanation };"),
+    `${where}: the seal-only Publish item does not carry publishAffordance.explanation`,
+  );
+
+  // (4) On an unsigned instance, the item carries the unsigned reason, today's words.
+  assert.ok(
+    item.includes("if (publishAffordance.kind === 'unsigned') return { id: 'publish', label: 'Publish', disabledReason: UNSIGNED_PUBLISH_REASON };"),
+    `${where}: the unsigned Publish item does not carry its reason`,
+  );
+  const reason = /const UNSIGNED_PUBLISH_REASON =\s*'([^']+)';/.exec(tabs);
+  assert.ok(reason && reason[1].startsWith('Publishing is unavailable'), `${where}: the unsigned reason is not today's words`);
 
   const page = read('../(app)/dashboard/page.tsx');
   assert.ok(page.includes("import { isSealOnly } from '@/lib/site-config';"), 'the dashboard page reads the setting from somewhere else');

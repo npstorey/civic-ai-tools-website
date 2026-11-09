@@ -23,6 +23,12 @@
 //      `dashboard-page.test.ts`.)
 //   5. The evaluations row type declares no `storageKey` (#565 item 1).
 //
+// THE RULINGS AT THE RED (relay 46), each pinned here: R3 (the disabled
+// Publish item reads "Publish" with today's reason; neither "Publish
+// unavailable (…)" renders), R4 ("Dashboard", "Previous" and "Next", "Copied"
+// read in the `role="status"` region above the list), R5 (the kind words), R6
+// (the trigger's name), R7 (no consistency classification on the row).
+//
 // WHAT IS DRIVEN. The real `DashboardTabs` on the surface harness. An action
 // is chosen as a reader chooses it: the row's menu is opened and the item
 // clicked; where the tree has no menu (the base), the row's own button with
@@ -69,6 +75,12 @@ Object.assign(globalThis as Record<string, unknown>, {
   },
   document: { ...target },
 });
+/** What Copy link wrote, in order. */
+const clipboard: string[] = [];
+Object.defineProperty(globalThis, 'navigator', {
+  configurable: true,
+  value: { clipboard: { writeText: async (text: string) => { clipboard.push(text); } } },
+});
 
 type Mod = Record<string, any>; // eslint-disable-line @typescript-eslint/no-explicit-any
 const load = async (rel: string): Promise<Mod> => (await import(pathToFileURL(path.join(SRC, rel)).href)) as Mod;
@@ -102,7 +114,8 @@ const PUBLIC_CONCERNS = analysis('public-concerns', {
   createdAt: '2026-11-04T12:00:00.000Z', attestationCount: 2,
   reviews: { expertRatings: ['concerns'], evaluations: 1, consistencyTests: 0 },
 });
-const PUBLIC_NONE = analysis('public-none', { createdAt: '2026-11-03T12:00:00.000Z' });
+// It carries a consistency classification, which R7 takes off the row.
+const PUBLIC_NONE = analysis('public-none', { createdAt: '2026-11-03T12:00:00.000Z', consistencyClassification: 'highly_reproducible' });
 const WITHDRAWN = analysis('withdrawn', { createdAt: '2026-11-01T12:00:00.000Z', withdrawnAt: '2026-11-02T12:00:00.000Z' });
 const REINSTATED = analysis('reinstated', {
   createdAt: '2026-10-30T12:00:00.000Z', withdrawnAt: '2026-10-31T12:00:00.000Z', reinstatedAt: '2026-11-03T12:00:00.000Z',
@@ -403,4 +416,102 @@ test('UX-2 P4a C5: the evaluations row type declares no storageKey (#565 item 1)
   }
   assert.equal(found.length, 1, `premise: one EvaluationRow type under src/components/dashboard, found ${JSON.stringify(found)}`);
   assert.ok(!found[0].members.includes('storageKey'), `${found[0].file}'s EvaluationRow declares ${JSON.stringify(found[0].members)}`);
+});
+
+// --- The rulings at the red (relay 46) ------------------------------------------------------------
+
+/** The unsigned tier's reason, today's words (`DashboardTabs.tsx:369` at the base). */
+const UNSIGNED_REASON =
+  'Publishing is unavailable — this instance is running unsigned (signing is not configured). Signing is the ' +
+  'go-to-production step and takes both PUBLISHER_SIGNING_KEY and PUBLISHER_KEY_ID; see docs/instance-setup.md.';
+
+test('UX-2 P4a R3: on an unsigned instance, Publish reads "Publish", disabled, with the unsigned reason', async () => {
+  const s = await dashboard({ myEvidence: [SEALED], analysesTotal: 1, pageCount: 1, signingConfigured: false });
+  const items = await openMenu(s, SEALED.title as string);
+  const publish = items.find((i) => i.label === 'Publish');
+  assert.ok(publish, `no Publish item: ${JSON.stringify(items)}`);
+  assert.equal(publish.disabled, true, 'Publish is not disabled on an unsigned instance');
+  assert.equal(publish.reason, UNSIGNED_REASON, 'Publish does not carry the unsigned reason');
+  s.unmount();
+});
+
+test('UX-2 P4a R3: neither "Publish unavailable (…)" label renders, menu open, on a seal-only or an unsigned instance', async () => {
+  for (const over of [{ sealOnly: true }, { signingConfigured: false }]) {
+    const s = await dashboard({ myEvidence: [SEALED], analysesTotal: 1, pageCount: 1, ...over });
+    assert.ok(!s.text().includes('Publish unavailable'), `menu closed, ${JSON.stringify(over)}: ${s.text().slice(0, 300)}`);
+    await openMenu(s, SEALED.title as string);
+    assert.ok(!s.text().includes('Publish unavailable'), `menu open, ${JSON.stringify(over)}: ${s.text().slice(0, 300)}`);
+    s.unmount();
+  }
+});
+
+test('UX-2 P4a R4: the tablist is named "Dashboard"', async () => {
+  const s = await dashboard();
+  assert.deepEqual(byRole(s, 'tablist').map((l) => attr(l, 'aria-label')), ['Dashboard']);
+  s.unmount();
+});
+
+test('UX-2 P4a R4: the pager reads "Previous" and "Next", each a link where there is a page to go to', async () => {
+  const linkWords = (s: Surface) => s.elements().filter((e) => e.type === 'a' && typeof e.props.href === 'string' && /[?&]page=/.test(e.props.href))
+    .map((e) => [readText(e), e.props.href as string]);
+  const middle = await dashboard({ page: 2, pageCount: 3 });
+  const words = linkWords(middle);
+  assert.deepEqual(words.filter(([w]) => w === 'Previous' || w === 'Next'), [['Previous', '/dashboard?page=1'], ['Next', '/dashboard?page=3']]);
+  middle.unmount();
+  const first = await dashboard({ page: 1, pageCount: 3 });
+  assert.deepEqual(linkWords(first).filter(([w]) => w === 'Previous' || w === 'Next'), [['Next', '/dashboard?page=2']], 'page 1: only Next is a link');
+  assert.ok(first.text().includes('Previous'), 'page 1: "Previous" is not shown');
+  first.unmount();
+});
+
+test('UX-2 P4a R4: Copy link copies the analysis\'s address and the status region above the list reads "Copied"', async () => {
+  clipboard.length = 0;
+  const s = await dashboard();
+  const status = () => byRole(s, 'status');
+  assert.equal(status().length, 1, 'premise: one role="status" region');
+  assert.equal(readText(status()[0]), '', 'the status region reads before anything is copied');
+  const region = status()[0];
+  const list = byClass(s, 'ui-row');
+  const all = s.elements();
+  assert.ok(all.indexOf(region) < all.indexOf(list[0]), 'the status region is not above the list');
+  await choose(s, PUBLIC_NONE.title as string, 'Copy link');
+  assert.deepEqual(clipboard, [`${ORIGIN}/records/${PUBLIC_NONE.slug}`], 'what Copy link wrote');
+  assert.equal(readText(status()[0]), 'Copied', 'the status region after Copy link');
+  assert.equal(attr(status()[0], 'aria-live'), 'polite');
+  s.unmount();
+});
+
+test('UX-2 P4a R4: "Withdrawn on <date>" uses today\'s formatDate (en-US, short month)', async () => {
+  const s = await dashboard();
+  assert.equal(labelsIn(rowTitled(s, WITHDRAWN.title as string), 'ui-signal-label')[0], 'Withdrawn on Nov 2, 2026');
+  s.unmount();
+});
+
+test('UX-2 P4a R5: the kind signal reads "Expert review", "Evaluation" or "Consistency test"', async () => {
+  const s = await dashboard();
+  const tab = (prefix: string) => {
+    const found = byRole(s, 'tab').filter((t) => readText(t).startsWith(prefix));
+    assert.equal(found.length, 1, `premise: one tab "${prefix}…"`);
+    return found[0];
+  };
+  await s.click(tab('My reviews and checks'));
+  assert.deepEqual(EVALUATIONS.map((e) => labelsIn(rowTitled(s, e.evidenceTitle), 'ui-signal-label')), [['Evaluation'], ['Consistency test']]);
+  await s.click(tab('Activity'));
+  assert.deepEqual(labelsIn(rowTitled(s, ACTIVITY[0].evidenceTitle), 'ui-signal-label'), ['Expert review']);
+  s.unmount();
+});
+
+test('UX-2 P4a R6: the row menu\'s icon trigger is named "Actions for " and the row\'s title', async () => {
+  const s = await dashboard();
+  const triggers = menuTriggerIn(rowTitled(s, SEALED.title as string));
+  assert.deepEqual(triggers.map((t) => attr(t, 'aria-label')), ['Actions for Fixture sealed analysis']);
+  s.unmount();
+});
+
+test('UX-2 P4a R7: a row carries no consistency classification', async () => {
+  const s = await dashboard();
+  const row = rowTitled(s, PUBLIC_NONE.title as string);
+  assert.equal(PUBLIC_NONE.consistencyClassification, 'highly_reproducible', 'premise: the fixture carries one');
+  assert.ok(!/reproducib/i.test(readText(row)), `the row reads: ${readText(row)}`);
+  s.unmount();
 });

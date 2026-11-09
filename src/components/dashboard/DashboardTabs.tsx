@@ -5,8 +5,22 @@ import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { normalizeVisibility } from '@/lib/evidence/visibility';
 import { sealedRecordPublishAffordance } from '@/lib/evidence/seal-only';
+import type { SealedRecordPublishAffordance } from '@/lib/evidence/seal-only';
+import { formatModelName } from '@/lib/models';
+import { reviewsLine, type RecordReviews } from '@/lib/evidence/review-summary';
 import SourcesTab from './SourcesTab';
+import { Dialog } from '@/components/ui/Dialog';
+import { Menu, type MenuItem } from '@/components/ui/Menu';
+import { Row } from '@/components/ui/Row';
 import { Signal } from '@/components/ui/Signal';
+import { Tabs } from '@/components/ui/Tabs';
+
+// My analyses (UX-2 P4a) on the UX-1 primitives: the tab bar is P8 `Tabs`,
+// each analysis, review and activity item a P7 `Row` with P6 signals, each
+// analysis's actions a P2 `icon` menu, and the four confirmations P4
+// `Dialog size="short"`. The first tab pages at 25 (`?page=`, read by the
+// page). Every word below is ruled: the charter's Words table, row A (X19,
+// X20, X21, P5's `reviewsLine`), and relay 46's R3-R6.
 
 // --- Types ---
 
@@ -16,23 +30,21 @@ interface EvidenceRow {
   title: string;
   summary: string;
   model: string;
-  verificationStatus: string;
-  consistencyClassification: string | null;
   withdrawnAt: string | null;
   reinstatedAt: string | null;
   createdAt: string;
-  attestationCount: number;
   /** Visibility mirror (civic-ai-tools#71), as the raw DB label — either
    *  vocabulary (ADR-0016 §A; normalized through `@/lib/evidence/visibility`).
    *  Sealed records are unlisted + creator-only until promoted via the publish
    *  flow. */
   visibility: string;
+  /** The row's reviews, as P5's `reviewsLine` reads them; absent, the reviews signal is absent (Principle 3). */
+  reviews?: RecordReviews;
 }
 
 interface EvaluationRow {
   id: string;
   type: string;
-  storageKey: string;
   createdAt: string;
   evidenceTitle: string;
   evidenceSlug: string;
@@ -61,16 +73,23 @@ interface TokenRow {
 export type DashboardTab = 'evidence' | 'evaluations' | 'activity' | 'tokens' | 'sources';
 
 interface DashboardTabsProps {
-  /** The tab shown first: `/dashboard?tab=sources` opens the Sources tab (R6 W3, Q7). */
+  /** The tab shown first: `/dashboard?tab=sources` opens the Sources tab (R6 W3, Q7); the parameter still works, though nothing links it since the Sources panel went (UX-2 P4b). */
   initialTab?: DashboardTab;
+  /** This page's analyses, newest first. */
   myEvidence: EvidenceRow[];
+  /** The analyses over every page, for the tab's count; omitted, this page's length. */
+  analysesTotal?: number;
+  /** This page's number, from 1. */
+  page?: number;
+  /** How many pages the analyses fill; 1 renders no pager. */
+  pageCount?: number;
   myEvaluations: EvaluationRow[];
   activity: ActivityRow[];
   tokens: TokenRow[];
   /** Whether this instance holds a signing key (ADR-0020, S3a P3): with no
    *  key the sealed→public promotion is gated off server-side, so the
-   *  Publish affordance renders disabled-with-explanation instead of a dead
-   *  button that errors. */
+   *  Publish action renders disabled-with-explanation instead of a dead
+   *  action that errors. */
   signingConfigured?: boolean;
   /** Whether this instance seals records only (`SITE_SEAL_ONLY`, #552): the
    *  sealed→public promotion is refused server-side, so Publish renders
@@ -78,35 +97,30 @@ interface DashboardTabsProps {
   sealOnly?: boolean;
 }
 
-// --- Shared styles ---
+// --- Words (ruled: X19-X21, relay 46 R3-R6) ---
 
-const tabStyle = (isActive: boolean): CSSProperties => ({
-  padding: '12px 24px',
-  fontSize: '15px',
-  fontWeight: isActive ? 600 : 400,
-  color: isActive ? 'var(--text-primary)' : 'var(--text-muted)',
-  border: 'none',
-  borderBottom: isActive ? '2px solid var(--accent)' : '2px solid transparent',
-  marginBottom: '-2px',
-  background: 'none',
-  cursor: 'pointer',
-  fontFamily: 'inherit',
-});
+/** The tablist's accessible name (R4). */
+const TABLIST_LABEL = 'Dashboard';
+/** The row menu's icon trigger, named for its row (R6, the owner's ruling). */
+const actionsFor = (title: string): string => `Actions for ${title}`;
+/** The pager's two words (R4, the registry's). */
+const PAGER_PREVIOUS = 'Previous';
+const PAGER_NEXT = 'Next';
+/** Shown in the status region after Copy link (R4, the analysis page's word). */
+const COPIED = 'Copied';
+/** The unsigned tier's reason, today's words (R3): the disabled Publish item's second line. */
+const UNSIGNED_PUBLISH_REASON =
+  'Publishing is unavailable — this instance is running unsigned (signing is not configured). Signing is the go-to-production step and takes both PUBLISHER_SIGNING_KEY and PUBLISHER_KEY_ID; see docs/instance-setup.md.';
+/** A review's kind, as the reviews line names it (R5; `review-summary.ts:50-52`, sentence case). */
+const KIND_LABEL: Record<string, string> = {
+  expert_attestation: 'Expert review',
+  evaluation: 'Evaluation',
+  consistency: 'Consistency test',
+};
+/** A kind the rulings name no word for (`re_evaluation`, `correction`) keeps today's text: its type. */
+const kindLabel = (type: string): string => KIND_LABEL[type] ?? type;
 
-function TypeBadge({ type }: { type: string }) {
-  const isConsistency = type === 'consistency';
-  return (
-    <span style={{
-      display: 'inline-block', padding: '2px 8px', borderRadius: '10px',
-      fontSize: '11px', fontWeight: 600,
-      backgroundColor: isConsistency ? 'rgba(var(--accent-rgb), 0.1)' : 'rgba(0, 183, 3, 0.1)',
-      color: isConsistency ? 'var(--accent)' : 'var(--success)',
-      textTransform: 'capitalize',
-    }}>
-      {type}
-    </span>
-  );
-}
+// --- Shared ---
 
 function formatDate(iso: string): string {
   return new Date(iso).toLocaleDateString('en-US', { year: 'numeric', month: 'short', day: 'numeric' });
@@ -128,45 +142,63 @@ function EmptyState({ message, cta }: { message: string; cta?: { text: string; h
   );
 }
 
+const BODY_TEXT: CSSProperties = { fontSize: '13px', color: 'var(--text-secondary)', lineHeight: 1.6, margin: '0 0 12px' };
+const QUOTED_TITLE: CSSProperties = { fontSize: '13px', fontWeight: 500, marginBottom: '4px', color: 'var(--text-primary)' };
+const REASON_LABEL: CSSProperties = { display: 'block', fontSize: '13px', fontWeight: 600, marginBottom: '4px', marginTop: '12px', color: 'var(--text-primary)' };
+const REASON_FIELD: CSSProperties = {
+  width: '100%', padding: '8px 12px', border: '1px solid var(--border-color)',
+  borderRadius: '4px', fontSize: '14px', boxSizing: 'border-box',
+  resize: 'vertical', fontFamily: 'inherit',
+};
+const ERROR_LINE: CSSProperties = { marginTop: '8px', fontSize: '13px', color: 'var(--error)' };
+
 // --- Main component ---
 
-export default function DashboardTabs({ initialTab = 'evidence', myEvidence, myEvaluations, activity, tokens, signingConfigured = true, sealOnly = false }: DashboardTabsProps) {
+export default function DashboardTabs({ initialTab = 'evidence', myEvidence, analysesTotal, page = 1, pageCount = 1, myEvaluations, activity, tokens, signingConfigured = true, sealOnly = false }: DashboardTabsProps) {
   const [activeTab, setActiveTab] = useState<DashboardTab>(initialTab);
+  const tabs = [
+    { id: 'evidence', label: `My analyses (${analysesTotal ?? myEvidence.length})` },
+    { id: 'evaluations', label: `My reviews and checks (${myEvaluations.length})` },
+    { id: 'activity', label: `Activity (${activity.length})` },
+    { id: 'tokens', label: `Tokens (${tokens.length})` },
+    { id: 'sources', label: 'Sources' },
+  ];
 
   return (
-    <>
-      <div style={{ display: 'flex', borderBottom: '2px solid var(--border-color)', marginBottom: '24px' }}>
-        <button onClick={() => setActiveTab('evidence')} style={tabStyle(activeTab === 'evidence')}>
-          My analyses ({myEvidence.length})
-        </button>
-        <button onClick={() => setActiveTab('evaluations')} style={tabStyle(activeTab === 'evaluations')}>
-          My Evaluations ({myEvaluations.length})
-        </button>
-        <button onClick={() => setActiveTab('activity')} style={tabStyle(activeTab === 'activity')}>
-          Activity ({activity.length})
-        </button>
-        <button onClick={() => setActiveTab('tokens')} style={tabStyle(activeTab === 'tokens')}>
-          Tokens ({tokens.length})
-        </button>
-        <button onClick={() => setActiveTab('sources')} style={tabStyle(activeTab === 'sources')}>
-          Sources
-        </button>
+    <Tabs label={TABLIST_LABEL} tabs={tabs} selectedId={activeTab} onSelect={(id) => setActiveTab(id as DashboardTab)}>
+      <div style={{ paddingTop: '24px' }}>
+        {activeTab === 'evidence' && <MyEvidenceTab rows={myEvidence} page={page} pageCount={pageCount} signingConfigured={signingConfigured} sealOnly={sealOnly} />}
+        {activeTab === 'evaluations' && <MyEvaluationsTab rows={myEvaluations} />}
+        {activeTab === 'activity' && <ActivityTab rows={activity} />}
+        {activeTab === 'tokens' && <TokensTab rows={tokens} />}
+        {activeTab === 'sources' && <SourcesTab />}
       </div>
-
-      {activeTab === 'evidence' && <MyEvidenceTab rows={myEvidence} signingConfigured={signingConfigured} sealOnly={sealOnly} />}
-      {activeTab === 'evaluations' && <MyEvaluationsTab rows={myEvaluations} />}
-      {activeTab === 'activity' && <ActivityTab rows={activity} />}
-      {activeTab === 'tokens' && <TokensTab rows={tokens} />}
-      {activeTab === 'sources' && <SourcesTab />}
-    </>
+    </Tabs>
   );
 }
 
 // --- Tab panels ---
 
-function MyEvidenceTab({ rows, signingConfigured, sealOnly }: { rows: EvidenceRow[]; signingConfigured: boolean; sealOnly: boolean }) {
+/** The row's one lifecycle signal (X20): withdrawn first, else its visibility. */
+function lifecycleLabel(r: EvidenceRow, currentlyWithdrawn: boolean): string {
+  if (currentlyWithdrawn) return `Withdrawn on ${formatDate(r.withdrawnAt!)}`;
+  return normalizeVisibility(r.visibility) === 'sealed' ? 'Sealed · only you' : 'Public';
+}
+
+/**
+ * The Publish item on a sealed row: enabled when the instance can publish;
+ * otherwise X21's "Publish", disabled, with the reason as its second line
+ * (R3): the unsigned tier's, or (#552) the seal-only instance's.
+ */
+function publishItem(publishAffordance: SealedRecordPublishAffordance): MenuItem {
+  if (publishAffordance.kind === 'available') return { id: 'publish', label: 'Publish' };
+  if (publishAffordance.kind === 'unsigned') return { id: 'publish', label: 'Publish', disabledReason: UNSIGNED_PUBLISH_REASON };
+  return { id: 'publish', label: 'Publish', disabledReason: publishAffordance.explanation };
+}
+
+function MyEvidenceTab({ rows, page, pageCount, signingConfigured, sealOnly }: { rows: EvidenceRow[]; page: number; pageCount: number; signingConfigured: boolean; sealOnly: boolean }) {
   const router = useRouter();
-  // What the Publish action on a sealed record is: the button, the unsigned
+  // What the Publish action on a sealed record is: available, the unsigned
   // tier's disabled action, or (#552) the seal-only one.
   const publishAffordance = sealedRecordPublishAffordance({ signingConfigured, sealOnly });
   const [withdrawTarget, setWithdrawTarget] = useState<EvidenceRow | null>(null);
@@ -179,7 +211,12 @@ function MyEvidenceTab({ rows, signingConfigured, sealOnly }: { rows: EvidenceRo
   const [reinstating, setReinstating] = useState(false);
   const [reinstateError, setReinstateError] = useState('');
 
-  const handleWithdraw = useCallback(async () => {
+  // Copy link: the status region above the list reads "Copied" for a moment.
+  const [copied, setCopied] = useState(false);
+
+  // A plain function: its one reader, the dialog's action, needs no stable
+  // identity (with `useCallback`, the react-hooks lint could not preserve it).
+  const handleWithdraw = async () => {
     if (!withdrawTarget || !withdrawReason.trim()) return;
     setWithdrawing(true);
     setWithdrawError('');
@@ -201,9 +238,11 @@ function MyEvidenceTab({ rows, signingConfigured, sealOnly }: { rows: EvidenceRo
     } finally {
       setWithdrawing(false);
     }
-  }, [withdrawTarget, withdrawReason, router]);
+  };
 
-  const handleReinstate = useCallback(async () => {
+  // A plain function: its one reader, the dialog's action, needs no stable
+  // identity (with `useCallback`, the react-hooks lint could not preserve it).
+  const handleReinstate = async () => {
     if (!reinstateTarget || !reinstateReason.trim()) return;
     setReinstating(true);
     setReinstateError('');
@@ -225,7 +264,7 @@ function MyEvidenceTab({ rows, signingConfigured, sealOnly }: { rows: EvidenceRo
     } finally {
       setReinstating(false);
     }
-  }, [reinstateTarget, reinstateReason, router]);
+  };
 
   // Sealed → public promotion (civic-ai-tools#71/#72 Phase 5). Runs the
   // default-on adversarial eval unless the user unchecks it; irreversible.
@@ -234,7 +273,9 @@ function MyEvidenceTab({ rows, signingConfigured, sealOnly }: { rows: EvidenceRo
   const [publishing, setPublishing] = useState(false);
   const [publishError, setPublishError] = useState('');
 
-  const handlePublish = useCallback(async () => {
+  // A plain function: its one reader, the dialog's action, needs no stable
+  // identity (with `useCallback`, the react-hooks lint could not preserve it).
+  const handlePublish = async () => {
     if (!publishTarget) return;
     setPublishing(true);
     setPublishError('');
@@ -255,7 +296,25 @@ function MyEvidenceTab({ rows, signingConfigured, sealOnly }: { rows: EvidenceRo
     } finally {
       setPublishing(false);
     }
-  }, [publishTarget, publishRunEval, router]);
+  };
+
+  const copyLink = async (r: EvidenceRow) => {
+    try {
+      await navigator.clipboard.writeText(`${window.location.origin}/records/${r.slug}`);
+    } catch {
+      return; // nothing was copied, so nothing is said
+    }
+    setCopied(true);
+    setTimeout(() => setCopied(false), 2000);
+  };
+
+  /** A row's menu item chosen. Only enabled items reach here (the Menu calls nothing for a disabled one). */
+  const act = (r: EvidenceRow, id: string) => {
+    if (id === 'publish') { setPublishTarget(r); setPublishRunEval(true); setPublishError(''); }
+    else if (id === 'withdraw') { setWithdrawTarget(r); setWithdrawReason(''); setWithdrawError(''); }
+    else if (id === 'reinstate') { setReinstateTarget(r); setReinstateReason(''); setReinstateError(''); }
+    else if (id === 'copy') void copyLink(r);
+  };
 
   if (rows.length === 0) {
     return (
@@ -276,168 +335,83 @@ function MyEvidenceTab({ rows, signingConfigured, sealOnly }: { rows: EvidenceRo
 
   return (
     <>
-      <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
+      <p role="status" aria-live="polite" style={{ margin: '0 0 8px', minHeight: '18px', fontSize: '13px', color: 'var(--success)' }}>
+        {copied ? COPIED : ''}
+      </p>
+      <div>
         {rows.map((r) => {
           const isCurrentlyWithdrawn = !!r.withdrawnAt && !r.reinstatedAt;
           const isReinstated = !!r.withdrawnAt && !!r.reinstatedAt;
+          const isSealed = normalizeVisibility(r.visibility) === 'sealed';
+          // X21's actions, as the row's state allows (brief measurement 5):
+          // Publish on a sealed row that is not withdrawn (the publish route
+          // refuses a withdrawn one); Withdraw once (the withdraw route
+          // refuses a record ever withdrawn, F8); Reinstate on a withdrawn one.
+          const items: MenuItem[] = [
+            { id: 'open', label: 'Open', href: `/records/${r.slug}` },
+            ...(isSealed && !isCurrentlyWithdrawn ? [publishItem(publishAffordance)] : []),
+            ...(!isCurrentlyWithdrawn && !isReinstated ? [{ id: 'withdraw', label: 'Withdraw' }] : []),
+            ...(isCurrentlyWithdrawn ? [{ id: 'reinstate', label: 'Reinstate' }] : []),
+            { id: 'copy', label: 'Copy link' },
+          ];
           return (
-            <div
+            <Row
               key={r.id}
-              style={{
-                padding: '14px 18px',
-                border: '1px solid var(--border-color)', borderRadius: '6px',
-                opacity: isCurrentlyWithdrawn ? 0.65 : 1,
-              }}
-            >
-              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: '10px', marginBottom: '6px' }}>
-                <Link
-                  href={`/records/${r.slug}`}
-                  style={{
-                    fontSize: '15px', fontWeight: 600, color: 'var(--text-primary)',
-                    textDecoration: isCurrentlyWithdrawn ? 'line-through' : 'none',
-                  }}
-                >
-                  {r.title}
-                </Link>
-                <div style={{ display: 'flex', gap: '6px', flexShrink: 0, alignItems: 'center' }}>
-                  {/* UX-2 P5 (R18 C): the verification-status verdict is gone; the
-                      two lifecycle facts the badge carried stay, as P6 signals
-                      in the words the badge rendered (research check 2, C5:
-                      interim, until P4's row). The row itself is P4's. */}
-                  {normalizeVisibility(r.visibility) === 'sealed' && <Signal tier="neutral" label="Sealed" />}
-                  {isCurrentlyWithdrawn && <Signal tier="neutral" label="Withdrawn" />}
-                </div>
-              </div>
-              <div style={{ fontSize: '12px', color: 'var(--text-muted)', display: 'flex', gap: '8px', flexWrap: 'wrap', alignItems: 'center' }}>
-                <span>{formatDate(r.createdAt)}</span>
-                <span>{'\u00b7'}</span>
-                <span>{r.model}</span>
-                <span>{'\u00b7'}</span>
-                <span>{r.attestationCount} attestation{r.attestationCount !== 1 ? 's' : ''}</span>
-                {r.consistencyClassification && !isCurrentlyWithdrawn && (
-                  <>
-                    <span>{'\u00b7'}</span>
-                    <span style={{ textTransform: 'capitalize' }}>
-                      {r.consistencyClassification.replace(/_/g, ' ')}
-                    </span>
-                  </>
-                )}
-                {isCurrentlyWithdrawn && (
-                  <>
-                    <span>{'\u00b7'}</span>
-                    <span style={{ color: 'var(--error)' }}>Withdrawn {formatDate(r.withdrawnAt!)}</span>
-                    <span>{'\u00b7'}</span>
-                    <button
-                      onClick={() => { setReinstateTarget(r); setReinstateReason(''); setReinstateError(''); }}
-                      style={{
-                        background: 'none', border: 'none', padding: 0,
-                        fontSize: '12px', color: 'var(--accent)', cursor: 'pointer',
-                        textDecoration: 'underline',
-                      }}
-                    >
-                      Reinstate
-                    </button>
-                  </>
-                )}
-                {isReinstated && (
-                  <>
-                    <span>{'\u00b7'}</span>
-                    <span style={{ color: 'var(--success)' }}>Reinstated {formatDate(r.reinstatedAt!)}</span>
-                  </>
-                )}
-                {normalizeVisibility(r.visibility) === 'sealed' && !isCurrentlyWithdrawn && (
-                  <>
-                    <span>{'\u00b7'}</span>
-                    {publishAffordance.kind === 'available' ? (
-                      <button
-                        onClick={() => { setPublishTarget(r); setPublishRunEval(true); setPublishError(''); }}
-                        style={{
-                          background: 'none', border: 'none', padding: 0,
-                          fontSize: '12px', color: 'var(--accent)', cursor: 'pointer',
-                          textDecoration: 'underline', fontWeight: 600,
-                        }}
-                      >
-                        Publish
-                      </button>
-                    ) : publishAffordance.kind === 'unsigned' ? (
-                      /* Unsigned-tier gate-off (ADR-0020, S3a P3): publishing
-                         emits signed attestations this instance cannot back,
-                         so the action is disabled with an explanation rather
-                         than left as a dead button that errors. */
-                      <button
-                        disabled
-                        title="Publishing is unavailable \u2014 this instance is running unsigned (signing is not configured). Signing is the go-to-production step and takes both PUBLISHER_SIGNING_KEY and PUBLISHER_KEY_ID; see docs/instance-setup.md."
-                        style={{
-                          background: 'none', border: 'none', padding: 0,
-                          fontSize: '12px', color: 'var(--text-muted)',
-                          cursor: 'not-allowed', fontWeight: 600,
-                        }}
-                      >
-                        Publish unavailable (unsigned)
-                      </button>
-                    ) : (
-                      /* SITE_SEAL_ONLY (#552): this instance seals records
-                         only, so the promotion is refused server-side; the
-                         action is shown disabled with the reason, not hidden. */
-                      <button
-                        disabled
-                        title={publishAffordance.explanation}
-                        aria-label={`${publishAffordance.label}: ${publishAffordance.explanation}`}
-                        style={{
-                          background: 'none', border: 'none', padding: 0,
-                          fontSize: '12px', color: 'var(--text-muted)',
-                          cursor: 'not-allowed', fontWeight: 600,
-                        }}
-                      >
-                        {publishAffordance.label}
-                      </button>
-                    )}
-                  </>
-                )}
-                {!isCurrentlyWithdrawn && !isReinstated && (
-                  <>
-                    <span>{'\u00b7'}</span>
-                    <button
-                      onClick={() => { setWithdrawTarget(r); setWithdrawReason(''); setWithdrawError(''); }}
-                      style={{
-                        background: 'none', border: 'none', padding: 0,
-                        fontSize: '12px', color: 'var(--text-muted)', cursor: 'pointer',
-                        textDecoration: 'underline',
-                      }}
-                    >
-                      Withdraw
-                    </button>
-                  </>
-                )}
-              </div>
-            </div>
+              as="article"
+              title={r.title}
+              href={`/records/${r.slug}`}
+              summary={r.summary}
+              meta={[
+                formatDate(r.createdAt),
+                formatModelName(r.model),
+                isReinstated ? `Reinstated ${formatDate(r.reinstatedAt!)}` : null,
+              ]}
+              withdrawn={isCurrentlyWithdrawn}
+              signals={
+                <>
+                  <Signal tier="neutral" label={lifecycleLabel(r, isCurrentlyWithdrawn)} />
+                  {r.reviews && <Signal tier="neutral" label={reviewsLine(r.reviews)} />}
+                </>
+              }
+              menu={
+                <Menu
+                  size="icon"
+                  align="end"
+                  trigger={<span aria-hidden="true">{'⋯'}</span>}
+                  triggerLabel={actionsFor(r.title)}
+                  items={items}
+                  onSelect={(id) => act(r, id)}
+                />
+              }
+            />
           );
         })}
       </div>
 
+      {pageCount > 1 && <Pager page={page} pageCount={pageCount} />}
+
       {/* Publish (sealed → public) confirmation dialog */}
-      {publishTarget && (
-        <div
-          style={{
-            position: 'fixed', inset: 0, zIndex: 1000,
-            display: 'flex', alignItems: 'center', justifyContent: 'center',
-            backgroundColor: 'rgba(0, 0, 0, 0.5)',
-          }}
-          onClick={(e) => { if (e.target === e.currentTarget && !publishing) { setPublishTarget(null); } }}
-        >
-          <div style={{
-            backgroundColor: 'white', borderRadius: '8px', width: '100%', maxWidth: '480px',
-            margin: '16px', padding: '24px',
-            boxShadow: '0 20px 60px rgba(0, 0, 0, 0.3)',
-          }}>
-            <h3 style={{ margin: '0 0 12px', fontSize: '16px', fontWeight: 600 }}>Publish this analysis</h3>
-            <p style={{ fontSize: '13px', color: 'var(--text-secondary)', lineHeight: 1.6, margin: '0 0 12px' }}>
+      <Dialog
+        open={publishTarget !== null}
+        onClose={() => setPublishTarget(null)}
+        title="Publish this analysis"
+        size="short"
+        state={publishing ? 'busy' : publishError ? 'error' : 'form'}
+        secondaryAction={{ label: 'Cancel', onClick: () => setPublishTarget(null) }}
+        primaryAction={{
+          label: publishing ? (publishRunEval ? 'Evaluating & publishing…' : 'Publishing…') : 'Publish',
+          onClick: handlePublish,
+        }}
+      >
+        {publishTarget && (
+          <>
+            <p style={BODY_TEXT}>
               Publishing makes the content of <strong>{publishTarget.title}</strong> publicly
               accessible, lists it in the registry, and emits signed publication
               attestations. Publication is <strong>not reversible</strong> — a later
               withdrawal flags the analysis but does not erase it.
             </p>
-            <label style={{ display: 'flex', alignItems: 'flex-start', gap: '8px', fontSize: '13px', cursor: 'pointer', marginBottom: '12px' }}>
+            <label style={{ display: 'flex', alignItems: 'flex-start', gap: '8px', fontSize: '13px', cursor: 'pointer' }}>
               <input
                 type="checkbox"
                 checked={publishRunEval}
@@ -455,185 +429,126 @@ function MyEvidenceTab({ rows, signingConfigured, sealOnly }: { rows: EvidenceRo
             </label>
             {publishError && (
               <div style={{
-                padding: '8px 12px', marginBottom: '12px', borderRadius: '4px',
-                backgroundColor: 'rgba(236, 19, 30, 0.08)', color: 'var(--error)', fontSize: '13px',
+                padding: '8px 12px', marginTop: '12px', borderRadius: '4px',
+                backgroundColor: 'rgba(var(--error-rgb), 0.08)', color: 'var(--error)', fontSize: '13px',
               }}>
                 {publishError}
               </div>
             )}
-            <div style={{ display: 'flex', gap: '8px', justifyContent: 'flex-end' }}>
-              <button
-                onClick={() => setPublishTarget(null)}
-                disabled={publishing}
-                style={{
-                  padding: '8px 16px', border: '1px solid var(--border-color)', borderRadius: '4px',
-                  fontSize: '13px', cursor: publishing ? 'not-allowed' : 'pointer', backgroundColor: 'white',
-                }}
-              >
-                Cancel
-              </button>
-              <button
-                onClick={handlePublish}
-                disabled={publishing}
-                style={{
-                  padding: '8px 16px', border: 'none', borderRadius: '4px',
-                  fontSize: '13px', fontWeight: 600,
-                  cursor: publishing ? 'wait' : 'pointer',
-                  backgroundColor: 'var(--accent)', color: 'white',
-                  opacity: publishing ? 0.7 : 1,
-                }}
-              >
-                {publishing ? (publishRunEval ? 'Evaluating & publishing…' : 'Publishing…') : 'Publish'}
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
+          </>
+        )}
+      </Dialog>
 
       {/* Withdrawal confirmation dialog */}
-      {withdrawTarget && (
-        <div
-          style={{
-            position: 'fixed', inset: 0, zIndex: 1000,
-            display: 'flex', alignItems: 'center', justifyContent: 'center',
-            backgroundColor: 'rgba(0, 0, 0, 0.5)',
-          }}
-          onClick={(e) => { if (e.target === e.currentTarget && !withdrawing) { setWithdrawTarget(null); } }}
-        >
-          <div style={{
-            backgroundColor: 'white', borderRadius: '8px', width: '100%', maxWidth: '480px',
-            margin: '16px', padding: '24px',
-            boxShadow: '0 20px 60px rgba(0, 0, 0, 0.3)',
-          }}>
-            <h3 style={{ margin: '0 0 12px', fontSize: '16px', fontWeight: 600 }}>Withdraw this analysis</h3>
-            <p style={{ fontSize: '13px', color: 'var(--text-secondary)', lineHeight: 1.6, margin: '0 0 16px' }}>
+      <Dialog
+        open={withdrawTarget !== null}
+        onClose={() => setWithdrawTarget(null)}
+        title="Withdraw this analysis"
+        size="short"
+        state={withdrawing ? 'busy' : withdrawError ? 'error' : 'form'}
+        secondaryAction={{ label: 'Cancel', onClick: () => setWithdrawTarget(null) }}
+        primaryAction={{
+          label: withdrawing ? 'Withdrawing...' : 'Withdraw',
+          onClick: handleWithdraw,
+          disabled: !withdrawReason.trim(),
+        }}
+      >
+        {withdrawTarget && (
+          <>
+            <p style={BODY_TEXT}>
               Withdrawing an analysis is a public, permanent action. The analysis and its cryptographic
               proofs remain accessible, but it will be flagged as withdrawn.
             </p>
-            <div style={{ fontSize: '13px', fontWeight: 500, marginBottom: '4px', color: 'var(--text-primary)' }}>
+            <div style={QUOTED_TITLE}>
               &ldquo;{withdrawTarget.title}&rdquo;
             </div>
-            <label style={{ display: 'block', fontSize: '13px', fontWeight: 600, marginBottom: '4px', marginTop: '12px', color: 'var(--text-primary)' }}>
+            <label htmlFor="dashboard-withdraw-reason" style={REASON_LABEL}>
               Reason for withdrawal *
             </label>
             <textarea
+              id="dashboard-withdraw-reason"
               value={withdrawReason}
               onChange={(e) => setWithdrawReason(e.target.value)}
               placeholder="e.g., Data source was updated, methodology was flawed, superseded by newer analysis..."
               rows={3}
-              style={{
-                width: '100%', padding: '8px 12px', border: '1px solid var(--border-color)',
-                borderRadius: '4px', fontSize: '14px', boxSizing: 'border-box',
-                resize: 'vertical', fontFamily: 'inherit',
-              }}
+              style={REASON_FIELD}
             />
-            {withdrawError && (
-              <div style={{ marginTop: '8px', fontSize: '13px', color: 'var(--error)' }}>
-                {withdrawError}
-              </div>
-            )}
-            <div style={{ display: 'flex', gap: '8px', justifyContent: 'flex-end', marginTop: '16px' }}>
-              <button
-                onClick={() => setWithdrawTarget(null)}
-                disabled={withdrawing}
-                style={{
-                  padding: '8px 16px', border: '1px solid var(--border-color)', borderRadius: '4px',
-                  fontSize: '13px', cursor: 'pointer', backgroundColor: 'white',
-                  color: 'var(--text-secondary)',
-                }}
-              >
-                Cancel
-              </button>
-              <button
-                onClick={handleWithdraw}
-                disabled={!withdrawReason.trim() || withdrawing}
-                style={{
-                  padding: '8px 16px', border: 'none', borderRadius: '4px',
-                  fontSize: '13px', fontWeight: 600, cursor: !withdrawReason.trim() || withdrawing ? 'not-allowed' : 'pointer',
-                  backgroundColor: 'var(--error)', color: 'white',
-                  opacity: !withdrawReason.trim() || withdrawing ? 0.6 : 1,
-                }}
-              >
-                {withdrawing ? 'Withdrawing...' : 'Withdraw'}
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
+            {withdrawError && <div style={ERROR_LINE}>{withdrawError}</div>}
+          </>
+        )}
+      </Dialog>
 
       {/* Reinstatement confirmation dialog */}
-      {reinstateTarget && (
-        <div
-          style={{
-            position: 'fixed', inset: 0, zIndex: 1000,
-            display: 'flex', alignItems: 'center', justifyContent: 'center',
-            backgroundColor: 'rgba(0, 0, 0, 0.5)',
-          }}
-          onClick={(e) => { if (e.target === e.currentTarget && !reinstating) { setReinstateTarget(null); } }}
-        >
-          <div style={{
-            backgroundColor: 'white', borderRadius: '8px', width: '100%', maxWidth: '480px',
-            margin: '16px', padding: '24px',
-            boxShadow: '0 20px 60px rgba(0, 0, 0, 0.3)',
-          }}>
-            <h3 style={{ margin: '0 0 12px', fontSize: '16px', fontWeight: 600 }}>Reinstate this analysis</h3>
-            <p style={{ fontSize: '13px', color: 'var(--text-secondary)', lineHeight: 1.6, margin: '0 0 16px' }}>
+      <Dialog
+        open={reinstateTarget !== null}
+        onClose={() => setReinstateTarget(null)}
+        title="Reinstate this analysis"
+        size="short"
+        state={reinstating ? 'busy' : reinstateError ? 'error' : 'form'}
+        secondaryAction={{ label: 'Cancel', onClick: () => setReinstateTarget(null) }}
+        primaryAction={{
+          label: reinstating ? 'Reinstating...' : 'Reinstate',
+          onClick: handleReinstate,
+          disabled: !reinstateReason.trim(),
+        }}
+      >
+        {reinstateTarget && (
+          <>
+            <p style={BODY_TEXT}>
               Reinstating will make this analysis visible again in the public index. The prior
               withdrawal record is preserved — both the withdrawal and reinstatement will appear
               in the status history for transparency.
             </p>
-            <div style={{ fontSize: '13px', fontWeight: 500, marginBottom: '4px', color: 'var(--text-primary)' }}>
+            <div style={QUOTED_TITLE}>
               &ldquo;{reinstateTarget.title}&rdquo;
             </div>
-            <label style={{ display: 'block', fontSize: '13px', fontWeight: 600, marginBottom: '4px', marginTop: '12px', color: 'var(--text-primary)' }}>
+            <label htmlFor="dashboard-reinstate-reason" style={REASON_LABEL}>
               Reason for reinstatement *
             </label>
             <textarea
+              id="dashboard-reinstate-reason"
               value={reinstateReason}
               onChange={(e) => setReinstateReason(e.target.value)}
               placeholder="e.g., Original concern resolved, data was re-verified, withdrawal was premature..."
               rows={3}
-              style={{
-                width: '100%', padding: '8px 12px', border: '1px solid var(--border-color)',
-                borderRadius: '4px', fontSize: '14px', boxSizing: 'border-box',
-                resize: 'vertical', fontFamily: 'inherit',
-              }}
+              style={REASON_FIELD}
             />
-            {reinstateError && (
-              <div style={{ marginTop: '8px', fontSize: '13px', color: 'var(--error)' }}>
-                {reinstateError}
-              </div>
-            )}
-            <div style={{ display: 'flex', gap: '8px', justifyContent: 'flex-end', marginTop: '16px' }}>
-              <button
-                onClick={() => setReinstateTarget(null)}
-                disabled={reinstating}
-                style={{
-                  padding: '8px 16px', border: '1px solid var(--border-color)', borderRadius: '4px',
-                  fontSize: '13px', cursor: 'pointer', backgroundColor: 'white',
-                  color: 'var(--text-secondary)',
-                }}
-              >
-                Cancel
-              </button>
-              <button
-                onClick={handleReinstate}
-                disabled={!reinstateReason.trim() || reinstating}
-                style={{
-                  padding: '8px 16px', border: 'none', borderRadius: '4px',
-                  fontSize: '13px', fontWeight: 600,
-                  cursor: !reinstateReason.trim() || reinstating ? 'not-allowed' : 'pointer',
-                  backgroundColor: 'var(--success)', color: 'white',
-                  opacity: !reinstateReason.trim() || reinstating ? 0.6 : 1,
-                }}
-              >
-                {reinstating ? 'Reinstating...' : 'Reinstate'}
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
+            {reinstateError && <div style={ERROR_LINE}>{reinstateError}</div>}
+          </>
+        )}
+      </Dialog>
     </>
+  );
+}
+
+/** The first tab's pager: links to `?page=N`, the current page marked, far pages elided as the registry does. */
+function Pager({ page, pageCount }: { page: number; pageCount: number }) {
+  const href = (n: number) => `/dashboard?page=${n}`;
+  const box: CSSProperties = {
+    padding: '6px 12px', border: '1px solid var(--border-color)', borderRadius: '4px',
+    fontSize: '13px', textDecoration: 'none', color: 'var(--text-secondary)',
+  };
+  const numbers = Array.from({ length: pageCount }, (_, i) => i + 1)
+    .filter((n) => n === 1 || n === pageCount || Math.abs(n - page) <= 1)
+    .reduce<(number | 'ellipsis')[]>((acc, n, i, arr) => {
+      if (i > 0 && n - arr[i - 1] > 1) acc.push('ellipsis');
+      acc.push(n);
+      return acc;
+    }, []);
+  return (
+    <div style={{ display: 'flex', justifyContent: 'center', flexWrap: 'wrap', gap: '8px', marginTop: '24px' }}>
+      {page > 1 ? <Link href={href(page - 1)} style={box}>{PAGER_PREVIOUS}</Link> : <span style={{ ...box, opacity: 0.5 }}>{PAGER_PREVIOUS}</span>}
+      {numbers.map((item, i) =>
+        item === 'ellipsis' ? (
+          <span key={`e${i}`} style={{ padding: '6px 4px', color: 'var(--text-muted)', fontSize: '13px' }}>...</span>
+        ) : item === page ? (
+          <span key={item} aria-current="page" style={{ ...box, backgroundColor: 'var(--accent)', color: 'var(--white)', fontWeight: 600 }}>{item}</span>
+        ) : (
+          <Link key={item} href={href(item)} style={box}>{item}</Link>
+        ),
+      )}
+      {page < pageCount ? <Link href={href(page + 1)} style={box}>{PAGER_NEXT}</Link> : <span style={{ ...box, opacity: 0.5 }}>{PAGER_NEXT}</span>}
+    </div>
   );
 }
 
@@ -648,31 +563,15 @@ function MyEvaluationsTab({ rows }: { rows: EvaluationRow[] }) {
   }
 
   return (
-    <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
+    <div>
       {rows.map((r) => (
-        <Link
+        <Row
           key={r.id}
+          title={r.evidenceTitle}
           href={`/records/${r.evidenceSlug}`}
-          style={{
-            display: 'flex', alignItems: 'center', gap: '12px',
-            padding: '14px 18px',
-            border: '1px solid var(--border-color)', borderRadius: '6px',
-            textDecoration: 'none', color: 'inherit',
-            transition: 'border-color 0.15s',
-          }}
-          onMouseOver={(e) => { e.currentTarget.style.borderColor = 'var(--accent)'; }}
-          onMouseOut={(e) => { e.currentTarget.style.borderColor = 'var(--border-color)'; }}
-        >
-          <TypeBadge type={r.type} />
-          <div style={{ flex: 1, minWidth: 0 }}>
-            <div style={{ fontSize: '15px', fontWeight: 500, color: 'var(--text-primary)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
-              {r.evidenceTitle}
-            </div>
-          </div>
-          <span style={{ fontSize: '12px', color: 'var(--text-muted)', flexShrink: 0 }}>
-            {formatDate(r.createdAt)}
-          </span>
-        </Link>
+          meta={[formatDate(r.createdAt)]}
+          signals={<Signal tier="neutral" label={kindLabel(r.type)} />}
+        />
       ))}
     </div>
   );
@@ -745,19 +644,19 @@ function TokensTab({ rows }: { rows: TokenRow[] }) {
               </div>
               <div style={{ fontSize: '12px', color: 'var(--text-muted)', display: 'flex', gap: '8px', flexWrap: 'wrap', alignItems: 'center' }}>
                 <code style={{ fontFamily: 'monospace' }}>{t.tokenPrefix}...</code>
-                <span>{'\u00b7'}</span>
+                <span>{'·'}</span>
                 <span>Created {formatDate(t.createdAt)}</span>
-                <span>{'\u00b7'}</span>
+                <span>{'·'}</span>
                 {expired ? (
                   <span style={{ color: 'var(--error)' }}>Expired {formatDate(t.expiresAt)}</span>
                 ) : (
                   <span>Expires {formatDate(t.expiresAt)}</span>
                 )}
-                <span>{'\u00b7'}</span>
+                <span>{'·'}</span>
                 <span>
                   {t.lastUsedAt ? `Last used ${formatDate(t.lastUsedAt)}` : 'Never used'}
                 </span>
-                <span>{'\u00b7'}</span>
+                <span>{'·'}</span>
                 <button
                   onClick={() => { setRevokeTarget(t); setRevokeError(''); }}
                   style={{
@@ -774,62 +673,29 @@ function TokensTab({ rows }: { rows: TokenRow[] }) {
         })}
       </div>
 
-      {revokeTarget && (
-        <div
-          style={{
-            position: 'fixed', inset: 0, zIndex: 1000,
-            display: 'flex', alignItems: 'center', justifyContent: 'center',
-            backgroundColor: 'rgba(0, 0, 0, 0.5)',
-          }}
-          onClick={(e) => { if (e.target === e.currentTarget && !revoking) { setRevokeTarget(null); } }}
-        >
-          <div style={{
-            backgroundColor: 'white', borderRadius: '8px', width: '100%', maxWidth: '440px',
-            margin: '16px', padding: '24px',
-            boxShadow: '0 20px 60px rgba(0, 0, 0, 0.3)',
-          }}>
-            <h3 style={{ margin: '0 0 12px', fontSize: '16px', fontWeight: 600 }}>Revoke token</h3>
-            <p style={{ fontSize: '13px', color: 'var(--text-secondary)', lineHeight: 1.6, margin: '0 0 16px' }}>
+      <Dialog
+        open={revokeTarget !== null}
+        onClose={() => setRevokeTarget(null)}
+        title="Revoke token"
+        size="short"
+        state={revoking ? 'busy' : revokeError ? 'error' : 'form'}
+        secondaryAction={{ label: 'Cancel', onClick: () => setRevokeTarget(null) }}
+        primaryAction={{ label: revoking ? 'Revoking...' : 'Revoke', onClick: handleRevoke }}
+      >
+        {revokeTarget && (
+          <>
+            <p style={BODY_TEXT}>
               Revoking is immediate and permanent. Any client still using this
               token will start seeing 401 Unauthorized responses. The client
               will need to run a fresh login to get a new token.
             </p>
-            <div style={{ fontSize: '13px', fontWeight: 500, marginBottom: '4px', color: 'var(--text-primary)' }}>
+            <div style={QUOTED_TITLE}>
               &ldquo;{revokeTarget.name}&rdquo; <code style={{ fontSize: '12px', color: 'var(--text-muted)' }}>({revokeTarget.tokenPrefix}...)</code>
             </div>
-            {revokeError && (
-              <div style={{ marginTop: '8px', fontSize: '13px', color: 'var(--error)' }}>
-                {revokeError}
-              </div>
-            )}
-            <div style={{ display: 'flex', gap: '8px', justifyContent: 'flex-end', marginTop: '16px' }}>
-              <button
-                onClick={() => setRevokeTarget(null)}
-                disabled={revoking}
-                style={{
-                  padding: '8px 16px', border: '1px solid var(--border-color)', borderRadius: '4px',
-                  fontSize: '13px', cursor: 'pointer', backgroundColor: 'white',
-                  color: 'var(--text-secondary)',
-                }}
-              >
-                Cancel
-              </button>
-              <button
-                onClick={handleRevoke}
-                disabled={revoking}
-                style={{
-                  padding: '8px 16px', border: 'none', borderRadius: '4px',
-                  fontSize: '13px', fontWeight: 600, cursor: revoking ? 'not-allowed' : 'pointer',
-                  backgroundColor: 'var(--error)', color: 'white',
-                  opacity: revoking ? 0.6 : 1,
-                }}
-              >
-                {revoking ? 'Revoking...' : 'Revoke'}
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
+            {revokeError && <div style={ERROR_LINE}>{revokeError}</div>}
+          </>
+        )}
+      </Dialog>
     </>
   );
 }
@@ -844,37 +710,15 @@ function ActivityTab({ rows }: { rows: ActivityRow[] }) {
   }
 
   return (
-    <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
+    <div>
       {rows.map((r) => (
-        <Link
+        <Row
           key={r.id}
+          title={r.evidenceTitle}
           href={`/records/${r.evidenceSlug}`}
-          style={{
-            display: 'flex', alignItems: 'center', gap: '12px',
-            padding: '14px 18px',
-            border: '1px solid var(--border-color)', borderRadius: '6px',
-            textDecoration: 'none', color: 'inherit',
-            transition: 'border-color 0.15s',
-          }}
-          onMouseOver={(e) => { e.currentTarget.style.borderColor = 'var(--accent)'; }}
-          onMouseOut={(e) => { e.currentTarget.style.borderColor = 'var(--border-color)'; }}
-        >
-          <TypeBadge type={r.type} />
-          <div style={{ flex: 1, minWidth: 0 }}>
-            <div style={{ fontSize: '15px', fontWeight: 500, color: 'var(--text-primary)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
-              {r.evidenceTitle}
-            </div>
-            <div style={{ fontSize: '12px', color: 'var(--text-muted)', marginTop: '2px' }}>
-              by{' '}
-              <span style={{ color: 'var(--text-secondary)' }}>
-                {r.creatorDisplayName}
-              </span>
-            </div>
-          </div>
-          <span style={{ fontSize: '12px', color: 'var(--text-muted)', flexShrink: 0 }}>
-            {formatDate(r.createdAt)}
-          </span>
-        </Link>
+          meta={[formatDate(r.createdAt), `by ${r.creatorDisplayName}`]}
+          signals={<Signal tier="neutral" label={kindLabel(r.type)} />}
+        />
       ))}
     </div>
   );
