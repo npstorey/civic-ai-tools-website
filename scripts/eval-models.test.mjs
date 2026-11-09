@@ -28,6 +28,11 @@
 // two configurations, and the tool names the live captures call. Q3's portal
 // moved with San Francisco's (#587), as a named delta on the query pin.
 //
+// AND THE APP'S IN-LOOP SHAPE (EVAL-OW P1, #740). The tests at the very foot
+// hold a row's first request to the one `src/app/api/compare-stream/route.ts`
+// itself sends under `SOURCE_ROUTING=in-loop` (A2), and every open-weight
+// request to the ruled `provider` object (A12).
+//
 // Run with: npm test
 
 import { test } from 'node:test';
@@ -253,29 +258,59 @@ async function fakeEndpoints() {
   };
 
   let serial = 0;
+  // FAKE_CHAT picks how the stand-in model behaves: `answer` (the default)
+  // loads Socrata when it is offered `load_source`, makes one data call and
+  // answers; `always-tool` never answers, so the loop runs to its round limit
+  // and takes its answering turn. FAKE_USAGE_TOTAL, when set, is the
+  // `total_tokens` every response reports, so a test can drive the
+  // cumulative bound.
+  const MODE = process.env.FAKE_CHAT || 'answer';
+  const USAGE_TOTAL = process.env.FAKE_USAGE_TOTAL ? Number(process.env.FAKE_USAGE_TOTAL) : undefined;
+  const dataArgs = (name, user) =>
+    ['get_data', 'socrata__get_data'].includes(name)
+      ? { type: 'query', dataset_id: /Chicago/.test(user) ? '4ijn-s7e5' : 'erm2-nwe9', limit: 5 }
+      : {};
+  const usageOf = (body, messages) => {
+    const prompt = USAGE_TOTAL !== undefined ? USAGE_TOTAL - 160 : Math.ceil(JSON.stringify(messages).length / 4);
+    const reasoning = body.reasoning_effort ? 60 : 0;
+    const completion = 100 + reasoning;
+    return {
+      prompt_tokens: prompt,
+      completion_tokens: completion,
+      total_tokens: prompt + completion,
+      // What OpenRouter reports the request cost, in US dollars.
+      cost: 0.000001,
+      ...(reasoning ? { completion_tokens_details: { reasoning_tokens: reasoning } } : {}),
+    };
+  };
   const chat = (body) => {
     const messages = body.messages ?? [];
     const last = messages.at(-1);
-    const tool = body.tools?.[0]?.function?.name;
+    const names = (body.tools ?? []).map((t) => t.function?.name);
+    const user = messages.find((m) => m.role === 'user')?.content ?? '';
+    const dataTool = names.includes('socrata__get_data') ? 'socrata__get_data' : names.find((n) => n !== 'load_source');
+    const calledData = messages.some((m) => m.role === 'assistant' && (m.tool_calls ?? []).some((c) => c.function?.name !== 'load_source'));
+    const callOf = (name, args) => ({
+      role: 'assistant',
+      content: null,
+      tool_calls: [{ id: `call_${++serial}`, type: 'function', function: { name, arguments: JSON.stringify(args) } }],
+    });
     let message;
-    if (last?.role === 'tool') {
+    if (MODE === 'always-tool') {
+      message = dataTool ? callOf(dataTool, dataArgs(dataTool, user)) : callOf('load_source', { alias: 'socrata' });
+    } else if (last?.role === 'tool' && !(dataTool && names.includes('load_source') && !calledData)) {
       const seen = String(body.model).startsWith('google/') ? asGoogleReceivesIt(String(last.content)) : String(last.content);
       last.content = seen; // so the prompt count below reflects what was "received"
       message = { role: 'assistant', content: `I received: ${seen}` };
+    } else if (last?.role === 'tool') {
+      // In loop, after a load: the loaded source's first tool.
+      message = callOf(dataTool, dataArgs(dataTool, user));
+    } else if (names.includes('load_source')) {
+      message = callOf('load_source', { alias: 'socrata' });
     } else {
-      const user = messages.find((m) => m.role === 'user')?.content ?? '';
-      const args = ['get_data', 'socrata__get_data'].includes(tool)
-        ? { type: 'query', dataset_id: /Chicago/.test(user) ? '4ijn-s7e5' : 'erm2-nwe9', limit: 5 }
-        : {};
-      message = {
-        role: 'assistant',
-        content: null,
-        tool_calls: [{ id: `call_${++serial}`, type: 'function', function: { name: tool, arguments: JSON.stringify(args) } }],
-      };
+      const tool = names[0];
+      message = callOf(tool, dataArgs(tool, user));
     }
-    const prompt = Math.ceil(JSON.stringify(messages).length / 4);
-    const reasoning = body.reasoning_effort ? 60 : 0;
-    const completion = 100 + reasoning;
     return {
       id: `gen-fake-${++serial}`,
       object: 'chat.completion',
@@ -283,13 +318,19 @@ async function fakeEndpoints() {
       model: body.model,
       provider: 'Fake',
       choices: [{ index: 0, message, finish_reason: message.tool_calls ? 'tool_calls' : 'stop', native_finish_reason: 'STOP' }],
-      usage: {
-        prompt_tokens: prompt,
-        completion_tokens: completion,
-        total_tokens: prompt + completion,
-        ...(reasoning ? { completion_tokens_details: { reasoning_tokens: reasoning } } : {}),
-      },
+      usage: usageOf(body, messages),
     };
+  };
+  // A streamed answering turn: one content chunk, then the usage chunk.
+  const chatStream = (body) => {
+    const frame = (payload) =>
+      `data: ${JSON.stringify({ id: `gen-fake-${++serial}`, object: 'chat.completion.chunk', created: 1, model: body.model, provider: 'Fake', ...payload })}\n\n`;
+    const text =
+      frame({ choices: [{ index: 0, delta: { content: 'Streamed answer.' }, finish_reason: null }] }) +
+      frame({ choices: [{ index: 0, delta: {}, finish_reason: 'stop', native_finish_reason: 'STOP' }] }) +
+      frame({ choices: [], usage: usageOf(body, body.messages ?? []) }) +
+      'data: [DONE]\n\n';
+    return new Response(text, { status: 200, headers: { 'content-type': 'text/event-stream' } });
   };
 
   const mcp = (host, body) => {
@@ -342,6 +383,8 @@ async function fakeEndpoints() {
         system: messages.find((m) => m.role === 'system')?.content,
         user: messages.find((m) => m.role === 'user')?.content,
         tools: parsed.tools,
+        // The request body as sent, whole: what a first request is compared on.
+        body: parsed,
       });
     }
     log(entry);
@@ -349,11 +392,14 @@ async function fakeEndpoints() {
     if (url.host === 'openrouter.ai') {
       if (method === 'GET' && url.pathname === '/api/v1/models') return json(200, JSON.parse(readFileSync(LIST, 'utf-8')));
       if (method === 'GET' && url.pathname === '/api/v1/key') {
+        // Distinctive figures, so a test can show none of them is written.
         return KEY_STATUS === 200
-          ? json(200, { data: { limit: null, usage: 0, limit_remaining: null } })
+          ? json(200, { data: { limit: 123.45, usage: 67.89, limit_remaining: 55.56 } })
           : json(KEY_STATUS, { error: { code: KEY_STATUS, message: 'fake: key refused' } });
       }
-      if (method === 'POST' && url.pathname === '/api/v1/chat/completions') return json(200, chat(parsed));
+      if (method === 'POST' && url.pathname === '/api/v1/chat/completions') {
+        return parsed?.stream === true ? chatStream(parsed) : json(200, chat(parsed));
+      }
     }
     if (MCP_HOSTS.includes(url.host)) return mcp(url.host, body);
     throw new Error(`fake endpoints: no route for ${method} ${url.href}`);
@@ -979,4 +1025,280 @@ test('#609: every live capture names a tool the app offers, and the name routes 
   for (const capture of LIVE_CAPTURES) {
     assert.equal(routedSourceId(capture.tool, configured), capture.source, capture.id);
   }
+});
+
+// --- EVAL-OW P1 (#740): the app's in-loop request shape, and the provider object ---
+//
+// A2 (C1). A row's first request equals the app's first request for the same
+// question, model and configuration under `SOURCE_ROUTING=in-loop`: tools
+// `[load_source]`, the directory prompt, and the model, limit and reasoning
+// fields. The app's side is CAPTURED FROM THE ROUTE ITSELF
+// (`src/app/api/compare-stream/route.ts`), driven in a child process as
+// `src/app/api/in-loop-routing-driven.test.ts` drives it: `module.registerHooks()`
+// resolves `@/` and stubs the modules that need a request scope or a sign-in
+// provider, the model endpoint is the built-in one with its requests answered
+// and recorded in process, and the consent in force is the real encoder's
+// cookie. A reference rebuilt from
+// the functions the harness calls would agree with the harness by
+// construction (the seat's ruling, #740 comment 6728891704 point 1).
+//
+// Three named configurations, so no one fixed request can equal them all:
+// the default sources (Socrata, and Data Commons, which has a coded default
+// address), every source On; the defaults with Boston OpenContext, every
+// source On; and that configuration with Socrata Ask first. The first two
+// list different directories, so their prompts and `load_source` enums
+// differ; the third is a pause row's first request.
+//
+// A12 (C2). Every open-weight request carries exactly the ruled `provider`
+// object (#740 D3 = A), read from what the row recorded it sent
+// (`sentFacts`), and no Claude request carries one.
+
+const SRC_DIR = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../src');
+const REPO_DIR = path.resolve(SRC_DIR, '..');
+
+/**
+ * The route's side: drives `POST /api/compare-stream` once per entry of
+ * DRIVES (model, question, portal, configuration, consent states), each with
+ * its own environment, and writes the first model request of each to
+ * DRIVER_OUT. The stand-in model answers every request at once with no tool
+ * call, so a drive is one request and contacts no source.
+ */
+const ROUTE_DRIVER_SOURCE = `
+import fs from 'node:fs';
+import path from 'node:path';
+import * as nodeModule from 'node:module';
+import { pathToFileURL } from 'node:url';
+
+const SRC = process.env.DRIVER_SRC;
+const STUB_PREFIX = 'file:///eval-ow-p1-stub/';
+const DRIVER_URL = pathToFileURL(path.join(SRC, 'lib/sandbox/driver.ts')).href;
+const STUB_SOURCE = {
+  'next/headers': "export async function headers() { return new Headers({ 'x-forwarded-for': '203.0.113.61' }); }",
+  'next-auth': 'export async function getServerSession() { return null; }',
+  '@/lib/auth': 'export const authOptions = {};',
+  '@/lib/sandbox': 'import { NotebookExecutionError } from ' + JSON.stringify(DRIVER_URL) + '; export { NotebookExecutionError }; export async function executeNotebook() { throw new Error("no sandbox in this drive"); }',
+};
+nodeModule.registerHooks({
+  resolve(specifier, context, nextResolve) {
+    if (Object.hasOwn(STUB_SOURCE, specifier)) return { url: STUB_PREFIX + encodeURIComponent(specifier) + '.mjs', format: 'module', shortCircuit: true };
+    if (specifier === 'next/server') return nextResolve('next/server.js', context);
+    if (specifier.startsWith('@/')) {
+      const base = path.join(SRC, specifier.slice(2));
+      for (const candidate of [base, base + '.ts', base + '.tsx', path.join(base, 'index.ts')]) {
+        try { if (fs.statSync(candidate).isFile()) return { url: pathToFileURL(candidate).href, shortCircuit: true }; } catch {}
+      }
+      throw new Error('route driver: cannot resolve ' + specifier);
+    }
+    return nextResolve(specifier, context);
+  },
+  load(url, context, nextLoad) {
+    if (url.startsWith(STUB_PREFIX)) {
+      const key = decodeURIComponent(url.slice(STUB_PREFIX.length).replace(/\\.mjs$/, ''));
+      return { format: 'module', source: STUB_SOURCE[key], shortCircuit: true };
+    }
+    return nextLoad(url, context);
+  },
+});
+
+// The model endpoint is the built-in one, as in production: the built-in
+// catalog is offered only against it (no MODEL_API_BASE_URL is set). Its
+// chat-completions requests are answered here, in process, and recorded;
+// every other request leaves for nowhere.
+const requests = [];
+globalThis.fetch = async (input, init = {}) => {
+  const url = new URL(typeof input === 'string' ? input : input instanceof URL ? input.href : input.url);
+  if (url.hostname !== 'openrouter.ai' || url.pathname !== '/api/v1/chat/completions') throw new TypeError('fetch failed');
+  const body = JSON.parse(typeof init.body === 'string' ? init.body : await new Response(init.body).text());
+  requests.push(body);
+  const usage = { prompt_tokens: 10, completion_tokens: 5, total_tokens: 15 };
+  if (body.stream === true) {
+    const frame = 'data: ' + JSON.stringify({ id: 'd', object: 'chat.completion.chunk', created: 1, model: body.model, choices: [{ index: 0, delta: { content: 'Answer.' }, finish_reason: 'stop' }], usage }) + '\\n\\n';
+    return new Response(frame + 'data: [DONE]\\n\\n', { status: 200, headers: { 'Content-Type': 'text/event-stream' } });
+  }
+  return new Response(JSON.stringify({ id: 'd', object: 'chat.completion', created: 1, model: body.model, choices: [{ index: 0, message: { role: 'assistant', content: 'A fixture answer that names no dataset.' }, finish_reason: 'stop' }], usage }), { status: 200, headers: { 'Content-Type': 'application/json' } });
+};
+
+const { _resetDefaultModelClientForTests } = await import(pathToFileURL(path.join(SRC, 'lib/model-client.ts')).href);
+_resetDefaultModelClientForTests();
+const { consentCookieForTests } = await import(pathToFileURL(path.join(SRC, 'lib/sources/consent-cookie-for-tests.ts')).href);
+const route = await import(pathToFileURL(path.join(SRC, 'app/api/compare-stream/route.ts')).href);
+
+const VARIABLES = JSON.parse(process.env.DRIVER_VARIABLES);
+const out = [];
+for (const d of JSON.parse(process.env.DRIVES)) {
+  for (const name of VARIABLES) delete process.env[name];
+  Object.assign(process.env, d.env);
+  const from = requests.length;
+  const response = await route.POST(new Request('http://localhost/api/compare-stream', {
+    method: 'POST',
+    headers: { cookie: consentCookieForTests(d.states) },
+    body: JSON.stringify({ query: d.query, model: d.model, portal: d.portal, mcpOnly: true }),
+  }));
+  const text = await response.text();
+  out.push({ ...d, first: requests[from] ?? null, requests: requests.length - from, responseHead: requests[from] ? undefined : text.slice(0, 600) });
+}
+fs.writeFileSync(process.env.DRIVER_OUT, JSON.stringify(out));
+process.exit(0);
+`;
+
+/** The source-configuration variables a drive sets or clears, from the manifest. */
+const SOURCE_VARIABLES = [
+  ...new Set(CIVIC_MANIFEST.flatMap((e) => [e.configuration.addressVariable, e.configuration.keyVariable].filter(Boolean))),
+];
+
+const DEFAULT_SOURCES_ENV = { SOCRATA_MCP_URL: 'https://fake-socrata.test', DATA_COMMONS_MCP_URL: 'https://fake-datacommons.test/mcp' };
+const WITH_BOSTON_ENV = { ...DEFAULT_SOURCES_ENV, BOSTON_OPENCONTEXT_MCP_URL: 'https://fake-boston.test/mcp' };
+
+/** The three named configurations of C1: the sources each configures, and Socrata's consent. */
+const C1_CONFIGURATIONS = [
+  { name: 'the default sources, every source On', env: DEFAULT_SOURCES_ENV, states: {} },
+  { name: 'the defaults and Boston OpenContext, every source On', env: WITH_BOSTON_ENV, states: {} },
+  { name: 'the defaults and Boston OpenContext, Socrata Ask first', env: WITH_BOSTON_ENV, states: { socrata: 'ask-first' } },
+];
+
+/** The two Claude models the route offers from the built-in catalog, and one question. */
+const C1_MODELS = ['anthropic/claude-haiku-5.5', 'anthropic/claude-sonnet-5.5'];
+const C1_QUERY = TEST_QUERIES.find((q) => q.id === 'Q2');
+
+/** The route's first request for every (configuration, model), memoized. */
+let routeFirstRequests;
+function routeDrives() {
+  if (routeFirstRequests) return routeFirstRequests;
+  const dir = scratchDir();
+  try {
+    const out = path.join(dir, 'route.json');
+    const drives = C1_CONFIGURATIONS.flatMap((c) =>
+      C1_MODELS.map((model) => ({ configuration: c.name, model, query: C1_QUERY.query, portal: C1_QUERY.portal, env: c.env, states: c.states })),
+    );
+    const result = spawnSync(process.execPath, ['--input-type=module', '-e', ROUTE_DRIVER_SOURCE], {
+      cwd: REPO_DIR,
+      encoding: 'utf-8',
+      timeout: 120_000,
+      env: {
+        PATH: process.env.PATH,
+        HOME: process.env.HOME,
+        SOURCE_ROUTING: 'in-loop',
+        RATE_LIMIT_SECRET: 'fixture',
+        OPENROUTER_API_KEY: 'fixture',
+        DRIVER_SRC: SRC_DIR,
+        DRIVER_OUT: out,
+        DRIVER_VARIABLES: JSON.stringify(SOURCE_VARIABLES),
+        DRIVES: JSON.stringify(drives),
+      },
+    });
+    assert.equal(result.status, 0, `the route drive failed\nstdout:\n${result.stdout}\nstderr:\n${result.stderr}`);
+    routeFirstRequests = JSON.parse(readFileSync(out, 'utf-8'));
+    return routeFirstRequests;
+  } finally {
+    rmSync(dir, { recursive: true, force: true });
+  }
+}
+
+/** The harness's side: one run per source configuration, against the stand-in; every first request it sent. */
+const harnessRuns = new Map();
+function harnessFirstRequests(env) {
+  const key = JSON.stringify(env);
+  if (harnessRuns.has(key)) return harnessRuns.get(key);
+  const dir = scratchDir();
+  try {
+    const index = TEST_QUERIES.findIndex((q) => q.id === C1_QUERY.id) + 1;
+    const run = runHarness(['--cap', '30', '--out-dir', dir], {
+      env: {
+        ...fakeEnv(dir, { EVAL_MODELS: C1_MODELS.join(','), EVAL_QUERIES: String(index), EVAL_REPEATS: '1', EVAL_ROW_GAP_MS: '0' }),
+        ...env,
+      },
+      preload: writeFakeEndpoints(dir),
+    });
+    assert.equal(run.status, 0, `harness run\nstdout:\n${run.stdout}\nstderr:\n${run.stderr}`);
+    const firsts = chatRequests(fakeLog(path.join(dir, 'requests.jsonl'))).filter((r) => r.messages === 2).map((r) => r.body);
+    const found = { firsts, out: JSON.parse(resultsFile(dir).text) };
+    harnessRuns.set(key, found);
+    return found;
+  } finally {
+    rmSync(dir, { recursive: true, force: true });
+  }
+}
+
+/** The request fields A2 names, by name. */
+const firstRequestFields = (body) => ({
+  model: body.model,
+  tools: toolNames(body.tools),
+  system: body.messages?.find((m) => m.role === 'system')?.content,
+  user: body.messages?.find((m) => m.role === 'user')?.content,
+  max_tokens: body.max_tokens,
+  max_completion_tokens: body.max_completion_tokens,
+  reasoning_effort: body.reasoning_effort,
+});
+
+test('EVAL-OW P1 A2 (C1): a row\'s first request equals the route\'s first request, under in-loop, at three named configurations', () => {
+  const route = routeDrives();
+  assert.equal(route.length, C1_CONFIGURATIONS.length * C1_MODELS.length);
+  for (const drive of route) assert.ok(drive.first, `${drive.configuration} ${drive.model}: the route sent no model request:\n${drive.responseHead}`);
+
+  // The instrument: the route's first request offers load_source alone, and
+  // the two directories differ, so no fixed request equals both.
+  for (const drive of route) assert.deepEqual(toolNames(drive.first.tools), ['load_source'], `${drive.configuration}: premise`);
+  const systemOf = (c) => firstRequestFields(route.find((d) => d.configuration === c.name).first).system;
+  assert.notEqual(systemOf(C1_CONFIGURATIONS[0]), systemOf(C1_CONFIGURATIONS[1]));
+
+  for (const configuration of C1_CONFIGURATIONS) {
+    const { firsts } = harnessFirstRequests(configuration.env);
+    for (const model of C1_MODELS) {
+      const app = route.find((d) => d.configuration === configuration.name && d.model === model).first;
+      const harness = firsts.filter((b) => b.model === model && firstRequestFields(b).user === C1_QUERY.query);
+      assert.ok(harness.length > 0, `${configuration.name} ${model}: the harness sent no first request for ${C1_QUERY.id}`);
+      for (const body of harness) {
+        assert.deepEqual(firstRequestFields(body), firstRequestFields(app), `${configuration.name} ${model}: the named fields differ`);
+        // And the whole body, so a field A2 does not name cannot differ either.
+        assert.ok(isDeepStrictEqual(body, app), `${configuration.name} ${model}: the bodies differ beyond the named fields`);
+      }
+    }
+  }
+});
+
+/** The ruled object (#740 D3 = A), stated here, not read from the harness. */
+const RULED_PROVIDER = { max_price: { prompt: 0.15, completion: 0.6 }, require_parameters: true, data_collection: 'deny' };
+
+/** Why a recorded `provider` is not the ruling's, or null when it is. */
+function providerProblem(provider, openWeight) {
+  if (!openWeight) return provider === undefined ? null : `a Claude request carried provider ${JSON.stringify(provider)}`;
+  if (provider === undefined) return 'an open-weight request carried no provider';
+  for (const pin of ['order', 'only', 'ignore']) if (Object.hasOwn(provider, pin)) return `the provider is pinned (${pin})`;
+  return isDeepStrictEqual(provider, RULED_PROVIDER) ? null : `the provider is ${JSON.stringify(provider)}, not the ruled object`;
+}
+
+test('EVAL-OW P1 A12 (C2): an open-weight request carries exactly the ruled provider object, read from sentFacts; a Claude request carries none', async () => {
+  const wire = [];
+  const base = async (_url, init) => {
+    wire.push(JSON.parse(init.body));
+    return new Response(
+      JSON.stringify({ id: 'g', model: 'm', provider: 'P', choices: [{ finish_reason: 'stop', message: { content: 'ok' } }], usage: { prompt_tokens: 1, completion_tokens: 1, total_tokens: 2 } }),
+      { headers: { 'content-type': 'application/json' } },
+    );
+  };
+  const send = (row, model, fields) =>
+    recordingFetch(row, base)('https://openrouter.ai/api/v1/chat/completions', {
+      method: 'POST',
+      body: JSON.stringify({ model, messages: [{}], tools: [{}], ...fields }),
+    });
+
+  const openWeight = { label: 'z-ai/glm-5.3-flash Q1', closed: false, requests: [], provider: RULED_PROVIDER };
+  await send(openWeight, 'z-ai/glm-5.3-flash', { max_tokens: 4000, reasoning_effort: 'low' });
+  const claude = { label: 'anthropic/claude-haiku-5.5 Q1', closed: false, requests: [] };
+  await send(claude, 'anthropic/claude-haiku-5.5', { max_completion_tokens: 4000, reasoning_effort: 'low' });
+
+  // Read from what the row recorded it sent.
+  assert.equal(providerProblem(openWeight.requests[0].sent?.provider, true), null);
+  assert.equal(providerProblem(claude.requests[0].sent?.provider, false), null);
+  // And from what reached the wire.
+  assert.deepEqual(wire[0].provider, RULED_PROVIDER);
+  assert.equal(Object.hasOwn(wire[1], 'provider'), false);
+
+  // The check fails on each mutation it exists for.
+  const { data_collection: _dropped, ...withoutDeny } = RULED_PROVIDER;
+  assert.match(providerProblem({ ...RULED_PROVIDER, order: ['Fake'] }, true), /pinned \(order\)/);
+  assert.match(providerProblem({ ...RULED_PROVIDER, only: ['Fake'] }, true), /pinned \(only\)/);
+  assert.match(providerProblem(withoutDeny, true), /not the ruled object/);
+  assert.match(providerProblem(undefined, true), /carried no provider/);
+  assert.match(providerProblem(RULED_PROVIDER, false), /a Claude request carried provider/);
 });
