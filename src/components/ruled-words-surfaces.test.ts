@@ -352,8 +352,14 @@ const composerProps = (extra: Record<string, unknown>): Record<string, unknown> 
 });
 
 const composerBox = (surface: Surface): HostElement[] => surface.elements().filter((el) => el.type === 'textarea');
+/** Each first-time line as read whole, and as its summary | body, with `open` when it renders open (relay 57: closed). */
 const firstTimeLine = (surface: Surface): string[] =>
-  surface.elements().filter((el) => el.props['data-part'] === 'first-time-line').map((el) => textOf(el));
+  surface.elements().filter((el) => el.props['data-part'] === 'first-time-line').flatMap((el) => {
+    const inner = within(el);
+    const summary = inner.filter((x) => x.type === 'summary').map((x) => textOf(x)).join('+');
+    const body = inner.filter((x) => classesOf(x).includes('ui-disclosure-body')).map((x) => textOf(x)).join('+');
+    return [textOf(el), `${summary} | ${body}${el.props.open ? ' | open' : ''}`];
+  });
 
 test('P3b-1 criterion 7 (X23): the docked box\'s placeholder reads "Ask another question"; undocked, the mount\'s own', async () => {
   installFetch(ORIGIN, {});
@@ -365,7 +371,7 @@ test('P3b-1 criterion 7 (X23): the docked box\'s placeholder reads "Ask another 
   undocked.unmount();
 });
 
-test('P3b-1 criterion 7 (X24, Q5 = B): the first-time line in its signed-in and signed-out forms, byte for byte; none when the mount asks for none', async () => {
+test('P3b-1 criterion 7 (X24, Q5 = B; relay 57): the first-time line in its signed-in and signed-out forms, byte for byte, its first sentence the summary of a closed disclosure; none when the mount asks for none', async () => {
   installFetch(ORIGIN, {});
   const read: Record<string, string[]> = {};
   for (const [name, form] of [['signed-in', 'signed-in'], ['signed-out', 'signed-out'], ['none', null]] as const) {
@@ -373,5 +379,9 @@ test('P3b-1 criterion 7 (X24, Q5 = B): the first-time line in its signed-in and 
     read[name] = firstTimeLine(view);
     view.unmount();
   }
-  assert.deepEqual(read, { 'signed-in': [X24_SIGNED_IN], 'signed-out': [X24_SIGNED_OUT], none: [] }, `the first-time lines read ${JSON.stringify(read)}`);
+  assert.deepEqual(read, {
+    'signed-in': [X24_SIGNED_IN, 'A new question replaces this answer. | To keep this answer, publish it first.'],
+    'signed-out': [X24_SIGNED_OUT, 'A new question replaces this answer. | To keep this answer, sign in and publish it.'],
+    none: [],
+  }, `the first-time lines read ${JSON.stringify(read)}`);
 });

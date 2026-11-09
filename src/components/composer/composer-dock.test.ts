@@ -56,7 +56,7 @@ import {
   type HostElement,
   type Surface,
 } from '../sources/surface-test-harness.ts';
-import { childrenOf, classesOf, cssRules, parentOf, within } from '../ui/ui-test-helpers.ts';
+import { attr, childrenOf, classesOf, cssRules, parentOf, within } from '../ui/ui-test-helpers.ts';
 
 registerSurfaceHooks({ ...CONSENT_SURFACE_STUBS });
 
@@ -104,6 +104,21 @@ const X24_SIGNED_IN = 'A new question replaces this answer. To keep this answer,
 const X24_SIGNED_OUT = 'A new question replaces this answer. To keep this answer, sign in and publish it.';
 const BOX_LABEL = 'Ask a question about open data';
 const DOCKED_CLASS = 'composer--docked';
+/** X24's shape (relay 57; design version 4): a closed inline disclosure, its first sentence the summary. */
+const X24_SUMMARY = 'A new question replaces this answer.';
+const X24_BODY_SIGNED_IN = 'To keep this answer, publish it first.';
+const X24_BODY_SIGNED_OUT = 'To keep this answer, sign in and publish it.';
+
+/** The first-time line's summary and body, and whether it renders open. */
+function assertX24Shape(line: HostElement, body: string, where: string): void {
+  const summaries = within(line).filter((el) => el.type === 'summary');
+  assert.equal(summaries.length, 1, `${where}: the first-time line has no one <summary>`);
+  assert.equal(textOf(summaries[0]), X24_SUMMARY, `${where}: the first-time line's summary`);
+  const bodies = within(line).filter((el) => classesOf(el).includes('ui-disclosure-body'));
+  assert.equal(bodies.length, 1, `${where}: the first-time line has no one body`);
+  assert.equal(textOf(bodies[0]), body, `${where}: the first-time line's body`);
+  assert.equal(attr(line, 'open'), null, `${where}: the first-time line renders open`);
+}
 
 // --- The held streams and the answers --------------------------------------------------------------------------
 
@@ -127,11 +142,16 @@ const sse = (events: Json[]) =>
 /** Every query a route received, by path, in order. */
 let queries: Array<{ path: string; body: Json }> = [];
 
+/** Answers a test queues for the next query requests, in order, before the gate is asked (relay 57: a run that fails). */
+let nextAnswers: Array<(routePath: string, body: Json) => Response> = [];
+
 /** A query route as the real gate makes it: refused in the route's own shape, or a held stream. */
 function queryRoute(routePath: string) {
   return async (request: Request): Promise<Response> => {
     const body = JSON.parse(await request.clone().text() || '{}') as Json;
     queries.push({ path: routePath, body });
+    const override = nextAnswers.shift();
+    if (override) return override(routePath, body);
     const decision = await consentInForce(request, sessions.server);
     if (!decision.ok) {
       if (routePath === '/api/compare-stream') {
@@ -149,6 +169,7 @@ function queryRoute(routePath: string) {
 function answers() {
   streams = [];
   queries = [];
+  nextAnswers = [];
   return installFetch(ORIGIN, {
     '/api/models': () => new Response(JSON.stringify({ models: [{ id: 'fixture/model', name: 'Fixture model' }] }), { status: 200, headers: { 'Content-Type': 'application/json' } }),
     '/api/flows': () => flowsRoute.GET(),
@@ -337,6 +358,7 @@ test('criterion 1, the home page signed out: undocked before the first answer; a
   assert.equal(lines[0].type, 'details', 'the first-time line is not a disclosure');
   assert.ok(classesOf(lines[0]).includes('ui-disclosure--inline'), `the first-time line is not an inline disclosure: [${classesOf(lines[0]).join(' ')}]`);
   assert.equal(textOf(lines[0]), X24_SIGNED_OUT, 'the signed-out first-time line, byte for byte');
+  assertX24Shape(lines[0], X24_BODY_SIGNED_OUT, 'the home page signed out');
   assert.ok(within(composerOf(page)).includes(lines[0]), 'the first-time line is not inside the composer');
   assert.ok(before(page, boxOf(page), lines[0]), 'the first-time line is not under the box');
 });
@@ -438,6 +460,7 @@ test('criterion 1, /ask signed in (an executed run): after the run finishes the 
   assert.equal(lines.length, 1, `first-time lines after the first answer: ${lines.length}`);
   assert.ok(classesOf(lines[0]).includes('ui-disclosure--inline'), 'the first-time line is not an inline disclosure');
   assert.equal(textOf(lines[0]), X24_SIGNED_IN, 'the signed-in first-time line, byte for byte');
+  assertX24Shape(lines[0], X24_BODY_SIGNED_IN, '/ask signed in');
   assert.ok(page.text().includes('Advanced options'), 'the gear is gone: P3b-1 removes nothing of P3b-2\'s');
   assertOrder(page, ['box', 'chip-row', 'where-this-question-goes', 'first-time-line', 'gear'], '/ask, docked');
 });
@@ -488,6 +511,49 @@ test('the second question, /ask standard: running the demoted comparison replace
   await settle(page);
   assert.equal(queries.length, 2, 'premise: the comparison was run');
   assert.equal(firstTimeLines(page).length, 0, 'the first-time line is still shown after the comparison replaced the answer');
+});
+
+// --- The dock condition (relay 57): a first run that ends in an error does not dock ----------------------------------
+
+test('the dock condition (relay 57), the home page: a first run the route answers with an error does not dock and shows no first-time line; the next answered run docks', async () => {
+  ANON();
+  answers();
+  await consentWith();
+  // The route fails outright (a 503): the stream hook reports the reader-facing error, and no panel has an answer.
+  nextAnswers.push(() => new Response('Service unavailable', { status: 503 }));
+  const page = await mountPage(HOME());
+  await askFromBox(page, 'What was the median household income in the Bronx?');
+  assert.equal(queries.length, 1, 'premise: the question reached the route');
+  assert.equal(streams.length, 0, 'premise: the route failed it');
+  assert.ok(resultsBlock(page, 'Results'), 'premise: the results block renders the error');
+  assert.equal(isDocked(page), false, 'a first run that ended in an error docked the composer');
+  assert.equal(firstTimeLines(page).length, 0, 'a first run that ended in an error shows the first-time line');
+
+  // Each panel errors in the stream (a model failure): complete, with no answer.
+  nextAnswers.push((_path, body) => sse((body.mcpOnly ? ['withMcp'] : ['withoutMcp', 'withMcp']).map((panel) => ({ type: 'error', panel, message: 'The model could not answer.', code: 'generic' }))));
+  await askFromBox(page, 'And in Brooklyn?');
+  assert.equal(queries.length, 2, 'premise: the second question reached the route');
+  assert.equal(isDocked(page), false, 'a run whose panels each ended in an error docked the composer');
+  assert.equal(firstTimeLines(page).length, 0, 'a run whose panels each ended in an error shows the first-time line');
+
+  // The converse: the next run that finishes with an answer docks it.
+  await askFromBox(page, 'And in Queens?');
+  await finishComparison(page);
+  assert.equal(isDocked(page), true, 'an answered run after the errors did not dock the composer');
+  assert.equal(firstTimeLines(page).length, 1, 'the errored runs were counted as questions: no first-time line after the first answer');
+});
+
+test('the dock condition (relay 57), /ask signed in: a first executed run that ends in an error does not dock and shows no first-time line', async () => {
+  SIGNED_IN();
+  answers();
+  await consentWith();
+  nextAnswers.push(() => sse([{ type: 'error', message: 'The notebook could not finish running. Please try again.', code: 'generic' }]));
+  const page = await mountPage(ASK('notebook'));
+  await askFromBox(page, 'How many 311 complaints were there in Brooklyn in 2024?');
+  assert.deepEqual(queries.map((q) => q.path), ['/api/query-notebook'], 'premise: /ask ran the question in the sandbox');
+  assert.ok(resultsBlock(page, 'Answer, executed in a signed sandbox'), 'premise: the results block renders the failed run');
+  assert.equal(isDocked(page), false, 'a first executed run that ended in an error docked the composer');
+  assert.equal(firstTimeLines(page).length, 0, 'a first executed run that ended in an error shows the first-time line');
 });
 
 // --- Criterion 1: the slots' order relative to the box ------------------------------------------------------------
