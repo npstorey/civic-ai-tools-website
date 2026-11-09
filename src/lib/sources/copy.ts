@@ -97,11 +97,13 @@ export const PANEL_PRIVACY_LINK = 'Where a question can go, in full';
 export const PANEL_STATE_CHANGED = { middle: ' is now ', end: '. This applies from your next question.' } as const;
 
 /**
- * Under the panel's lead, as a status line, on the one read that kept a
- * consent given signed out on the account (R9 P4, #662; D5 = A of the UX
- * pass). Ruled as written (reading A): the lead, the controls and the account
- * block beside it say how to change the choice. Renders only for a consent
- * kept on an account, which exists only with a database.
+ * In the Settings overlay, under its lede, as a status line, on the one read
+ * that kept a consent given signed out on the account (R9 P4, #662; D5 = A of
+ * the UX pass); it moved there from the Sources panel when the panel was
+ * removed (UX-2 P4b, #729 comment 6728493444). Ruled as written (reading A):
+ * the lede, the controls and the account block beside it say how to change
+ * the choice. Renders only for a consent kept on an account, which exists
+ * only with a database.
  */
 export const PANEL_KEPT_ON_ACCOUNT = 'Your choice is now kept on your account.';
 
@@ -111,7 +113,8 @@ export const PANEL_KEPT_ON_ACCOUNT = 'Your choice is now kept on your account.';
  * notebook mode) + the On sources (or `noSource`) +
  * `.`; then, when any source is not On, `notTo` + each group of the others
  * with `whichAre` / `whichIs` + its state, the groups joined by `orGroup`;
- * then the link that opens the Sources panel, `change`. The names are read
+ * then the link that opens the Settings overlay, `change` (the Sources panel
+ * until its removal, UX-2 P4b). The names are read
  * from the statement (`readerSourceName`), never typed.
  */
 export const JUST_IN_TIME_LINE = {
@@ -269,8 +272,9 @@ export const KEPT_WITHOUT_ACCOUNTS = 'We keep your answer in a cookie, named bel
 /** "When we ask again": D2's scoped sentences, with a database; without one, the cookie's rule alone. */
 export const NOTIFY_WITH_ACCOUNTS =
   'A recipient may also be removed, or say it keeps less. If your answer is kept on your account, we tell you and do not ask again. If it is kept in a cookie, we may ask again instead. ' +
-  // Ruled W1 (relay 26): item 40's place word plus the panel, which still shows the notices until P3b removes it.
-  'We tell you in Data source settings and in the panel beside the question box, until you dismiss it.';
+  // Item 40's form (UX-2 P4b): the notices show in Data source settings only, since the Sources panel was removed
+  // (#729 comment 6728493444; the clause drop W1 (relay 26) left for the panel's removal).
+  'We tell you in Data source settings, until you dismiss it.';
 export const NOTIFY_WITHOUT_ACCOUNTS = 'A recipient may also be removed, or say it keeps less. Your answer is kept in a cookie, so we may ask again instead.';
 
 /** "The model endpoint", only when the operator supplies D3's statement. */

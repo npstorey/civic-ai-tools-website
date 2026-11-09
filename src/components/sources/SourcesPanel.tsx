@@ -1,8 +1,15 @@
 'use client';
 
 /**
- * The Sources panel (R6 W3, #632 anchor W3 item 1), beside the question box
- * on the home page, `/ask` and `/explore`. One row per configured source, in
+ * NOT MOUNTED since UX-2 P4b (#729 comment 6728493444, "507 - a"): the owner
+ * removed the panel from every page, and its rows and controls are the
+ * Settings overlay's (`src/components/settings/SettingsOverlay.tsx`).
+ * `panel-removed.test.ts` keeps it off every page. The file stays, with the
+ * tests that mount it directly, until a follow-up removes it and re-points or
+ * retires those tests; nothing should mount it again.
+ *
+ * The Sources panel (R6 W3, #632 anchor W3 item 1), once beside the question
+ * box on the home page, `/ask` and `/explore`. One row per configured source, in
  * manifest order: its name, what the source is, whose connector reaches it
  * (the publisher's name linking to the connector's repository) and where it
  * runs, who holds its logs and what they say they keep, how current its data

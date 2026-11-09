@@ -41,7 +41,7 @@ import LocalOnlyOffer from '@/components/sources/LocalOnlyOffer';
 import SourceRow from '@/components/sources/SourceRow';
 import type { ConfirmedChange, SourceStateControlProps } from '@/components/sources/SourceStateControl';
 import { panelStates, useSourceConsent, type SourceStateValue } from '@/components/sources/useSourceConsent';
-import { PANEL_LEAD, PANEL_PRIVACY_LINK, SETTINGS_TEXT, panelLeadBeforeConsent, sourcesShownLine } from '@/lib/sources/copy';
+import { PANEL_KEPT_ON_ACCOUNT, PANEL_LEAD, PANEL_PRIVACY_LINK, SETTINGS_TEXT, panelLeadBeforeConsent, sourcesShownLine } from '@/lib/sources/copy';
 import { readerSourceName, sourceRowLines } from '@/lib/sources/source-name';
 import { matchingSources } from '@/lib/sources/source-search';
 
@@ -90,6 +90,9 @@ function DataSources() {
     <div style={{ fontSize: '14px', lineHeight: 1.6, color: 'var(--text-primary)' }}>
       <p style={PARA}>{onAccount ? SETTINGS_TEXT.ledeWithAccount : SETTINGS_TEXT.ledeCookie}</p>
       {lead !== '' && <p style={MUTED}>{lead}</p>}
+      {/* R9 P4 (#662), moved from the Sources panel (UX-2 P4b): the read that kept a consent given signed out on the
+          account says so; the page keeps it until the reader's next change. */}
+      {onAccount && inForce && status?.keptFromCookie === true && <p role="status" style={PARA}>{PANEL_KEPT_ON_ACCOUNT}</p>}
       {onAccount && inForce && <ConsentNotices />}
       {onAccount && inForce && (
         <p style={PARA}>

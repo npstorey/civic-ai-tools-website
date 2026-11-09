@@ -7,7 +7,6 @@ import type { LiveTraceStatus, SlowQueryMessage } from '@/hooks/useLiveTrace';
 import { MODELS_LOAD_ERROR } from '@/lib/streaming';
 import { DONT_ALLOW_LINE } from '@/lib/sources/copy';
 import ConsentCard from '@/components/sources/ConsentCard';
-import SourcesPanel from '@/components/sources/SourcesPanel';
 import LocalOnlyOffer from '@/components/sources/LocalOnlyOffer';
 import NoSourcesOnLine from '@/components/sources/NoSourcesOnLine';
 import { useSourceConsent } from '@/components/sources/useSourceConsent';
@@ -132,8 +131,8 @@ export default function TraceControls({
   // Speed controls are relevant during active playback or when replay is available
   const showExampleSpeed = replayState.isPlaying || replayState.isPaused || replayState.isComplete;
 
-  // The consent card and the Sources panel (R6 W3, #632; stage-A rulings
-  // (a) and flag 9): the live question goes through the same guard as the
+  // The consent card (R6 W3, #632; stage-A rulings (a) and flag 9; the
+  // Sources panel beside it was removed in UX-2 P4b): the live question goes through the same guard as the
   // query form's, and a refusal the route answers shows the card here.
   const consent = useSourceConsent();
   const [cardOpen, setCardOpen] = useState(false);
@@ -376,14 +375,6 @@ export default function TraceControls({
             <div role="status" style={{ fontSize: '13px', color: 'var(--text-secondary)' }}>
               <NoSourcesOnLine />
             </div>
-          )}
-          {(liveStatus === 'idle' || liveStatus === 'error' || liveStatus === 'cancelled') && !isReplayingCapture && (
-            <details>
-              <summary style={{ cursor: 'pointer', fontSize: '12px', color: 'var(--text-secondary)' }}>Data sources this site can use</summary>
-              <div style={{ marginTop: '8px' }}>
-                <SourcesPanel />
-              </div>
-            </details>
           )}
 
           {/* Model-catalog load failure (website#30 P7): disclosed in place
