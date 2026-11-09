@@ -5,7 +5,7 @@
 //
 // Relative, extension-carrying imports (the convention of src/lib since #345).
 
-import { EXPERT_RATINGS, type ExpertRating } from './expert-attestation.ts';
+import { expertRatingOf, tallyReviews } from './expert-rating.ts';
 import type { RecordReviews } from './review-summary.ts';
 
 /** One row of `GET /api/records/[slug]/attestations`, as far as the mapping reads it. */
@@ -35,13 +35,11 @@ export const REVIEWS_SECTION_ID = 'reviews';
  * cannot be read), and the evaluations and consistency tests counted.
  */
 export function recordReviewsOf(rows: readonly ReviewListRow[], expertPayloads: ExpertPayloads): RecordReviews {
-  const reviews: RecordReviews = { expertRatings: [], evaluations: 0, consistencyTests: 0 };
-  for (const row of oldestFirst(rows)) {
-    if (row.type === 'expert_attestation') reviews.expertRatings.push(ratingOf(expertPayloads[row.id]));
-    else if (row.type === 'evaluation') reviews.evaluations += 1;
-    else if (row.type === 'consistency') reviews.consistencyTests += 1;
-  }
-  return reviews;
+  // The one check and the one aggregation, shared with the registry and the dashboard (UX-2 P4a, criterion 6).
+  return tallyReviews(oldestFirst(rows).map((row) => ({
+    type: row.type,
+    rating: row.type === 'expert_attestation' ? expertRatingOf(expertPayloads[row.id]) : null,
+  })));
 }
 
 /** Whether every expert review's payload read has returned (loaded or failed). */
@@ -54,8 +52,3 @@ export function oldestFirst<T extends ReviewListRow>(rows: readonly T[]): T[] {
   return [...rows].sort((a, b) => a.createdAt.localeCompare(b.createdAt) || a.id.localeCompare(b.id));
 }
 
-/** A payload's rating word, checked against the vocabulary as the registry checks it (`list/route.ts`); null otherwise. */
-function ratingOf(payload: { rating?: unknown } | null | undefined): ExpertRating | null {
-  const rating = payload?.rating;
-  return typeof rating === 'string' && (EXPERT_RATINGS as readonly string[]).includes(rating) ? (rating as ExpertRating) : null;
-}

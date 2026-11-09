@@ -4,8 +4,7 @@ import { evidenceRecords, attestationPackages, users } from '@/lib/db/schema';
 import { eq, desc, asc, ilike, or, and, gte, isNull, isNotNull, sql, inArray, notInArray, type SQL } from 'drizzle-orm';
 import { visibilityMatches } from '@/lib/evidence/visibility-sql';
 import { buildRecordListItems, sortByAttestationCount } from '@/lib/evidence/record-list';
-import { getPackage } from '@/lib/storage';
-import { EXPERT_RATINGS, type ExpertRating } from '@/lib/evidence/expert-attestation';
+import { readRecordReviews } from '@/lib/evidence/expert-rating-read';
 import type { RecordReviews } from '@/lib/evidence/review-summary';
 
 const PAGE_SIZE = 20;
@@ -157,7 +156,9 @@ export async function GET(request: NextRequest) {
   // read per expert review on the page, and none for any other review or for
   // any record's package (F4 = A; relay 13, rulings 1-2;
   // `reviews-filter-and-reads.test.ts` counts them). A payload that cannot be
-  // read gives `null`, and the line leaves the word out.
+  // read gives `null`, and the line leaves the word out. The read and the
+  // aggregation are `@/lib/evidence/expert-rating-read`, which the dashboard
+  // page shares (UX-2 P4a, criterion 6).
   //
   // `null` (rather than an empty map) is what the projection reads as "not
   // computed" and omits the field for; it is never `0`. See
@@ -175,25 +176,18 @@ export async function GET(request: NextRequest) {
       .from(attestationPackages)
       .where(inArray(attestationPackages.evidenceRecordId, records.map(r => r.id)))
       .orderBy(asc(attestationPackages.createdAt));
-    const ratings = await Promise.all(
-      rows.map(row => (row.type === 'expert_attestation' ? ratingOf(row.storageKey) : Promise.resolve(null))),
-    );
     attestationCountMap = new Map();
-    reviewsMap = new Map();
-    for (const [i, row] of rows.entries()) {
-      const id = row.evidenceRecordId;
-      attestationCountMap.set(id, (attestationCountMap.get(id) ?? 0) + 1);
-      const reviews = reviewsMap.get(id) ?? { expertRatings: [], evaluations: 0, consistencyTests: 0 };
-      if (row.type === 'expert_attestation') reviews.expertRatings.push(ratings[i]);
-      else if (row.type === 'evaluation') reviews.evaluations += 1;
-      else if (row.type === 'consistency') reviews.consistencyTests += 1;
-      reviewsMap.set(id, reviews);
+    for (const row of rows) {
+      attestationCountMap.set(row.evidenceRecordId, (attestationCountMap.get(row.evidenceRecordId) ?? 0) + 1);
     }
+    reviewsMap = await readRecordReviews(rows);
   }
 
-  // The row -> response projection lives in `@/lib/evidence/record-list` so it
-  // is reachable by the test runner, which cannot load this module (it imports
-  // `db` at module scope). Same reason `[slug]`'s read-back projection lives in
+  // The row -> response projection lives in `@/lib/evidence/record-list`, a
+  // pure module a test imports directly. This module imports `db` at module
+  // scope, so a test reaches it only with a database double in place of
+  // `@/lib/db` (as `reviews-filter-and-reads.test.ts` drives it); the
+  // projection needs none. Same reason `[slug]`'s read-back projection lives in
   // `@/lib/evidence/readback`.
   const results = buildRecordListItems(records, {
     creators: creatorMap,
@@ -234,13 +228,3 @@ async function reviewsFilterCondition(filter: string): Promise<SQL | null> {
   }
 }
 
-/** An expert review's rating word, read from its stored payload; null when it cannot be read. */
-async function ratingOf(storageKey: string): Promise<ExpertRating | null> {
-  try {
-    const payload = await getPackage(storageKey);
-    const rating = payload?.rating;
-    return typeof rating === 'string' && (EXPERT_RATINGS as readonly string[]).includes(rating) ? (rating as ExpertRating) : null;
-  } catch {
-    return null;
-  }
-}
