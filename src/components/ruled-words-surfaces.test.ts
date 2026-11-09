@@ -297,6 +297,10 @@ test('PW2 criterion 1 (X1, R4): answer-first, the run-the-comparison button\'s h
 // Publish action clicked as the harness clicks, and the dialog's paragraph
 // read whole. At the base it ends "a later withdrawal flags the record but
 // does not erase it."
+//
+// UX-2 P4a (F3, relay 46): Publish is an item of the row's menu, so the menu
+// is opened first; the dialog is the P4 `Dialog`, whose title is an `h2`. Only
+// the finders changed; the paragraph's assertion is as it was.
 
 const S8_PARAGRAPH =
   'Publishing makes the content of Fixture sealed analysis publicly accessible, lists it in the registry, and emits ' +
@@ -312,8 +316,9 @@ test('PW2 criterion 5 (S8): the dashboard\'s Publish dialog says a withdrawal fl
     createdAt: '2026-11-01T00:00:00.000Z', attestationCount: 0, visibility: 'sealed',
   };
   const tabs = await mount(h(DashboardTabs, { myEvidence: [sealed], myEvaluations: [], activity: [], tokens: [], signingConfigured: true, sealOnly: false }));
-  await tabs.click(onlyButton(tabs, (el) => textOf(el) === 'Publish', 'Publish'));
-  const heading = tabs.elements().filter((el) => el.type === 'h3' && textOf(el) === 'Publish this analysis');
+  await tabs.click(onlyButton(tabs, (el) => el.props['aria-haspopup'] === 'menu', 'row menu'));
+  await tabs.click(onlyButton(tabs, (el) => el.props.role === 'menuitem' && textOf(el) === 'Publish', 'Publish'));
+  const heading = tabs.elements().filter((el) => el.type === 'h2' && textOf(el) === 'Publish this analysis');
   assert.equal(heading.length, 1, `premise: the click opened the dialog; the surface reads: ${tabs.text().slice(0, 400)}`);
   const paragraph = tabs.elements().filter((el) => el.type === 'p' && textOf(el).startsWith('Publishing makes the content of')).map((el) => textOf(el));
   assert.deepEqual(paragraph, [S8_PARAGRAPH], `the dialog's paragraph reads ${JSON.stringify(paragraph)}`);
