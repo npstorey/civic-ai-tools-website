@@ -51,10 +51,6 @@ lists (UX-1 P7); later phases convert the other surfaces named under "Replaces",
   - the provenance graph "Expand".
 
   Every native `<details>` already in use stays, restyled.
-- **Uses:** the composer's first-time line (UX-2 P3b-1, X24): an `inline` disclosure under the docked
-  box, closed, its first sentence the summary and its second the body. It carries
-  `data-part="first-time-line"`, so the composer writes the `<details>` with P1's classes rather than
-  through `Disclosure`, which takes no `data-part`.
 
 ### P2 · Menu (`ui-menu`)
 
@@ -235,7 +231,8 @@ lists (UX-1 P7); later phases convert the other surfaces named under "Replaces",
   record page, and the example-chip row (`QueryForm.tsx`).
 - **Uses:** the composer's example questions are `ChipRow`'s first use (UX-2 P3b-1,
   `src/components/composer/Composer.tsx`): one `<button>` per offered example, built by the form, in
-  a row named by the composer's chip-row label. `/explore`'s composer has no chips.
+  a row named by the composer's chip-row label ("Example questions"). The row shows before the first
+  answer only: once the composer docks it is not rendered. `/explore`'s composer has no chips.
 
 ## Not primitives
 
