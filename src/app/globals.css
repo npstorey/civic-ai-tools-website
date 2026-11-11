@@ -1439,6 +1439,17 @@ footer a:visited {
 
 /* The lines under the box (1B), and the guard's slots: one column, the box's
    left edge, the gaps the form had. */
+
+/* Each line under the box (1B: "one text size, 13 px"): the where-line, the
+   first-time line and the account line take their size, leading and colour
+   from this one rule. The account line's empty count overrides the colour
+   with the error token. */
+.composer-line {
+  margin: 0;
+  font-size: 13px;
+  line-height: 1.5;
+  color: var(--text-secondary);
+}
 .composer-lines {
   display: flex;
   flex-direction: column;

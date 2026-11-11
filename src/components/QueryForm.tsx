@@ -102,7 +102,6 @@ interface QueryFormProps {
 /** The count's answer from `/api/rate-limit`, kept only when it carries both numbers (addendum 3, 3.5). */
 interface QuestionCount { remaining: number; limit: number }
 
-const LINE_TEXT: React.CSSProperties = { margin: 0, fontSize: '13px', lineHeight: 1.5, color: 'var(--text-secondary)' };
 /** The sign-in control reads as a link in every branch, a button where it starts the sign-in in place. */
 const SIGN_IN_CONTROL: React.CSSProperties = { background: 'none', border: 'none', padding: 0, color: 'var(--accent)', textDecoration: 'underline', cursor: 'pointer', font: 'inherit' };
 
@@ -382,7 +381,7 @@ export default function QueryForm({
   // the text colour; at 0 the whole line takes the error colour, the reset sentence with it; never the caution colour.
   const low = shownCount !== null && shownCount.remaining > 0 && shownCount.remaining <= 2;
   const accountLine = shownCount !== null || signInLine !== null ? (
-    <p data-part="account-line" className="composer-line" style={{ ...LINE_TEXT, ...(exhausted ? { color: 'var(--error)' } : {}) }}>
+    <p data-part="account-line" className="composer-line" style={exhausted ? { color: 'var(--error)' } : undefined}>
       {shownCount !== null ? (
         <>
           {low ? <strong style={{ color: 'var(--text-primary)' }}>{COUNT_LINE.left(shownCount.remaining, shownCount.limit)}</strong> : COUNT_LINE.left(shownCount.remaining, shownCount.limit)}
@@ -407,7 +406,7 @@ export default function QueryForm({
       placeholder="What data is available about child care in NYC?"
       chips={exampleQueries.map((example, idx) => ({ id: String(idx), label: example.text, onSelect: () => handleExampleClick(example) }))}
       line={whereLine !== null ? (
-        <p data-part="where-this-question-goes" className="composer-line" style={LINE_TEXT}>
+        <p data-part="where-this-question-goes" className="composer-line">
           {whereLine}{WHERE_LINE.separator}
           {/* UX-2 P4b: the Settings overlay, a client-side link so the form beneath stays mounted. */}
           <Link href={SETTINGS_HREF}>{WHERE_LINE.link}</Link>
