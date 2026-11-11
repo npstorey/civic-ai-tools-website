@@ -330,7 +330,7 @@ export default function TraceControls({
                   const run = pendingRef.current ?? (resendOnAllow ? lastSentRef.current : null);
                   pendingRef.current = null;
                   setResendOnAllow(false);
-                  if (run) void consent.guard(run, () => setCardOpen(true));
+                  if (run) void consent.guard(run, () => setCardOpen(true)).then((result) => { if (result === 'none-on') setNoneOn(true); });
                 },
                 onNotNow: () => {
                   setCardOpen(false);

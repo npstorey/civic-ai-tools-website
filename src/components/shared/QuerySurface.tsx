@@ -55,19 +55,6 @@ interface QuerySurfaceProps {
   /** Framing content rendered above the form, inside its container. */
   children?: React.ReactNode;
   /**
-   * Whether to close a completed comparison with the footnote suggesting the
-   * reader run the tools locally for complex multi-step analysis.
-   *
-   * Default `true` — the apex demo's existing behavior, unchanged and
-   * unconfigured (the marketing page passes nothing). The signed-in `(app)`
-   * mount passes `false`: there, the footnote would send a user who just
-   * signed in to the surface built for exactly this work somewhere else to
-   * do it, and the limit it implicitly apologizes for is the app tier, not
-   * the demo's. On the apex the footnote is honest — that surface IS the
-   * rate-limited demo, and pointing past it is the point.
-   */
-  showLocalSetupFootnote?: boolean;
-  /**
    * How this mount presents the standard-mode result (s6 P2, #229; Q62 G0).
    *
    * Default `'comparison'` — the apex demo's side-by-side, unchanged and
@@ -98,7 +85,6 @@ interface QuerySurfaceProps {
 
 export default function QuerySurface({
   children,
-  showLocalSetupFootnote = true,
   presentation = 'comparison',
   defaultMode = 'standard',
   advancedOptions = 'always',
@@ -227,7 +213,9 @@ export default function QuerySurface({
     <QueryForm
       key="query-form"
       onSubmit={handleSubmit}
-      isLoading={streaming.isLoading}
+      // Any run, Standard or Sandbox, docked or not, disables the box and its arrow (UX-2 P3b-1, 1A; addendum 3, 3.1):
+      // a send during a Sandbox run would otherwise restart it (`useNotebookStream.start` aborts the run in progress).
+      isLoading={streaming.isLoading || notebook.state.isLoading}
       queryCount={queryCount}
       defaultMode={defaultMode}
       advancedOptions={advancedOptions}
@@ -296,34 +284,6 @@ export default function QuerySurface({
             answerFirst={answerFirstActive}
             onRunComparison={answerFirstConfigured ? handleRunComparison : undefined}
           />
-          {/* The footnote closes a finished run, however many panes the run
-              had — a demoted (one-pane) run is finished when its only pane
-              is. On the apex (mcpOnly always false) this is exactly the old
-              both-panes condition. */}
-          {showLocalSetupFootnote && isComparisonRunComplete(
-            streaming.mcpOnly,
-            streaming.withoutMcp.isComplete,
-            streaming.withMcp.isComplete,
-          ) && (
-            <p
-              style={{
-                marginTop: '16px',
-                fontSize: '14px',
-                color: 'var(--text-muted)',
-                textAlign: 'center',
-              }}
-            >
-              For complex multi-step analysis, try{' '}
-              <a
-                href="https://github.com/npstorey/civic-ai-tools"
-                target="_blank"
-                rel="noopener noreferrer"
-              >
-                civic-ai-tools
-              </a>{' '}
-              locally with Claude Code or Cursor.
-            </p>
-          )}
         </div>
       )}
 

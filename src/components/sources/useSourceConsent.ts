@@ -446,18 +446,20 @@ export type GuardResult = 'ran' | 'asked' | 'none-on' | 'held';
 
 /**
  * Why no question can go with no source On (UX-2 P3b-1; addenda 1-3), one predicate for the guard below and the
- * where-line under the box: 'every-off' when every source the statement lists is Off; 'cannot-ask' when none is On, one
- * is not Off, and this site cannot ask (routing all-sources, or no store); null otherwise, a routing or store still
- * unread included. TYPED STUB at the red: it answers null, and nothing calls it yet.
+ * where-line under the box, so the two cannot part: 'every-off' when every source the statement lists is Off;
+ * 'cannot-ask' when none is On, one is not Off, and this site cannot ask (routing all-sources, or no store);
+ * null otherwise, a routing or store still unread (`null`) included, where the guard runs the question. A source
+ * with no state (`undefined`) is not Off. The guard reads the stored states; the line reads the same lookup after a
+ * consent, and before one the pending states Allow writes (`panelStates`).
  */
 export function noSourceOnReason(
   ids: readonly string[],
   stateOf: (id: string) => SourceStateValue | undefined,
   ask: Pick<ConsentSnapshot, 'routing' | 'store'>,
 ): 'every-off' | 'cannot-ask' | null {
-  void ids;
-  void stateOf;
-  void ask;
+  if (ids.length === 0 || ids.some((id) => stateOf(id) === 'on')) return null;
+  if (ids.every((id) => stateOf(id) === 'off')) return 'every-off';
+  if (ask.routing === 'all-sources' || ask.store === false) return 'cannot-ask';
   return null;
 }
 
@@ -470,16 +472,12 @@ export async function guardQuestion(run: () => void, ask: () => void): Promise<G
     ask();
     return 'asked';
   }
-  const ids = configured();
-  if (ids.length > 0 && !ids.some((id) => status.states?.[id]?.state === 'on')) {
-    // No source On (R9 P1a, #681): the gate's rule. Every source Off reaches
-    // nothing in any mode. Otherwise a source is Ask first (a source with no
-    // stored state is too), which a run reaches only where the site can ask:
-    // refused when the GET said it cannot, run when it said it can or could
-    // not be read.
-    if (ids.every((id) => status.states?.[id]?.state === 'off')) return 'none-on';
-    if (snapshot.routing === 'all-sources' || snapshot.store === false) return 'none-on';
-  }
+  // No source On (R9 P1a, #681): the gate's rule. Every source Off reaches
+  // nothing in any mode. Otherwise a source is Ask first (a source with no
+  // stored state is too), which a run reaches only where the site can ask:
+  // refused when the GET said it cannot, run when it said it can or could
+  // not be read. One predicate, read by the where-line too (UX-2 P3b-1).
+  if (noSourceOnReason(configured(), (id) => status.states?.[id]?.state, snapshot) !== null) return 'none-on';
   run();
   return 'ran';
 }

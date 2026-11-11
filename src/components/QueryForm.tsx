@@ -17,11 +17,10 @@ import {
 } from '@/lib/query-presentation';
 import { parseModelsResponse, type Model } from '@/lib/model-list';
 import { MODELS_LOAD_ERROR } from '@/lib/streaming';
-import { JUST_IN_TIME_LINE, SETTINGS_HREF } from '@/lib/sources/copy';
-import { readerSourceName } from '@/lib/sources/source-name';
+import { SETTINGS_HREF } from '@/lib/sources/copy';
 import Composer from '@/components/composer/Composer';
-import { currentStates, useSourceConsent, type SourceStateValue } from '@/components/sources/useSourceConsent';
-import RateLimitBanner from './RateLimitBanner';
+import { COUNT_LINE, SIGN_IN_LINE, WHERE_LINE } from '@/components/composer/copy';
+import { noSourceOnReason, panelStates, useSourceConsent, type SourceStateValue } from '@/components/sources/useSourceConsent';
 import { useDefaultPortalArg, usePortalLocked } from '@/components/DefaultPortalProvider';
 import { useNotebooksOffered } from '@/components/NotebookModeProvider';
 import { NOTEBOOK_MODE_UNAVAILABLE_REASON, notebookModeAffordance } from '@/lib/notebook-availability';
@@ -73,8 +72,9 @@ interface QueryFormProps {
    * Whether Advanced options is offered to a signed-out reader (UX pass row 7,
    * the owner's ruling of 2026-10-22). Default 'always': every mount as before.
    * The public home page passes 'hidden-signed-out': signed out, on an instance
-   * that offers sign-in, the toggle is not rendered and `SIGN_IN_ADDS` stands
-   * in its place. Signed in, nothing changes.
+   * that offers sign-in, the toggle is not rendered, and the account line under
+   * the box carries the P3b sign-in sentence (UX-2 P3b-1). Signed in, nothing
+   * changes.
    */
   advancedOptions?: 'always' | 'hidden-signed-out';
   /**
@@ -89,23 +89,6 @@ interface QueryFormProps {
   showFirstTimeLine?: boolean;
 }
 
-/**
- * What signing in adds, as one line in Advanced options' place (UX pass row
- * 7): the executed-sandbox mode, publishing, and the signed-in daily count. It
- * names no models: `/api/models` reads no session, so the model list is the
- * same signed in or out.
- *
- * THE COUNT is stated as the privacy page states it on the reference
- * deployment ("Using the site": "signed in, 20"), not read from its source.
- * That source (`dailyLimits` in `src/lib/privacy-facts.ts`, from
- * `AUTHENTICATED_RATE_LIMIT` / `APP_TIER_RATE_LIMIT`) is server-only and
- * unexported, and this form renders under a client page with no server
- * ancestor to thread it from. An instance whose signed-in limit is not 20
- * states a wrong number here until it is threaded through a provider.
- */
-const SIGNED_IN_DAILY_QUESTIONS = 20;
-const SIGN_IN_ADDS_REST = ` to run the answer as a notebook in a signed sandbox and publish it as a signed analysis. Signed in, you can ask ${SIGNED_IN_DAILY_QUESTIONS} questions a day.`;
-
 /*
  * The suggested questions under the box live in `src/lib/query-presentation.ts`
  * (`EXAMPLE_QUERIES`, `offeredExampleQueries`). One of them demonstrates the
@@ -116,30 +99,12 @@ const SIGN_IN_ADDS_REST = ` to run the answer as a notebook in a signed sandbox 
  * (#436).
  */
 
-/** "A", "A and B", "A, B and C" (or "or"). */
-function joinNames(names: string[], word: 'and' | 'or'): string {
-  return names.length <= 1 ? names.join('') : `${names.slice(0, -1).join(', ')} ${word} ${names[names.length - 1]}`;
-}
+/** The count's answer from `/api/rate-limit`, kept only when it carries both numbers (addendum 3, 3.5). */
+interface QuestionCount { remaining: number; limit: number }
 
-const STATE_WORDS: Record<SourceStateValue, string> = { on: 'On', 'ask-first': 'Ask first', off: 'Off' };
-
-/**
- * The just-in-time line (UX pass row 11): where this question goes, read from
- * the states the guard reads, in statement order. The sources not On are
- * grouped by state, Ask first before Off, each group with its own state. In
- * notebook mode the notebook runner is named: the notebook sent to run carries
- * the question's text (the privacy page's executor statements).
- */
-function whereThisQuestionGoes(sources: Array<{ name: string; state: SourceStateValue }>, notebook: boolean): string {
-  const on = sources.filter((s) => s.state === 'on').map((s) => s.name);
-  const first = `${notebook ? JUST_IN_TIME_LINE.leadNotebook : JUST_IN_TIME_LINE.lead}${on.length > 0 ? joinNames(on, 'and') : JUST_IN_TIME_LINE.noSource}.`;
-  if (on.length === 0) return first;
-  const groups = (['ask-first', 'off'] as const)
-    .map((state) => ({ state, names: sources.filter((s) => s.state === state).map((s) => s.name) }))
-    .filter((g) => g.names.length > 0)
-    .map((g) => `${joinNames(g.names, 'or')}${g.names.length > 1 ? JUST_IN_TIME_LINE.whichAre : JUST_IN_TIME_LINE.whichIs}${STATE_WORDS[g.state]}`);
-  return groups.length === 0 ? first : `${first} ${JUST_IN_TIME_LINE.notTo}${groups.join(JUST_IN_TIME_LINE.orGroup)}.`;
-}
+const LINE_TEXT: React.CSSProperties = { margin: 0, fontSize: '13px', lineHeight: 1.5, color: 'var(--text-secondary)' };
+/** The sign-in control reads as a link in every branch, a button where it starts the sign-in in place. */
+const SIGN_IN_CONTROL: React.CSSProperties = { background: 'none', border: 'none', padding: 0, color: 'var(--accent)', textDecoration: 'underline', cursor: 'pointer', font: 'inherit' };
 
 const PORTALS = [
   { id: '', name: 'All portals' },
@@ -170,6 +135,14 @@ export default function QueryForm({
   const portalLocked = usePortalLocked();
   const exampleQueries = offeredExampleQueries(portalLocked);
   const [query, setQuery] = useState('');
+  // UX-2 P3b-1 (1A; addendum 3, 3.2): the box empties when the surface docks. A question the guard holds keeps its
+  // text: the guard holds it before its run starts, and only a started run empties the box (`ask`, below).
+  const [dockSeen, setDockSeen] = useState(docked);
+  if (docked !== dockSeen) {
+    // The "adjust state when a value changes" render-time pattern.
+    setDockSeen(docked);
+    if (docked) setQuery('');
+  }
   // Empty until `/api/models` answers, then the first model THIS instance
   // offers (website#30 P4). It used to initialize to a hardcoded `openai/gpt-4o`
   // — a statement that this instance offers that id, true only of the built-in
@@ -201,14 +174,12 @@ export default function QueryForm({
   const signInAffordance = resolveSignInAffordance(useSignInOptions());
   const [mode, updateMode] = useStoredMode(notebookAffordance === 'toggle', defaultMode);
   // UX pass row 7: on a mount that asks for it, a signed-out reader on an
-  // instance that offers sign-in sees what signing in adds instead of the
-  // toggle. With no sign-in to offer, the toggle stays: there is nothing to
-  // sign in to, and the model and portal choices are theirs to make.
+  // instance that offers sign-in sees no toggle, and the P3b sign-in sentence
+  // in the account line (UX-2 P3b-1, Q6 = B). With no sign-in to offer, the
+  // toggle stays: there is nothing to sign in to, and the model and portal
+  // choices are theirs to make.
   const signInOffered = signInHref !== null || signInAffordance.kind !== 'none';
   const hideAdvanced = advancedOptions === 'hidden-signed-out' && !isAuthenticated && signInOffered;
-  // The provider is named only where sign-in starts in place, as the sandbox
-  // box below names it (#229 P1); a split topology links to the app host.
-  const signInAdds = `${signInHref === null && signInAffordance.kind === 'provider' ? `Sign in with ${signInAffordance.option.name}` : 'Sign in'}${SIGN_IN_ADDS_REST}`;
   const [models, setModels] = useState<Model[]>([]);
   const [modelsError, setModelsError] = useState(false);
   const [modelOpen, setModelOpen] = useState(false);
@@ -276,17 +247,29 @@ export default function QueryForm({
   // through this form.
   const consent = useSourceConsent();
   const [cardOpen, setCardOpen] = useState(false);
-  // The just-in-time line (UX pass row 11), only while a consent is in force,
-  // and the Sources details it opens.
-  const statementSources = consent.statement?.sources ?? [];
-  const sourceStates = currentStates(consent.status, statementSources.map((s) => s.sourceId));
-  const goesLine = consent.status?.inForce === true && statementSources.length > 0
-    ? whereThisQuestionGoes(statementSources.map((s) => ({ name: readerSourceName(s), state: sourceStates[s.sourceId] ?? 'ask-first' })), mode === 'notebook')
-    : null;
+  // The where-line (UX-2 P3b-1, 1B.1; D5 B; addenda 1-3), before and after a first consent. Nothing until the
+  // statement and the status are both read (a failed read leaves either null, with `loaded` true). Before a consent
+  // it reads the pending states, which Allow writes (`panelStates`); after one, the guard's own lookup. One predicate
+  // with the guard: every source Off, W5/W6's words; no source On where this site cannot ask, no line (addendum 2).
+  const whereLine = (() => {
+    const statement = consent.statement;
+    const status = consent.status;
+    const ids = statement?.sources.map((s) => s.sourceId) ?? [];
+    if (!statement || !status || ids.length === 0) return null;
+    const pending = status.inForce ? null : panelStates({ status, pending: consent.pending }, ids);
+    const stateOf = (id: string): SourceStateValue | undefined => (pending ? pending[id] : status.states?.[id]?.state);
+    const reason = noSourceOnReason(ids, stateOf, consent);
+    if (reason === 'cannot-ask') return null;
+    const on = ids.filter((id) => stateOf(id) === 'on').length;
+    const sandbox = mode === 'notebook';
+    return reason === 'every-off' ? WHERE_LINE.everyOff : on > 0 ? WHERE_LINE.on(on, sandbox) : WHERE_LINE.askFirst(sandbox);
+  })();
   const [declinedQuery, setDeclinedQuery] = useState<string | null>(null);
   const [noneOn, setNoneOn] = useState(false);
   const pendingRef = useRef<(() => void) | null>(null);
   const lastSentRef = useRef<(() => void) | null>(null);
+  /** The text of the last question sent, which a route's refusal holds (addendum 3, ruling 1). */
+  const [lastSentQuery, setLastSentQuery] = useState('');
   const [refusalsSeen, setRefusalsSeen] = useState(consent.refusals);
   const [resendOnAllow, setResendOnAllow] = useState(false);
   if (consent.refusals !== refusalsSeen) {
@@ -296,8 +279,36 @@ export default function QueryForm({
       // Allow then sends the last question again (read in the handler, not here).
       setResendOnAllow(true);
       setCardOpen(true);
+      // The question the route refused goes back into the box if the box is still empty (addendum 3, ruling 1);
+      // text the reader typed since the send stays.
+      if (query === '' && lastSentQuery !== '') setQuery(lastSentQuery);
     }
   }
+
+  // The count (UX-2 P3b-1, 1B.3; O3 = A; addendum 3, ruling 2): read when a question is sent, and again when a run
+  // ends however it ends (a route adds to the count while the run is under way, so the first read can come before
+  // that add). Shown from the first question on; nothing while unanswered or failed.
+  const [runsEnded, setRunsEnded] = useState(0);
+  const [wasLoading, setWasLoading] = useState(isLoading);
+  if (isLoading !== wasLoading) {
+    // The "adjust state when a value changes" render-time pattern.
+    setWasLoading(isLoading);
+    if (!isLoading) setRunsEnded((n) => n + 1);
+  }
+  const [questionCount, setQuestionCount] = useState<QuestionCount | null>(null);
+  useEffect(() => {
+    if (queryCount === 0) return;
+    let live = true;
+    fetch('/api/rate-limit')
+      .then((res) => (res.ok ? res.json() : null))
+      .then((body: { remaining?: unknown; limit?: unknown } | null) => {
+        if (!live) return;
+        setQuestionCount(body && typeof body.remaining === 'number' && typeof body.limit === 'number' ? { remaining: body.remaining, limit: body.limit } : null);
+      })
+      .catch(() => { if (live) setQuestionCount(null); });
+    return () => { live = false; };
+  }, [queryCount, runsEnded]);
+  const shownCount = queryCount > 0 ? questionCount : null;
 
   // No model chosen yet means `/api/models` has not answered (a few hundred ms
   // on first paint) or could not answer at all. Either way there is no id to
@@ -311,7 +322,10 @@ export default function QueryForm({
     const args = [query.trim(), model, portal, mode] as const;
     const run = () => {
       lastSentRef.current = () => onSubmit(...args);
+      setLastSentQuery(args[0]);
       onSubmit(...args);
+      // The run has started: the docked box empties for the next question (1A).
+      if (docked) setQuery('');
     };
     setNoneOn(false);
     void consent.guard(run, () => {
@@ -349,8 +363,39 @@ export default function QueryForm({
     gap: '6px',
   });
 
-  // UX-2 P3b-1: the composer lays out the box, the example chips (built here, from the offered list), the line and
-  // the guard's slots; the gear, its region and the status lines stay this form's, beneath.
+  // The P3b sign-in sentence (Q6 = B with the note; 1B.3), on the home page signed out where sign-in is offered: its
+  // "Sign in" makes the header's decision through the same resolver (S2): a link to the app host's sign-in on a split
+  // topology, the one provider's sign-in started in place, or a link to the panel that lists several.
+  const exhausted = shownCount !== null && shownCount.remaining === 0;
+  const controlStyle: React.CSSProperties = exhausted ? { ...SIGN_IN_CONTROL, color: 'inherit' } : SIGN_IN_CONTROL;
+  const signInControl = signInHref !== null ? (
+    <a href={signInHref} style={controlStyle}>{SIGN_IN_LINE.action}</a>
+  ) : signInAffordance.kind === 'provider' ? (
+    <button type="button" onClick={() => signIn(signInAffordance.option.id)} style={controlStyle}>{SIGN_IN_LINE.action}</button>
+  ) : signInAffordance.kind === 'panel' ? (
+    <a href={signInAffordance.href} style={controlStyle}>{SIGN_IN_LINE.action}</a>
+  ) : null;
+  const signInLine = hideAdvanced && signInControl !== null ? (
+    <span data-part="sign-in-line">{signInControl}{SIGN_IN_LINE.rest}</span>
+  ) : null;
+  // The account line (O2 = A): the count, then the sign-in sentence, one paragraph. A low count (2 or fewer) is bold in
+  // the text colour; at 0 the whole line takes the error colour, the reset sentence with it; never the caution colour.
+  const low = shownCount !== null && shownCount.remaining > 0 && shownCount.remaining <= 2;
+  const accountLine = shownCount !== null || signInLine !== null ? (
+    <p data-part="account-line" className="composer-line" style={{ ...LINE_TEXT, ...(exhausted ? { color: 'var(--error)' } : {}) }}>
+      {shownCount !== null ? (
+        <>
+          {low ? <strong style={{ color: 'var(--text-primary)' }}>{COUNT_LINE.left(shownCount.remaining, shownCount.limit)}</strong> : COUNT_LINE.left(shownCount.remaining, shownCount.limit)}
+          {exhausted ? <> {COUNT_LINE.reset}</> : null}
+          {signInLine !== null ? ' ' : null}
+        </>
+      ) : null}
+      {signInLine}
+    </p>
+  ) : null;
+
+  // UX-2 P3b-1: the composer lays out the box, the example chips (built here, from the offered list), the lines and
+  // the guard's slots; the gear, its region and the models-error status stay this form's, beneath.
   return (
     <Composer
       value={query}
@@ -361,14 +406,15 @@ export default function QueryForm({
       docked={docked}
       placeholder="What data is available about child care in NYC?"
       chips={exampleQueries.map((example, idx) => ({ id: String(idx), label: example.text, onSelect: () => handleExampleClick(example) }))}
-      line={goesLine !== null ? (
-        <p data-part="where-this-question-goes" style={{ margin: 0, fontSize: '13px', lineHeight: 1.5, color: 'var(--text-secondary)' }}>
-          {goesLine}{' '}
+      line={whereLine !== null ? (
+        <p data-part="where-this-question-goes" className="composer-line" style={LINE_TEXT}>
+          {whereLine}{WHERE_LINE.separator}
           {/* UX-2 P4b: the Settings overlay, a client-side link so the form beneath stays mounted. */}
-          <Link href={SETTINGS_HREF}>{JUST_IN_TIME_LINE.change}</Link>
+          <Link href={SETTINGS_HREF}>{WHERE_LINE.link}</Link>
         </p>
       ) : null}
       firstTimeLine={showFirstTimeLine ? (isAuthenticated ? 'signed-in' : 'signed-out') : null}
+      accountLine={accountLine}
       guard={{
         cardOpen,
         onAllow: () => {
@@ -377,43 +423,40 @@ export default function QueryForm({
           const run = pendingRef.current ?? (resendOnAllow ? lastSentRef.current : null);
           pendingRef.current = null;
           setResendOnAllow(false);
-          if (run) void consent.guard(run, () => setCardOpen(true));
+          // A `none-on` after Allow says so, as the submit path does (addendum 1, section 3).
+          if (run) void consent.guard(run, () => setCardOpen(true)).then((result) => { if (result === 'none-on') setNoneOn(true); });
         },
         onNotNow: () => {
           setCardOpen(false);
           pendingRef.current = null;
+          // A route's refusal holds the question it refused, which "Don't allow" records (addendum 3, ruling 1).
+          setDeclinedQuery(resendOnAllow && lastSentQuery !== '' ? lastSentQuery : query.trim());
           setResendOnAllow(false);
-          setDeclinedQuery(query.trim());
         },
         declined,
         statement: consent.statement,
         noneOn,
       }}
     >
-      {/* Secondary info row: advanced options + rate limit (after first query) */}
-      <div style={{ display: 'flex', justifyContent: queryCount > 0 ? 'space-between' : 'center', alignItems: 'center', flexWrap: 'wrap', gap: '8px', fontSize: '13px', color: 'var(--text-muted)' }}>
-        {hideAdvanced ? (
-          <p style={{ margin: 0, padding: '4px 0', fontSize: '13px', color: 'var(--text-muted)', textAlign: 'center' }}>
-            {signInAdds}
-          </p>
-        ) : (
-        <button
-          type="button"
-          onClick={() => setAdvancedOpen(!advancedOpen)}
-          style={{
-            background: 'none',
-            border: 'none',
-            fontSize: '13px',
-            color: 'var(--text-muted)',
-            cursor: 'pointer',
-            padding: '4px 0',
-          }}
-        >
-          <span style={{ fontSize: '16px' }}>&#9881;</span> Advanced options {advancedOpen ? '\u25B4' : '\u25BE'}
-        </button>
-        )}
-        {queryCount > 0 && <RateLimitBanner refreshTrigger={queryCount} />}
-      </div>
+      {/* The gear's row, where the mount shows it (P3b-2 replaces it with the harness menu). */}
+      {hideAdvanced ? null : (
+        <div style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', flexWrap: 'wrap', gap: '8px', fontSize: '13px', color: 'var(--text-muted)' }}>
+          <button
+            type="button"
+            onClick={() => setAdvancedOpen(!advancedOpen)}
+            style={{
+              background: 'none',
+              border: 'none',
+              fontSize: '13px',
+              color: 'var(--text-muted)',
+              cursor: 'pointer',
+              padding: '4px 0',
+            }}
+          >
+            <span style={{ fontSize: '16px' }}>&#9881;</span> Advanced options {advancedOpen ? '\u25B4' : '\u25BE'}
+          </button>
+        </div>
+      )}
 
       {/* Model-list load failure (#283): disclosed, not painted onto the
           model picker as an invalid field — the picker didn't fail, the

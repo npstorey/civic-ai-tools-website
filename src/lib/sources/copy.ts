@@ -107,28 +107,6 @@ export const PANEL_STATE_CHANGED = { middle: ' is now ', end: '. This applies fr
  */
 export const PANEL_KEPT_ON_ACCOUNT = 'Your choice is now kept on your account.';
 
-/**
- * The just-in-time line under the question box while a consent is in force
- * (UX pass row 11), in its pieces: `lead` (`leadNotebook` when the form is in
- * notebook mode) + the On sources (or `noSource`) +
- * `.`; then, when any source is not On, `notTo` + each group of the others
- * with `whichAre` / `whichIs` + its state, the groups joined by `orGroup`;
- * then the link that opens the Settings overlay, `change` (the Sources panel
- * until its removal, UX-2 P4b). The names are read
- * from the statement (`readerSourceName`), never typed.
- */
-export const JUST_IN_TIME_LINE = {
-  lead: 'This question goes to the model service and to ',
-  /** In notebook mode: the notebook sent to run carries the question's text, so the runner is named too. */
-  leadNotebook: 'This question goes to the model service, the notebook runner and to ',
-  noSource: 'no data source',
-  notTo: 'Not to ',
-  whichAre: ', which are set to ',
-  whichIs: ', which is set to ',
-  orGroup: ', or ',
-  change: 'Change sources',
-} as const;
-
 // --- The Settings overlay (UX-2 P4b) ---
 
 /**

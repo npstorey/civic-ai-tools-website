@@ -36,9 +36,8 @@ import { hasPublishedEvidence } from '@/lib/db/creator-evidence';
  *     by `McpResponseDisplay` on a completed, tool-grounded result to a
  *     visitor with a session. Every visitor who reaches the surface below
  *     has one.
- *   - NO MARKETING FRAMING. No positioning band, no "go set it up locally"
- *     call to action, and `showLocalSetupFootnote={false}` suppresses the
- *     one piece of that framing living inside the shared component.
+ *   - NO MARKETING FRAMING. No positioning band and no "go set it up locally"
+ *     call to action (the shared component's footnote is gone, UX-2 P3b-1).
  *   - ANSWER-FIRST, ONE MODEL CALL (s6 P2, #229; Q62 G0).
  *     `presentation="answer-first"` makes the with-data answer primary and
  *     demotes the side-by-side comparison to an expand option; demoted
@@ -148,7 +147,6 @@ export default async function AskPage({ searchParams }: AskPageProps) {
 
   return (
     <QuerySurface
-      showLocalSetupFootnote={false}
       presentation="answer-first"
       defaultMode="notebook"
     >
