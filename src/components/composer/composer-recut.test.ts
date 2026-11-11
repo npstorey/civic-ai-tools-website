@@ -520,6 +520,33 @@ test('P3b-1 criterion 1 (addendum 3, ruling 1, fixture 3): text typed between th
   assert.equal(arrowOf(page).props.disabled, true, 'the arrow is enabled for the refused question: "Don\'t allow" did not record it');
 });
 
+test('P3b-1 criterion 1 (addendum 3, ruling 1, fixture 1 in Sandbox): on /ask, a docked send that /api/query-notebook refuses (403 consent_required): the box empties when its run starts, the refused question comes back, and after "Don\'t allow" the box holds it and the arrow is disabled for it', async () => {
+  SIGNED_IN();
+  answers();
+  await consentWith(allStates('on'));
+  const page = await mountPage(ASK('notebook'));
+  await askFromBox(page, 'Q-first: how many 311 complaints in Brooklyn in 2024?');
+  await finishNotebook(page);
+  assert.equal(isDocked(page), true, 'premise: docked after the first executed run');
+  await fetch('/api/sources/consent', { method: 'DELETE' });
+  const gate = deferred();
+  net.hold = gate.promise;
+  const refused = 'Q-refused: how many permits were issued in Queens?';
+  await askFromBox(page, refused);
+  assert.deepEqual(queries.map((q) => q.path), ['/api/query-notebook', '/api/query-notebook'], 'premise: the docked send went to the sandbox route');
+  assert.equal(valueOf(page), '', `the box still holds the question once its run started: "${valueOf(page)}"`);
+  net.hold = null;
+  gate.release();
+  await settle(page, 200);
+  assert.equal(parts(page, 'consent-card').length, 1, 'premise: the route\'s 403 consent_required opened the card');
+  assert.equal(valueOf(page), refused, `the refused question did not come back into the empty box: "${valueOf(page)}"`);
+  await page.click(page.button("Don't allow"));
+  await settle(page);
+  assert.equal(valueOf(page), refused, `after "Don't allow" the box does not hold the refused question: "${valueOf(page)}"`);
+  assert.equal(arrowOf(page).props.disabled, true, 'the arrow is not disabled for the refused question');
+  assert.equal(parts(page, 'dont-allow').length, 1, 'the decline line is not shown for the refused question');
+});
+
 // --- Criterion 2 (1B, 1C) and criterion 5's one sign-in ask: the golden order, state by state ------------------------
 
 test('P3b-1 criterion 2 (1B, 1C) and criterion 5, the home page signed out: the golden order in each state; the chips before the first answer only; no <details> or <summary>; "sign in" once and one control that signs in, inside the sign-in line', async () => {
