@@ -54,7 +54,7 @@ import {
   type HostElement,
   type Surface,
 } from '../sources/surface-test-harness.ts';
-import { within } from '../ui/ui-test-helpers.ts';
+import { cssRules, within } from '../ui/ui-test-helpers.ts';
 
 registerSurfaceHooks({
   ...CONSENT_SURFACE_STUBS,
@@ -634,6 +634,45 @@ for (const [who, mountName, mode, expected] of [
     assert.equal(within(lines[0]).filter((el) => el !== lines[0] && ['p', 'details', 'summary', 'div'].includes(el.type)).length, 0, 'the first-time line holds a block inside it');
     assert.equal(textOf(lines[0]), expected, 'the first-time line, byte for byte');
     if (expected === X24_SIGNED_OUT) assert.ok(!page.text().includes(WITHHELD), `the page says "${WITHHELD}" signed out`);
+  });
+}
+
+// --- Criterion 1B: the lines under the box are one text size, 13 px (the preview read of befcdde, #729 6796266406) ----
+
+/**
+ * An element's font size as the code sets it: its inline style, else a globals.css rule on one of its classes (a
+ * `var()` resolved through `:root`). Null when nothing sets it, which is what the reader sees as the inherited body
+ * size (16 px at 390, 18 px at 1280 in the preview read). The rendered size is criterion 9's TS, in a browser.
+ */
+function setSize(el: HostElement): string | null {
+  const inline = (el.props.style as Record<string, unknown> | undefined)?.fontSize;
+  if (inline !== undefined && inline !== null) return String(inline);
+  const resolve = (value: string): string => {
+    const v = /^var\((--[\w-]+)\)$/.exec(value);
+    if (!v) return value;
+    for (const body of cssRules(':root')) { const m = new RegExp(`${v[1]}\\s*:\\s*([^;]+)`).exec(body); if (m) return resolve(m[1].trim()); }
+    return value;
+  };
+  for (const cls of String(el.props.className ?? '').split(/\s+/).filter(Boolean)) {
+    for (const body of cssRules(`.${cls}`)) { const m = /font-size\s*:\s*([^;]+)/.exec(body); if (m) return resolve(m[1].trim()); }
+  }
+  return null;
+}
+
+for (const [mountName, mode] of [['home', 'standard'], ['ask', 'notebook']] as const) {
+  test(`P3b-1 criterion 2 (1B: "one text size, 13 px"), ${mountName === 'home' ? 'the home page' : '/ask'}: the where-line, the first-time line and the account line each have their size set to 13px`, async () => {
+    if (mountName === 'home') ANON(); else SIGNED_IN();
+    answers();
+    await consentWith(allStates('on'));
+    const page = await mountPage(mountName === 'home' ? HOME() : ASK(mode));
+    await askFromBox(page, 'Q-first: what was the median household income in the Bronx?');
+    await finishRun(page, mode);
+    const read = Object.fromEntries(LINES.map((name) => {
+      const found = parts(page, name);
+      assert.equal(found.length, 1, `premise: one ${name} after the first answer, found ${found.length}`);
+      return [name, setSize(found[0])];
+    }));
+    assert.deepEqual(read, Object.fromEntries(LINES.map((name) => [name, '13px'])), `the lines' sizes as set (null: inherited from the body): ${JSON.stringify(read)}`);
   });
 }
 
