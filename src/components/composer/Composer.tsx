@@ -1,6 +1,6 @@
 'use client';
 
-import { useCallback, useEffect, useRef, type ReactNode } from 'react';
+import { useCallback, useEffect, useLayoutEffect, useRef, type ReactNode } from 'react';
 import type { FlowsStatement } from '@/lib/flows/statement';
 import { ChipRow } from '@/components/ui/Page';
 import ConsentCard from '@/components/sources/ConsentCard';
@@ -39,6 +39,15 @@ import { CHIP_ROW_LABEL, DOCKED_PLACEHOLDER, FIRST_TIME_LINE } from './copy';
  * IT OWNS THE MOUNT'S ONLY `<form>`: the box and the arrow. Nothing else in the
  * composer can submit the question (the chips are `type="button"`, "Select
  * sources" is a link, the slots carry their own buttons).
+ *
+ * THE BOX STAYS WHERE THE READER TYPED (1D; O7 = A; the seat, #729 6796320602).
+ * Docked, a slot opens above the box, inside the bar. Stuck, the bar grows
+ * upward and the box does not move. At the answer's end the bar is in the
+ * page's flow, so the slot would push the box down by its height; there the
+ * page is scrolled by the change in the slot's space in the same frame,
+ * before paint, so the answer moves up and the box stays put. The same holds
+ * when a slot gives way to another (the card to the decline line) or closes.
+ * Focus is not touched.
  *
  * THE FIRST-TIME LINE (X24) is one plain paragraph (the owner, 6753017330):
  * signed in both sentences, signed out the first only (O4 = A).
@@ -117,6 +126,10 @@ export default function Composer({
   children,
 }: ComposerProps) {
   const textareaRef = useRef<HTMLTextAreaElement>(null);
+  const fieldRef = useRef<HTMLDivElement>(null);
+  const slotsRef = useRef<HTMLDivElement>(null);
+  /** The box's top in the window and the slot's space above it, as last laid out or scrolled. */
+  const held = useRef<{ top: number | null; slotSpace: number }>({ top: null, slotSpace: 0 });
 
   const autoResize = useCallback(() => {
     const el = textareaRef.current;
@@ -128,13 +141,46 @@ export default function Composer({
 
   useEffect(() => { autoResize(); }, [value, autoResize]);
 
+  // The box's top, kept current as the reader scrolls, so a slot that opens later is measured against it.
+  useEffect(() => {
+    const onScroll = () => {
+      const el = fieldRef.current;
+      if (el) held.current = { ...held.current, top: el.getBoundingClientRect().top };
+    };
+    window.addEventListener('scroll', onScroll, { passive: true });
+    return () => window.removeEventListener('scroll', onScroll);
+  }, []);
+
+  // Docked, when the slot's space changes and that moved the box (the bar in the page's flow), the page is scrolled
+  // by the box's own displacement before paint, measured again until the box is back where it was: a bar pushed
+  // into its sticky place moves less than the slot's height at first, and at the page's maximum scroll the browser
+  // already takes back part of a shrinking slot. A stuck bar grows upward instead; the box does not move, and
+  // nothing scrolls.
+  useLayoutEffect(() => {
+    const el = fieldRef.current;
+    if (!el) return;
+    const slotsEl = docked ? slotsRef.current : null;
+    const slotSpace = slotsEl ? slotsEl.getBoundingClientRect().height + (parseFloat(getComputedStyle(slotsEl).marginBottom) || 0) : 0;
+    const prev = held.current;
+    if (docked && prev.top !== null && Math.abs(slotSpace - prev.slotSpace) > 0.5) {
+      for (let i = 0; i < 8; i += 1) {
+        const off = el.getBoundingClientRect().top - prev.top;
+        if (Math.abs(off) <= 0.5) break;
+        const y = window.scrollY;
+        window.scrollBy({ top: off, behavior: 'instant' });
+        if (window.scrollY === y) break;
+      }
+    }
+    held.current = { top: el.getBoundingClientRect().top, slotSpace };
+  });
+
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     if (canSubmit) onSubmit();
   };
 
   const slots = guard.cardOpen || guard.declined || guard.noneOn ? (
-    <div className="composer-slots">
+    <div className="composer-slots" ref={slotsRef}>
       {guard.cardOpen ? (
         <div data-part="consent-card">
           <ConsentCard onAllow={guard.onAllow} onNotNow={guard.onNotNow} />
@@ -160,7 +206,7 @@ export default function Composer({
           {docked ? slots : null}
           <form onSubmit={handleSubmit}>
             {/* Chat-style textarea with inline send button */}
-            <div className="ui-field" style={{ position: 'relative' }}>
+            <div className="ui-field" ref={fieldRef} style={{ position: 'relative' }}>
               <textarea
                 id="query"
                 ref={textareaRef}
