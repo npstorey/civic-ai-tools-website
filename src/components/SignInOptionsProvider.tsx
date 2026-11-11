@@ -12,7 +12,7 @@ import { DEFAULT_SIGN_IN_OPTIONS, type SignInOption } from '@/lib/auth-provider-
  * provider CONFIGS carrying client secrets and callbacks; only a server
  * component may call it, and only the narrowed `{id, name}` list may cross to
  * the client. But three of the affordances that need that list —
- * `RateLimitBanner`, `QueryForm`, and `McpResponseDisplay` — render inside
+ * `RateLimitBanner` (retired by UX-2 P3b-1), `QueryForm`, and `McpResponseDisplay` — render inside
  * `QuerySurface`, mounted by the apex page, which is itself a client
  * component; `NotebookOutput` is the fourth, in the same tree. There is no
  * server ancestor to extend a prop chain from without converting the apex

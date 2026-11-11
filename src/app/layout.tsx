@@ -277,7 +277,7 @@ export default function RootLayout({
               example. The routes enforce the lock either way. */}
           <DefaultPortalProvider value={getDefaultPortal()} locked={isPortalLocked()}>
           {/* Sign-in choices for the affordances inside client trees (#229
-              P1) — QueryForm, RateLimitBanner, McpResponseDisplay and
+              P1) — QueryForm, McpResponseDisplay and
               NotebookOutput all render under the apex page, a client
               component with no server ancestor to thread a prop from. */}
           <SignInOptionsProvider value={signInOptions}>
