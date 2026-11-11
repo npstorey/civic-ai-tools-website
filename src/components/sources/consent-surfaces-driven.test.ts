@@ -230,7 +230,7 @@ const SURFACES: Array<{ name: string; route: string; session: () => void; elemen
     name: '/ask',
     route: '/api/query-notebook',
     session: SIGNED_IN_DB,
-    element: () => h(QuerySurface, { showLocalSetupFootnote: false, presentation: 'answer-first', defaultMode: 'notebook' }),
+    element: () => h(QuerySurface, { presentation: 'answer-first', defaultMode: 'notebook' }),
     ask: askOnQueryForm,
   },
 ];
@@ -488,7 +488,7 @@ test('criterion 2 (/ask, a direct path): Retry on a refused consent shows the ca
       return sse([{ type: 'error', message: 'The notebook could not finish running. Please try again.', code: 'generic' }]);
     },
   });
-  const page = await mount(h(QuerySurface, { showLocalSetupFootnote: false, presentation: 'answer-first', defaultMode: 'notebook' }));
+  const page = await mount(h(QuerySurface, { presentation: 'answer-first', defaultMode: 'notebook' }));
   await askOnQueryForm(page);
   await page.click(page.button('Allow'));
   assert.equal(queryRequests(net.sent).length, 1, 'premise: after Allow the question was sent');

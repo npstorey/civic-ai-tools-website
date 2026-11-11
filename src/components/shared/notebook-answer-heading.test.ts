@@ -73,7 +73,7 @@ test('row 19: the heading over a notebook-mode answer reads "Answer, executed in
   sessions.client = { status: 'authenticated', data: { user: { name: 'Fixture' } } };
   sessions.rows.clear();
   answers();
-  const page = await mount(h(QuerySurface, { showLocalSetupFootnote: false, presentation: 'answer-first', defaultMode: 'notebook' }));
+  const page = await mount(h(QuerySurface, { presentation: 'answer-first', defaultMode: 'notebook' }));
   const box = page.elements().find((el) => el.type === 'textarea');
   assert.ok(box, 'premise: the question box');
   await page.type(box!, 'How many 311 complaints were there in Brooklyn in 2024?');

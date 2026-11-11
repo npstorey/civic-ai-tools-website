@@ -6,21 +6,21 @@
 //   (the route answers `consent_required`) finishes with no answer, so it does not dock; nor does a first run
 //   still under way (its pause prompt stays below the box, as `consent-pause-in-view.test.ts` reads it). Once
 //   docked, the composer stays docked for the life of the surface.
-// - The first-time line (X24, `data-part="first-time-line"`, a P1 `inline` disclosure) renders once under the
-//   docked box, in Q5 = B's form for the reader's sign-in state, until the second question of the session: the
+// - The first-time line (X24, `data-part="first-time-line"`, one <p>: contract v5 1B.2, O4 = A) renders once under
+//   the docked box, in Q5 = B's form for the reader's sign-in state (signed out, its first sentence only), until the second question of the session: the
 //   second submit that starts an analysis and so replaces the answer. Three submits do (each resets the shown
 //   answer, `useStreamingComparison.ts:109-117`): the box (`QuerySurface.tsx:128-156`), "Continue this analysis"
 //   (`:158-166`) and the demoted comparison's run (`:172-180`). A chip only fills the box (`QueryForm.tsx:331-336`),
 //   so it reaches a run through the box's submit. A refused send starts no analysis. The count is kept in session
 //   storage, so a remount in the same session does not show the line again.
-// - The guard's slots keep their place relative to the box, in the ruled order (leg A's seam, carried by the
-//   rulings): box, chips, line, first-time line, consent card, decline line, no-source-on line, then the gear.
-//   The base's order with these hooks patched in differs in two places: the line came before the chips
-//   (`QueryForm.tsx:425-431`, `:434-468`), and the three slots came after the gear and its region (`:903-932`).
+// - Before the dock the parts keep the ruled order: box, chips, where-line, the guard's slot, then the account line
+//   (with the sign-in line on the home page signed out) and the gear. Docked (contract v5 1A, 1D; addendum 3, 3.3),
+//   the bar (`composer-bar`) holds any open slot and then the box, and the lines follow it; no chips.
 // - The results block still opens with its heading, then the pause prompt (`QuerySurface.tsx:233`, `:235`):
 //   P3b-1 does not move it.
 // - The docked rule in `globals.css` is `position: sticky; bottom: 0` with a `z-index` below the header's 50
-//   (#728 line 3; `Header.tsx:279-281`). The page gains no bottom padding (the seat's ruling S2); that, and the
+//   (#728 line 3; `Header.tsx:279-281`), carried by the bar's rule since the re-cut; the docked root is
+//   `display: contents` (addendum 3, 3.3). The page gains no bottom padding (the seat's ruling S2); that, and the
 //   last line of a finished answer above the docked box, are criterion 5's instrument's reads, not this file's.
 //
 // WHAT IS DRIVEN. The home page component (`src/app/(marketing)/page.tsx`, signed out, the comparison) and
@@ -56,7 +56,7 @@ import {
   type HostElement,
   type Surface,
 } from '../sources/surface-test-harness.ts';
-import { attr, childrenOf, classesOf, cssRules, parentOf, within } from '../ui/ui-test-helpers.ts';
+import { attr, childrenOf, classesOf, cssRules, cssRulesMentioning, parentOf, within } from '../ui/ui-test-helpers.ts';
 
 registerSurfaceHooks({ ...CONSENT_SURFACE_STUBS });
 
@@ -101,23 +101,16 @@ const { buildFlowsStatement, statementHash } = await load('lib/flows/statement.t
 
 const X23 = 'Ask another question';
 const X24_SIGNED_IN = 'A new question replaces this answer. To keep this answer, publish it first.';
-const X24_SIGNED_OUT = 'A new question replaces this answer. To keep this answer, sign in and publish it.';
+/** O4 = A: signed out, the first sentence only; "To keep this answer, sign in and publish it." is withheld. */
+const X24_SIGNED_OUT = 'A new question replaces this answer.';
 const BOX_LABEL = 'Ask a question about open data';
 const DOCKED_CLASS = 'composer--docked';
-/** X24's shape (relay 57; design version 4): a closed inline disclosure, its first sentence the summary. */
-const X24_SUMMARY = 'A new question replaces this answer.';
-const X24_BODY_SIGNED_IN = 'To keep this answer, publish it first.';
-const X24_BODY_SIGNED_OUT = 'To keep this answer, sign in and publish it.';
-
-/** The first-time line's summary and body, and whether it renders open. */
-function assertX24Shape(line: HostElement, body: string, where: string): void {
-  const summaries = within(line).filter((el) => el.type === 'summary');
-  assert.equal(summaries.length, 1, `${where}: the first-time line has no one <summary>`);
-  assert.equal(textOf(summaries[0]), X24_SUMMARY, `${where}: the first-time line's summary`);
-  const bodies = within(line).filter((el) => classesOf(el).includes('ui-disclosure-body'));
-  assert.equal(bodies.length, 1, `${where}: the first-time line has no one body`);
-  assert.equal(textOf(bodies[0]), body, `${where}: the first-time line's body`);
-  assert.equal(attr(line, 'open'), null, `${where}: the first-time line renders open`);
+/** X24's shape (the owner, 6753017330; contract v5 1B.2): one plain paragraph, no disclosure inside it. */
+function assertX24OneParagraph(line: HostElement, where: string): void {
+  assert.equal(line.type, 'p', `${where}: the first-time line is a <${line.type}>, not one <p>`);
+  const inner = within(line).filter((el) => el !== line && ['details', 'summary', 'p', 'div'].includes(el.type)).map((el) => el.type);
+  assert.deepEqual(inner, [], `${where}: the first-time line holds a block or a disclosure`);
+  assert.equal(attr(line, 'open'), null, `${where}: the first-time line carries an open attribute`);
 }
 
 // --- The held streams and the answers --------------------------------------------------------------------------
@@ -172,6 +165,8 @@ function answers() {
   nextAnswers = [];
   return installFetch(ORIGIN, {
     '/api/models': () => new Response(JSON.stringify({ models: [{ id: 'fixture/model', name: 'Fixture model' }] }), { status: 200, headers: { 'Content-Type': 'application/json' } }),
+    // The count (contract v5 1B.3): answered, so the account line is shown from the first question on.
+    '/api/rate-limit': () => new Response(JSON.stringify({ remaining: 7, limit: 10, resets_at: '2099-01-01T00:00:00.000Z', authenticated: sessions.server !== null }), { status: 200, headers: { 'Content-Type': 'application/json' } }),
     '/api/flows': () => flowsRoute.GET(),
     '/api/sources/consent/decision': async (request: Request) => {
       if (request.method === 'GET') return new Response(JSON.stringify({ routing: 'in-loop', store: true }), { status: 200, headers: { 'Content-Type': 'application/json' } });
@@ -218,7 +213,7 @@ afterEach(() => {
 
 const HOME = () => h(Home);
 const ASK = (defaultMode: 'notebook' | 'standard' = 'notebook') =>
-  h(QuerySurface, { showLocalSetupFootnote: false, presentation: 'answer-first', defaultMode });
+  h(QuerySurface, { presentation: 'answer-first', defaultMode });
 
 async function mountPage(element: ReturnType<typeof h>): Promise<Surface> {
   const p = await mount(element);
@@ -314,7 +309,7 @@ function before(surface: Surface, a: HostElement, b: HostElement): boolean {
 }
 
 /** The ruled order of the composer's parts, then the gear (P3b-1 keeps it, beneath). */
-const GOLDEN = ['box', 'chip-row', 'where-this-question-goes', 'first-time-line', 'consent-card', 'dont-allow', 'no-source-on', 'gear'];
+const GOLDEN = ['composer-bar', 'box', 'chip-row', 'where-this-question-goes', 'first-time-line', 'consent-card', 'dont-allow', 'no-source-on', 'account-line', 'sign-in-line', 'gear'];
 
 /** The parts present, in document order, named as `GOLDEN` names them. */
 function partOrder(surface: Surface): string[] {
@@ -330,13 +325,16 @@ function partOrder(surface: Surface): string[] {
 
 /** The parts present are the ones `expected` names, in the golden's order. */
 function assertOrder(surface: Surface, expected: string[], where: string): void {
+  // Exactly `expected`, in that order: docked, a slot comes before the box (1D), so no one global order holds. Undocked,
+  // the bar is the shape's own business and is read past.
   const read = partOrder(surface);
-  assert.deepEqual(read, GOLDEN.filter((p) => expected.includes(p)), `${where}: the composer's parts, in page order: ${JSON.stringify(read)}`);
+  const compared = expected.includes('composer-bar') ? read : read.filter((p) => p !== 'composer-bar');
+  assert.deepEqual(compared, expected, `${where}: the composer's parts, in page order: ${JSON.stringify(read)}`);
 }
 
 // --- Criterion 1: the home page, signed out ---------------------------------------------------------------------
 
-test('criterion 1, the home page signed out: undocked before the first answer; after the run finishes the composer is docked below the results, reads "Ask another question", and shows the signed-out first-time line once, in an inline disclosure', async () => {
+test('criterion 1, the home page signed out: undocked before the first answer; after the run finishes the composer is docked below the results, reads "Ask another question", and shows the signed-out first-time line once, one paragraph, its first sentence only', async () => {
   ANON();
   answers();
   await consentWith();
@@ -355,10 +353,9 @@ test('criterion 1, the home page signed out: undocked before the first answer; a
   assert.ok(before(page, resultsBlock(page, 'Results'), composerOf(page)), 'the docked composer is not after the results');
   const lines = firstTimeLines(page);
   assert.equal(lines.length, 1, `first-time lines after the first answer: ${lines.length}`);
-  assert.equal(lines[0].type, 'details', 'the first-time line is not a disclosure');
-  assert.ok(classesOf(lines[0]).includes('ui-disclosure--inline'), `the first-time line is not an inline disclosure: [${classesOf(lines[0]).join(' ')}]`);
-  assert.equal(textOf(lines[0]), X24_SIGNED_OUT, 'the signed-out first-time line, byte for byte');
-  assertX24Shape(lines[0], X24_BODY_SIGNED_OUT, 'the home page signed out');
+  assertX24OneParagraph(lines[0], 'the home page signed out');
+  assert.equal(textOf(lines[0]), X24_SIGNED_OUT, 'the signed-out first-time line, byte for byte (its first sentence only, O4 = A)');
+  assert.ok(!page.text().includes('To keep this answer, sign in and publish it.'), 'the withheld sentence is on the page signed out');
   assert.ok(within(composerOf(page)).includes(lines[0]), 'the first-time line is not inside the composer');
   assert.ok(before(page, boxOf(page), lines[0]), 'the first-time line is not under the box');
 });
@@ -458,11 +455,10 @@ test('criterion 1, /ask signed in (an executed run): after the run finishes the 
   assert.ok(before(page, resultsBlock(page, 'Answer, executed in a signed sandbox'), composerOf(page)), 'the docked composer is not after the results');
   const lines = firstTimeLines(page);
   assert.equal(lines.length, 1, `first-time lines after the first answer: ${lines.length}`);
-  assert.ok(classesOf(lines[0]).includes('ui-disclosure--inline'), 'the first-time line is not an inline disclosure');
+  assertX24OneParagraph(lines[0], '/ask signed in');
   assert.equal(textOf(lines[0]), X24_SIGNED_IN, 'the signed-in first-time line, byte for byte');
-  assertX24Shape(lines[0], X24_BODY_SIGNED_IN, '/ask signed in');
   assert.ok(page.text().includes('Advanced options'), 'the gear is gone: P3b-1 removes nothing of P3b-2\'s');
-  assertOrder(page, ['box', 'chip-row', 'where-this-question-goes', 'first-time-line', 'gear'], '/ask, docked');
+  assertOrder(page, ['composer-bar', 'box', 'where-this-question-goes', 'first-time-line', 'account-line', 'gear'], '/ask, docked');
 });
 
 test('criterion 1, the home page signed in (a single-host instance): the first-time line takes the signed-in form, by sign-in state', async () => {
@@ -566,12 +562,12 @@ test('criterion 1, the golden order on the home page: the consent card, the decl
   composerOf(card);
   await askFromBox(card, 'What was the median household income in the Bronx?');
   assert.equal(card.buttons('Allow').length, 1, 'premise: the card is shown');
-  assertOrder(card, ['box', 'chip-row', 'consent-card'], 'the card');
+  assertOrder(card, ['box', 'chip-row', 'where-this-question-goes', 'consent-card', 'account-line', 'sign-in-line'], 'the card');
 
   // The decline line: Don't allow.
   await card.click(card.button("Don't allow"));
   await settle(card);
-  assertOrder(card, ['box', 'chip-row', 'dont-allow'], 'the decline line');
+  assertOrder(card, ['box', 'chip-row', 'where-this-question-goes', 'dont-allow', 'account-line', 'sign-in-line'], 'the decline line');
 
   // The no-source-on line: a consent in force with every source Off.
   answers();
@@ -579,7 +575,7 @@ test('criterion 1, the golden order on the home page: the consent card, the decl
   const none = await mountPage(HOME());
   await askFromBox(none, 'What was the median household income in the Bronx?');
   assert.equal(queries.length, 0, 'premise: with every source Off nothing is sent');
-  assertOrder(none, ['box', 'chip-row', 'where-this-question-goes', 'no-source-on'], 'the no-source-on line');
+  assertOrder(none, ['box', 'chip-row', 'where-this-question-goes', 'no-source-on', 'account-line', 'sign-in-line'], 'the no-source-on line');
 });
 
 // --- Criterion 1: the results block still opens with its heading, then the pause prompt ---------------------------
@@ -606,14 +602,16 @@ test('criterion 1, unchanged: the results block opens with its heading, then the
 
 // --- Criterion 4 (#728 line 3) and the seat's ruling S2: the docked rule ------------------------------------------
 
-test('criterion 4 (#728 line 3), S2: globals.css docks the composer with position: sticky (not fixed) at bottom 0 and a z-index below the header\'s 50', () => {
-  const rules = cssRules(`.${DOCKED_CLASS}`);
-  assert.ok(rules.length > 0, `globals.css has no .${DOCKED_CLASS} rule`);
-  const declared = rules.join(';');
-  assert.match(declared, /position\s*:\s*sticky/, 'the docked composer is not position: sticky');
-  assert.doesNotMatch(declared, /position\s*:\s*fixed/, 'the docked composer is position: fixed');
-  assert.match(declared, /(^|;)\s*bottom\s*:\s*0(px)?\s*(;|$)/, 'the docked composer is not at bottom: 0');
+test('criterion 4 (#728 line 3), S2; re-pointed to the bar (contract v5 1A; addendum 3, 3.3): the docked root is display: contents and not itself sticky; the rule that docks the bar is position: sticky (not fixed) at bottom 0, with a z-index below the header\'s 50', () => {
+  const root = cssRules(`.${DOCKED_CLASS}`).join(';');
+  assert.match(root, /display\s*:\s*contents/, `the docked root is not display: contents: ${root}`);
+  assert.doesNotMatch(root, /position\s*:\s*(sticky|fixed)/, 'the docked root itself is still positioned: the whole composer sticks');
+  const bar = cssRulesMentioning('composer-bar').filter((r) => /position\s*:\s*sticky/.test(r.body));
+  assert.equal(bar.length, 1, `rules naming composer-bar that make it sticky: ${JSON.stringify(bar.map((r) => r.selector))}`);
+  const declared = bar[0].body;
+  assert.doesNotMatch(declared, /position\s*:\s*fixed/, 'the bar is position: fixed');
+  assert.match(declared, /(^|;)\s*bottom\s*:\s*0(px)?\s*(;|$)/, 'the bar is not at bottom: 0');
   const z = /z-index\s*:\s*(-?\d+)/.exec(declared);
-  assert.ok(z, 'the docked composer declares no z-index');
-  assert.ok(Number(z![1]) < 50, `the docked composer's z-index ${z![1]} is not below the header's 50`);
+  assert.ok(z, 'the bar declares no z-index');
+  assert.ok(Number(z![1]) < 50, `the bar's z-index ${z![1]} is not below the header's 50`);
 });

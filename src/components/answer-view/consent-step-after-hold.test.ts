@@ -400,7 +400,7 @@ test('note 4, AnswerView (/ask, notebook mode): the run moves on with the questi
   streams = [];
   answers();
   await consentWith({ 'boston-opencontext': 'ask-first' });
-  const page = await mount(h(QuerySurface, { showLocalSetupFootnote: false, presentation: 'answer-first', defaultMode: 'notebook' }));
+  const page = await mount(h(QuerySurface, { presentation: 'answer-first', defaultMode: 'notebook' }));
   mounted.push(page);
   await ask(page);
   const stream = streams[0];

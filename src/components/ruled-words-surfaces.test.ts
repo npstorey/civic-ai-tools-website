@@ -29,12 +29,14 @@
 // UX-2 PW2 (#729) adds the home comparison's two headings (X1, R4) and the
 // dashboard's not-reversible sentence (G0-4 B, S8) at the end of this file,
 // under their own headers. UX-2 P3b-1 adds the docked composer's words (X23,
-// X24's two forms) after them.
+// X24's two forms) after them, and its re-cut (criterion 11) the where-line's
+// forms, the sign-in line, the count's two forms and the example row's name.
 //
 // Run with: npm test
 
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
+import fs from 'node:fs';
 import path from 'node:path';
 import { pathToFileURL } from 'node:url';
 import type { ComponentType } from 'react';
@@ -335,7 +337,8 @@ test('PW2 criterion 5 (S8): the dashboard\'s Publish dialog says a withdrawal fl
 
 const X23_PLACEHOLDER = 'Ask another question';
 const X24_SIGNED_IN = 'A new question replaces this answer. To keep this answer, publish it first.';
-const X24_SIGNED_OUT = 'A new question replaces this answer. To keep this answer, sign in and publish it.';
+/** O4 = A: signed out, the first sentence only; the second is ruled and withheld until sign-in keeps the answer. */
+const X24_SIGNED_OUT = 'A new question replaces this answer.';
 
 const Composer = (await load('components/composer/Composer.tsx')).default as ComponentType<Record<string, unknown>>;
 
@@ -352,13 +355,11 @@ const composerProps = (extra: Record<string, unknown>): Record<string, unknown> 
 });
 
 const composerBox = (surface: Surface): HostElement[] => surface.elements().filter((el) => el.type === 'textarea');
-/** Each first-time line as read whole, and as its summary | body, with `open` when it renders open (relay 57: closed). */
+/** Each first-time line as read whole, with its element (contract v5 1B.2: one plain <p>, no disclosure). */
 const firstTimeLine = (surface: Surface): string[] =>
   surface.elements().filter((el) => el.props['data-part'] === 'first-time-line').flatMap((el) => {
-    const inner = within(el);
-    const summary = inner.filter((x) => x.type === 'summary').map((x) => textOf(x)).join('+');
-    const body = inner.filter((x) => classesOf(x).includes('ui-disclosure-body')).map((x) => textOf(x)).join('+');
-    return [textOf(el), `${summary} | ${body}${el.props.open ? ' | open' : ''}`];
+    const inner = within(el).filter((x) => x !== el && ['details', 'summary', 'p', 'div'].includes(x.type)).map((x) => x.type);
+    return [textOf(el), `<${el.type}>${inner.length > 0 ? ` holding ${inner.join(', ')}` : ''}`];
   });
 
 test('P3b-1 criterion 7 (X23): the docked box\'s placeholder reads "Ask another question"; undocked, the mount\'s own', async () => {
@@ -371,7 +372,7 @@ test('P3b-1 criterion 7 (X23): the docked box\'s placeholder reads "Ask another 
   undocked.unmount();
 });
 
-test('P3b-1 criterion 7 (X24, Q5 = B; relay 57): the first-time line in its signed-in and signed-out forms, byte for byte, its first sentence the summary of a closed disclosure; none when the mount asks for none', async () => {
+test('P3b-1 criterion 11 (X24, Q5 = B; O4 = A): the first-time line in its signed-in and signed-out forms, byte for byte, one <p>, signed out its first sentence only; none when the mount asks for none', async () => {
   installFetch(ORIGIN, {});
   const read: Record<string, string[]> = {};
   for (const [name, form] of [['signed-in', 'signed-in'], ['signed-out', 'signed-out'], ['none', null]] as const) {
@@ -380,8 +381,122 @@ test('P3b-1 criterion 7 (X24, Q5 = B; relay 57): the first-time line in its sign
     view.unmount();
   }
   assert.deepEqual(read, {
-    'signed-in': [X24_SIGNED_IN, 'A new question replaces this answer. | To keep this answer, publish it first.'],
-    'signed-out': [X24_SIGNED_OUT, 'A new question replaces this answer. | To keep this answer, sign in and publish it.'],
+    'signed-in': [X24_SIGNED_IN, '<p>'],
+    'signed-out': [X24_SIGNED_OUT, '<p>'],
     none: [],
   }, `the first-time lines read ${JSON.stringify(read)}`);
+});
+
+// --- UX-2 P3b-1, criterion 11 (addendum 1, section 1; Q6 = B; W1, W2, W7): the re-cut's ruled words, rendered -------
+//
+// Each row is read off the real surface that renders it, the home page signed out (Standard) or /ask signed in
+// (Sandbox), against the words written out here: the where-line's forms (items 23/47, W3, W4, W5, W6), "Select
+// sources", the P3b sign-in line, the count's forms at 7 and at 0 (W1, W2), and the example row's name (W7). The
+// consent is written through the REAL consent route. At the base the where-line reads "This question goes to …
+// Change sources", there is no sign-in line or account line, and the count reads "N/M requests remaining today".
+
+process.env.SOCRATA_MCP_URL = 'https://socrata.fixture.example';
+process.env.BOSTON_OPENCONTEXT_MCP_URL = 'https://boston.fixture.example/mcp';
+process.env.EXECUTOR_DRIVER = 'vercel-sandbox';
+const Home = (await load('app/(marketing)/page.tsx')).default as ComponentType;
+const QuerySurface = (await load('components/shared/QuerySurface.tsx')).default as ComponentType<Record<string, unknown>>;
+const flowsRoute = await load('app/api/flows/route.ts');
+const consentRoute = await load('app/api/sources/consent/route.ts');
+const { buildFlowsStatement, statementHash } = await load('lib/flows/statement.ts');
+const wordsStatement = await buildFlowsStatement();
+const WORDS_IDS: string[] = wordsStatement.sources.map((s: { sourceId: string }) => s.sourceId);
+
+const WHERE = {
+  standardOne: 'Where your question goes: the model service and 1 data source · Select sources',
+  standardAll: `Where your question goes: the model service and ${WORDS_IDS.length} data sources · Select sources`,
+  sandboxOne: 'Where your question goes: the model service, the notebook runner and 1 data source · Select sources',
+  standardAsk: 'Where your question goes: the model service; data sources ask first · Select sources',
+  sandboxAsk: 'Where your question goes: the model service and the notebook runner; data sources ask first · Select sources',
+  everyOff: 'Where your question goes: nowhere; every data source is Off · Select sources',
+};
+const P3B_SIGN_IN_LINE = 'Sign in for more features and usage.';
+
+const wordsJson = (body: unknown) => new Response(JSON.stringify(body), { status: 200, headers: { 'Content-Type': 'application/json' } });
+function wordsAnswers(remaining: number, limit: number): void {
+  installFetch(ORIGIN, {
+    '/api/models': () => wordsJson({ models: [{ id: 'fixture/model', name: 'Fixture model' }] }),
+    '/api/flows': () => flowsRoute.GET(),
+    '/api/sources/consent/decision': () => wordsJson({ routing: 'in-loop', store: true }),
+    '/api/sources/consent': (request: Request) => (consentRoute[request.method] as (r: Request) => Promise<Response>)(request),
+    '/api/rate-limit': () => wordsJson({ remaining, limit, resets_at: '2099-01-01T00:00:00.000Z', authenticated: sessions.server !== null }),
+    '/api/compare-stream': () => new Response(['withoutMcp', 'withMcp'].map((panel) => `data: ${JSON.stringify({ type: 'complete', panel, data: { content: 'A fixture answer.', duration_ms: 1, tools_called: [] } })}\n\n`).join(''), { status: 200, headers: { 'Content-Type': 'text/event-stream' } }),
+  });
+}
+async function wordsConsent(states: (id: string, i: number) => string): Promise<void> {
+  const response = await fetch('/api/sources/consent', { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ states: Object.fromEntries(WORDS_IDS.map((id, i) => [id, states(id, i)])), flowsVersion: statementHash(wordsStatement) }) });
+  assert.equal(response.status, 200, 'premise: the consent was written');
+}
+const settled = async (surface: Surface) => { await new Promise((resolve) => setTimeout(resolve, 50)); await surface.settle(); };
+const partText = (surface: Surface, name: string): string[] => surface.elements().filter((el) => el.props['data-part'] === name).map((el) => textOf(el));
+const signedOut = () => { sessions.server = null; sessions.client = { status: 'unauthenticated', data: null }; };
+
+test('P3b-1 criterion 11 (items 23/47, W3, W4, W5, W6): the where-line\'s forms, byte for byte, on the surfaces that render them', async () => {
+  const read: Record<string, string[]> = {};
+  const rows: Array<[string, () => void, () => ReturnType<typeof h>, (id: string, i: number) => string]> = [
+    ['Standard, N = 1', signedOut, () => h(Home), (_id, i) => (i === 0 ? 'on' : i === 1 ? 'ask-first' : 'off')],
+    ['Standard, every source On', signedOut, () => h(Home), () => 'on'],
+    ['Standard, no source On, one Ask first', signedOut, () => h(Home), (_id, i) => (i === 0 ? 'ask-first' : 'off')],
+    ['Standard, every source Off', signedOut, () => h(Home), () => 'off'],
+    ['Sandbox, N = 1', signedIn, () => h(QuerySurface, { presentation: 'answer-first', defaultMode: 'notebook' }), (_id, i) => (i === 0 ? 'on' : 'off')],
+    ['Sandbox, no source On, one Ask first', signedIn, () => h(QuerySurface, { presentation: 'answer-first', defaultMode: 'notebook' }), (_id, i) => (i === 0 ? 'ask-first' : 'off')],
+    ['Sandbox, every source Off', signedIn, () => h(QuerySurface, { presentation: 'answer-first', defaultMode: 'notebook' }), () => 'off'],
+  ];
+  for (const [name, who, element, states] of rows) {
+    who();
+    wordsAnswers(7, 10);
+    await wordsConsent(states);
+    const page = await mount(element());
+    await settled(page);
+    read[name] = partText(page, 'where-this-question-goes');
+    page.unmount();
+  }
+  assert.deepEqual(read, {
+    'Standard, N = 1': [WHERE.standardOne],
+    'Standard, every source On': [WHERE.standardAll],
+    'Standard, no source On, one Ask first': [WHERE.standardAsk],
+    'Standard, every source Off': [WHERE.everyOff],
+    'Sandbox, N = 1': [WHERE.sandboxOne],
+    'Sandbox, no source On, one Ask first': [WHERE.sandboxAsk],
+    'Sandbox, every source Off': [WHERE.everyOff],
+  });
+});
+
+test('P3b-1 criterion 11 (Q6 = B; W1, W2; W7): on the home page signed out, the sign-in line from first paint, the count at 7 and at 0 after a question, and the example row named "Example questions"', async () => {
+  const read: Record<string, string[]> = {};
+  for (const remaining of [7, 0]) {
+    signedOut();
+    wordsAnswers(remaining, 10);
+    await wordsConsent(() => 'on');
+    const page = await mount(h(Home));
+    await settled(page);
+    if (remaining === 7) {
+      read['the sign-in line, first paint'] = partText(page, 'sign-in-line');
+      read['the example row\'s name'] = page.elements().filter((el) => el.props['data-part'] === 'chip-row').flatMap((el) => within(el)).filter((el) => el.props.role === 'group').map((el) => String(el.props['aria-label']));
+    }
+    const box = page.elements().find((el) => el.type === 'textarea');
+    assert.ok(box, 'premise: the question box');
+    await page.type(box!, 'What was the median household income in the Bronx?');
+    const form = page.elements().find((el) => el.type === 'form' && within(el).includes(page.elements().find((x) => x.type === 'textarea')!));
+    await page.submit(form!);
+    await settled(page);
+    read[`the account line at ${remaining} of 10`] = partText(page, 'account-line');
+    page.unmount();
+  }
+  assert.deepEqual(read, {
+    'the sign-in line, first paint': [P3B_SIGN_IN_LINE],
+    'the example row\'s name': ['Example questions'],
+    'the account line at 7 of 10': [`7 of 10 questions left today. ${P3B_SIGN_IN_LINE}`],
+    'the account line at 0 of 10': [`0 of 10 questions left today. The count resets at midnight UTC. ${P3B_SIGN_IN_LINE}`],
+  });
+});
+
+test('P3b-1 criterion 11 (W7; addendum 1, section 4): no word in src/components/composer/copy.ts is marked PENDING', () => {
+  const copy = fs.readFileSync(path.join(SRC, 'components', 'composer', 'copy.ts'), 'utf8');
+  assert.deepEqual(copy.split('\n').filter((line) => /PENDING/.test(line)), [], 'composer/copy.ts still marks a word PENDING');
+  assert.ok(copy.includes("'To keep this answer, sign in and publish it.'"), 'the withheld sentence (O4 = A) is not kept as one constant in composer/copy.ts');
 });

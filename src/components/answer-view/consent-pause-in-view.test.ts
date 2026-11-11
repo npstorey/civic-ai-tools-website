@@ -378,7 +378,7 @@ test('criterion 1, /ask (the executed run): a holding pause shows the prompt, in
   SIGNED_IN_DB();
   answers();
   await consentWith({ 'boston-opencontext': 'ask-first' });
-  const p = await mountPage(h(QuerySurface, { showLocalSetupFootnote: false, presentation: 'answer-first', defaultMode: 'notebook' }));
+  const p = await mountPage(h(QuerySurface, { presentation: 'answer-first', defaultMode: 'notebook' }));
   await askOnQueryForm(p);
   const stream = streams[0];
   assert.ok(stream, 'premise: the question was sent');

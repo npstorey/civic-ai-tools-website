@@ -267,7 +267,7 @@ test('criterion 3 (d), the executed run (/ask, notebook mode): the pause reaches
   sessions.rows.clear();
   answers();
   await consentWith({ 'boston-opencontext': 'ask-first' });
-  const page = await mountTracked(h(QuerySurface, { showLocalSetupFootnote: false, presentation: 'answer-first', defaultMode: 'notebook' }));
+  const page = await mountTracked(h(QuerySurface, { presentation: 'answer-first', defaultMode: 'notebook' }));
   await askOnQueryForm(page);
   assert.equal(streams.length, 1, 'premise: the question was sent');
   const stream = streams[0];

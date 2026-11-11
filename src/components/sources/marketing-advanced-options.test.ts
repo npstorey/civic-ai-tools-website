@@ -1,10 +1,12 @@
 // Advanced options on the public home page, signed out (UX pass, row 7; the
 // owner's ruling of 2026-10-22). The marketing mount passes
 // `advancedOptions="hidden-signed-out"` and only it: signed out under it, the
-// form renders no Advanced options toggle and, in its place, one line saying
-// what signing in adds. The line promises no models: the model list does not
-// depend on sign-in (`/api/models` reads no session; the form gates only the
-// response mode on it).
+// form renders no Advanced options toggle. Since UX-2 P3b-1's re-cut (Q6 = B
+// with the note; contract v5 1B.3) the line under the box is the ruled
+// "Sign in for more features and usage.", its "Sign in" making the header's
+// decision (a link to the app host's sign-in on the split topology, a button
+// that starts the one provider in place); the long sentence, with its daily
+// count and its publishing statement, is gone. The line promises no models.
 //
 // WHAT IS DRIVEN. The real home page (`src/app/(marketing)/page.tsx`) and
 // `/ask`'s mount (`QuerySurface` as `src/app/(app)/ask/page.tsx` mounts it), on
@@ -32,6 +34,7 @@ import {
   textOf,
   type Surface,
 } from './surface-test-harness.ts';
+import { within } from '../ui/ui-test-helpers.ts';
 
 registerSurfaceHooks({ ...CONSENT_SURFACE_STUBS });
 
@@ -74,10 +77,21 @@ installFetch(ORIGIN, {
 
 /** The reference deployment's shape: sign-in lives on the app host. */
 const splitTopology = (child: ReactElement) => h(HostLinksProvider, { value: { marketingOrigin: '', signInHref: 'https://app.fixture.example/ask' } }, child);
-const askMount = () => h(QuerySurface, { showLocalSetupFootnote: false, presentation: 'answer-first', defaultMode: 'notebook' });
+const askMount = () => h(QuerySurface, { presentation: 'answer-first', defaultMode: 'notebook' });
 
-const LINE_SPLIT = 'Sign in to run the answer as a notebook in a signed sandbox and publish it as a signed analysis. Signed in, you can ask 20 questions a day.';
-const LINE_IN_PLACE = 'Sign in with GitHub to run the answer as a notebook in a signed sandbox and publish it as a signed analysis. Signed in, you can ask 20 questions a day.';
+/** The P3b sign-in line (Q6 = B with the note), byte for byte. */
+const SIGN_IN_LINE = 'Sign in for more features and usage.';
+/** The retired long sentence's two forms carried these; neither may show. */
+const RETIRED = ['to run the answer as a notebook in a signed sandbox', 'Signed in, you can ask'];
+/** The sign-in line's element, and the one control in it reading "Sign in". */
+function signInLine(page: Surface): { text: string; control: { type: string; href: unknown } | null } {
+  const line = page.elements().filter((el) => el.props['data-part'] === 'sign-in-line');
+  assert.equal(line.length, 1, `data-part="sign-in-line": ${line.length}; the page reads: ${page.text().slice(0, 400)}`);
+  const controls = within(line[0]).filter((el) => (el.type === 'a' || el.type === 'button') && textOf(el) === 'Sign in');
+  assert.ok(controls.length <= 1, `controls reading "Sign in" in the sign-in line: ${controls.length}`);
+  const control = controls[0];
+  return { text: textOf(line[0]), control: control ? { type: control.type, href: control.props.href } : null };
+}
 
 const ANON = () => { sessions.server = null; sessions.client = { status: 'unauthenticated', data: null }; };
 const SIGNED_IN = () => {
@@ -87,20 +101,22 @@ const SIGNED_IN = () => {
 
 const toggles = (page: Surface) => page.elements().filter((el) => el.type === 'button' && textOf(el).includes('Advanced options'));
 
-test('row 7: the home page, signed out, split topology: no Advanced options, and the sign-in line in its place', async () => {
+test('row 7, re-cut (Q6 = B): the home page, signed out, split topology: no Advanced options, and the ruled sign-in line in its place', async () => {
   ANON();
   const page = await mount(splitTopology(h(Home)));
   assert.equal(toggles(page).length, 0, 'the signed-out home page still offers Advanced options');
-  assert.ok(page.text().includes(LINE_SPLIT), `the sign-in line is not on the page: ${page.text().slice(0, 400)}`);
+  assert.deepEqual(signInLine(page), { text: SIGN_IN_LINE, control: { type: 'a', href: 'https://app.fixture.example/ask' } }, 'the split topology\'s sign-in line');
+  assert.deepEqual(RETIRED.filter((w) => page.text().includes(w)), [], 'the retired long sentence is on the page');
   assert.doesNotMatch(page.text(), /more models/i, 'the line promises more models');
   page.unmount();
 });
 
-test('row 7: the home page, signed out, in-place sign-in: the line names the one provider', async () => {
+test('row 7, re-cut (Q6 = B): the home page, signed out, in-place sign-in: the ruled line, its "Sign in" a button', async () => {
   ANON();
   const page = await mount(h(Home));
   assert.equal(toggles(page).length, 0);
-  assert.ok(page.text().includes(LINE_IN_PLACE), `the in-place line is not on the page: ${page.text().slice(0, 400)}`);
+  assert.deepEqual(signInLine(page), { text: SIGN_IN_LINE, control: { type: 'button', href: undefined } }, 'the in-place sign-in line');
+  assert.deepEqual(RETIRED.filter((w) => page.text().includes(w)), [], 'the retired long sentence is on the page');
   page.unmount();
 });
 
@@ -108,7 +124,7 @@ test('row 7: the home page, signed in: the toggle as before, and no line', async
   SIGNED_IN();
   const page = await mount(splitTopology(h(Home)));
   assert.equal(toggles(page).length, 1, 'the signed-in home page lost Advanced options');
-  assert.ok(!page.text().includes('Signed in, you can ask'), 'the signed-in home page shows the sign-in line');
+  assert.ok(!page.text().includes('Signed in, you can ask') && !page.text().includes(SIGN_IN_LINE), 'the signed-in home page shows a sign-in line');
   page.unmount();
 });
 
@@ -117,7 +133,7 @@ for (const [who, session] of [['signed out', ANON], ['signed in', SIGNED_IN]] as
     session();
     const page = await mount(splitTopology(askMount()));
     assert.equal(toggles(page).length, 1, `/ask (${who}) lost Advanced options`);
-    assert.ok(!page.text().includes('Signed in, you can ask'), `/ask (${who}) shows the sign-in line`);
+    assert.ok(!page.text().includes('Signed in, you can ask') && !page.text().includes(SIGN_IN_LINE), `/ask (${who}) shows a sign-in line`);
     page.unmount();
   });
 }

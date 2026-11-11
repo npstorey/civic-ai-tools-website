@@ -444,6 +444,23 @@ export function dismissNotices(): Promise<boolean> {
 
 export type GuardResult = 'ran' | 'asked' | 'none-on' | 'held';
 
+/**
+ * Why no question can go with no source On (UX-2 P3b-1; addenda 1-3), one predicate for the guard below and the
+ * where-line under the box: 'every-off' when every source the statement lists is Off; 'cannot-ask' when none is On, one
+ * is not Off, and this site cannot ask (routing all-sources, or no store); null otherwise, a routing or store still
+ * unread included. TYPED STUB at the red: it answers null, and nothing calls it yet.
+ */
+export function noSourceOnReason(
+  ids: readonly string[],
+  stateOf: (id: string) => SourceStateValue | undefined,
+  ask: Pick<ConsentSnapshot, 'routing' | 'store'>,
+): 'every-off' | 'cannot-ask' | null {
+  void ids;
+  void stateOf;
+  void ask;
+  return null;
+}
+
 /** The guard each surface puts in front of a question (stage-A ruling (a)). */
 export async function guardQuestion(run: () => void, ask: () => void): Promise<GuardResult> {
   if (snapshot.writing) return 'held';
