@@ -47,6 +47,8 @@ interface ComparisonDisplayProps {
   streamingWithoutMcp?: StreamingPanelState;
   streamingWithMcp?: StreamingPanelState;
   queryText?: string;
+  /** Forwarded to the with-data panel: false leaves out its italic quote of the question (UX-2 P3b-1 leg H). */
+  showQueryQuote?: boolean;
   portal?: string;
   model?: string;
   evidenceTrace?: EvidenceTrace | null;
@@ -95,6 +97,7 @@ export default function ComparisonDisplay({
   streamingWithoutMcp,
   streamingWithMcp,
   queryText,
+  showQueryQuote,
   portal,
   model,
   evidenceTrace,
@@ -141,6 +144,7 @@ export default function ComparisonDisplay({
       progressLog={streamingWithMcp?.progressLog}
       progressGroups={streamingWithMcp?.progressGroups}
       queryText={queryText}
+      showQueryQuote={showQueryQuote}
       portal={portal}
       model={model}
       evidenceTrace={evidenceTrace}

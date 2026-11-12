@@ -28,6 +28,8 @@ interface ResponsePanelProps {
   progressGroups?: ProgressGroup[];
   isStreaming?: boolean;
   queryText?: string;
+  /** Forwarded to the with-data display: false leaves out its italic quote of the question (UX-2 P3b-1 leg H). */
+  showQueryQuote?: boolean;
   portal?: string;
   model?: string;
   evidenceTrace?: EvidenceTrace | null;
@@ -54,6 +56,7 @@ export default function ResponsePanel({
   progressGroups,
   isStreaming,
   queryText,
+  showQueryQuote,
   portal,
   model,
   evidenceTrace,
@@ -156,6 +159,7 @@ export default function ResponsePanel({
         <McpResponseDisplay
           content={content}
           queryText={queryText}
+          showQueryQuote={showQueryQuote}
           progressLog={progressLog}
           progressGroups={progressGroups}
           toolsCalled={tools_called}

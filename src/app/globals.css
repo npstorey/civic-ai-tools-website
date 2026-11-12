@@ -1504,3 +1504,18 @@ footer a:visited {
 .composer--docked > .composer-lines {
   padding-bottom: 12px;
 }
+
+/* The query surface's answer area (UX-2 P3b-1 leg H, `src/components/shared/QuerySurface.tsx`). The reader's question,
+   first in each results container, right-aligned in the answer's wide column (A2 = B), by the chat convention. */
+.query-bubble {
+  width: fit-content;
+  max-width: 80%;
+  margin: 0 0 16px auto;
+  padding: 10px 16px;
+  border-radius: 18px;
+  background-color: var(--card-background);
+  color: var(--text-primary);
+  font-size: 15px;
+  line-height: 1.5;
+  overflow-wrap: anywhere;
+}

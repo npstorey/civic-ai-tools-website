@@ -253,6 +253,11 @@ export default function QuerySurface({
     />
   );
 
+  // The reader's question, first in each results container (leg H; A2 = B, A3/D2 = yes): the question as sent, which
+  // "Continue this analysis" keeps (it sends a built prompt and leaves `lastQuery` as it was). No screen-reader name:
+  // after the page's hidden h1 it reads as the question, then the run's heading.
+  const bubble = lastQuery ? <div data-part="question-bubble" className="query-bubble">{lastQuery}</div> : null;
+
   return (
     <>
       {/* Framing: narrow container */}
@@ -284,6 +289,7 @@ export default function QuerySurface({
       {lastMode === 'standard' && (streaming.isLoading || streaming.withoutMcp.content || streaming.withMcp.content ||
         streaming.withoutMcp.isComplete || streaming.withMcp.isComplete || streaming.error) && (
         <div key="results" ref={resultsRef} className="max-w-6xl mx-auto px-6" style={{ marginBottom: '24px' }}>
+          {bubble}
           <h2 style={{ marginBottom: '16px' }}>Results</h2>
           {/* R9 P1 (#672): where the submit scroll leaves the reader, a run's open question, with its two answers. */}
           <ConsentPausePrompt />
@@ -296,6 +302,8 @@ export default function QuerySurface({
             streamingWithoutMcp={streaming.withoutMcp}
             streamingWithMcp={streaming.withMcp}
             queryText={lastQuery}
+            // The bubble above shows the question; the answer leaves out its italic quote (A4 = A). /explore keeps it.
+            showQueryQuote={false}
             portal={lastPortal}
             model={usedModel}
             evidenceTrace={streaming.evidenceTrace}
@@ -310,6 +318,7 @@ export default function QuerySurface({
 
       {lastMode === 'notebook' && (notebook.state.isLoading || notebook.state.notebook || notebook.state.error) && (
         <div key="notebook-results" ref={resultsRef} className="max-w-6xl mx-auto px-6" style={{ marginBottom: '24px' }}>
+          {bubble}
           {/* UX pass row 19: the reader's words for the mode, as the record page says it. */}
           <h2 style={{ marginBottom: '16px' }}>Answer, executed in a signed sandbox</h2>
           {/* R9 P1 (#672): the run's open question, as above. */}
