@@ -3,11 +3,12 @@
 // THE RULE (contract v5 Part 1, 1A-1E; addendum 1; addendum 2; addendum 3, sections 1 and 3).
 // - 1A: once docked, only the bar (`data-part="composer-bar"`, inside the composer) holds the box and its arrow; the
 //   where-line, the first-time line and the account line follow it in the composer, outside it. The box empties at
-//   the dock and once a docked send's run has started; a question the page's guard holds keeps its text. During any
+//   the dock (since UX-2 P3b-1 leg H, the first send that starts a run: plan v3, dock at send) and once a docked
+//   send's run has started; a question the page's guard holds keeps its text. During any
 //   run, docked or not, Standard or Sandbox, the box and its arrow are disabled (addendum 3, 3.1). A docked send the
 //   route refuses puts the refused question back into the box if it is still empty, and "Don't allow" records the
 //   refused question (addendum 3, ruling 1).
-// - 1B/1C: the golden order of the composer's parts in each state; the chips before the first answer only; no
+// - 1B/1C: the golden order of the composer's parts in each state; the chips before the first send only (leg H); no
 //   <details> or <summary>; on the home page signed out "sign in" once and one control that signs in, in the sign-in
 //   line; on /ask none.
 // - 1B.2: the first-time line is one <p>; signed out, its first sentence only (O4 = A).
@@ -417,7 +418,7 @@ for (const [mount, mode] of [['home', 'standard'], ['ask', 'notebook']] as const
 }
 
 for (const [mount, mode] of [['home', 'standard'], ['ask', 'standard'], ['ask', 'notebook']] as const) {
-  test(`P3b-1 criterion 1 (1A; addendum 3, 3.1-3.2), ${mount === 'home' ? 'the home page' : '/ask'} ${mode === 'notebook' ? 'Sandbox' : 'Standard'}: the box empties at the dock and once a docked send's run has started; it and its arrow are disabled during the first run and the docked run, and enabled when each ends`, async () => {
+  test(`P3b-1 criterion 1 (1A; addendum 3, 3.1-3.2; leg H, dock at send), ${mount === 'home' ? 'the home page' : '/ask'} ${mode === 'notebook' ? 'Sandbox' : 'Standard'}: the box docks and empties at the first send, and empties once a docked send's run has started; it and its arrow are disabled during the first run and the docked run, and enabled when each ends`, async () => {
     if (mount === 'home') ANON(); else SIGNED_IN();
     answers();
     await consentWith(allStates('on'));
@@ -426,12 +427,13 @@ for (const [mount, mode] of [['home', 'standard'], ['ask', 'standard'], ['ask', 
     const second = 'Q-second: and how many 311 complaints in Brooklyn?';
     await askFromBox(page, first);
     assert.equal(queries.length, 1, 'premise: the first question was sent');
-    assert.equal(isDocked(page), false, 'premise: not docked during the first run');
-    assert.equal(boxOf(page).props.disabled, true, 'the first, undocked box is not disabled during its run');
-    assert.equal(arrowOf(page).props.disabled, true, 'the first, undocked box\'s arrow is not disabled during its run');
+    assert.equal(isDocked(page), true, 'not docked during the first run: leg H docks the box at the send');
+    assert.equal(valueOf(page), '', `the box still holds the first question once its run started: "${valueOf(page)}"`);
+    assert.equal(boxOf(page).props.disabled, true, 'the docked box is not disabled during the first run');
+    assert.equal(arrowOf(page).props.disabled, true, 'the docked arrow is not disabled during the first run');
     await finishRun(page, mode);
     assert.equal(isDocked(page), true, 'premise: docked after the first answer');
-    assert.equal(valueOf(page), '', `the box still holds the first question after the dock: "${valueOf(page)}"`);
+    assert.equal(valueOf(page), '', `the box still holds the first question after the answer: "${valueOf(page)}"`);
     assert.equal(boxOf(page).props.placeholder, X23, 'the docked placeholder');
     assert.notEqual(boxOf(page).props.disabled, true, 'the docked box is disabled after the first run ended');
 
@@ -549,7 +551,7 @@ test('P3b-1 criterion 1 (addendum 3, ruling 1, fixture 1 in Sandbox): on /ask, a
 
 // --- Criterion 2 (1B, 1C) and criterion 5's one sign-in ask: the golden order, state by state ------------------------
 
-test('P3b-1 criterion 2 (1B, 1C) and criterion 5, the home page signed out: the golden order in each state; the chips before the first answer only; no <details> or <summary>; "sign in" once and one control that signs in, inside the sign-in line', async () => {
+test('P3b-1 criterion 2 (1B, 1C) and criterion 5, the home page signed out (leg H: docked from the first send): the golden order in each state; the chips before the first send only; no <details> or <summary>; "sign in" once and one control that signs in, inside the sign-in line', async () => {
   ANON();
   answers();
   const page = await mountPage(HOME());
@@ -575,7 +577,7 @@ test('P3b-1 criterion 2 (1B, 1C) and criterion 5, the home page signed out: the 
   await page.click(page.button('Allow'));
   await settle(page, 200);
   assert.equal(queries.length, 1, 'premise: after Allow the question was sent');
-  await check('during the first run', ['box', 'chip-row', 'where-this-question-goes', 'account-line', 'sign-in-line']);
+  await check('during the first run', ['composer-bar', 'box', 'where-this-question-goes', 'first-time-line', 'account-line', 'sign-in-line']);
   await finishComparison(page);
   await check('docked after the first answer', ['composer-bar', 'box', 'where-this-question-goes', 'first-time-line', 'account-line', 'sign-in-line']);
   await askFromBox(page, 'Q-second: and in Brooklyn?');
@@ -584,7 +586,7 @@ test('P3b-1 criterion 2 (1B, 1C) and criterion 5, the home page signed out: the 
   assert.equal(states.length, 5);
 });
 
-test('P3b-1 criterion 2 (1B, 1C) and criterion 5, /ask signed in (Sandbox): the golden order in each state, the gear after the lines; the chips before the first answer only; no <details> or <summary>; no "sign in" and no control that signs in', async () => {
+test('P3b-1 criterion 2 (1B, 1C) and criterion 5, /ask signed in (Sandbox; leg H: docked from the first send): the golden order in each state, the gear after the lines; the chips before the first send only; no <details> or <summary>; no "sign in" and no control that signs in', async () => {
   SIGNED_IN();
   answers();
   const page = await mountPage(ASK('notebook'));
@@ -605,7 +607,7 @@ test('P3b-1 criterion 2 (1B, 1C) and criterion 5, /ask signed in (Sandbox): the 
   await page.click(page.button('Allow'));
   await settle(page, 200);
   assert.deepEqual(queries.map((q) => q.path), ['/api/query-notebook'], 'premise: after Allow the question ran in the sandbox');
-  await check('during the first run', ['box', 'chip-row', 'where-this-question-goes', 'account-line', 'gear']);
+  await check('during the first run', ['composer-bar', 'box', 'where-this-question-goes', 'first-time-line', 'account-line', 'gear']);
   await finishNotebook(page);
   await check('docked after the first answer', ['composer-bar', 'box', 'where-this-question-goes', 'first-time-line', 'account-line', 'gear']);
   await askFromBox(page, 'Q-second: and in Queens?');

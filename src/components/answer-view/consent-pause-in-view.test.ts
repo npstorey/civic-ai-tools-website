@@ -17,8 +17,11 @@
 // box above the viewport when a pause arrives (its top at -397 px at 390 px
 // wide, -289 px at 1280 px), so a prompt under the question box would be out
 // of view; the prompt sits at the top of the answer area, the part of the page
-// the reader is looking at, right after the question box in the page's order.
-// On /explore the question row stays in view, and the prompt sits under it.
+// the reader is looking at. Since UX-2 P3b-1 leg H the box docks at the send
+// (plan v3, #729 6825049451): on the home page and /ask the prompt sits in the
+// answer area, before the run's steps and ahead of the docked box, which follows
+// the results. On /explore the question row stays in view, and the prompt sits
+// under it.
 //
 // AMENDMENT 3 (the owner's preview read, the seat's ruling). At 393 x 852 the
 // page's own scroll to the step card took the prompt 237 px above the
@@ -283,6 +286,21 @@ function before(surface: Surface, a: HostElement, b: HostElement): boolean {
 /** The question box as the last render has it (an element read before a re-render is not in it). */
 const questionBox = (surface: Surface) => surface.elements().find((el) => el.type === 'textarea' && el.props['aria-label'] === 'Ask a question about open data')!;
 
+/**
+ * Leg H (dock at send): the prompt sits in the answer area (the results block under the run's heading), before the
+ * run's steps, and ahead of the docked box, which follows the results.
+ */
+function assertPromptInAnswerArea(surface: Surface, prompt: HostElement, heading: string, where: string): void {
+  const h2 = surface.elements().find((el) => el.type === 'h2' && textOf(el) === heading);
+  assert.ok(h2, `${where}: premise: the run's heading "${heading}"`);
+  const block = surface.elements().find((el) => (Array.isArray(el.props.children) ? el.props.children : [el.props.children]).includes(h2));
+  assert.ok(block && [...within(block.props.children)].includes(prompt), `${where}: the prompt is not in the answer area`);
+  assert.ok(before(surface, prompt, stepCards(surface)[0]), `${where}: the prompt does not come before the run's steps`);
+  const composer = surface.elements().find((el) => el.props['data-part'] === 'composer');
+  assert.ok(composer && String(composer.props.className ?? '').split(/\s+/).includes('composer--docked'), `${where}: the composer is not docked while the run streams (leg H: it docks at the send)`);
+  assert.ok(before(surface, prompt, questionBox(surface)), `${where}: the prompt does not come ahead of the docked box`);
+}
+
 const describeScrolls = (made: Scroll[]) => JSON.stringify(made.map((m) => ({ part: m.element.props['data-part'], options: m.options })));
 
 /** Amendment 3: the prompt was already in the viewport when the pause arrived, so the page did not move at all. */
@@ -331,7 +349,7 @@ function rowCopy(surface: Surface): string {
 // --- Criterion 1: the home page ----------------------------------------------------------------------
 
 for (const [reduced, out] of [[false, false], [false, true], [true, true]] as const) {
-  test(`criterion 1, the home page (a comparison surface)${reduced ? ', reduced motion' : ''}: ${out ? `the prompt above the viewport (-237 px at 393 x 852, the owner's read) is scrolled into view (${reduced ? 'auto' : 'smooth'}), never the card` : 'the prompt in the viewport: nothing scrolls'}; the compact prompt offers both buttons until a decision`, async () => {
+  test(`criterion 1, the home page (a comparison surface)${reduced ? ', reduced motion' : ''}: ${out ? `the prompt above the viewport (-237 px at 393 x 852, the owner's read) is scrolled into view (${reduced ? 'auto' : 'smooth'}), never the card` : 'the prompt in the viewport: nothing scrolls'}; the compact prompt offers both buttons until a decision; leg H (dock at send): the prompt sits in the answer area, before the run's steps and ahead of the docked box`, async () => {
     ANON();
     answers();
     reducedMotion = reduced;
@@ -356,9 +374,8 @@ for (const [reduced, out] of [[false, false], [false, true], [true, true]] as co
     if (reduced) assert.ok(mediaQueries.includes('(prefers-reduced-motion: reduce)'), 'the reduced-motion query was never read');
     const prompt = onePrompt(p, 'the home page');
     assertPrompt(prompt, 'the home page');
-    // Near the question box: after it in the page, and before the run's steps.
-    assert.ok(before(p, questionBox(p), prompt), 'the prompt comes before the question box');
-    assert.ok(before(p, prompt, stepCards(p)[0]), 'the prompt comes after the run\'s step card');
+    // Leg H: in the answer area, before the run's steps, ahead of the docked box.
+    assertPromptInAnswerArea(p, prompt, 'Results', 'the home page');
     // The source row's own copy (the Settings overlay's row since UX-2 P4b) is byte-identical (the card is the only addition).
     assert.equal(rowCopy(p), rowBefore, 'the row\'s copy changed when the pause arrived');
     // A decision from the prompt posts the pause's own key; then the prompt goes and the card shows the outcome.
@@ -374,7 +391,7 @@ for (const [reduced, out] of [[false, false], [false, true], [true, true]] as co
 
 // --- Criterion 1: /ask, notebook mode -------------------------------------------------------------------
 
-test('criterion 1, /ask (the executed run): a holding pause shows the prompt, in view, with no scroll; a later line of the run (the hold over) takes the prompt away', async () => {
+test('criterion 1, /ask (the executed run): a holding pause shows the prompt, in view, with no scroll; leg H (dock at send): it sits in the answer area, before the run\'s steps and ahead of the docked box; a later line of the run (the hold over) takes the prompt away', async () => {
   SIGNED_IN_DB();
   answers();
   await consentWith({ 'boston-opencontext': 'ask-first' });
@@ -393,7 +410,7 @@ test('criterion 1, /ask (the executed run): a holding pause shows the prompt, in
   assertNoScroll(from, '/ask');
   const prompt = onePrompt(p, '/ask');
   assertPrompt(prompt, '/ask');
-  assert.ok(before(p, questionBox(p), prompt) && before(p, prompt, stepCards(p)[0]), '/ask: the prompt is not between the question box and the run\'s steps');
+  assertPromptInAnswerArea(p, prompt, 'Answer, executed in a signed sandbox', '/ask');
   stream.push({ type: 'phase_a_progress', ...LOAD_DONE });
   await settle(p);
   assert.equal(prompts(p).length, 0, `the prompt stays after the run moved past the pause: ${summary(p)}`);

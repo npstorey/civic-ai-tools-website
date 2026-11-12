@@ -30,6 +30,7 @@ import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
+import ts from 'typescript';
 
 const HERE = path.dirname(fileURLToPath(import.meta.url));
 const ROOT = path.resolve(HERE, '../..');
@@ -40,6 +41,21 @@ function read(relative: string): string {
   } catch {
     return '';
   }
+}
+
+/** The prop names on a page's one `<QuerySurface>`, read with the TypeScript compiler's parser (`...` for a spread). */
+function surfaceProps(relative: string): string[] {
+  const sf = ts.createSourceFile(relative, read(relative), ts.ScriptTarget.Latest, true, ts.ScriptKind.TSX);
+  const found: string[][] = [];
+  const visit = (n: ts.Node) => {
+    if ((ts.isJsxOpeningElement(n) || ts.isJsxSelfClosingElement(n)) && n.tagName.getText(sf) === 'QuerySurface') {
+      found.push(n.attributes.properties.map((a) => (ts.isJsxAttribute(a) ? a.name.getText(sf) : '...')));
+    }
+    ts.forEachChild(n, visit);
+  };
+  visit(sf);
+  assert.equal(found.length, 1, `${relative} should mount one <QuerySurface>, found ${found.length}`);
+  return found[0];
 }
 
 function at(source: string, needle: string, where: string): number {
@@ -104,13 +120,20 @@ test('#547 C3: outside the provider, and with nothing passed, an instance runs n
   assert.match(provider, /offered = true/, 'a provider passed nothing must offer notebook mode');
 });
 
-test('#547 C3: both mounts render the same form, and /ask keeps its notebook default', () => {
+test('#547 C3: both mounts render the same form, and /ask keeps its notebook default; the home page\'s mount in leg H\'s shape (its h1 handed over as heading)', () => {
   const ask = read('src/app/(app)/ask/page.tsx');
   const home = read('src/app/(marketing)/page.tsx');
   at(ask, '<QuerySurface', 'ask/page.tsx');
   at(ask, 'defaultMode="notebook"', 'ask/page.tsx');
-  // The home page passes one prop of its own (UX pass row 7: Advanced options, signed out); the form is the same.
-  at(home, '<QuerySurface advancedOptions="hidden-signed-out">', '(marketing)/page.tsx');
+  // The home page passes one prop of its own (UX pass row 7: Advanced options, signed out), and since UX-2 P3b-1 leg H
+  // its framing in the mount's shape (plan v3: its h1 handed over as `heading`, the wrapper's spacing as
+  // `framingStyle`); the form is the same.
+  at(home, 'advancedOptions="hidden-signed-out"', '(marketing)/page.tsx');
+  assert.deepEqual(
+    [...surfaceProps('src/app/(marketing)/page.tsx')].sort(),
+    ['advancedOptions', 'framingStyle', 'heading'],
+    'the home page\'s <QuerySurface> props: Advanced options and its framing (leg H), nothing that changes the form',
+  );
   const surface = read('src/components/shared/QuerySurface.tsx');
   at(surface, '<QueryForm', 'QuerySurface.tsx');
 });
