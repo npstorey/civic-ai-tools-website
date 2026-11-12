@@ -11,6 +11,9 @@
 // - Leg H: the reader's question shows once, in `data-part="question-bubble"`, the first child of the results
 //   container, after the page's `h1` (visually hidden from the send, `ui-visually-hidden`) with nothing between them;
 //   the italic quote (`McpResponseDisplay`) is left out on these two mounts and kept on `/explore`'s.
+// - The seat's rulings (#729 6838758130): a Standard run's route error renders inside the results container, after the
+//   bubble and the heading; the first-time line shows from the first send, but after a first run that ends with no
+//   answer (refused or errored) it is hidden until the first answer arrives, then shown.
 // - The first-time line (X24, `data-part="first-time-line"`, one <p>: contract v5 1B.2, O4 = A) renders once under
 //   the docked box, in Q5 = B's form for the reader's sign-in state (signed out, its first sentence only), until the second question of the session: the
 //   second submit that starts an analysis and so replaces the answer. Three submits do (each resets the shown
@@ -501,7 +504,7 @@ test('criterion 1, the home page: after the second question, a remount in the sa
   assert.equal(firstTimeLines(fresh).length, 1, 'a new session shows no first-time line after its first answer');
 });
 
-test('criterion 6, leg H (dock at send; reverses "a refused first send does not dock"): a first send the route refuses (consent_required) docks the composer, the question goes back into the docked box, and the card opens in the docked bar before the box, with the first-time line shown; after Allow the question runs, the composer stays docked, and the resend is not counted as a second question', async () => {
+test('criterion 6, leg H (dock at send; reverses "a refused first send does not dock"): a first send the route refuses (consent_required) docks the composer, the question goes back into the docked box, and the card opens in the docked bar before the box; the first-time line is hidden until the first answer (the seat, #729 6838758130); after Allow the question runs, the composer stays docked, the resend is not counted as a second question, and the line shows at the answer', async () => {
   ANON();
   const net = answers();
   // The race the guard cannot see (consent-surfaces-driven.test.ts, criterion 2): the page reads the consent as in
@@ -529,7 +532,7 @@ test('criterion 6, leg H (dock at send; reverses "a refused first send does not 
     const card = surfaceParts(page, 'consent-card');
     assert.ok(bar.length === 1 && card.length === 1 && within(bar[0]).includes(card[0]), 'the card is not in the docked bar (O7 = A)');
     assert.ok(before(page, card[0], boxOf(page)), 'the card is not before the docked box');
-    assert.equal(firstTimeLines(page).length, 1, 'no first-time line under the docked box after a refused first send');
+    assert.equal(firstTimeLines(page).length, 0, 'the first-time line shows after a refused first send, before any answer (#729 6838758130)');
 
     await page.click(page.button('Allow'));
     await settle(page);
@@ -619,7 +622,7 @@ test('the second question, /ask standard: running the demoted comparison replace
 
 // --- The dock condition, leg H: a first run that ends in an error has started, so it docks -----------------------------
 
-test('criterion 6, leg H (dock at send; reverses relay 57\'s "an errored first run does not dock"), the home page: a first run the route answers with an error docks the composer and shows the first-time line; the second question, from the docked box, takes the line away; the composer stays docked through a run whose panels each error and through the next answer', async () => {
+test('criterion 6, leg H (dock at send; reverses relay 57\'s "an errored first run does not dock"), the home page: a first run the route answers with an error docks the composer; the first-time line is hidden until the first answer (the seat, #729 6838758130), through a second run whose panels each error, and shows at the first answer; the composer stays docked throughout', async () => {
   ANON();
   answers();
   await consentWith();
@@ -631,22 +634,22 @@ test('criterion 6, leg H (dock at send; reverses relay 57\'s "an errored first r
   assert.equal(streams.length, 0, 'premise: the route failed it');
   assert.ok(resultsBlock(page, 'Results'), 'premise: the results block renders the error');
   assert.equal(isDocked(page), true, 'a first run that ended in an error left the composer undocked: it started, so it docks at the send');
-  assert.equal(firstTimeLines(page).length, 1, 'no first-time line under the docked box after a first run that ended in an error');
+  assert.equal(firstTimeLines(page).length, 0, 'the first-time line shows after a first run that ended in an error, before any answer (#729 6838758130)');
 
   // Each panel errors in the stream (a model failure): complete, with no answer.
   nextAnswers.push((_path, body) => sse((body.mcpOnly ? ['withMcp'] : ['withoutMcp', 'withMcp']).map((panel) => ({ type: 'error', panel, message: 'The model could not answer.', code: 'generic' }))));
   await askFromBox(page, 'And in Brooklyn?');
   assert.equal(queries.length, 2, 'premise: the second question reached the route');
   assert.equal(isDocked(page), true, 'a run whose panels each ended in an error undocked the composer');
-  assert.equal(firstTimeLines(page).length, 0, 'the second question, sent from the docked box, did not take the first-time line away');
+  assert.equal(firstTimeLines(page).length, 0, 'the first-time line shows after a second run that ended in an error, before any answer');
 
   await askFromBox(page, 'And in Queens?');
   await finishComparison(page);
   assert.equal(isDocked(page), true, 'an answered run after the errors left the composer undocked');
-  assert.equal(firstTimeLines(page).length, 0, 'the first-time line came back after the answer');
+  assert.equal(firstTimeLines(page).length, 1, 'no first-time line at the first answer, after runs that ended with no answer: a question sent before any answer was counted as the second');
 });
 
-test('criterion 6, leg H (dock at send; reverses relay 57\'s "an errored first run does not dock"), /ask signed in: a first executed run that ends in an error docks the composer and shows the first-time line', async () => {
+test('criterion 6, leg H (dock at send; reverses relay 57\'s "an errored first run does not dock"), /ask signed in: a first executed run that ends in an error docks the composer; the first-time line is hidden until the first answer (#729 6838758130)', async () => {
   SIGNED_IN();
   answers();
   await consentWith();
@@ -657,7 +660,7 @@ test('criterion 6, leg H (dock at send; reverses relay 57\'s "an errored first r
   assert.ok(resultsBlock(page, 'Answer, executed in a signed sandbox'), 'premise: the results block renders the failed run');
   assert.equal(isDocked(page), true, 'a first executed run that ended in an error left the composer undocked: it started, so it docks at the send');
   assert.ok(before(page, resultsBlock(page, 'Answer, executed in a signed sandbox'), composerOf(page)), 'the docked composer is not after the failed run');
-  assert.equal(firstTimeLines(page).length, 1, 'no first-time line under the docked box after a first executed run that ended in an error');
+  assert.equal(firstTimeLines(page).length, 0, 'the first-time line shows after a first executed run that ended in an error, before any answer (#729 6838758130)');
 });
 
 // --- Criterion 1: the slots' order relative to the box ------------------------------------------------------------
@@ -992,4 +995,59 @@ test('leg H criterion 6, GUARD (green on the base by design), the home page: a s
   assert.equal(isDocked(page), false, 'a send the guard holds docked the composer');
   assert.equal(String(boxOf(page).props.value ?? ''), q, 'the box lost the question the guard holds');
   assert.equal(surfaceParts(page, BUBBLE).length, 0, 'a bubble for a question the guard holds');
+});
+
+// === Leg H, the seat's rulings (#729 6838758130): the route error box's place, and the first-time line ==============
+
+/** The Standard run's error box (QuerySurface): the box the stream hook's reader-facing error renders in. */
+const errorBoxes = (surface: Surface): HostElement[] =>
+  surface.elements().filter((el) => el.type === 'div' && (el.props.style as { border?: string } | undefined)?.border === '1px solid var(--error)');
+
+for (const m of [MOUNTS[0], MOUNTS[1]]) {
+  test(`leg H (the seat, #729 6838758130), ${m.name}: a first run the route answers with an error renders the error inside the results container, after the bubble and the heading`, async () => {
+    const page = await mountFor(m);
+    nextAnswers.push(() => new Response('Service unavailable', { status: 503 }));
+    const q = `Q-error (${m.mount}): what was the median household income in the Bronx?`;
+    await askFromBox(page, q);
+    assert.equal(streams.length, 0, 'premise: the route failed the run');
+    const boxes = errorBoxes(page);
+    assert.equal(boxes.length, 1, `premise: one error box, found ${boxes.length}`);
+    const bubbles = surfaceParts(page, BUBBLE);
+    assert.equal(bubbles.length, 1, `data-part="${BUBBLE}" after a run the route failed: ${bubbles.length}`);
+    const block = resultsBlock(page, 'Results');
+    const h2 = childrenOf(block).find((el) => el.type === 'h2')!;
+    assert.ok(within(block).includes(boxes[0]), 'the error box is not inside the results container');
+    assert.ok(before(page, bubbles[0], h2) && before(page, h2, boxes[0]), 'not the bubble, then the heading, then the error box');
+  });
+}
+
+test('leg H, the first-time line (the seat, #729 6838758130), state 1, the home page: it shows under the docked box from the first send, while the first run streams', async () => {
+  const page = await mountFor(MOUNTS[0]);
+  await askFromBox(page, 'Q-line-1: what was the median household income in the Bronx?');
+  await midStream(page, 'standard');
+  assert.equal(firstTimeLines(page).length, 1, 'no first-time line while the first run streams');
+  assert.equal(isDocked(page), true, 'the first-time line shows, but not under a docked box');
+});
+
+test('leg H, the first-time line (the seat, #729 6838758130), state 2, GUARD (green on the base by construction: the base docks only at an answer, so it shows no line before one): after a first run that ends with no answer (the route\'s error), and through a second run whose panels each error, it is hidden (the refused first send is read in the dock condition test above)', async () => {
+  const page = await mountFor(MOUNTS[0]);
+  nextAnswers.push(() => new Response('Service unavailable', { status: 503 }));
+  await askFromBox(page, 'Q-line-2: what was the median household income in the Bronx?');
+  assert.equal(streams.length, 0, 'premise: the route failed the run');
+  assert.equal(firstTimeLines(page).length, 0, 'the first-time line shows after a first run that ended in an error');
+  nextAnswers.push((_path, body) => sse((body.mcpOnly ? ['withMcp'] : ['withoutMcp', 'withMcp']).map((panel) => ({ type: 'error', panel, message: 'The model could not answer.', code: 'generic' }))));
+  await askFromBox(page, 'Q-line-2b: and in Brooklyn?');
+  assert.equal(queries.length, 2, 'premise: the second question reached the route');
+  assert.equal(firstTimeLines(page).length, 0, 'the first-time line shows after a second run that ended with no answer');
+});
+
+test('leg H, the first-time line (the seat, #729 6838758130), state 3, GUARD (green on the base by construction: its second send is made undocked, so it is not counted): after a first run that ends with no answer, the line shows at the first answer', async () => {
+  const page = await mountFor(MOUNTS[0]);
+  nextAnswers.push(() => new Response('Service unavailable', { status: 503 }));
+  await askFromBox(page, 'Q-line-3: what was the median household income in the Bronx?');
+  assert.equal(streams.length, 0, 'premise: the route failed the run');
+  await askFromBox(page, 'Q-line-3b: and in Brooklyn?');
+  await finishComparison(page);
+  assert.equal(isDocked(page), true, 'premise: docked after the answer');
+  assert.equal(firstTimeLines(page).length, 1, 'no first-time line at the first answer after a run that ended with no answer');
 });
