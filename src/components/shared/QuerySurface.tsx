@@ -14,19 +14,24 @@
  * framing (hero copy, calls to action, positioning) stays with the page; only
  * the form and its outputs live here.
  *
- * THE DOCK (UX-2 P3b-1; the seat's rulings on leg A's stop, relay 57). The
- * first time a run on this surface finishes with an answer — standard: every
- * panel the run has is complete and one has content; notebook: the run ended
- * with a notebook — the form moves below the results and docks there (sticky
- * at the viewport's bottom, `composer--docked`), and stays docked for the
- * surface's life. A run the route refused, or one that ended in an error,
- * finished with no answer and does not dock it; nor does a first run still
- * under way. The form is one keyed child that changes place, so it moves
- * rather than remounts. Docked, the first-time line (X24) shows under the box
- * until the session's second question: the first submit made while an answer
- * is shown — the box (a chip only fills it), "Continue this analysis", or the
- * demoted comparison's run, each of which replaces the answer. That is kept in
- * session storage, so a remount in the same session does not show it again.
+ * THE DOCK (UX-2 P3b-1; leg H, the owner's design change, dock at send: plan
+ * v3, #729 6825049451 and 6835240316). The first send that starts a run moves
+ * the form below the results and docks it there (sticky at the viewport's
+ * bottom, `composer--docked`), for the surface's life: mid-stream, after a
+ * refused or errored run, and after the answer. A send the consent guard holds
+ * starts no run (the guard holds it before `onSubmit`), so it does not dock.
+ * The form is one keyed child that changes place, so it moves rather than
+ * remounts.
+ *
+ * THE FIRST-TIME LINE (X24; the seat's ruling, #729 6838758130). Docked, it
+ * shows under the box from the first send, except after a run that ended with
+ * no answer (refused or errored) and before any answer: then it is hidden until
+ * the first answer arrives. It goes at the session's second question: a submit
+ * made once an answer has arrived on this surface — the box (a chip only fills
+ * it), "Continue this analysis", or the demoted comparison's run. A submit made
+ * before any answer (the first send, a retry after a failed run, the form's
+ * resend after Allow) is not counted. That is kept in session storage, so a
+ * remount in the same session does not show it again.
  */
 
 import { useState, useRef } from 'react';
@@ -120,22 +125,36 @@ export default function QuerySurface({
   // executed). The next submit picks the toggle up.
   const answerFirstActive = answerFirstConfigured && streaming.mcpOnly;
 
-  // The dock (UX-2 P3b-1): the first run on this surface that finishes with an answer docks the form, for good.
+  // The dock (UX-2 P3b-1 leg H): the first send that starts a run docks the form, for good (`handleSubmit`).
+  const [docked, setDocked] = useState(false);
+  // The run on show has finished with an answer — standard: every panel the run has is complete and one has content;
+  // notebook: the run ended with a notebook. `answeredOnce` latches the first time it does on this surface.
   const answered = lastMode === 'standard'
     ? !streaming.isLoading
       && isComparisonRunComplete(streaming.mcpOnly, streaming.withoutMcp.isComplete, streaming.withMcp.isComplete)
       && (streaming.withMcp.content !== '' || streaming.withoutMcp.content !== '')
     : !notebook.state.isLoading && notebook.state.notebook != null;
-  const [docked, setDocked] = useState(false);
-  if (answered && !docked) {
+  const running = streaming.isLoading || notebook.state.isLoading;
+  const [answeredOnce, setAnsweredOnce] = useState(false);
+  // A run that ended with no answer (refused or errored) before any answer: the first-time line waits for one.
+  const [endedWithoutAnswer, setEndedWithoutAnswer] = useState(false);
+  if (answered && !answeredOnce) {
     // The "adjust state when a value changes" render-time pattern.
-    setDocked(true);
+    setAnsweredOnce(true);
+  }
+  if (docked && !running && !answered && !answeredOnce && !endedWithoutAnswer) {
+    setEndedWithoutAnswer(true);
   }
   const [firstTimeLineDone, setFirstTimeLineDone] = useSessionChoice(FIRST_TIME_LINE_STORAGE_KEY, parseFirstTimeLineDone);
-  /** A submit that replaces a shown answer is the session's second question: the first-time line has done its job. */
+  /**
+   * The session's second question is a submit made once an answer has arrived on this surface: the first-time line
+   * has done its job. Before any answer nothing is counted, so the line still shows at the first answer
+   * (composer-dock.test.ts: the refused first send, Allow's resend, and the errored first runs fail if it is).
+   */
   const countQuestion = () => {
-    if (docked) setFirstTimeLineDone('done');
+    if (answeredOnce) setFirstTimeLineDone('done');
   };
+  const showFirstTimeLine = docked && firstTimeLineDone !== 'done' && (answeredOnce || !endedWithoutAnswer);
 
   // Extract display name from model ID (e.g., "anthropic/claude-sonnet-4" -> "Claude Sonnet 4")
   const getModelDisplayName = (modelId: string) => {
@@ -154,6 +173,8 @@ export default function QuerySurface({
     // deployment's city and every surface downstream said so.
     const effectivePortal = portal || defaultPortal;
     countQuestion();
+    // Dock at send (leg H): set after the count, so a send is read against the state it was made in.
+    setDocked(true);
     setUsedModel(model);
     setLastQuery(query);
     setLastPortal(effectivePortal);
@@ -228,7 +249,7 @@ export default function QuerySurface({
           : undefined
       }
       docked={docked}
-      showFirstTimeLine={docked && firstTimeLineDone !== 'done'}
+      showFirstTimeLine={showFirstTimeLine}
     />
   );
 
@@ -303,7 +324,7 @@ export default function QuerySurface({
         </div>
       )}
 
-      {/* Query Form, docked below the results once a run has finished with an answer */}
+      {/* Query Form, docked below the results from the first send that starts a run */}
       {docked && form}
     </>
   );
