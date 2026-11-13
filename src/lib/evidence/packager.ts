@@ -141,7 +141,7 @@ export interface ToolCallInput {
   failed?: boolean;
   /**
    * Why, when `failed` is true: the loop's closed set (`timeout`,
-   * `unavailable`, `not_configured`, `not_offered`, `unknown`). A string here, not that
+   * `unavailable`, `not_configured`, `not_offered`, `unknown`, `base_changed`). A string here, not that
    * union, because the publish body is an API any producer can post to.
    */
   failureKind?: string;

@@ -57,7 +57,10 @@ import { deriveOperationType, isTool, toolSpanNames, upstreamToolName } from '..
 import type { ToolFailureKind } from '../notebook-author/tool-to-cell.ts';
 import { PortalLockedCallError, portalOutsideLock } from '../portal-lock.ts';
 import { injectPackFilter, packCallOutsideFilter, packFilterOf, PackFilterRefusedError } from '../mcp/pack-filter.ts';
-import type { BaseCheck } from '../mcp/base-check.ts';
+import { BaseChangedError, createBaseCheck, type BaseCheck, type BaseReader } from '../mcp/base-check.ts';
+
+/** The base check's read: the client's `tools/list` read, loaded when a pack call first needs it. */
+const readBase: BaseReader = async (baseSourceId) => (await import('../mcp/client.ts')).readServerTools(baseSourceId);
 import type { LoadOutcome } from '@typedstandards/civic-typed-harness';
 
 export interface TraceContext {
@@ -293,8 +296,10 @@ export interface ToolLoopOptions {
    */
   loadStep?: LoadStep;
   /**
-   * S2-B P3R, tree 8: the base check's option, typed so the red tree's tests
-   * type-check. The red tree reads it nowhere: no pack call is checked.
+   * The base check this run applies before each pack call (S2-B P3R,
+   * `../mcp/base-check.ts`). Omitted, the core makes its own for the run, so
+   * every caller's pack calls are checked; a test passes one to inject the
+   * read or the clock. Never passed to skip the check.
    */
   checkBase?: BaseCheck;
   /** Label for this loop's operator log lines. */
@@ -450,6 +455,9 @@ const UNRUN_TOOL_CALL_NOTE =
  * the notebook, "the source could not be reached" is the same fact either way.
  */
 function toolFailureKindOf(error: unknown): ToolFailureKind {
+  // S2-B P3R: a pack call whose base did not match its pins, recognised by
+  // type before any classification: nothing was sent (bundle revision 4).
+  if (error instanceof BaseChangedError) return 'base_changed';
   switch (classifyStreamError(error)) {
     case 'mcp_timeout':
       return 'timeout';
@@ -846,6 +854,7 @@ export async function runToolLoop(options: ToolLoopOptions): Promise<ToolLoopRes
     onEvent,
     trace,
     loadStep,
+    checkBase = createBaseCheck({ read: readBase }),
     logContext = 'model-loop',
   } = options;
 
@@ -1132,6 +1141,10 @@ export async function runToolLoop(options: ToolLoopOptions): Promise<ToolLoopRes
         if (argumentsMalformed) throw malformedToolArgumentsError();
         if (lockRefusal) throw lockRefusal;
         if (packRefusal) throw packRefusal;
+        // The base check (S2-B P3R): a pack's call is sent only after its base
+        // matched a pin, read at most once per five minutes in this run. Inside
+        // the timed region, so a refused call's span is timed to its refusal.
+        if (pack && !argumentsMalformed) await checkBase(pack);
 
         const result = await boundToolCall(executeToolCall(name, args), name, toolTimeoutMs);
         const toolDuration = Date.now() - toolStartTime;
@@ -1196,7 +1209,7 @@ export async function runToolLoop(options: ToolLoopOptions): Promise<ToolLoopRes
         // Do not add a second name, and do not reintroduce the raw text —
         // if a consumer needs more than the `ToolFailureKind` values
         // (`TOOL_FAILURE_KINDS`: `timeout`, `unavailable`, `not_configured`,
-        // `not_offered`, `unknown`), the vocabulary widens rather than the
+        // `not_offered`, `unknown`, `base_changed`), the vocabulary widens rather than the
         // span carrying prose.
         // `tool.duration_ms` is the SAME attribute name the success path
         // ends with at `:857` — one name for one measurement, so the PROV-O

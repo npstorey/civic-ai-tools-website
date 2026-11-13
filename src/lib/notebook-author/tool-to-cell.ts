@@ -44,6 +44,9 @@ function byUpstreamName<T extends { name?: string }>(call: T): T {
  *   - `not_offered`     — the source is configured here, but this run was not
  *                         offered it, so nothing was sent (R6 W1).
  *   - `unknown`         — it failed and we cannot honestly say more.
+ *   - `base_changed`    — a pack's call, not sent because the server its
+ *                         requests go through did not match the pack's pins
+ *                         (S2-B P3R, the base check; bundle revision 4).
  *
  * `unknown` is a real member, not a placeholder: claiming a specific cause we
  * did not measure is exactly the false precision docs/design-principles.md
@@ -52,7 +55,7 @@ function byUpstreamName<T extends { name?: string }>(call: T): T {
  * has no branch for it — so such a call lands in `unknown` rather than being
  * asserted as a refusal.
  */
-export const TOOL_FAILURE_KINDS = ['timeout', 'unavailable', 'not_configured', 'not_offered', 'unknown'] as const;
+export const TOOL_FAILURE_KINDS = ['timeout', 'unavailable', 'not_configured', 'not_offered', 'unknown', 'base_changed'] as const;
 
 export type ToolFailureKind = (typeof TOOL_FAILURE_KINDS)[number];
 
@@ -805,16 +808,21 @@ function renderOpenContextQueryCell(
  * reader through this path — the same discipline `friendlyStreamError()` and
  * `notebookExecutionErrorMessage()` enforce in src/lib/streaming.ts, applied
  * to the notebook surface. "Data source", not "MCP server"
- * (design-principles.md Principle 9).
+ * (design-principles.md Principle 9); "server" in the `base_changed` entry is
+ * R5's ruled word for the base's server (the owner's D1, OA-790).
  */
 export const FAILURE_REASON: Record<ToolFailureKind, string> = {
   timeout: 'The data source did not respond in time, so the request returned no data.',
-  unavailable: 'The data source could not be reached, so the request returned no data.',
+  unavailable: 'The data source could not be reached or could not answer, so the request returned no data.',
   not_configured: 'No live data source was configured for this request, so it returned no data.',
   // Not an empty result: nothing was asked. Not "turned off": on a replay the
   // reader turned nothing off (R6 W1).
-  not_offered: 'This question did not use this data source, so nothing was sent to it.',
+  not_offered: 'This question was not using this data source at the time, so nothing was sent to it.',
   unknown: 'The request could not be completed, so it returned no data.',
+  // Not sent (S2-B P3R): the server a pack's requests go through did not
+  // match what the pack was written for.
+  base_changed:
+    "The site that ran this question did not send this request. This data source's requests go through another source's server, and that server did not match what this data source was written for.",
 };
 
 /**
@@ -965,9 +973,10 @@ function renderFailedToolCell(
     `The original analysis tried to ${describeAttempt(call, ctx)}. ` +
       `${describeToolFailure(call.failureKind)}`,
     '',
-    // A `not_offered` call was never sent, so it did not "return no data" (R6
-    // W1, the G5 string review); every other kind keeps the sentence it had.
-    call.failureKind === 'not_offered'
+    // A `not_offered` or `base_changed` call was never sent, so it did not
+    // "return no data" (R6 W1, the G5 string review; the owner's D1); every
+    // other kind keeps the sentence it had.
+    call.failureKind === 'not_offered' || call.failureKind === 'base_changed'
       ? 'No code cell is generated for it — a request that was not sent cannot be ' +
         'reproduced. The steps below rest only on the requests that did return data.'
       : 'No code cell is generated for it — a request that returned no data cannot be ' +

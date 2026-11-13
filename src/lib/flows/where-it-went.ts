@@ -103,8 +103,8 @@ export interface OfferedSource {
 export const NOT_RECORDED = 'not recorded';
 
 const LOAD_OPERATION = 'load_source';
-/** A call that failed with one of these was never received. */
-const NOT_RECEIVED = new Set(['not_configured', 'not_offered']);
+/** A call that failed with one of these was never received (`base_changed`: a pack's call the base check did not send, S2-B P3R). */
+const NOT_RECEIVED = new Set(['not_configured', 'not_offered', 'base_changed']);
 
 type Contact =
   | { kind: 'call'; source: string | undefined; failureKind: string | undefined }

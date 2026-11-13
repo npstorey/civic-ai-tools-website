@@ -3,7 +3,7 @@ import { getServerSession } from 'next-auth';
 import { authOptions } from '@/lib/auth';
 import { queryWithoutMcpStreaming, queryWithMcpStreaming, type StreamCallbacks, type ProgressOpts } from '@/lib/openrouter-streaming';
 import { mcpToolsFor, offeredMcpTools } from '@/lib/mcp/tools';
-import { callMcpTool } from '@/lib/mcp/client';
+import { callMcpTool, startRunServerReads, withReportedKeys } from '@/lib/mcp/client';
 import { composeSystemPrompt, withPortalLockGuidance } from '@/lib/mcp/socrata-skill';
 import { consentInForce } from '@/lib/sources/consent-gate';
 import { decisionStoreFromEnv, readerGone, streamingRoutePause } from '@/lib/sources/decision';
@@ -272,6 +272,9 @@ export async function POST(request: NextRequest) {
     // the record states about them describe one configuration (#599 W4). The
     // selection is the reader's: configured ∩ On, from the consent store
     // (R6 W2, D3 = A), never from the request.
+    // What each server reports of itself, as this run reads it (S2-B P3R):
+    // opened before anything here contacts a server, read back by `runRecord`.
+    const serverReads = startRunServerReads();
     const configured = readMcpEnvFromProcess();
     const selection = consent.selection;
     // How the sources reach the model (#644 W1, D9), read once per request,
@@ -335,18 +338,23 @@ export async function POST(request: NextRequest) {
     // In loop (#644 W1, C5) the tools, the components, the routing statement
     // and the definition hash are the run's last state, read after the loop;
     // the servers and the offered reasons stay as composed (C4).
-    const runRecord = () => runRecordAttributes({
-      assertedDate: composition.assertedDate,
-      mcpServers: configuredMcpServers(configured),
-      toolDefinitions: offeredTools,
-      // The router's `not-selected` is recorded as the reader's own state:
-      // `reader-off` or `not-consented` (D2 = A).
-      sourcesOffered: consent.recordReasons(composition.sourcesOffered),
-      components: composition.components,
-      // The flows statement in force: its url, hash and date (D2 = A).
-      flowsStatement: consent.reference,
-      ...(inLoop ? inLoop.record() : {}),
-    });
+    // The components carry what each remote server the run read reported of
+    // itself, folded in here, when the record is built (S2-B P3R).
+    const runRecord = () => {
+      const run = {
+        assertedDate: composition.assertedDate,
+        mcpServers: configuredMcpServers(configured),
+        toolDefinitions: offeredTools,
+        // The router's `not-selected` is recorded as the reader's own state:
+        // `reader-off` or `not-consented` (D2 = A).
+        sourcesOffered: consent.recordReasons(composition.sourcesOffered),
+        components: composition.components,
+        // The flows statement in force: its url, hash and date (D2 = A).
+        flowsStatement: consent.reference,
+        ...(inLoop ? inLoop.record() : {}),
+      };
+      return runRecordAttributes({ ...run, components: withReportedKeys(run.components, serverReads, configured) });
+    };
 
     const systemPromptWithoutMcp = `You are a helpful assistant.
 When answering questions about civic data, government statistics, or local information,

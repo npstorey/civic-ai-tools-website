@@ -5,6 +5,7 @@ import { isSourceRefusal } from './mcp/tool-call-failure.ts';
 import { ambiguousToolNameOf } from './mcp/tool-name-refusal.ts';
 import { PortalLockedCallError } from './portal-lock.ts';
 import { PackFilterRefusedError, type PackFilter } from './mcp/pack-filter.ts';
+import { BaseChangedError, BaseReadFailedError } from './mcp/base-check.ts';
 import type { ToolFailureKind } from './notebook-author/tool-to-cell.ts';
 import type { FlowsLinks, FlowsSource } from './flows/statement.ts';
 import { readerSourceName } from './sources/source-name.ts';
@@ -268,6 +269,10 @@ export function classifyStreamError(input: unknown): StreamErrorKind {
     // for readers rather than for the matchers below.
     if (isStreamErrorKind(code)) return code;
   }
+  // S2-B P3R: a pack call not sent because its base's list could not be read
+  // is `mcp_unavailable` by its type, whatever the words of the error it wraps
+  // (a timed-out read included), so it is never read as a timeout of a call.
+  if (input instanceof BaseReadFailedError) return 'mcp_unavailable';
   // An `SSEError` (`./sse-client.ts`) carries a route's JSON refusal body in
   // its `data`: a typed refusal answered as JSON (a 403 `consent_required`, a
   // 503 configuration refusal) is classified by that body's code, exactly as
@@ -971,6 +976,22 @@ export function packFilterRefusalForLlm(filter: Pick<PackFilter, 'source' | 'por
 }
 
 /**
+ * What the model is told when the loop core did not send a pack's call because
+ * the server its requests go through did not match what the pack was written
+ * for (S2-B P3R, the base check; the owner's D3 in R2, OA-790): the twin of
+ * `packFilterRefusalForLlm`. The call was never sent. {source} is the site's
+ * reader name for the pack. No retry wording, and no value of the call.
+ */
+export function baseChangedRefusalForLlm(filter: Pick<PackFilter, 'source'>): string {
+  const { source } = filter;
+  return (
+    `${TOOL_FAILURE_PREAMBLE} This tool belongs to ${source}. The server that ${source}'s requests go through does not match what ${source} was written for, so this request was not sent.` +
+    ` Do not call ${source}'s tools again for this question. If the question can be answered from another data source you have tools for, make that request instead;` +
+    ` if it cannot, tell the user in plain language that ${source} could not be used for this question, and do not include any raw error text, status codes, server names, or system details.`
+  );
+}
+
+/**
  * What the model is told when dispatch refused a bare tool name that two or
  * more offered sources have (#599 W3; D6's dispatch rule). The call was never
  * sent. The candidates are names from this app's own dispatch map, every one a
@@ -1011,6 +1032,8 @@ export function describeToolFailureForLlm(_toolName: string, input: unknown): st
   // The pack's twin (S2-B W3): refused by the loop core before anything was
   // sent; recognised by type, as the lock's is.
   if (input instanceof PackFilterRefusedError) return packFilterRefusalForLlm(input.filter);
+  // The base check's refusal (S2-B P3R): not sent, recognised by type.
+  if (input instanceof BaseChangedError) return baseChangedRefusalForLlm(input.filter);
   // Dispatch refused a bare name two offered sources share (#599 W3, D6),
   // before anything was sent. Recognised by its marker, not its words.
   const ambiguous = ambiguousToolNameOf(input);

@@ -2,14 +2,17 @@ import {
   buildMcpRegistry,
   isHostedServer,
   McpConfigurationError,
+  npmPackageVariantInForce,
   readMcpEnvFromProcess,
   routeToolCall,
   withSelection,
   type HostedMcpServer,
   type McpRegistry,
+  type McpRegistryEnv,
   type McpServerConfig,
 } from './registry.ts';
-import type { SourceSelection } from '@typedstandards/civic-typed-router';
+import { civicRouter, type SourceSelection } from '@typedstandards/civic-typed-router';
+import { AsyncLocalStorage } from 'node:async_hooks';
 import { McpErrorEnvelope, throwIfErrorResult } from './tool-call-failure.ts';
 import { errorLogFacts } from '../streaming.ts';
 
@@ -72,6 +75,17 @@ const MCP_TIMEOUT_MS = 45_000; // 45-second timeout for MCP server requests
 // Callers see none of this: `callMcpTool` and `callMcpPrompt` resolve to a
 // string or throw, and `getServerInstructions` returns text or null, whichever
 // era answers (D3). Nothing outside this file reads the era.
+//
+// S2-B P3R (npstorey/civic-ai-tools#309; router 0.9.0, ADR-0033 amendment 4):
+// what each server reports about itself, `serverInfo`'s `name` and `version`,
+// is kept on its state: from `initialize`'s result in the older era, from the
+// `DiscoverResult`'s `_meta['io.modelcontextprotocol/serverInfo']` in the
+// newer. `readServerTools` sends `tools/list`, following `nextCursor` to the
+// last page, for the base check (`./base-check.ts`). A run's reads of
+// `serverInfo` are kept for that run alone (`startRunServerReads`), so a
+// record states a server's report only when the run itself read it: a
+// handshake made in the run, or, on a session-keeping server, an answer in the
+// run on the session that handshake opened. No request is added for it.
 
 // The process-wide registry, built once from the configuration as read at
 // module load. A run's selection (R6 W1) narrows its offered set per call
@@ -114,6 +128,12 @@ interface McpToolResult {
   error?: string;
 }
 
+/** What a server reported about itself (`serverInfo`), each member only when it stated a string. */
+export interface ReportedServerInfo {
+  name?: string;
+  version?: string;
+}
+
 interface ServerState {
   initialized: boolean;
   /** Session id issued by the server on `initialize`, or null if stateless. */
@@ -131,12 +151,16 @@ interface ServerState {
   protocolVersion: string | null;
   /** Modern: whether this server's own `DiscoverResult` has been read. */
   discovered: boolean;
+  /** What the server reported about itself on the handshake this state holds:
+   *  `initialize`'s `serverInfo` (legacy) or the `DiscoverResult`'s (modern).
+   *  Null until read, or when the server stated none. */
+  serverInfo: ReportedServerInfo | null;
 }
 
 const serverState: Record<string, ServerState> = {};
 
 function freshServerState(): ServerState {
-  return { initialized: false, sessionId: null, instructions: null, protocolVersion: null, discovered: false };
+  return { initialized: false, sessionId: null, instructions: null, protocolVersion: null, discovered: false, serverInfo: null };
 }
 
 function getServerState(server: McpServerConfig): ServerState {
@@ -150,6 +174,83 @@ function getServerState(server: McpServerConfig): ServerState {
 
 function resetServerState(server: McpServerConfig): void {
   serverState[server.sourceId] = freshServerState();
+}
+
+// --- What a run read of each server's report ------------------------------------
+
+/** One run's reads of `serverInfo`, by source id. */
+export type RunServerReads = Map<string, ReportedServerInfo>;
+
+const runServerReads = new AsyncLocalStorage<RunServerReads>();
+
+/**
+ * Open this run's record of `serverInfo` reads, for the rest of the calling
+ * request's async context, and return it. A route calls it once, before it
+ * composes, and reads it back when it builds `runRecord()`.
+ */
+export function startRunServerReads(): RunServerReads {
+  const reads: RunServerReads = new Map();
+  runServerReads.enterWith(reads);
+  return reads;
+}
+
+/** Note `state`'s report as read by the current run, if a run is open and the server stated one. */
+function noteServerRead(server: McpServerConfig, state: ServerState): void {
+  const reads = runServerReads.getStore();
+  if (reads && state.serverInfo) reads.set(server.sourceId, { ...state.serverInfo });
+}
+
+/** `serverInfo` as a result states it: each member only when it is a string. */
+function reportedServerInfoOf(value: unknown): ReportedServerInfo | null {
+  if (value === null || typeof value !== 'object') return null;
+  const { name, version } = value as { name?: unknown; version?: unknown };
+  const info: ReportedServerInfo = {
+    ...(typeof name === 'string' ? { name } : {}),
+    ...(typeof version === 'string' ? { version } : {}),
+  };
+  return info.name === undefined && info.version === undefined ? null : info;
+}
+
+/** A `DiscoverResult`'s `serverInfo`, carried in its `_meta`. */
+function discoveredServerInfoOf(result: { _meta?: unknown }): ReportedServerInfo | null {
+  const meta = result._meta;
+  return meta !== null && typeof meta === 'object'
+    ? reportedServerInfoOf((meta as Record<string, unknown>)['io.modelcontextprotocol/serverInfo'])
+    : null;
+}
+
+/**
+ * `components` with what each remote server the run read reported of itself
+ * (S2-B P3R; route-identity C3 = B, C4 = A; ADR-0033 amendment 4; the seat's
+ * rulings 4 to 6 on P3R's stage 1): `reportedName` and `reportedVersion`,
+ * beside `id` and never in `version`, so `definitionHash` does not move with a
+ * server's release (router 0.9.0's definition reads `id`, `version` and
+ * `guidanceHash` only). Only on the component of an addressed (remote)
+ * server, a pack's base stated as its bare `{ id }` included; never on a
+ * hosted entry, a pack's own component or the router's. Only from a read made
+ * in this run (`reads`); a member the server stated as the
+ * empty string is omitted, since the harness refuses one.
+ */
+export function withReportedKeys<C extends { id: string }>(
+  components: readonly C[],
+  reads: RunServerReads,
+  configured: McpRegistryEnv,
+): Array<C & { reportedName?: string; reportedVersion?: string }> {
+  const remote = new Map(
+    civicRouter.manifest
+      .filter((entry) => entry.base === undefined && npmPackageVariantInForce(entry, configured) === undefined)
+      .map((entry) => [entry.id, entry.sourceId] as const),
+  );
+  return components.map((component) => {
+    const sourceId = remote.get(component.id);
+    const read = sourceId === undefined ? undefined : reads.get(sourceId);
+    if (!read) return component;
+    return {
+      ...component,
+      ...(read.name ? { reportedName: read.name } : {}),
+      ...(read.version ? { reportedVersion: read.version } : {}),
+    };
+  });
 }
 
 function originOf(server: McpServerConfig): string {
@@ -260,6 +361,7 @@ interface InitializeResult {
   sessionId: string | null;
   instructions: string | null;
   protocolVersion: string;
+  serverInfo: ReportedServerInfo | null;
 }
 
 /**
@@ -399,7 +501,7 @@ function eraFromSupported(supported: unknown): Era | null {
   return null;
 }
 
-function isDiscoverResult(result: unknown): result is { supportedVersions: unknown[]; capabilities: object; instructions?: unknown } {
+function isDiscoverResult(result: unknown): result is { supportedVersions: unknown[]; capabilities: object; instructions?: unknown; _meta?: unknown } {
   if (result === null || typeof result !== 'object') return false;
   const { supportedVersions, capabilities } = result as { supportedVersions?: unknown; capabilities?: unknown };
   return Array.isArray(supportedVersions) && capabilities !== null && typeof capabilities === 'object' && !Array.isArray(capabilities);
@@ -440,8 +542,8 @@ async function postDiscover(server: McpServerConfig, version: string): Promise<{
  * the probe existed), and when a modern server supports no version this client
  * implements; in each of those cases nothing is cached.
  */
-async function probeEra(server: McpServerConfig): Promise<{ era: Era; instructions: string | null }> {
-  const legacy = { era: { kind: 'legacy' } as Era, instructions: null };
+async function probeEra(server: McpServerConfig): Promise<{ era: Era; instructions: string | null; serverInfo: ReportedServerInfo | null }> {
+  const legacy = { era: { kind: 'legacy' } as Era, instructions: null, serverInfo: null };
   let version = MODERN_PROTOCOL_VERSIONS[0];
   for (let attempt = 0; attempt < 2; attempt += 1) {
     const answer = await postDiscover(server, version);
@@ -451,7 +553,9 @@ async function probeEra(server: McpServerConfig): Promise<{ era: Era; instructio
       if (!isDiscoverResult(result)) return legacy;
       const era = eraFromSupported(result.supportedVersions);
       if (!era) throw new Error(`MCP server "${server.sourceId}" supports no protocol version this client implements.`);
-      return { era, instructions: era.kind === 'modern' ? instructionsOf(result) : null };
+      return era.kind === 'modern'
+        ? { era, instructions: instructionsOf(result), serverInfo: discoveredServerInfoOf(result) }
+        : { era, instructions: null, serverInfo: null };
     }
     const error = answer.status === 400 ? jsonRpcErrorOf(answer.text) : null;
     if (error?.code !== UNSUPPORTED_PROTOCOL_VERSION) return legacy;
@@ -476,12 +580,14 @@ async function eraFor(server: McpServerConfig): Promise<Era> {
   let probe = probesInFlight.get(origin);
   if (!probe) {
     probe = (async () => {
-      const { era, instructions } = await probeEra(server);
+      const { era, instructions, serverInfo } = await probeEra(server);
       eraByOrigin.set(origin, era);
       if (era.kind === 'modern') {
         const state = getServerState(server);
         state.instructions = instructions;
+        state.serverInfo = serverInfo;
         state.discovered = true;
+        noteServerRead(server, state);
       }
       console.log(`[MCP:${server.sourceId}] Protocol era: ${era.kind === 'modern' ? `modern (${era.version})` : 'legacy (initialize)'}`);
       return era;
@@ -505,7 +611,9 @@ async function ensureDiscovered(server: McpServerConfig, version: string): Promi
     throw new Error(`MCP server "${server.sourceId}" error: ${answer.status}`);
   }
   state.instructions = instructionsOf(result);
+  state.serverInfo = discoveredServerInfoOf(result);
   state.discovered = true;
+  noteServerRead(server, state);
 }
 
 // --- The legacy handshake ------------------------------------------------------
@@ -576,6 +684,7 @@ async function initializeSession(server: McpServerConfig): Promise<InitializeRes
   // when it cannot be read, the version asked for stands in for it.
   let instructions: string | null = null;
   let protocolVersion = LEGACY_INITIALIZE_VERSION;
+  let serverInfo: ReportedServerInfo | null = null;
   try {
     const jsonData = extractMcpJsonPayload(text);
     if (jsonData) {
@@ -584,6 +693,7 @@ async function initializeSession(server: McpServerConfig): Promise<InitializeRes
       if (typeof agreed === 'string' && PROTOCOL_VERSION_SHAPE.test(agreed)) {
         protocolVersion = agreed;
       }
+      serverInfo = reportedServerInfoOf(parsed?.result?.serverInfo);
       const rawInstructions = parsed?.result?.instructions;
       if (typeof rawInstructions === 'string' && rawInstructions.length > 0) {
         instructions = rawInstructions;
@@ -597,7 +707,7 @@ async function initializeSession(server: McpServerConfig): Promise<InitializeRes
   }
 
   await sendInitializedNotification(server, sessionId, protocolVersion);
-  return { sessionId, instructions, protocolVersion };
+  return { sessionId, instructions, protocolVersion, serverInfo };
 }
 
 function warnInitializeBodyUnread(server: McpServerConfig, error: unknown): void {
@@ -649,11 +759,13 @@ async function sendInitializedNotification(
 async function ensureInitialized(server: McpServerConfig): Promise<string | null> {
   const state = getServerState(server);
   if (!state.initialized) {
-    const { sessionId, instructions, protocolVersion } = await initializeSession(server);
+    const { sessionId, instructions, protocolVersion, serverInfo } = await initializeSession(server);
     state.sessionId = sessionId;
     state.instructions = instructions;
     state.protocolVersion = protocolVersion;
+    state.serverInfo = serverInfo;
     state.initialized = true;
+    noteServerRead(server, state);
   }
   return state.sessionId;
 }
@@ -723,7 +835,13 @@ async function inEra<T>(server: McpServerConfig, send: (era: Era) => Promise<T>)
     const era = await eraFor(server);
     try {
       if (era.kind === 'legacy') await ensureInitialized(server);
-      return await send(era);
+      const answer = await send(era);
+      // An answer on a session is an answer from the server that opened it,
+      // so its report is read again in this run (a session-keeping server);
+      // a server that keeps no session is read only by its handshake.
+      const state = getServerState(server);
+      if (era.kind === 'legacy' && state.sessionId !== null) noteServerRead(server, state);
+      return answer;
     } catch (error) {
       const failure = httpFailureOf(error);
       if (!failure) throw error;
@@ -948,6 +1066,104 @@ function parseSsePayload(jsonData: string) {
   }
 }
 
+// --- A server's tools, as it lists them (S2-B P3R) -----------------------------
+
+/** The most pages `readServerTools` follows before it reads the list as failed. */
+const MAX_TOOL_LIST_PAGES = 20;
+
+/** What one read of a server's list holds: its report, and every page's tools in order. */
+export interface ServerToolsRead {
+  /** `serverInfo` as the handshake this read was answered on stated it; null when it stated none. */
+  serverInfo: ReportedServerInfo | null;
+  /** Every listed tool, as listed; null when a page carried no `tools` array. */
+  tools: unknown[] | null;
+}
+
+/**
+ * Read a configured server's `tools/list`, following `nextCursor` to the last
+ * page, in whichever era the server speaks. Throws `McpConfigurationError` when
+ * the server is not configured, and any other error when the list could not be
+ * read: a network failure, an error status, a timeout, a JSON-RPC error, a
+ * body that does not parse, a cursor that repeats, or more pages than
+ * `MAX_TOOL_LIST_PAGES`. A page without a `tools` array is returned as
+ * `tools: null`, for the caller to judge. Not narrowed by a run's selection:
+ * the base check reads the server a pack's call goes to.
+ */
+export async function readServerTools(sourceId: string): Promise<ServerToolsRead> {
+  const server = registry.servers[sourceId];
+  if (!server) {
+    throw new McpConfigurationError(`The MCP server "${sourceId}" is not configured, so its tools cannot be listed.`);
+  }
+  const tools = await inEra(server, (era) => listAllPages(server, era));
+  return { serverInfo: getServerState(server).serverInfo, tools };
+}
+
+async function listAllPages(server: McpServerConfig, era: Era): Promise<unknown[] | null> {
+  const tools: unknown[] = [];
+  const cursors = new Set<string>();
+  let cursor: string | undefined;
+  for (let page = 0; ; page += 1) {
+    if (page >= MAX_TOOL_LIST_PAGES) {
+      throw new Error(`The tool list of "${server.sourceId}" ran past ${MAX_TOOL_LIST_PAGES} pages.`);
+    }
+    const result = await listPage(server, era, cursor === undefined ? {} : { cursor });
+    if (!Array.isArray(result.tools)) return null;
+    tools.push(...result.tools);
+    const next = result.nextCursor;
+    if (next === undefined || next === null) return tools;
+    if (typeof next !== 'string' || cursors.has(next)) {
+      throw new Error(`The tool list of "${server.sourceId}" repeated or malformed its cursor.`);
+    }
+    cursors.add(next);
+    cursor = next;
+  }
+}
+
+/** One `tools/list` page's result, or a throw. */
+async function listPage(
+  server: McpServerConfig,
+  era: Era,
+  params: Record<string, unknown>,
+): Promise<{ tools?: unknown; nextCursor?: unknown }> {
+  const state = getServerState(server);
+  const request = era.kind === 'modern'
+    ? modernRequest(server, era.version, 'tools/list', params)
+    : {
+        headers: legacyHeaders(server, state),
+        body: JSON.stringify({ jsonrpc: '2.0', id: Date.now(), method: 'tools/list', params }),
+      };
+  const sessionCarried = era.kind === 'legacy' && state.sessionId !== null;
+  const { signal, clear } = createTimeoutSignal(MCP_TIMEOUT_MS);
+  let text: string;
+  try {
+    let response: Response;
+    try {
+      response = await fetch(server.endpointUrl, { method: 'POST', headers: request.headers, signal, body: request.body });
+    } catch (error) {
+      if (error instanceof DOMException && error.name === 'AbortError') throw serverTimedOut(server);
+      throw error;
+    }
+    if (!response.ok) {
+      if (era.kind === 'modern' && response.status === 401) throw authenticationError(server);
+      const code = statusWorthReading(response.status) ? jsonRpcErrorOf(await bodyTextOf(response))?.code ?? null : null;
+      throw withHttpFailure(
+        new Error(`MCP server "${server.sourceId}" error: ${response.status}`),
+        { phase: 'request', status: response.status, code, sessionCarried },
+      );
+    }
+    text = await answerTextWithin(response, signal, () => serverTimedOut(server), (error) => { throw error; });
+  } finally {
+    clear();
+  }
+  const message = parsedMessageOf(text);
+  if (!message) throw new Error('Failed to parse MCP response');
+  if (message.error !== undefined) throw new McpErrorEnvelope('The tool list request was answered with an error.');
+  const result = message.result;
+  if (result === null || typeof result !== 'object' || Array.isArray(result)) throw new Error('Unexpected MCP response format');
+  if (era.kind === 'modern') throwIfNotComplete(result);
+  return result as { tools?: unknown; nextCursor?: unknown };
+}
+
 interface McpPromptResult {
   messages?: Array<{
     role: string;
@@ -1095,45 +1311,4 @@ function formatMcpResult(result: McpToolResult): string {
     return formatted;
   }
   return JSON.stringify(result);
-}
-
-// --- S2-B P3R, tree 8: typed stubs, so the red tree's tests type-check --------------------------------
-//
-// The red tree moves the pins and adds the tests, and runs no check: nothing below reads a server. Tree 9
-// replaces this block with the client's `serverInfo`, `tools/list` and the run's reads.
-
-/** What a server reported about itself (`serverInfo`). Stub. */
-export interface ReportedServerInfo {
-  name?: string;
-  version?: string;
-}
-
-/** One run's reads of `serverInfo`, by source id. Stub. */
-export type RunServerReads = Map<string, ReportedServerInfo>;
-
-/** What one read of a server's list holds. Stub. */
-export interface ServerToolsRead {
-  serverInfo: ReportedServerInfo | null;
-  tools: unknown[] | null;
-}
-
-/** Stub: records nothing. */
-export function startRunServerReads(): RunServerReads {
-  return new Map();
-}
-
-/** Stub: the components as given. */
-export function withReportedKeys<C extends { id: string }>(
-  components: readonly C[],
-  reads: RunServerReads,
-  configured: unknown,
-): Array<C & { reportedName?: string; reportedVersion?: string }> {
-  void reads;
-  void configured;
-  return [...components];
-}
-
-/** Stub: no list is read in the red tree. */
-export async function readServerTools(sourceId: string): Promise<ServerToolsRead> {
-  throw new Error(`readServerTools("${sourceId}"): not in tree 8`);
 }

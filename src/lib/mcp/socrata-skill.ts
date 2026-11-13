@@ -340,14 +340,19 @@ export interface CompositionComponent {
   id: string;
   /** What this instance knows of the component's version: the composing
    *  package's, as installed; for a hosted source, the version it pins
-   *  (`hostedComponentVersion`). Omitted for an addressed source: the client
-   *  does not read a server's `serverInfo`. */
+   *  (`hostedComponentVersion`). Omitted for an addressed source: what such a
+   *  server reports of itself is `reportedName` and `reportedVersion`, never
+   *  this member. */
   version?: string;
   /** Lowercase hex SHA-256 of the component's block as composed into the
    *  prompt. Omitted when the component contributed no block. */
   guidanceHash?: string;
   /** Present exactly when `guidanceHash` is. */
   guidanceOrigin?: GuidanceOrigin;
+  /** A remote server's `serverInfo.name`, as this run read it (`withReportedKeys`, `./client.ts`). */
+  reportedName?: string;
+  /** A remote server's `serverInfo.version`, as this run read it (`withReportedKeys`, `./client.ts`). */
+  reportedVersion?: string;
 }
 
 /**
