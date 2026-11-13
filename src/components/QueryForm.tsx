@@ -79,7 +79,7 @@ interface QueryFormProps {
   advancedOptions?: 'always' | 'hidden-signed-out';
   /**
    * The composer sits docked below the results (UX-2 P3b-1): the surface says
-   * so once a run on it has finished with an answer (`QuerySurface`).
+   * so when a run on it starts (leg H, dock at send; `QuerySurface`).
    */
   docked?: boolean;
   /**

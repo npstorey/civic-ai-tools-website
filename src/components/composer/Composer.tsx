@@ -273,7 +273,7 @@ export default function Composer({
       </div>
 
       <div className="composer-col composer-lines">
-        {/* The example questions (P9's ChipRow, 1B), before the first answer only (O5 = A). */}
+        {/* The example questions (P9's ChipRow, 1B), before the first send only (O5 = A; leg H, dock at send). */}
         {!docked && chips && chips.length > 0 ? (
           <div data-part="chip-row">
             <ChipRow label={CHIP_ROW_LABEL}>
