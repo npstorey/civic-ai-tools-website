@@ -466,7 +466,7 @@ export const SOURCE_CHOOSER_TEXT = {
  * name for the base}"; no author), in parentheses: "NYC City Record (a pack recorded as <id>, using Socrata)".
  * This site resolves no inventory, so it never names the pack or its author from one. The id is the record's,
  * whole, in code style (the seat's 6779017419). `definition` is R5's sentence, shown once after the groups and
- * only when a clause shows. Pinned by `chooser-considered-revision-3.test.ts`.
+ * only when a clause shows. Pinned by `chooser-considered-revision-4.test.ts`.
  */
 export const SOURCE_CHOOSER_PACK = {
   open: ' (a pack recorded as ',
@@ -480,7 +480,7 @@ export const SOURCE_CHOOSER_PACK = {
  * after the in-loop sentence, when the record carries `composition.considered`. The inventory is named by its id
  * as written (this site has no name for it) with its version, both whole; a rule this site has no words for is
  * named as recorded, through `echoCapped`. Absent: no count is stated, and none is derived from `sourcesOffered`.
- * Pinned to the bundle's digest by `chooser-considered-revision-3.test.ts`.
+ * Pinned to the bundle's digest by `chooser-considered-revision-4.test.ts`.
  */
 export const SOURCE_CHOOSER_CONSIDERED = {
   shown: (listed: number, total: number, inventory: string, version: string) =>
@@ -500,7 +500,7 @@ export const ECHO_LIMIT = 40;
  * Why a source the model requested was not loaded, by the load's outcome, in
  * the chooser line only: bundle revision 3's three sentences, verbatim
  * (`bundle.json:142`; S2-B W9, the research check's R6 = KEEP; pinned to the
- * installed bundle's digest by `chooser-reasons-revision-3.test.ts`). None of
+ * installed bundle's digest by `chooser-reasons-revision-4.test.ts`). None of
  * them claims a question put to the reader: `declined` is also the outcome when
  * no pause could be held, and `no-answer` when the reader could not be asked
  * (`decision.ts`, `notHeld`); a record states whether a question was put only

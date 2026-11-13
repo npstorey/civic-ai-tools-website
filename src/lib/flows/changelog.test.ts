@@ -102,7 +102,7 @@ test('the 2026-10-20 entry states the statement\'s date it moved to', () => {
 // --- The newest entry: recomputed -----------------------------------------------------------
 
 /** The newest entry. */
-const NEWEST = '2026-11-09';
+const NEWEST = '2026-11-14';
 
 /**
  * The configuration the newest entry names: the 2026-10-21 entry's, without

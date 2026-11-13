@@ -25,13 +25,13 @@ carries was read.
 its configuration and fails when they differ from the code. An earlier entry
 is history: the test fails if its versions or its words change. Today's code
 can give a different statement under an earlier entry's configuration. It does
-since the 2026-11-09 entry, where NYC City Record stopped being a server of its
+since the 2026-11-14 entry, where NYC City Record stopped being a server of its
 own. An entry also gives
 the statement's **hash** (the SHA-256 of the bytes `/api/flows` serves) under
 that configuration when the entry moves the hash but no version: such a
 change re-asks no one.
 
-## 2026-11-09 — NYC City Record through the Socrata source (npstorey/civic-ai-tools#309 W8)
+## 2026-11-14 — NYC City Record through the Socrata source (npstorey/civic-ai-tools#309 W8)
 
 NYC City Record no longer has a server of its own on this site. Its requests
 now go to the Socrata source's MCP server, and from there to
