@@ -140,3 +140,48 @@ test('the 2026-10-21 entry\'s base version and six source versions are the code\
     }
   }
 });
+
+// --- S2-B W8 (npstorey/civic-ai-tools#309): City Record through the Socrata server -------------
+//
+// Since router 0.8.0 City Record is a pack over the Socrata server: its
+// requests reach `data.cityofnewyork.us` through that server, so its one
+// recipient is the remote kind at the Socrata server's host with the Socrata
+// roles, and no recipient is its own upstream (`source:nyc-record:<host>`).
+// Under the 2026-10-21 entry's configuration less the retired switch, the base
+// version is that entry's and every other source's version is too; City
+// Record's moves. At f0c1eca (router 0.6.0) City Record is offered only by its
+// switch, so with the switch unset the statement has no row for it.
+
+test('S2-B W8: under the 2026-10-21 configuration less the retired switch, City Record is one remote recipient at the Socrata server\'s host', () => {
+  const env = Object.fromEntries(Object.entries(SWITCHES_ENTRY_ENV).filter(([name]) => name !== 'NYC_RECORD_HOSTING'));
+  const names = [...Object.keys(SWITCHES_ENTRY_ENV), ...CLEARED];
+  const saved = Object.fromEntries(names.map((name) => [name, process.env[name]]));
+  try {
+    for (const name of [...CLEARED, ...Object.keys(SWITCHES_ENTRY_ENV)]) delete process.env[name];
+    Object.assign(process.env, env);
+    const statement = buildFlowsStatementFor(ANALYTICS);
+    const record = statement.sources.find((s) => s.sourceId === 'nyc-record');
+    assert.ok(record, `the statement has no nyc-record row: ${statement.sources.map((s) => s.sourceId).join(', ')}`);
+    const socrata = statement.sources.find((s) => s.sourceId === 'socrata');
+    assert.ok(socrata, 'premise: the statement has a socrata row');
+    const host = new URL(env.SOCRATA_MCP_URL ?? '').host;
+    assert.equal(record!.variant.kind, 'remote', 'City Record is not the remote kind');
+    assert.equal(record!.host, host, 'City Record\'s row is not at the Socrata server\'s host');
+    assert.deepEqual(record!.recipients.map((r) => ({ id: r.id, role: r.role, host: r.host })), [{ id: 'source:nyc-record', role: 'source', host }], 'City Record does not have one recipient at the Socrata server\'s host');
+    assert.deepEqual(record!.recipients[0].keptBy, socrata!.recipients[0].keptBy, 'City Record\'s recipient does not hold the Socrata roles');
+    const everyRecipient = [...statement.recipients, ...statement.sources.flatMap((s) => s.recipients)];
+    assert.deepEqual(everyRecipient.filter((r) => r.id.startsWith('source:nyc-record:')).map((r) => r.id), [], 'a recipient is City Record\'s own upstream');
+    const entry = entryOf('2026-10-21');
+    assert.ok(entry.includes(`**Base \`version\`:** \`${statement.version}\``), `the base version moved: ${statement.version}`);
+    for (const source of statement.sources.filter((s) => s.sourceId !== 'nyc-record')) {
+      assert.ok(entry.includes(`| \`${source.sourceId}\` | \`${source.version}\` |`), `${source.sourceId}'s version moved: ${source.version}`);
+    }
+    assert.equal(entry.includes(`| \`nyc-record\` | \`${record!.version}\` |`), false, 'City Record\'s version did not move');
+  } finally {
+    for (const [name, value] of Object.entries(saved)) {
+      if (value === undefined) delete process.env[name];
+      else process.env[name] = value;
+    }
+  }
+});
+

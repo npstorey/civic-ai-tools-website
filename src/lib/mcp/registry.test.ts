@@ -15,6 +15,8 @@ import {
   McpConfigurationError,
   resolveServerForTool,
   readMcpEnvFromProcess,
+  routeToolCall,
+  routedSourceId,
   skillRoutingTraceAttributes,
   type McpServerConfig,
 } from './registry.ts';
@@ -323,5 +325,51 @@ test('R8 W3 criterion 1: each new switch, set alone, puts its source in the host
       if (saved[name] === undefined) delete process.env[name];
       else process.env[name] = saved[name];
     }
+  }
+});
+
+// --- S2-B W2 and W3 (npstorey/civic-ai-tools#309): NYC City Record, a pack over the Socrata server ----
+//
+// Since router 0.8.0 City Record's tools are the Socrata server's `get_data`
+// and `fetch`, exposed as `nyc_record__get_data` and `nyc_record__fetch`. A
+// call of one goes to the Socrata server under its upstream name, and the
+// call is attributed to the base (`socrata`), never to the pack's `sourceId`.
+// With `SOCRATA_MCP_URL` unset it is refused per call naming that variable,
+// as `socrata__get_data` is. At f0c1eca (router 0.6.0) neither name is in the
+// dispatch map and both refuse with "No MCP server registered".
+
+const PACK_TOOLS = ['nyc_record__get_data', 'nyc_record__fetch'] as const;
+
+test('S2-B W2: a pack call routes to the Socrata server under its upstream name, attributed to socrata', () => {
+  const registry = buildMcpRegistry(TEST_ENV);
+  for (const name of PACK_TOOLS) {
+    const call = routeToolCall(registry, name);
+    assert.equal(call.server.sourceId, 'socrata', `${name} is not routed to the Socrata server`);
+    assert.equal((call.server as McpServerConfig).endpointUrl, 'https://socrata-mcp.example.org/mcp');
+    assert.equal(call.exposedName, name);
+    assert.equal(call.upstreamName, name.slice('nyc_record__'.length), `${name} is not sent under its upstream name`);
+    assert.equal(routedSourceId(name, TEST_ENV), 'socrata', `${name} is not attributed to the base`);
+  }
+});
+
+test('S2-B W3: with no socrataUrl a pack call is refused per call naming SOCRATA_MCP_URL, as socrata__get_data is', () => {
+  const registry = buildMcpRegistry({ ...TEST_ENV, socrataUrl: undefined });
+  const refusal = (name: string): unknown => {
+    try {
+      routeToolCall(registry, name);
+    } catch (error) {
+      return error;
+    }
+    return undefined;
+  };
+  const control = refusal('socrata__get_data');
+  assert.ok(control instanceof McpConfigurationError && /SOCRATA_MCP_URL/.test(control.message), 'premise: socrata__get_data is refused naming SOCRATA_MCP_URL');
+  for (const name of PACK_TOOLS) {
+    const error = refusal(name);
+    assert.ok(
+      error instanceof McpConfigurationError && /SOCRATA_MCP_URL/.test(error.message),
+      `${name} is not refused naming SOCRATA_MCP_URL: ${error instanceof Error ? `${error.name}: ${error.message}` : String(error)}`,
+    );
+    assert.equal(registry.unconfiguredTools[name], 'SOCRATA_MCP_URL');
   }
 });

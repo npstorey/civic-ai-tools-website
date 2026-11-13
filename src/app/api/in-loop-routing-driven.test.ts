@@ -30,6 +30,12 @@
 // tools differ from the all-sources run's and the comparison can fail; its
 // refused call is to Boston, which no successful call touches.
 //
+// S2-B W2 and W3 (npstorey/civic-ai-tools#309), at the end of this file: an
+// in-loop run that loads NYC City Record, a pack over the Socrata server since
+// router 0.8.0, and calls its tools. The pack's calls reach the Socrata path
+// with the filter's portal and dataset, are attributed to the base, name the
+// pack, and a call outside the filter is refused before any request.
+//
 // No live endpoint, no credential: every key is a placeholder and every
 // address is loopback.
 //
@@ -126,10 +132,12 @@ const { consentCookieForTests } = (await import('../../lib/sources/consent-cooki
 
 const ONE_ROW = JSON.stringify({ data: [{ count: '512' }], total_rows: 1 });
 const MCP_CALLS: Array<{ path: string; tool?: string }> = [];
+/** The same calls with their arguments, for S2-B's pack drive (MCP_CALLS keeps its shape). */
+const MCP_CALL_ARGS: Array<{ path: string; tool?: string; args?: Record<string, unknown> }> = [];
 const mcp = http.createServer(async (req, res) => {
   let body = '';
   for await (const chunk of req) body += chunk;
-  const msg = body ? (JSON.parse(body) as { id?: unknown; method?: string; params?: { name?: string } }) : {};
+  const msg = body ? (JSON.parse(body) as { id?: unknown; method?: string; params?: { name?: string; arguments?: Record<string, unknown> } }) : {};
   if (msg.id === undefined) { res.writeHead(202); res.end(); return; }
   const reply = (payload: Record<string, unknown>) => JSON.stringify({ jsonrpc: '2.0', id: msg.id, ...payload });
   const route = req.url ?? '';
@@ -144,7 +152,10 @@ const mcp = http.createServer(async (req, res) => {
     res.end(reply({ error: { code: -32603, message: 'fixture: no skill guidance here' } }));
     return;
   }
-  if (msg.method === 'tools/call') MCP_CALLS.push({ path: route, tool: msg.params?.name });
+  if (msg.method === 'tools/call') {
+    MCP_CALLS.push({ path: route, tool: msg.params?.name });
+    MCP_CALL_ARGS.push({ path: route, tool: msg.params?.name, args: msg.params?.arguments });
+  }
   res.writeHead(200, { 'content-type': 'text/event-stream' });
   res.end(`event: message\ndata: ${reply({ result: { content: [{ type: 'text', text: ONE_ROW }] } })}\n\n`);
 });
@@ -165,12 +176,39 @@ type Call = { id: string; type: 'function'; function: { name: string; arguments:
 const call = (id: string, name: string, args: Record<string, unknown>): Call =>
   ({ id, type: 'function', function: { name, arguments: JSON.stringify(args) } });
 
+// S2-B's pack drive: the first turn loads City Record; the second calls its
+// tools five times, told apart by `limit`: (1) with the filter's portal and
+// dataset, (2) with neither, (3) naming another portal, (4) naming another
+// dataset, and a `fetch` of an identifier outside the dataset; the third
+// answers. The run's portal is `PORTAL`, never the filter's, so a call that
+// omits `portal` shows whose value is sent.
+const PACK_QUESTION = 'Which notices did the City Record publish about sidewalk repair?';
+const PACK_FILTER = { portal: 'data.cityofnewyork.us', dataset_id: 'dg92-zbpx' } as const;
+const OTHER_PORTAL = 'data.sfgov.org';
+const OTHER_DATASET = 'erm2-nwe9';
+const OUTSIDE_ID = `dataset:${PACK_FILTER.portal}:${OTHER_DATASET}`;
+
+function packTurn(assistantTurns: number): Call[] | null {
+  if (assistantTurns === 0) return [call('call-load-record', 'load_source', { alias: 'nyc_record' })];
+  if (assistantTurns === 1) {
+    return [
+      call('call-pack-filter', 'nyc_record__get_data', { type: 'query', ...PACK_FILTER, query: 'sidewalk repair', limit: 1 }),
+      call('call-pack-omitted', 'nyc_record__get_data', { type: 'query', query: 'sidewalk repair', limit: 2 }),
+      call('call-pack-portal', 'nyc_record__get_data', { type: 'query', portal: OTHER_PORTAL, dataset_id: PACK_FILTER.dataset_id, limit: 3 }),
+      call('call-pack-dataset', 'nyc_record__get_data', { type: 'query', portal: PACK_FILTER.portal, dataset_id: OTHER_DATASET, limit: 4 }),
+      call('call-pack-fetch', 'nyc_record__fetch', { id: OUTSIDE_ID }),
+    ];
+  }
+  return null;
+}
+
 function turnFor(body: Record<string, unknown>): Call[] | null {
   const tools = (body.tools ?? []) as Array<{ function: { name: string } }>;
   if (tools.length === 0) return null;
   const messages = (body.messages ?? []) as Array<{ role?: string }>;
   const assistantTurns = messages.filter((m) => m.role === 'assistant').length;
   const inLoop = tools.some((t) => t.function.name === 'load_source');
+  if (inLoop && JSON.stringify(body.messages ?? []).includes(PACK_QUESTION)) return packTurn(assistantTurns);
   if (!inLoop) {
     return assistantTurns === 0
       ? [
@@ -299,6 +337,10 @@ const NOTEBOOK_IN_LOOP = await drive('query-notebook, in-loop', 'in-loop', () =>
   notebookRoute.POST(post('/api/query-notebook', { query: QUESTION, portal: PORTAL })));
 const COMPARE_IN_LOOP = await drive('compare, in-loop', 'in-loop', () =>
   compareRoute.POST(post('/api/compare', { query: QUESTION, model: 'fixture-fast', portal: PORTAL })));
+const PACK_ARGS_FROM = MCP_CALL_ARGS.length;
+const PACK = await drive('compare-stream, in-loop, City Record', 'in-loop', () =>
+  compareStreamRoute.POST(post('/api/compare-stream', { ...streamBody, query: PACK_QUESTION })));
+const PACK_MCP_CALLS = MCP_CALL_ARGS.slice(PACK_ARGS_FROM);
 
 // --- Readers -------------------------------------------------------------------------
 
@@ -576,3 +618,160 @@ test('R10 P1 criterion 4: adaptRecord over the packaged all-sources record shows
   assert.equal(typeof chooserLines, 'function', 'source-chooser.ts exports no chooserLines');
   assert.deepEqual(chooserLines(model.whereItWent?.chooser), [{ text: T.notRecorded }]);
 });
+
+// --- S2-B W2 and W3 (npstorey/civic-ai-tools#309): City Record, a pack over the Socrata server ------
+//
+// G0-B5 A, both parts: a pack's call states the base's `mcp.source`
+// (`socrata`), `mcp.alias` (`socrata`) and `mcp.server.id`, and the pack's
+// inventory id as `mcp.pack_id`; the record states the same on the call's
+// activity (`civic:sourceId`, `civic:sourceAlias`, `civic:serverId`,
+// `civic:packId`), mints no agent for the pack, and its `dataSources[]` carries
+// Socrata's entry for the pack's dataset. At f0c1eca (router 0.6.0) the pack's
+// tools are not in the dispatch map: every call is refused before any request
+// ("No MCP server registered", `registry.ts:674`), so the Socrata path receives
+// nothing.
+//
+// WHAT MAKES IT ABLE TO FAIL. The refused calls name another portal and another
+// dataset, which no answered call touches, so a refused call that reached the
+// record would show as its own `dataSources` entry; the omitted call would
+// carry the run's portal (`PORTAL`) if that, not the filter's, were injected.
+// The two decoys rewrite only `mcp.source` on the answered pack calls (to the
+// pack's id, then to its `sourceId`) and must fail the same assertions.
+
+const PACK_ID = 'nyc-record@https://data.cityofnewyork.us/d/dg92-zbpx';
+const SOCRATA_SERVER_ID = 'socrata-mcp-server@https://github.com/npstorey/socrata-mcp-server';
+
+type SpanAttrs = Record<string, string | boolean | undefined>;
+
+/** The pack drive's tool-call spans, by the `limit` (or, for `fetch`, the name) each call carried. */
+function packSpan(trace: Json, which: number | 'fetch'): SpanAttrs | undefined {
+  return spans(trace)
+    .filter((s) => s.name === 'mcp_tool_call')
+    .map((s) => Object.fromEntries(attrPairs(s)) as SpanAttrs)
+    .find((a) => {
+      if (which === 'fetch') return a['tool.name'] === 'nyc_record__fetch';
+      if (a['tool.name'] !== 'nyc_record__get_data') return false;
+      try { return (JSON.parse(String(a['tool.arguments'] ?? '{}')) as { limit?: unknown }).limit === which; } catch { return false; }
+    });
+}
+
+/** What the run's loopback model was told about each tool result of its second turn: the evidence of a refusal's cause. */
+function packToolResults(): string {
+  const last = PACK.requests[PACK.requests.length - 1]?.body.messages as Array<{ role?: string; tool_call_id?: string; content?: unknown }> | undefined;
+  return (last ?? []).filter((m) => m.role === 'tool').map((m) => `${m.tool_call_id}: ${String(m.content).slice(0, 200)}`).join('\n');
+}
+
+function packageFrom(trace: Json, toolCalls: unknown) {
+  return buildEvidencePackage({
+    trace,
+    prompt: PACK_QUESTION,
+    output: ANSWER,
+    toolCalls: toolCalls as never,
+    model: 'vendor/model-fixture-1',
+    tokenUsage: { promptTokens: 10, completionTokens: 5 },
+    promptVisibility: 'full_text',
+    title: 'City Record notices',
+    summary: 'City Record notices.',
+    type: 'content/analysis/v1',
+    captureMethod: 'chat-flow-stream',
+    contentProfile: 'datHere',
+    extensions: { 'org.civicaitools.notebook': { nbformat: 4, nbformat_minor: 5, cells: [], metadata: {} } },
+  });
+}
+
+/** W2's record assertions, over any package: the decoys run the same function. */
+function assertPackCallRecorded(pkg: ReturnType<typeof packageFrom>['pkg']): void {
+  const graph = (pkg.provenance as { '@graph': Array<Record<string, unknown>> })['@graph'];
+  const activities = graph.filter((n) => String(n['dcterms:description'] ?? '').startsWith('MCP tool call: nyc_record__get_data') && n['civic:failed'] !== true);
+  assert.equal(activities.length, 2, `the record does not state the two answered pack calls: ${activities.length}`);
+  for (const activity of activities) {
+    assert.equal(activity['civic:sourceId'], 'socrata', 'the pack call\'s activity is not attributed to the base');
+    assert.equal(activity['civic:sourceAlias'], 'socrata', 'the pack call\'s activity does not state the base\'s alias');
+    assert.equal(activity['civic:serverId'], SOCRATA_SERVER_ID, 'the pack call\'s activity does not state the Socrata server');
+    assert.equal(activity['civic:packId'], PACK_ID, 'the pack call\'s activity does not name the pack');
+  }
+  const agents = graph.filter((n) => [n['@type']].flat().includes('prov:Agent'));
+  const packAgents = agents.filter((n) => n['civic:sourceId'] === PACK_ID || n['civic:sourceId'] === 'nyc-record');
+  assert.deepEqual(packAgents.map((n) => n['@id']), [], 'the record mints an agent for the pack');
+  const sources = pkg.dataSources as Array<{ sourceId: string; datasetId?: string; datasetUrl?: string }>;
+  assert.ok(
+    sources.some((d) => d.sourceId === 'socrata' && d.datasetId === PACK_FILTER.dataset_id && d.datasetUrl === `https://${PACK_FILTER.portal}/d/${PACK_FILTER.dataset_id}`),
+    `dataSources[] carries no Socrata entry for ${PACK_FILTER.dataset_id}: ${JSON.stringify(sources)}`,
+  );
+  const text = JSON.stringify(sources);
+  for (const absent of [OTHER_DATASET, OTHER_PORTAL, 'nyc-record']) {
+    assert.equal(text.includes(absent), false, `dataSources[] names ${absent}, which no answered call reached: ${text}`);
+  }
+}
+
+/** The pack drive's trace with `mcp.source` rewritten on every pack span that answered. */
+function decoyTrace(source: string): Json {
+  const trace = JSON.parse(JSON.stringify(traceOf(PACK))) as Json;
+  let rewritten = 0;
+  for (const span of spans(trace)) {
+    const attrs = Object.fromEntries(attrPairs(span)) as SpanAttrs;
+    if (span.name !== 'mcp_tool_call' || !String(attrs['tool.name'] ?? '').startsWith('nyc_record__') || attrs['tool.response_hash'] === undefined) continue;
+    const at = span.attributes.find((a) => a.key === 'mcp.source');
+    if (at) { at.value = { stringValue: source }; rewritten += 1; }
+  }
+  assert.equal(rewritten, 2, `premise: the decoy rewrites the two answered pack calls (${rewritten} found)`);
+  return trace;
+}
+
+test('S2-B W2: the pack\'s calls reach the Socrata path as get_data, with the filter\'s portal and dataset', () => {
+  assert.deepEqual(
+    PACK_MCP_CALLS.map((c) => ({ path: c.path, tool: c.tool, portal: c.args?.portal, dataset_id: c.args?.dataset_id, limit: c.args?.limit })),
+    [
+      { path: '/socrata/mcp', tool: 'get_data', ...PACK_FILTER, limit: 1 },
+      { path: '/socrata/mcp', tool: 'get_data', ...PACK_FILTER, limit: 2 },
+    ],
+    `the Socrata path did not receive the two pack calls; the model was told:\n${packToolResults()}`,
+  );
+});
+
+test('S2-B W2: the pack call\'s span states the base\'s source, alias and server, and the pack\'s id', () => {
+  const span = packSpan(traceOf(PACK), 1);
+  assert.ok(span, 'premise: the trace has a span for the pack call');
+  assert.deepEqual(
+    {
+      source: span!['mcp.source'], alias: span!['mcp.alias'], server: span!['mcp.server.id'], pack: span!['mcp.pack_id'],
+      upstream: span!['tool.upstream_name'], failed: span!['error'] ?? false,
+    },
+    { source: 'socrata', alias: 'socrata', server: SOCRATA_SERVER_ID, pack: PACK_ID, upstream: 'get_data', failed: false },
+    `the pack call's span is not the base's with the pack named; the model was told:\n${packToolResults()}`,
+  );
+});
+
+test('S2-B W2: the record packaged from the run attributes the pack\'s calls to the base, names the pack, and mints no agent for it', () => {
+  const { pkg } = packageFrom(traceOf(PACK), toolCallsOf(PACK));
+  assertPackCallRecorded(pkg);
+});
+
+for (const [label, source] of [['the pack\'s id', PACK_ID], ['the pack\'s sourceId', 'nyc-record']] as const) {
+  test(`S2-B W2 decoy: a trace whose pack calls write mcp.source = ${label} fails W2's record assertions`, () => {
+    const { pkg } = packageFrom(decoyTrace(source), toolCallsOf(PACK));
+    assert.throws(() => assertPackCallRecorded(pkg), assert.AssertionError);
+  });
+}
+
+test('S2-B W3: the filter\'s values are sent when the call omits them, not the run\'s portal', () => {
+  const omitted = PACK_MCP_CALLS.find((c) => c.args?.limit === 2);
+  assert.ok(omitted, `the call that omitted portal and dataset_id never reached the Socrata path; the model was told:\n${packToolResults()}`);
+  assert.deepEqual({ portal: omitted!.args?.portal, dataset_id: omitted!.args?.dataset_id }, { ...PACK_FILTER });
+  assert.notEqual(omitted!.args?.portal, PORTAL);
+});
+
+for (const [label, which] of [[`portal ${OTHER_PORTAL}`, 3], [`dataset_id ${OTHER_DATASET}`, 4], [`a fetch of ${OUTSIDE_ID}`, 'fetch']] as const) {
+  test(`S2-B W3: a pack call naming ${label} is refused before any request and recorded as a rejected call naming the pack`, () => {
+    const sent = PACK_MCP_CALLS.filter((c) => (which === 'fetch' ? c.tool === 'fetch' : c.args?.limit === which));
+    assert.deepEqual(sent, [], 'the refused call reached the Socrata path');
+    const span = packSpan(traceOf(PACK), which);
+    assert.ok(span, 'premise: the trace has a span for the refused call');
+    assert.equal(span!['error'], true, 'the call is not recorded as rejected');
+    assert.equal(span!['mcp.pack_id'], PACK_ID, 'the rejected call does not name the pack');
+    const recorded = toolCallsOf(PACK).filter((c) => (which === 'fetch' ? c.name === 'nyc_record__fetch' : c.name === 'nyc_record__get_data' && c.args?.limit === which));
+    assert.equal(recorded.length, 1, 'premise: the completed tool calls hold the refused call once');
+    assert.equal(recorded[0].failed, true, 'the completed tool call is not marked failed');
+  });
+}
+
