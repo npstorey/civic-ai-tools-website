@@ -17,7 +17,7 @@ import type { FlowsSource } from '@/lib/flows/statement';
 import { sourceRowLines } from '@/lib/sources/source-name';
 import { KeptByLines } from './KeptByLine';
 import { SourceStateConfirmation, SourceStateRadios, type SourceStateControlProps } from './SourceStateControl';
-import type { PendingPause } from './useSourceConsent';
+import { canPauseToAsk, type PendingPause } from './useSourceConsent';
 import ConsentStep from '../answer-view/ConsentStep';
 
 export interface SourceRowProps {
@@ -37,8 +37,9 @@ export default function SourceRow({ source, control, consent }: SourceRowProps) 
       {lines.what !== null && <div>{lines.what.charAt(0).toUpperCase() + lines.what.slice(1)}</div>}
       <SourceStateRadios {...control} />
       <SourceStateConfirmation {...control} />
-      {/* A question stops to ask only in loop and with the decision store (R9 P1, #666): the pause words only then. */}
-      {state === 'ask-first' && <div>{consent.routing === 'in-loop' && consent.store === true ? ASK_FIRST_MEANS_WITH_PAUSE : ASK_FIRST_MEANS}</div>}
+      {/* A question stops to ask only in loop and with the decision store (R9 P1, #666): the pause words only then, by the
+          one predicate the harness menu reads too (UX-2 P3b-2, v2 ruling 1). */}
+      {state === 'ask-first' && <div>{canPauseToAsk(consent) ? ASK_FIRST_MEANS_WITH_PAUSE : ASK_FIRST_MEANS}</div>}
       {/* R9 P2 (#661): the row's detail, closed by default (design principle 8). */}
       <details style={{ marginTop: '4px' }}>
         <summary style={{ cursor: 'pointer', color: 'var(--text-secondary)' }}>{PANEL_ROW_MORE}</summary>
