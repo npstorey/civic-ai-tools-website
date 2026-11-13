@@ -159,7 +159,7 @@ function pkgWithQueries(queries: unknown[]): EvidencePackage {
   } as unknown as EvidencePackage;
 }
 
-test('the pinned harness renders a rejected call as rejected, not as an unknown row count', () => {
+test('the pinned harness renders a failed call as failed, not as an unknown row count', () => {
   const [answered, rejected, unrecorded] = promptLines(
     pkgWithQueries([
       { tool: 'get_data', operationType: 'query', arguments: { dataset_id: 'aaaa-1111' }, resultRows: 12 },
@@ -172,8 +172,9 @@ test('the pinned harness renders a rejected call as rejected, not as an unknown 
   assert.equal(answered, 'get_data(dataset_id="aaaa-1111") → 12 rows');
   assert.equal(unrecorded, 'get_data(dataset_id="cccc-3333") → ? rows');
 
-  // The rejection is stated, and no row count is claimed for it.
-  assert.match(rejected, /REJECTED/);
+  // The failure is stated, and no row count is claimed for it. Harness 0.13.0's words (S2-C F7, the seat's
+  // 6835241542): no source is said to have refused the call, since revision 4's words claim no refusal.
+  assert.equal(rejected, 'get_data(dataset_id="bbbb-2222") → FAILED: no data was returned, and no row count is claimed');
   assert.doesNotMatch(rejected, /rows/);
 
   // And the conflation is gone: with the dataset id normalised away, the

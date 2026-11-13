@@ -120,6 +120,11 @@ globalThis.fetch = (async (input: RequestInfo | URL, init?: RequestInit) => {
   return realFetch(input, init);
 }) as typeof fetch;
 const CALLS: Array<{ path: string; tool?: string; args?: Record<string, unknown> }> = [];
+// S2-B P3R (the seat's ruling 12): the server reports, and lists its tools, as the deployed Socrata server did
+// at the GR read (`src/lib/mcp/fixtures/socrata-tools-at-gr.json`, copied by script), so the replayed pack call
+// passes the base check; `socrata-tools-at-gr.test.ts` holds each pinned entry to its pin.
+const GR = JSON.parse(fs.readFileSync(path.join(path.dirname(fileURLToPath(import.meta.url)), '../../lib/mcp/fixtures/socrata-tools-at-gr.json'), 'utf8')) as { serverInfo: { name: string; version: string }; tools: unknown[] };
+const LISTS: string[] = [];
 const mcp = http.createServer(async (req, res) => {
   let body = '';
   for await (const chunk of req) body += chunk;
@@ -130,7 +135,13 @@ const mcp = http.createServer(async (req, res) => {
   const reply = (payload: Record<string, unknown>) => JSON.stringify({ jsonrpc: '2.0', id: msg.id, ...payload });
   if (msg.method === 'initialize') {
     res.writeHead(200, { 'content-type': 'application/json' });
-    res.end(reply({ result: { protocolVersion: '2024-11-05', capabilities: { tools: {}, prompts: {} }, serverInfo: { name: 's2b-retired-replay-fixture', version: '0' } } }));
+    res.end(reply({ result: { protocolVersion: '2024-11-05', capabilities: { tools: {}, prompts: {} }, serverInfo: GR.serverInfo } }));
+    return;
+  }
+  if (msg.method === 'tools/list') {
+    LISTS.push(p);
+    res.writeHead(200, { 'content-type': 'application/json' });
+    res.end(reply({ result: { tools: GR.tools } }));
     return;
   }
   if (msg.method === 'prompts/get') {
@@ -246,6 +257,8 @@ test('S2-B W11: a replayed pack call reaches the Socrata server as get_data with
     CALLS.map((c) => ({ path: c.path, tool: c.tool, portal: c.args?.portal, dataset_id: c.args?.dataset_id })),
     [{ path: '/socrata/mcp', tool: 'get_data', portal: 'data.cityofnewyork.us', dataset_id: 'dg92-zbpx' }],
   );
+  // S2-B P3R: the replay is a path that sends a pack call, so the base's list was read before it.
+  assert.deepEqual(LISTS, ['/socrata/mcp']);
 });
 
 test('S2-B W11 decoy: with the base absent (SOCRATA_MCP_URL unset) the pack is not offered: it is lacking with its base', () => {

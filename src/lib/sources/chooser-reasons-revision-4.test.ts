@@ -1,5 +1,8 @@
 // S2-B W9 (npstorey/civic-ai-tools#309): the chooser line's load reasons are bundle revision 3's words, verbatim.
 //
+// READ AGAIN AT REVISION 4 (S2-B P3R, the seat's ruling 7): `trace.loadSpan.loadOutcome` is unchanged from
+// revision 3, so the three reasons are revision 4's words too, and the pin names revision 4's digest.
+//
 // The bundle the installed verify-core names for this site's producer profile
 // (`PRODUCER_PROFILE_SUBTYPES['ai-assisted-analysis/civicaitools-v1'].bundle`) states, at its `:142`
 // (`trace.loadSpan.loadOutcome`'s sentence), the reason the chooser sentence gives for a source requested and
@@ -20,8 +23,8 @@ import assert from 'node:assert/strict';
 import { PRODUCER_PROFILE_SUBTYPES } from '@typedstandards/verify-core';
 import { CHOOSER_REASONS } from './copy.ts';
 
-/** The digest of the bundle these words were read from: verify-core 0.15.2's row, revision 3. */
-const BUNDLE_SHA256_OF_THESE_WORDS = 'db8175703601a5de9d785a2cda93db194eb05cdeeb222dcfd509ea8ab249f016';
+/** The digest of the bundle these words were read from: verify-core 0.15.3's row, revision 4. */
+const BUNDLE_SHA256_OF_THESE_WORDS = '4c623892516dc1996e412c313c2208e0880d594e753ef0c9d2a1a3e4f4ce5c81';
 
 test('S2-B W9: the installed producer-profile bundle is the one the chooser reasons were read from', () => {
   const row = (PRODUCER_PROFILE_SUBTYPES as Record<string, { bundle?: { url: string; sha256: string } }>)['ai-assisted-analysis/civicaitools-v1']?.bundle;

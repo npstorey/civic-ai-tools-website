@@ -167,7 +167,7 @@ test('premise: the three sources are configured and the switch is unset', () => 
     assert.equal(Object.hasOwn(configured, key), false, `premise: ${key} is unset`);
   }
   assert.deepEqual(withPortal.sourcesOffered.slice(0, 3).map((s) => s.reason), ['configured', 'configured', 'configured']);
-  assert.equal(ROUTER_VERSION, '0.8.0', 'premise: the installed router is the pin this criterion is for');
+  assert.equal(ROUTER_VERSION, '0.9.0', 'premise: the installed router is the pin this criterion is for');
 });
 
 test('criterion P: the composed prompt is byte-identical to 3e9717b\'s, with and without a portal', () => {
@@ -193,9 +193,14 @@ test('criterion P: the composition moves exactly the two named facts', () => {
   const base = AT_BASE.components;
   // S2-B: the three sources' components are as at the base; City Record's pack, offered since router 0.8.0, adds its
   // own before the router's (what it states is P3's, W6).
-  assert.deepEqual(observed.components.slice(0, 3), base.slice(0, -1), 'a source\'s component moved');
+  // S2-B P3R: router 0.9.0 carries G0-C1 = A (hub #317 6835239767), Data Commons' new id. The base's bytes above
+  // stay as captured; that one moved fact is named here, so any other change to a source's component still fails.
+  const G0_C1 = { from: 'datacommons-mcp@https://github.com/datacommonsorg/agent-toolkit', to: 'Data Commons MCP Server@https://api.datacommons.org/mcp' };
+  const expected = base.slice(0, -1).map((c) => ((c as { id: string }).id === G0_C1.from ? { ...c, id: G0_C1.to } : c));
+  assert.notDeepEqual(expected, base.slice(0, -1), 'premise: the base states Data Commons by its old id');
+  assert.deepEqual(observed.components.slice(0, 3), expected, 'a source\'s component moved');
   assert.equal(observed.components.length, base.length + 1);
   assert.equal((observed.components[3] as { id: string }).id, 'nyc-record@https://data.cityofnewyork.us/d/dg92-zbpx');
   assert.deepEqual(base.at(-1), { id: '@typedstandards/civic-typed-router', version: '0.2.0' });
-  assert.deepEqual(observed.components.at(-1), { id: '@typedstandards/civic-typed-router', version: '0.8.0' });
+  assert.deepEqual(observed.components.at(-1), { id: '@typedstandards/civic-typed-router', version: '0.9.0' });
 });

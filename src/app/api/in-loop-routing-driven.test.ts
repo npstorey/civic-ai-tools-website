@@ -134,6 +134,12 @@ const ONE_ROW = JSON.stringify({ data: [{ count: '512' }], total_rows: 1 });
 const MCP_CALLS: Array<{ path: string; tool?: string }> = [];
 /** The same calls with their arguments, for S2-B's pack drive (MCP_CALLS keeps its shape). */
 const MCP_CALL_ARGS: Array<{ path: string; tool?: string; args?: Record<string, unknown> }> = [];
+// S2-B P3R (the seat's ruling 12): the Socrata path reports what the deployed
+// server reported at the GR read, and lists its tools as it listed them there,
+// so the base check finds the pack's pin (`src/lib/mcp/fixtures/socrata-tools-at-gr.json`,
+// copied by script; `socrata-tools-at-gr.test.ts` holds each pinned entry to its pin).
+const GR = JSON.parse(fs.readFileSync(path.join(path.dirname(fileURLToPath(import.meta.url)), '../../lib/mcp/fixtures/socrata-tools-at-gr.json'), 'utf8')) as { serverInfo: { name: string; version: string }; tools: unknown[] };
+const MCP_LISTS: string[] = [];
 const mcp = http.createServer(async (req, res) => {
   let body = '';
   for await (const chunk of req) body += chunk;
@@ -144,7 +150,14 @@ const mcp = http.createServer(async (req, res) => {
   if (msg.method === 'initialize') {
     const instructions = route.startsWith('/dc/') ? { instructions: DATA_COMMONS_INSTRUCTIONS } : {};
     res.writeHead(200, { 'content-type': 'application/json', 'mcp-session-id': 'civic-r8-w1' });
-    res.end(reply({ result: { protocolVersion: '2024-11-05', capabilities: { tools: {} }, serverInfo: { name: 'civic-r8-w1-fixture', version: '0' }, ...instructions } }));
+    const serverInfo = route.startsWith('/socrata/') ? GR.serverInfo : { name: 'civic-r8-w1-fixture', version: '0' };
+    res.end(reply({ result: { protocolVersion: '2024-11-05', capabilities: { tools: {} }, serverInfo, ...instructions } }));
+    return;
+  }
+  if (msg.method === 'tools/list') {
+    MCP_LISTS.push(route);
+    res.writeHead(200, { 'content-type': 'application/json' });
+    res.end(reply({ result: { tools: route.startsWith('/socrata/') ? GR.tools : [] } }));
     return;
   }
   if (msg.method === 'prompts/get') {
@@ -338,9 +351,11 @@ const NOTEBOOK_IN_LOOP = await drive('query-notebook, in-loop', 'in-loop', () =>
 const COMPARE_IN_LOOP = await drive('compare, in-loop', 'in-loop', () =>
   compareRoute.POST(post('/api/compare', { query: QUESTION, model: 'fixture-fast', portal: PORTAL })));
 const PACK_ARGS_FROM = MCP_CALL_ARGS.length;
+const PACK_LISTS_FROM = MCP_LISTS.length;
 const PACK = await drive('compare-stream, in-loop, City Record', 'in-loop', () =>
   compareStreamRoute.POST(post('/api/compare-stream', { ...streamBody, query: PACK_QUESTION })));
 const PACK_MCP_CALLS = MCP_CALL_ARGS.slice(PACK_ARGS_FROM);
+const PACK_LISTS = MCP_LISTS.slice(PACK_LISTS_FROM);
 
 // --- Readers -------------------------------------------------------------------------
 
@@ -493,8 +508,9 @@ test('criterion 5, compare-stream: the root span states routing, the definition 
   assert.deepEqual(JSON.parse(root['analysis.routing'] ?? 'null'), { method: 'in-loop', version: ROUTER_VERSION });
   const block = await socrataBlock();
   assert.ok(systemText(last).includes(block), 'premise — the final prompt carries the Socrata block the router composes');
+  // S2-B P3R (criterion 4): the run read the Socrata server, so its component states what it reported.
   const components = [
-    { id: 'socrata-mcp-server@https://github.com/npstorey/socrata-mcp-server', guidanceHash: sha(block), guidanceOrigin: 'fallback' },
+    { id: 'socrata-mcp-server@https://github.com/npstorey/socrata-mcp-server', guidanceHash: sha(block), guidanceOrigin: 'fallback', reportedName: 'socrata-mcp-server', reportedVersion: '0.9.2' },
     { id: '@typedstandards/civic-typed-router', version: ROUTER_VERSION },
   ];
   assert.deepEqual(JSON.parse(root['analysis.components'] ?? 'null'), components);
@@ -820,9 +836,9 @@ const EXPECTED_CONSIDERED = {
   ruleVersion: '1',
 };
 
-test('S2-B W4 premise: the installed router\'s inventory is civic 2026-11-09.1, seven entries, and the drives\' directory set lists four', () => {
+test('S2-B W4 premise: the installed router\'s inventory is civic 2026-11-12.1, seven entries, and the drives\' directory set lists four', () => {
   assert.equal(CIVIC_INVENTORY.id, 'civic');
-  assert.equal(CIVIC_INVENTORY.version, '2026-11-09.1');
+  assert.equal(CIVIC_INVENTORY.version, '2026-11-12.1');
   assert.equal(router.civicRouter.manifest.length, 7);
   assert.deepEqual(DIRECTORY_IDS, ['socrata', 'data-commons', 'boston-opencontext', 'nyc-record']);
 });
@@ -898,10 +914,11 @@ const PACK_DEFINITION = 'A pack is a source with no server of its own. Its reque
 test('S2-B W6: the pack drive\'s trace and record credit the pack and state its base, which the run did not load', () => {
   const stated = JSON.parse(rootAttributes(traceOf(PACK))['analysis.components'] ?? 'null') as Array<{ id: string; version?: string; guidanceHash?: string; guidanceOrigin?: string }>;
   assert.deepEqual(stated.map((c) => c.id), [SOCRATA_SERVER_ID, PACK_ID, '@typedstandards/civic-typed-router']);
-  assert.deepEqual(stated[0], { id: SOCRATA_SERVER_ID }, 'the base is not stated as { id } alone');
+  // S2-B P3R (criterion 4): the base's bare { id }, with what the base reported on the read the check compared.
+  assert.deepEqual(stated[0], { id: SOCRATA_SERVER_ID, reportedName: 'socrata-mcp-server', reportedVersion: '0.9.2' }, 'the base is not stated as { id } with its report alone');
   const pack = stated[1];
   assert.equal(pack.version, PACK_CREDIT);
-  assert.equal(PACK_CREDIT, '1+b4a208462f8d');
+  assert.equal(PACK_CREDIT, '1.1+ef1b4b6089e9');
   assert.match(pack.guidanceHash ?? '', /^[0-9a-f]{64}$/);
   assert.equal(pack.guidanceOrigin, 'inline');
   const record = (packageFrom(traceOf(PACK), toolCallsOf(PACK)).pkg.extensions?.['org.civicaitools.composition'] as Json).components;
@@ -918,6 +935,16 @@ test('S2-B W6: the pack drive\'s definition hash is the definition over the cred
   t.diagnostic(`pack drive definitionHash: before (no credit, no base) ${before.hash}; after ${after.hash}`);
   assert.notEqual(before.hash, after.hash, 'premise: the credit and the base move the definition hash');
   assert.equal(root['analysis.definition_hash'], after.hash, 'the run\'s definition hash is not the definition over the credited components');
+  // S2-B P3R (the seat's ruling 4): the reported keys sit beside `id`, so the definition is the same without them.
+  const unreported = stated.map((c) => Object.fromEntries(Object.entries(c).filter(([k]) => k !== 'reportedName' && k !== 'reportedVersion'))) as typeof stated;
+  assert.notDeepEqual(unreported, stated, 'premise: the stated components carry reported keys');
+  const withoutKeys = router.civicRouter.harnessDefinition({ configured, selection: ['nyc-record'], chosenBy: 'model', components: [...unreported, INVENTORY_COMPONENT] });
+  assert.equal(withoutKeys.hash, after.hash, 'the reported keys moved the definition hash');
+});
+
+test('S2-B P3R: the pack drive read the base\'s list once, on the Socrata path, for its two sent pack calls', () => {
+  assert.deepEqual(PACK_LISTS, ['/socrata/mcp'], `the pack drive's tools/list reads: ${JSON.stringify(PACK_LISTS)}`);
+  assert.equal(PACK_MCP_CALLS.length, 2, 'premise: two pack calls were sent');
 });
 
 test('S2-B D3 and R5: adaptRecord over the pack drive\'s record names the pack on the Loaded line, the id whole in a code part, then the definition once', async () => {

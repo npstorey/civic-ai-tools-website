@@ -1,6 +1,10 @@
 // S2-B F9 and D3 (npstorey/civic-ai-tools#309): the chooser line's sentences for what an in-loop run considered,
 // and its clause for a loaded pack, are bundle revision 3's words, verbatim.
 //
+// READ AGAIN AT REVISION 4 (S2-B P3R, the seat's ruling 7): `composition.considered` is unchanged from revision 3,
+// and `civic.packId`'s sentence changed while its fallback, 'a pack recorded as {packId}, using {the host's name for
+// the base}', is byte-equal; so every word pinned here is revision 4's too, and the pin names revision 4's digest.
+//
 // The bundle the installed verify-core names for this site's producer profile states, at its `:88`
 // (`composition.considered`'s sentence), the two sentences that follow the chooser's in-loop sentence: the count
 // and the inventory, then the rule's words (`directory-set` version 1), or, for a rule this site has no words for,
@@ -10,7 +14,7 @@
 // `SOURCE_CHOOSER_PACK.definition` is R5's sentence, the owner's D4 = A, not the bundle's, and is pinned here
 // beside them.
 //
-// THE PIN, as `chooser-reasons-revision-3.test.ts` pins `:142`: the bundle is not installed, only its address
+// THE PIN, as `chooser-reasons-revision-4.test.ts` pins `:142`: the bundle is not installed, only its address
 // and digest are, so these words are held to the digest they were read from. When an upgrade moves the
 // installed digest, this test fails, and the words are read again from the new bundle.
 //
@@ -26,8 +30,8 @@ import * as copy from './copy.ts';
 type Loose = Record<string, any>; // eslint-disable-line @typescript-eslint/no-explicit-any
 const C = copy as unknown as Loose;
 
-/** The digest of the bundle these words were read from: verify-core 0.15.2's row, revision 3. */
-const BUNDLE_SHA256_OF_THESE_WORDS = 'db8175703601a5de9d785a2cda93db194eb05cdeeb222dcfd509ea8ab249f016';
+/** The digest of the bundle these words were read from: verify-core 0.15.3's row, revision 4. */
+const BUNDLE_SHA256_OF_THESE_WORDS = '4c623892516dc1996e412c313c2208e0880d594e753ef0c9d2a1a3e4f4ce5c81';
 
 test('S2-B F9: the installed producer-profile bundle is the one the considered sentences and the pack clause were read from', () => {
   const row = (PRODUCER_PROFILE_SUBTYPES as Record<string, { bundle?: { url: string; sha256: string } }>)['ai-assisted-analysis/civicaitools-v1']?.bundle;

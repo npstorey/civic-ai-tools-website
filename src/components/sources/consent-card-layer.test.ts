@@ -248,18 +248,21 @@ const sha = (value: unknown) => createHash('sha256').update(typeof value === 'st
  * router 0.8.0 NYC City Record is a pack over the Socrata server, offered wherever
  * Socrata is, so its row moves (six) or is added (three), and the privacy page gains
  * or rewrites its row. Each base `version` is unchanged.
+ * S2-B P3R re-captured `statement` and `hash` by the same computation (the seat's ruling 11): router 0.9.0 names
+ * NYC City Record's source `NYC City Record` (its manifest `displayName`), the one change in the statement's bytes;
+ * each base `version` and the privacy page are unchanged.
  */
 const BASE: Record<'six' | 'three', { statement: string; version: string; hash: string; privacy: string }> = {
   six: {
-    statement: '61ccd44a1d8def98e43d50ca02594f5ef4fbcbab53c3d4f68731e925ef2bf55f',
+    statement: 'ad7aca3dd4fa6c871565ea3e07d13b75532bf105f1149e4d6d85a6dba0cc6486',
     version: '2489d0dda25a79b3286c380379c6d2c8202e66a77fe5b4f493f558a7ce190f9c',
-    hash: 'dd4d254fb01632fabd11d539cea286a5f764b75a0073506433a8918cddb51b1e',
+    hash: '1ee9511a279f58b523082c0dfb3c83125a9a6056929147496f3bb3e5c12e20bc',
     privacy: 'd02b95b4be497772af64eb12c80a20b94b8cb16642de8295fa5aeeff0484422c',
   },
   three: {
-    statement: '8b90aeed76257fae8f270412045f068497f9c4641868ca91d6b688c82849f47f',
+    statement: 'b7bab42b2422402ed60b49f3113ce2177677cf53b85be2c941e05abdf9c88fff',
     version: 'ce0f4f09dff9d9d998a00cca59b12ee92486752ce9d94ed1eb310eae01c69325',
-    hash: 'a5e818b6f0d85be1b68571b7769de6d77dec031ad03606b4b44167d67c8ef59c',
+    hash: 'cfc7839f4e4064989e5ab43f4fc4b3830a72e7ea2e4af56102f7304b066a38c8',
     privacy: '7ab08f254f4e46510caa0ef44329bdd152a058b589612a9eb1d836c2c8e6a227',
   },
 };

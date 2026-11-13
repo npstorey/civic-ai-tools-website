@@ -349,6 +349,12 @@ const ROUTER_VERSION = (JSON.parse(fs.readFileSync(path.join(process.cwd(), 'nod
 
 // --- Tests ---------------------------------------------------------------------------
 
+/** S2-B P3R: the remote servers each drive read in its own run (ruling 6), by drive name. */
+const REPORTED_IN_RUN: Record<string, string[]> = {
+  '/api/compare-stream': ['socrata', 'data-commons', 'boston-opencontext'],
+  '/api/query-notebook': ['socrata', 'boston-opencontext'],
+};
+
 for (const d of [COMPARE_STREAM, NOTEBOOK]) {
   test(`${d.name}: the root span carries the five run attributes`, () => {
     const root = rootAttributes(traceOf(d));
@@ -406,12 +412,18 @@ for (const d of [COMPARE_STREAM, NOTEBOOK]) {
     for (const [sourceId, block] of Object.entries(blocks)) {
       assert.ok(system.includes(block), `premise — the system message does not carry the ${sourceId} block the router composes`);
     }
+    // S2-B P3R (criterion 4; the seat's ruling 6): a remote server's component states what it reported only when
+    // this run read it. The first drive (compare-stream) makes every handshake; the second (query-notebook) reads
+    // Socrata and Boston on their sessions (it calls both) and makes no request to Data Commons, whose
+    // instructions it already holds, so Data Commons carries no report there.
+    const reported = REPORTED_IN_RUN[d.name];
+    const keys = (sourceId: string) => (reported.includes(sourceId) ? { reportedName: 'civic-r2-w4-fixture', reportedVersion: '0' } : {});
     assert.deepEqual(JSON.parse(root['analysis.components'] ?? 'null'), [
-      { id: 'socrata-mcp-server@https://github.com/npstorey/socrata-mcp-server', guidanceHash: sha(blocks.socrata), guidanceOrigin: 'fallback' },
-      { id: 'datacommons-mcp@https://github.com/datacommonsorg/agent-toolkit', guidanceHash: sha(blocks['data-commons']), guidanceOrigin: 'endpoint' },
-      { id: 'opencontext@https://data-mcp.boston.gov/mcp', guidanceHash: sha(blocks['boston-opencontext']), guidanceOrigin: 'inline' },
-      // S2-B: the pack's component as router 0.8.0's composition states it (its credit is P3's, W6).
-      { id: 'nyc-record@https://data.cityofnewyork.us/d/dg92-zbpx', version: '1+b4a208462f8d', guidanceHash: sha(blocks['nyc-record']), guidanceOrigin: 'inline' },
+      { id: 'socrata-mcp-server@https://github.com/npstorey/socrata-mcp-server', guidanceHash: sha(blocks.socrata), guidanceOrigin: 'fallback', ...keys('socrata') },
+      { id: 'Data Commons MCP Server@https://api.datacommons.org/mcp', guidanceHash: sha(blocks['data-commons']), guidanceOrigin: 'endpoint', ...keys('data-commons') },
+      { id: 'opencontext@https://data-mcp.boston.gov/mcp', guidanceHash: sha(blocks['boston-opencontext']), guidanceOrigin: 'inline', ...keys('boston-opencontext') },
+      // S2-B: the pack's component as router 0.9.0's composition states it (its credit is P3's, W6).
+      { id: 'nyc-record@https://data.cityofnewyork.us/d/dg92-zbpx', version: '1.1+ef1b4b6089e9', guidanceHash: sha(blocks['nyc-record']), guidanceOrigin: 'inline' },
       { id: '@typedstandards/civic-typed-router', version: ROUTER_VERSION },
     ]);
   });
@@ -672,3 +684,12 @@ for (const c of LOOP_CASES) {
     assert.deepEqual(graphRows(packageRun(run.trace, run.toolCalls).pkg), c.expected, 'civic:loadAsked per load activity');
   });
 }
+
+// S2-B P3R (the seat's ruling 5): a run's components state the reads the run made after it started, so an
+// all-sources query-notebook run writes them at the root's end, as an in-loop run does; every other attribute it
+// writes stays at the start. Before: the components were written with the root's start, before the flows statement.
+test('S2-B P3R ruling 5: an all-sources query-notebook run writes its components at the root\'s end, after the start\'s attributes', () => {
+  const keys = Object.keys(rootAttributes(traceOf(NOTEBOOK)));
+  assert.ok(keys.includes('analysis.flows_statement'), 'premise: the run states its flows statement');
+  assert.equal(keys.at(-1), 'analysis.components', `the components are not the root's last attribute: ${keys.join(', ')}`);
+});

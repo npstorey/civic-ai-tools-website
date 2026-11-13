@@ -1096,3 +1096,44 @@ function formatMcpResult(result: McpToolResult): string {
   }
   return JSON.stringify(result);
 }
+
+// --- S2-B P3R, tree 8: typed stubs, so the red tree's tests type-check --------------------------------
+//
+// The red tree moves the pins and adds the tests, and runs no check: nothing below reads a server. Tree 9
+// replaces this block with the client's `serverInfo`, `tools/list` and the run's reads.
+
+/** What a server reported about itself (`serverInfo`). Stub. */
+export interface ReportedServerInfo {
+  name?: string;
+  version?: string;
+}
+
+/** One run's reads of `serverInfo`, by source id. Stub. */
+export type RunServerReads = Map<string, ReportedServerInfo>;
+
+/** What one read of a server's list holds. Stub. */
+export interface ServerToolsRead {
+  serverInfo: ReportedServerInfo | null;
+  tools: unknown[] | null;
+}
+
+/** Stub: records nothing. */
+export function startRunServerReads(): RunServerReads {
+  return new Map();
+}
+
+/** Stub: the components as given. */
+export function withReportedKeys<C extends { id: string }>(
+  components: readonly C[],
+  reads: RunServerReads,
+  configured: unknown,
+): Array<C & { reportedName?: string; reportedVersion?: string }> {
+  void reads;
+  void configured;
+  return [...components];
+}
+
+/** Stub: no list is read in the red tree. */
+export async function readServerTools(sourceId: string): Promise<ServerToolsRead> {
+  throw new Error(`readServerTools("${sourceId}"): not in tree 8`);
+}

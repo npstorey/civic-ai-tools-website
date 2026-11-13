@@ -56,12 +56,13 @@ function assertCredit(component: Component | undefined): void {
 
 const inLoop = (loaded: string[]) => skill.composeInLoopSystemPrompt({ portal: 'data.example.org', configured, directory: DIRECTORY, loaded, now: NOW });
 
-test('S2-B W6 premise: the installed pack is NYC City Record over Socrata, version 1, hash b4a20846…', () => {
+test('S2-B W6 premise: the installed pack is NYC City Record over Socrata, version 1.1, hash ef1b4b60…', () => {
   assert.equal(PACK.id, 'nyc-record@https://data.cityofnewyork.us/d/dg92-zbpx');
   assert.equal(BASE.id, 'socrata-mcp-server@https://github.com/npstorey/socrata-mcp-server');
-  assert.equal(PACK.pack?.version, '1');
-  assert.match(PACK.pack?.hash ?? '', /^b4a20846[0-9a-f]{56}$/);
-  assert.equal(CREDIT, '1+b4a208462f8d');
+  // S2-B P3R: router 0.9.0's pack is version 1.1 (the seat's 6822292750), hash ef1b4b60….
+  assert.equal(PACK.pack?.version, '1.1');
+  assert.match(PACK.pack?.hash ?? '', /^ef1b4b60[0-9a-f]{56}$/);
+  assert.equal(CREDIT, '1.1+ef1b4b6089e9');
   assert.ok(PACK_BLOCK.length > 0, 'premise: the pack carries guidance of its own');
 });
 

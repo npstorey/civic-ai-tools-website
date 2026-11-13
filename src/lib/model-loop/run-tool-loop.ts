@@ -57,6 +57,7 @@ import { deriveOperationType, isTool, toolSpanNames, upstreamToolName } from '..
 import type { ToolFailureKind } from '../notebook-author/tool-to-cell.ts';
 import { PortalLockedCallError, portalOutsideLock } from '../portal-lock.ts';
 import { injectPackFilter, packCallOutsideFilter, packFilterOf, PackFilterRefusedError } from '../mcp/pack-filter.ts';
+import type { BaseCheck } from '../mcp/base-check.ts';
 import type { LoadOutcome } from '@typedstandards/civic-typed-harness';
 
 export interface TraceContext {
@@ -291,6 +292,11 @@ export interface ToolLoopOptions {
    * `llm_inference` span then states its own request's system prompt hash.
    */
   loadStep?: LoadStep;
+  /**
+   * S2-B P3R, tree 8: the base check's option, typed so the red tree's tests
+   * type-check. The red tree reads it nowhere: no pack call is checked.
+   */
+  checkBase?: BaseCheck;
   /** Label for this loop's operator log lines. */
   logContext?: string;
 }

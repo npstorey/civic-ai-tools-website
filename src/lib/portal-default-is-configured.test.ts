@@ -321,9 +321,9 @@ const EXCEPTIONS: readonly Exception[] = [
   },
   {
     path: 'node_modules/@typedstandards/civic-typed-router/dist/civic/data-commons.js',
-    classification: 'documentation',
-    hits: 1,
-    why: "A code comment naming Google Data Commons' hosted MCP endpoint (moved from tools.ts).",
+    classification: 'server-endpoint',
+    hits: 2,
+    why: "Google Data Commons' hosted MCP endpoint, the named server's own host: in a code comment (moved from tools.ts) and, since router 0.9.0, in the entry's `id` (G0-C1 = A, npstorey/civic-ai-tools#317), which names that address. Never a portal a run chooses or inherits.",
   },
   {
     path: 'node_modules/@typedstandards/civic-typed-router/dist/civic/env.js',
@@ -339,8 +339,8 @@ const EXCEPTIONS: readonly Exception[] = [
   {
     path: 'node_modules/@typedstandards/civic-typed-router/dist/civic/nyc-record.js',
     classification: 'server-endpoint',
-    hits: 12,
-    why: "The one portal the NYC City Record pack reads (its City Record Online dataset, dg92-zbpx), fixed by the pack's filter and named in its header comments, its query recipes, the filter and its inventory id; the pack's, every instance's the same, never a portal a run chooses or inherits.",
+    hits: 13,
+    why: "The one portal the NYC City Record pack reads (its City Record Online dataset, dg92-zbpx), fixed by the pack's filter and named in its header comments, its query recipes, the filter, its inventory id and, since router 0.9.0, its `api` member; the pack's, every instance's the same, never a portal a run chooses or inherits.",
   },
 ];
 

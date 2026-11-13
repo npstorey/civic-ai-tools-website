@@ -160,11 +160,12 @@ test('the prompt pieces: configured, the pre-rule text; unset, the same lines le
 });
 
 test('the lock section names Boston OpenContext only where it is configured', () => {
-  // S2-B: with City Record's pack, which router 0.8.0 offers wherever Socrata is, named last.
-  assert.match(portalLockGuidance('records.city-a.example', SET), /\(Data Commons, Boston OpenContext for Boston, and the City Record server for New York City notices\) are separate, remain available/);
+  // S2-B: with City Record's pack, which router 0.8.0 offers wherever Socrata is, named last; since router 0.9.0
+  // its lock mention is "City Record for New York City notices" (the router's text, not this site's; S2-B P3R).
+  assert.match(portalLockGuidance('records.city-a.example', SET), /\(Data Commons, Boston OpenContext for Boston, and City Record for New York City notices\) are separate, remain available/);
   const unset = portalLockGuidance('records.city-a.example', UNSET);
   for (const needle of NEEDLES) assert.ok(!unset.includes(needle), `the unset lock section carries ${needle}`);
-  assert.match(unset, /the other data sources described above \(Data Commons, and the City Record server for New York City notices\) are separate, remain available, and keep their own scope\.$/);
+  assert.match(unset, /the other data sources described above \(Data Commons, and City Record for New York City notices\) are separate, remain available, and keep their own scope\.$/);
 });
 
 test('trace attribution: the routed source, or none — never a throw', () => {

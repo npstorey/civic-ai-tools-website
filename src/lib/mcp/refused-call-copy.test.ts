@@ -279,3 +279,29 @@ test('S2-B R9a: a refused pack call reaches the model as the pack refusal, by ty
   assert.ok(text.endsWith('do not include any raw error text, status codes, server names, or system details.'), 'the closing rider is not the twin\'s');
   assert.equal(streaming.classifyStreamError(new PackFilterRefusedError(filter!)), 'generic', 'the refusal classifies as something specific: the reader would not get the generic words (R9b)');
 });
+
+// --- S2-B P3R (npstorey/civic-ai-tools#309): the base check's refusal, R9a's twin ----------------
+//
+// The owner's D3 (OA-790): a pack call the base check did not send reaches the model in fixed words chosen by the
+// error's type, under the twins' riders: the preamble first, the call said to be not sent, no retry wording, no
+// value of the call, and the closing rider. {source} is the pack's reader name.
+
+test('S2-B P3R D3: a pack call the base check did not send reaches the model as the ruled line, by type, under the riders', async () => {
+  const { packFilterOf } = await import('./pack-filter.ts');
+  const { BaseChangedError } = await import('./base-check.ts');
+  const filter = packFilterOf('nyc_record__get_data');
+  assert.ok(filter, 'premise: City Record is a pack with a filter');
+  const text = streaming.describeToolFailureForLlm('nyc_record__get_data', new BaseChangedError(filter!));
+  assert.equal(
+    text,
+    'This data request returned no data. Do not estimate, guess, or fabricate any values to fill the gap. This tool belongs to NYC City Record.' +
+      " The server that NYC City Record's requests go through does not match what NYC City Record was written for, so this request was not sent." +
+      " Do not call NYC City Record's tools again for this question. If the question can be answered from another data source you have tools for, make that request instead;" +
+      ' if it cannot, tell the user in plain language that NYC City Record could not be used for this question, and do not include any raw error text, status codes, server names, or system details.',
+  );
+  assert.ok(text.startsWith('This data request returned no data. Do not estimate, guess, or fabricate any values to fill the gap.'), 'the preamble does not open it');
+  assert.ok(text.includes('so this request was not sent'), 'it does not say the call was not sent');
+  assert.doesNotMatch(text, RETRY, `the refusal tells the model to retry:\n${text}`);
+  for (const value of ['dg92-zbpx', 'data.cityofnewyork.us', 'socrata-mcp-server', '0.9.2']) assert.ok(!text.includes(value), `the refusal names ${value}`);
+  assert.ok(text.endsWith('do not include any raw error text, status codes, server names, or system details.'), 'the closing rider is not the twin\'s');
+});

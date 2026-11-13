@@ -37,7 +37,13 @@ import * as sourceNameModule from './source-name.ts';
 test('T13: every manifest entry reads the record page\'s name, from its displayName and from a registry label alike', () => {
   assert.ok(CIVIC_MANIFEST.length >= 4, 'premise: the manifest has its four entries');
   for (const entry of CIVIC_MANIFEST) {
-    assert.ok(entry.displayName.endsWith(' MCP Server'), `premise: ${entry.sourceId}'s name ends " MCP Server" (${entry.displayName})`);
+    // S2-B P3R: since router 0.9.0 a pack, which has no server of its own, is named without the suffix
+    // ("NYC City Record"); every source with a server keeps it. The reader name is the same either way.
+    if (entry.base === undefined) {
+      assert.ok(entry.displayName.endsWith(' MCP Server'), `premise: ${entry.sourceId}'s name ends " MCP Server" (${entry.displayName})`);
+    } else {
+      assert.ok(!entry.displayName.includes('MCP Server'), `premise: the pack ${entry.sourceId}'s name carries no " MCP Server" (${entry.displayName})`);
+    }
     const record = displayNameForSource(entry.sourceId);
     assert.equal(readerSourceName({ sourceId: entry.sourceId, displayName: entry.displayName }), record, `${entry.sourceId}: the reader name and the record name differ`);
     assert.equal(readerSourceName({ sourceId: entry.sourceId, label: entry.displayName }), record, `${entry.sourceId}: a label reads differently from a displayName`);
@@ -100,6 +106,10 @@ interface EntryLike { what: string; publisher: string; link: string }
 const LINK_EXCEPTIONS: Readonly<Record<string, string>> = {
   'boston-opencontext': 'https://github.com/CityOfBoston/OpenContext',
   'nyc-record': 'https://github.com/BetaNYC/nyc-record-mcp',
+  // S2-B P3R (the seat's ruling 10): router 0.9.0's Data Commons `id` names its API address (G0-C1 = A), and
+  // the map still links today's page (`copy.ts`). Held here, test-only, until npstorey/civic-ai-tools-website#750
+  // decides the link; any other drift of this entry still fails.
+  'data-commons': 'https://github.com/datacommonsorg/agent-toolkit',
 };
 
 /** The address in a manifest `id`: the part after the "@" that precedes "https://". */

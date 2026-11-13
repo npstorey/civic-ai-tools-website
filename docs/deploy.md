@@ -1066,7 +1066,7 @@ this reproduction into a different error than the one you came to see.
 Most data sources are servers the instance calls at a configured address. A
 **hosted source** is one the instance runs itself: a publisher-bundled MCP
 server that speaks stdio only. The router (`@typedstandards/civic-typed-router`
-0.8.x) pins three, each published by BetaNYC, by version together with the
+0.9.x) pins three, each published by BetaNYC, by version together with the
 commit the registry states for that version. Each is off unless its own
 switch is `sandbox`.
 
