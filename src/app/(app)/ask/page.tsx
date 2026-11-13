@@ -146,52 +146,51 @@ export default async function AskPage({ searchParams }: AskPageProps) {
   }
 
   return (
+    // The h1 handed to the surface apart from the lede and the note, which give way at the first send (UX-2 P3b-1
+    // leg H, A1 = A); the note returns on the next visit, until the first publish.
     <QuerySurface
       presentation="answer-first"
       defaultMode="notebook"
+      heading={<h1 style={{ fontSize: '28px', fontWeight: 700, marginBottom: '8px' }}>Ask a question</h1>}
+      framingStyle={{ marginBottom: '24px' }}
     >
-      <div style={{ marginBottom: '24px' }}>
-        <h1 style={{ fontSize: '28px', fontWeight: 700, marginBottom: '8px' }}>
-          Ask a question
-        </h1>
-        <p
+      <p
+        style={{
+          fontSize: '15px',
+          lineHeight: '160%',
+          color: 'var(--text-secondary)',
+          maxWidth: '650px',
+        }}
+      >
+        Ask in plain language. The answer is built from live public data, and
+        you can publish it as a signed analysis anyone can verify
+        independently.
+      </p>
+      {showFirstRunOrientation && (
+        <div
           style={{
-            fontSize: '15px',
-            lineHeight: '160%',
+            marginTop: '16px',
+            padding: '12px 16px',
+            border: '1px solid var(--border-color)',
+            borderRadius: '6px',
+            backgroundColor: 'var(--card-background)',
+            fontSize: '14px',
+            lineHeight: 1.6,
             color: 'var(--text-secondary)',
             maxWidth: '650px',
           }}
         >
-          Ask in plain language. The answer is built from live public data, and
-          you can publish it as a signed analysis anyone can verify
-          independently.
-        </p>
-        {showFirstRunOrientation && (
-          <div
-            style={{
-              marginTop: '16px',
-              padding: '12px 16px',
-              border: '1px solid var(--border-color)',
-              borderRadius: '6px',
-              backgroundColor: 'var(--card-background)',
-              fontSize: '14px',
-              lineHeight: 1.6,
-              color: 'var(--text-secondary)',
-              maxWidth: '650px',
-            }}
-          >
-            <strong style={{ color: 'var(--text-primary)', fontWeight: 600 }}>
-              Getting started.
-            </strong>{' '}
-            Ask a question below and the answer is assembled from live public
-            data, with every query it ran shown alongside the result. When an
-            answer is worth keeping, publish it: publishing creates a signed
-            package — a permanent, independently verifiable account of
-            the answer and how it was produced — listed on your dashboard.
-            This note disappears after your first publish.
-          </div>
-        )}
-      </div>
+          <strong style={{ color: 'var(--text-primary)', fontWeight: 600 }}>
+            Getting started.
+          </strong>{' '}
+          Ask a question below and the answer is assembled from live public
+          data, with every query it ran shown alongside the result. When an
+          answer is worth keeping, publish it: publishing creates a signed
+          package — a permanent, independently verifiable account of
+          the answer and how it was produced — listed on your dashboard.
+          This note disappears after your first publish.
+        </div>
+      )}
     </QuerySurface>
   );
 }

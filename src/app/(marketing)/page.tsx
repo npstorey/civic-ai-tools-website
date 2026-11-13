@@ -8,24 +8,24 @@ export default function Home() {
   return (
     <>
       {/* Signed out, Advanced options gives way to what signing in adds (UX pass row 7). */}
-      <QuerySurface advancedOptions="hidden-signed-out">
-        {/* Hero Section */}
-        <div style={{ textAlign: 'center', marginBottom: '24px', paddingTop: '40px' }}>
-          <h1 style={{ marginBottom: '8px' }}>
-            Explore Open Data with AI
-          </h1>
-          <p
-            style={{
-              fontSize: '20px',
-              lineHeight: '150%',
-              color: 'var(--text-secondary)',
-              maxWidth: '650px',
-              margin: '0 auto',
-            }}
-          >
-            See how AI answers with and without access to real datasets
-          </p>
-        </div>
+      {/* Hero Section: the h1 handed to the surface apart from the subtitle, which gives way at the first send (UX-2
+          P3b-1 leg H, A5 = A). */}
+      <QuerySurface
+        advancedOptions="hidden-signed-out"
+        heading={<h1 style={{ marginBottom: '8px' }}>Explore Open Data with AI</h1>}
+        framingStyle={{ textAlign: 'center', marginBottom: '24px', paddingTop: '40px' }}
+      >
+        <p
+          style={{
+            fontSize: '20px',
+            lineHeight: '150%',
+            color: 'var(--text-secondary)',
+            maxWidth: '650px',
+            margin: '0 auto',
+          }}
+        >
+          See how AI answers with and without access to real datasets
+        </p>
       </QuerySurface>
 
       {/* CTA: narrow container */}

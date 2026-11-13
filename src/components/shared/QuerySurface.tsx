@@ -12,7 +12,10 @@
  * `children` renders in the form's narrow container, above the form — the
  * slot each mount uses for its own framing copy. Everything that is purely
  * framing (hero copy, calls to action, positioning) stays with the page; only
- * the form and its outputs live here.
+ * the form and its outputs live here. A mount hands its `h1` over apart from
+ * the rest (`heading`, with its wrapper's spacing as `framingStyle`): from the
+ * first send the framing gives way to the reader's question (UX-2 P3b-1 leg H,
+ * A1 = A, A5 = A), and the page keeps its one `h1`, visually hidden.
  *
  * THE DOCK (UX-2 P3b-1; leg H, the owner's design change, dock at send: plan
  * v3, #729 6825049451 and 6835240316). The first send that starts a run moves
@@ -34,7 +37,7 @@
  * remount in the same session does not show it again.
  */
 
-import { useState, useRef } from 'react';
+import { cloneElement, useState, useRef, type CSSProperties, type ReactElement } from 'react';
 import QueryForm from '@/components/QueryForm';
 import { useDefaultPortalArg } from '@/components/DefaultPortalProvider';
 import ComparisonDisplay from '@/components/ComparisonDisplay';
@@ -57,8 +60,15 @@ const FIRST_TIME_LINE_STORAGE_KEY = 'civicaitools.firstTimeLineDone';
 const parseFirstTimeLineDone = (raw: string | null): 'done' | null => (raw === 'done' ? 'done' : null);
 
 interface QuerySurfaceProps {
-  /** Framing content rendered above the form, inside its container. */
+  /** Framing content rendered above the form, inside its container, before the first send only. */
   children?: React.ReactNode;
+  /**
+   * The page's `h1`, handed over apart from the rest of its framing (UX-2 P3b-1 leg H). Before the first send it
+   * renders first in the framing's wrapper; from the send it stays, alone, carrying `ui-visually-hidden`.
+   */
+  heading?: ReactElement<{ className?: string }>;
+  /** The style of the wrapper around `heading` and `children` before the first send: the page's own spacing. */
+  framingStyle?: CSSProperties;
   /**
    * How this mount presents the standard-mode result (s6 P2, #229; Q62 G0).
    *
@@ -90,6 +100,8 @@ interface QuerySurfaceProps {
 
 export default function QuerySurface({
   children,
+  heading,
+  framingStyle,
   presentation = 'comparison',
   defaultMode = 'standard',
   advancedOptions = 'always',
@@ -260,9 +272,13 @@ export default function QuerySurface({
 
   return (
     <>
-      {/* Framing: narrow container */}
+      {/* Framing: narrow container. Before the first send, the page's framing; from it, only the page's h1, hidden. */}
       <div key="framing" style={{ maxWidth: '900px', margin: '0 auto', padding: '48px 24px 0' }}>
-        {children}
+        {!docked ? (
+          heading ? <div style={framingStyle}>{heading}{children}</div> : children
+        ) : heading ? (
+          cloneElement(heading, { className: [heading.props.className, 'ui-visually-hidden'].filter(Boolean).join(' ') })
+        ) : null}
       </div>
 
       {/* Query Form, before the first answer (its narrow column is the composer's own, `composer--form`) */}
