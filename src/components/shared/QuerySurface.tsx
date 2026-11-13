@@ -284,31 +284,31 @@ export default function QuerySurface({
       {/* Query Form, before the first answer (its narrow column is the composer's own, `composer--form`) */}
       {!docked && form}
 
-      {/* Results: wide container matching header max-w-6xl */}
-      {lastMode === 'standard' && streaming.error && (
-        <div key="error" className="max-w-6xl mx-auto px-6">
-          <div
-            style={{
-              marginBottom: '32px',
-              padding: '16px 24px',
-              backgroundColor: 'rgba(236, 19, 30, 0.1)',
-              color: 'var(--error)',
-              borderRadius: '4px',
-              border: '1px solid var(--error)',
-            }}
-          >
-            {streaming.error}
-          </div>
-        </div>
-      )}
-
+      {/* Results: wide container matching header max-w-6xl. From the send it is at least the window's height below the
+          header, and a scroll to it stops below the sticky header (`query-results`, leg H). */}
       {lastMode === 'standard' && (streaming.isLoading || streaming.withoutMcp.content || streaming.withMcp.content ||
         streaming.withoutMcp.isComplete || streaming.withMcp.isComplete || streaming.error) && (
-        <div key="results" ref={resultsRef} className="max-w-6xl mx-auto px-6" style={{ marginBottom: '24px' }}>
+        <div key="results" ref={resultsRef} className="query-results max-w-6xl mx-auto px-6" style={{ marginBottom: '24px' }}>
           {bubble}
-          <h2 style={{ marginBottom: '16px' }}>Results</h2>
+          <h2 className="ui-page-section-heading" style={{ marginBottom: '16px' }}>Results</h2>
           {/* R9 P1 (#672): where the submit scroll leaves the reader, a run's open question, with its two answers. */}
           <ConsentPausePrompt />
+          {/* A run the route answered with an error: inside the answer area, after the bubble and the heading (the
+              seat, #729 6838758130). */}
+          {streaming.error && (
+            <div
+              style={{
+                marginBottom: '32px',
+                padding: '16px 24px',
+                backgroundColor: 'rgba(236, 19, 30, 0.1)',
+                color: 'var(--error)',
+                borderRadius: '4px',
+                border: '1px solid var(--error)',
+              }}
+            >
+              {streaming.error}
+            </div>
+          )}
           <ComparisonDisplay
             withoutMcp={null}
             withMcp={null}
@@ -333,10 +333,11 @@ export default function QuerySurface({
       )}
 
       {lastMode === 'notebook' && (notebook.state.isLoading || notebook.state.notebook || notebook.state.error) && (
-        <div key="notebook-results" ref={resultsRef} className="max-w-6xl mx-auto px-6" style={{ marginBottom: '24px' }}>
+        <div key="notebook-results" ref={resultsRef} className="query-results max-w-6xl mx-auto px-6" style={{ marginBottom: '24px' }}>
           {bubble}
-          {/* UX pass row 19: the reader's words for the mode, as the record page says it. */}
-          <h2 style={{ marginBottom: '16px' }}>Answer, executed in a signed sandbox</h2>
+          {/* UX pass row 19: the reader's words for the mode, as the record page says it. The design system's one
+              section heading (leg H, the cards' stated (b)). */}
+          <h2 className="ui-page-section-heading" style={{ marginBottom: '16px' }}>Answer, executed in a signed sandbox</h2>
           {/* R9 P1 (#672): the run's open question, as above. */}
           <ConsentPausePrompt />
           <NotebookOutput
