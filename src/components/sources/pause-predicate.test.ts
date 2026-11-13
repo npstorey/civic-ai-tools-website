@@ -66,3 +66,11 @@ test('P3b-2 fix 9: the Settings row words Ask first by the predicate, not by its
   const copies = tracked.filter((f) => /\.routing === 'in-loop' && [\w.]+\.store === true/.test(fs.readFileSync(path.join(ROOT, f), 'utf8')));
   assert.deepEqual(copies, [], 'a component keeps its own copy of the in-loop-with-store test');
 });
+
+test('P3b-2 criterion 1 (v2 ruling 1): the Settings row and the harness menu call the one predicate (a source scan, as where-line.test.ts scans for noSourceOnReason)', () => {
+  const callers = ['src/components/sources/SourceRow.tsx', 'src/components/composer/HarnessMenu.tsx'].map((f) => {
+    const p = path.join(ROOT, f);
+    return [f, fs.existsSync(p) && /canPauseToAsk\(/.test(fs.readFileSync(p, 'utf8'))];
+  });
+  assert.deepEqual(callers, [['src/components/sources/SourceRow.tsx', true], ['src/components/composer/HarnessMenu.tsx', true]]);
+});

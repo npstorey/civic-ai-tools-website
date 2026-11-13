@@ -133,22 +133,18 @@ test('#436: the replay route takes no part in the lock', () => {
   }
 });
 
-test('#436 C4: the form drops its portal picker under the lock, and offers the examples the lock allows', () => {
+test('#436 C4: the form reads the lock and offers the examples the lock allows; UX-2 P3b-2 (Q7 = A) removed the portal picker the lock used to drop', () => {
   const form = read('../../components/QueryForm.tsx');
   assert.ok(form.includes('const portalLocked = usePortalLocked();'), 'the form does not read the lock');
   assert.ok(form.includes('offeredExampleQueries(portalLocked)'), 'the form does not filter its examples by the lock');
   assert.ok(form.includes('exampleQueries.map('), 'the form renders some other list of examples');
   assert.ok(!/const EXAMPLE_QUERIES\b/.test(form), 'the form keeps its own copy of the examples');
-  // The picker is the block that renders the PORTALS menu. It must sit inside
-  // a `!portalLocked` guard that opens before it and closes after it.
-  const guard = at(form, '{!portalLocked && (', 'QueryForm.tsx');
-  const picker = at(form, 'ref={portalDropdownRef}', 'QueryForm.tsx');
-  const menu = at(form, 'PORTALS.map(', 'QueryForm.tsx');
-  assert.equal(count(form, 'ref={portalDropdownRef}'), 1);
-  assert.ok(guard < picker && picker < menu, 'the portal picker is not inside the lock guard');
-  assert.ok(picker - guard < 300, 'the lock guard does not open immediately around the picker');
-  const between = form.slice(guard, menu);
-  assert.ok(!/\)\}\s*\n/.test(between.slice(0, between.indexOf('ref={portalDropdownRef}'))), 'the guard closes before the picker opens');
+  // The picker the lock dropped (#436) went with the Advanced-options region (UX-2 P3b-2, Q7 = A): on no instance,
+  // locked or not, does the form offer a portal choice, so the lock still governs only the examples (above) and the
+  // routes (the tests before this one). The form names no portal menu, and its lock read has one reader left.
+  assert.equal(count(form, 'PORTALS'), 0, 'the form still names a PORTALS menu');
+  assert.equal(count(form, 'portalDropdownRef'), 0, 'the form still keeps a portal dropdown');
+  assert.equal(count(form, 'portalLocked'), 2, 'the lock is read somewhere other than for the examples');
 
   const layout = read('../layout.tsx');
   assert.ok(

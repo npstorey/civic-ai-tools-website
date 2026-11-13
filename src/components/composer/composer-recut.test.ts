@@ -354,15 +354,17 @@ const X24_SIGNED_OUT = 'A new question replaces this answer.';
 const WITHHELD = 'To keep this answer, sign in and publish it.';
 const LINES = ['where-this-question-goes', 'first-time-line', 'account-line'];
 
-/** The composer's parts in document order: the bar, the box, the chips, the lines, the guard's slots, the gear. */
-const KNOWN = ['composer-bar', 'chip-row', 'where-this-question-goes', 'first-time-line', 'consent-card', 'dont-allow', 'no-source-on', 'account-line', 'sign-in-line'];
+/**
+ * The composer's parts in document order: the bar, the box, the harness menu (UX-2 P3b-2: it replaces the gear, in the
+ * box after the arrow; fix 4, #729 6865424128), the chips, the lines, the guard's slots.
+ */
+const KNOWN = ['composer-bar', 'harness-menu', 'chip-row', 'where-this-question-goes', 'first-time-line', 'consent-card', 'dont-allow', 'no-source-on', 'account-line', 'sign-in-line'];
 function partOrder(surface: Surface): string[] {
   const out: string[] = [];
   for (const el of within(composerOf(surface))) {
     const p = part(el);
     if (el.type === 'textarea' && el.props['aria-label'] === BOX_LABEL) out.push('box');
     else if (typeof p === 'string' && KNOWN.includes(p)) out.push(p);
-    else if (el.type === 'button' && textOf(el).includes('Advanced options')) out.push('gear');
   }
   return out;
 }
@@ -568,21 +570,21 @@ test('P3b-1 criterion 2 (1B, 1C) and criterion 5, the home page signed out (leg 
     assert.ok(within(line[0]).includes(controls[0]), `${where}: the control that signs in is not inside data-part="sign-in-line"`);
     states.push([where, expected]);
   };
-  await check('before a question', ['box', 'chip-row', 'where-this-question-goes', 'account-line', 'sign-in-line']);
+  await check('before a question', ['box', 'harness-menu', 'chip-row', 'where-this-question-goes', 'account-line', 'sign-in-line']);
   await page.type(boxOf(page), 'Q-first: what was the median household income in the Bronx?');
   await page.submit(formOf(page));
   await settle(page);
   assert.equal(parts(page, 'consent-card').length, 1, 'premise: the first send opened the card');
-  await check('the card open on a first send', ['box', 'chip-row', 'where-this-question-goes', 'consent-card', 'account-line', 'sign-in-line']);
+  await check('the card open on a first send', ['box', 'harness-menu', 'chip-row', 'where-this-question-goes', 'consent-card', 'account-line', 'sign-in-line']);
   await page.click(page.button('Allow'));
   await settle(page, 200);
   assert.equal(queries.length, 1, 'premise: after Allow the question was sent');
-  await check('during the first run', ['composer-bar', 'box', 'where-this-question-goes', 'first-time-line', 'account-line', 'sign-in-line']);
+  await check('during the first run', ['composer-bar', 'box', 'harness-menu', 'where-this-question-goes', 'first-time-line', 'account-line', 'sign-in-line']);
   await finishComparison(page);
-  await check('docked after the first answer', ['composer-bar', 'box', 'where-this-question-goes', 'first-time-line', 'account-line', 'sign-in-line']);
+  await check('docked after the first answer', ['composer-bar', 'box', 'harness-menu', 'where-this-question-goes', 'first-time-line', 'account-line', 'sign-in-line']);
   await askFromBox(page, 'Q-second: and in Brooklyn?');
   await finishComparison(page);
-  await check('docked after the second answer', ['composer-bar', 'box', 'where-this-question-goes', 'account-line', 'sign-in-line']);
+  await check('docked after the second answer', ['composer-bar', 'box', 'harness-menu', 'where-this-question-goes', 'account-line', 'sign-in-line']);
   assert.equal(states.length, 5);
 });
 
@@ -598,21 +600,21 @@ test('P3b-1 criterion 2 (1B, 1C) and criterion 5, /ask signed in (Sandbox; leg H
     assert.equal((await signInControls(page, [])).length, 0, `${where}: a control in the composer signs in`);
     assert.equal(parts(page, 'sign-in-line').length, 0, `${where}: a sign-in line on /ask`);
   };
-  await check('before a question', ['box', 'chip-row', 'where-this-question-goes', 'gear']);
+  await check('before a question', ['box', 'harness-menu', 'chip-row', 'where-this-question-goes']);
   await page.type(boxOf(page), 'Q-first: how many 311 complaints in Brooklyn in 2024?');
   await page.submit(formOf(page));
   await settle(page);
   assert.equal(parts(page, 'consent-card').length, 1, 'premise: the first send opened the card');
-  await check('the card open on a first send', ['box', 'chip-row', 'where-this-question-goes', 'consent-card', 'gear']);
+  await check('the card open on a first send', ['box', 'harness-menu', 'chip-row', 'where-this-question-goes', 'consent-card']);
   await page.click(page.button('Allow'));
   await settle(page, 200);
   assert.deepEqual(queries.map((q) => q.path), ['/api/query-notebook'], 'premise: after Allow the question ran in the sandbox');
-  await check('during the first run', ['composer-bar', 'box', 'where-this-question-goes', 'first-time-line', 'account-line', 'gear']);
+  await check('during the first run', ['composer-bar', 'box', 'harness-menu', 'where-this-question-goes', 'first-time-line', 'account-line']);
   await finishNotebook(page);
-  await check('docked after the first answer', ['composer-bar', 'box', 'where-this-question-goes', 'first-time-line', 'account-line', 'gear']);
+  await check('docked after the first answer', ['composer-bar', 'box', 'harness-menu', 'where-this-question-goes', 'first-time-line', 'account-line']);
   await askFromBox(page, 'Q-second: and in Queens?');
   await finishNotebook(page);
-  await check('docked after the second answer', ['composer-bar', 'box', 'where-this-question-goes', 'account-line', 'gear']);
+  await check('docked after the second answer', ['composer-bar', 'box', 'harness-menu', 'where-this-question-goes', 'account-line']);
 });
 
 // --- Criterion 4 (1B.2): the first-time line ------------------------------------------------------------------------
