@@ -185,10 +185,10 @@ export default async function AskPage({ searchParams }: AskPageProps) {
           </strong>{' '}
           Ask a question below and the answer is assembled from live public
           data, with every query it ran shown alongside the result. When an
-          answer is worth keeping, publish it: publishing creates a signed
-          package — a permanent, independently verifiable account of
-          the answer and how it was produced — listed on your dashboard.
-          This note disappears after your first publish.
+          answer is worth keeping, publish it. Publishing creates a signed
+          analysis: a permanent record of the answer and how it was produced,
+          which anyone can verify independently. It is listed on your
+          dashboard.
         </div>
       )}
     </QuerySurface>

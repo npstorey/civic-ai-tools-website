@@ -159,6 +159,9 @@ const ALLOWLIST: readonly Allowed[] = [
   // adapt-record.ts: X29's note (UX-2 P5, RULED), "record" in the standard's sense.
   { file: 'src/components/answer-view/adapt-record.ts', rows: ':360 (X29)', reason: 'ruled copy', phrase: 'Answer kept outside the signed record', count: 1 },
 
+  // ask/page.tsx: the "Getting started" note's words as ruled (D3 = A, OA-741, #729 6835240316; the census entry, OA-754).
+  { file: 'src/app/(app)/ask/page.tsx', rows: ':189 (D3 = A, OA-741, #729 6835240316; OA-754)', reason: 'ruled copy', phrase: 'a permanent record of the answer', count: 1 },
+
   // AnswerView.tsx
   { file: 'src/components/answer-view/AnswerView.tsx', rows: ':605', reason: 'verb', text: 'The notebook metadata records the sandbox runtime versions used at execution.', count: 1 },
 
