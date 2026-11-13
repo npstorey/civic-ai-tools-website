@@ -232,7 +232,8 @@ lists (UX-1 P7); later phases convert the other surfaces named under "Replaces",
 - **Uses:** the composer's example questions are `ChipRow`'s first use (UX-2 P3b-1,
   `src/components/composer/Composer.tsx`): one `<button>` per offered example, built by the form, in
   a row named by the composer's chip-row label ("Example questions"). The row shows before the first
-  answer only: once the composer docks it is not rendered. `/explore`'s composer has no chips.
+  send only: the composer docks at the send that starts a run (UX-2 P3b-1 leg H), and docked the row is
+  not rendered. `/explore`'s composer has no chips.
 
 ## Not primitives
 
