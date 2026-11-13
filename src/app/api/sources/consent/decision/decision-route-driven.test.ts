@@ -466,7 +466,9 @@ test('R6-WEB-D condition 3: Not now writes no consent on either branch, and a no
     sleep: async (ms: number) => { clock += ms; },
   });
   const outcome = await pause.ask('data-commons', () => {});
-  assert.equal(outcome, 'no-answer');
+  // The property kept: a held pause nobody answers ends with no decision. S2-B (G0-B1 A,
+  // npstorey/civic-ai-tools#309): \`ask\` also says that it held, so the load can record a question was put.
+  assert.deepEqual(outcome, { decision: 'no-answer', held: true });
   assert.equal(globals.__w2Decision.writes, 0, 'a no-answer pause wrote the row');
   assert.ok(kv.calls.every((c) => c.key.startsWith(d.DECISION_KEY_PREFIX)), 'the pause wrote a store key other than its entry');
 });

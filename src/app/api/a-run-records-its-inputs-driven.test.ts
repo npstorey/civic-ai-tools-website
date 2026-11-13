@@ -35,6 +35,15 @@
 //
 // RED at the base (a787452): the routes write none of the five attributes.
 //
+// S2-B W5 (npstorey/civic-ai-tools#309; cards G0-B1 A, G0-B2 A), at the end of
+// this file: each load span states `tool.load_asked`, whether a question was
+// put to the reader about the load's source, and the record's graph states
+// `civic:loadAsked` on exactly those load activities. Two drives: compare-stream
+// in loop (an On source and an alias the directory does not list, both
+// `false`), and the loop core (`runToolLoop` over `createInLoopRouting`, the
+// real trace builder and packager) with a scripted pause, one run per path,
+// since a route cannot reach a pause that throws or a load that throws.
+//
 // No live endpoint, no credential: every key is a placeholder and every
 // address is loopback.
 //
@@ -182,10 +191,18 @@ const model = http.createServer((req, res) => {
       res.end('data: [DONE]\n\n');
       return;
     }
-    const toolCalls = [
-      { id: 'call-socrata', type: 'function', function: { name: 'socrata__get_data', arguments: JSON.stringify({ type: 'query', dataset_id: 'aaaa-1111', limit: 1 }) } },
-      { id: 'call-boston', type: 'function', function: { name: 'boston__ckan__query_data', arguments: JSON.stringify({ resource_id: 'r-1', limit: 1 }) } },
-    ];
+    // S2-B W5: in loop (the request offers `load_source` alone), the first turn loads an On source and an alias
+    // the directory does not list; the all-sources turns are unchanged.
+    const offersLoadOnly = Array.isArray(body.tools) && body.tools.length === 1 && (body.tools[0] as { function?: { name?: string } }).function?.name === 'load_source';
+    const toolCalls = offersLoadOnly
+      ? [
+          { id: 'call-load-socrata', type: 'function', function: { name: 'load_source', arguments: JSON.stringify({ alias: 'socrata' }) } },
+          { id: 'call-load-unknown', type: 'function', function: { name: 'load_source', arguments: JSON.stringify({ alias: 'nyc_charter' }) } },
+        ]
+      : [
+          { id: 'call-socrata', type: 'function', function: { name: 'socrata__get_data', arguments: JSON.stringify({ type: 'query', dataset_id: 'aaaa-1111', limit: 1 }) } },
+          { id: 'call-boston', type: 'function', function: { name: 'boston__ckan__query_data', arguments: JSON.stringify({ resource_id: 'r-1', limit: 1 }) } },
+        ];
     res.writeHead(200, { 'Content-Type': 'application/json' });
     res.end(JSON.stringify({
       id: 'chatcmpl-r2-w4',
@@ -210,6 +227,7 @@ const MODEL_ORIGIN = `http://127.0.0.1:${(model.address() as AddressInfo).port}`
 for (const name of [
   'DATA_COMMONS_API_KEY', 'SITE_PORTAL_LOCKED', 'SITE_DEFAULT_PORTAL', 'MODEL_API_KEY', 'OPENAI_API_KEY',
   'MODEL_API_KIND', 'MODEL_API_AUTH', 'KV_REST_API_URL', 'KV_REST_API_TOKEN', 'EXECUTOR_DRIVER', 'NYC_CHARTER_HOSTING',
+  'SOURCE_ROUTING',
 ]) {
   delete process.env[name];
 }
@@ -257,6 +275,11 @@ const COMPARE_STREAM = await drive('/api/compare-stream', () =>
   compareStreamRoute.POST(post('/api/compare-stream', { query: QUESTION, model: 'fixture-fast', portal: PORTAL, mcpOnly: true })));
 const NOTEBOOK = await drive('/api/query-notebook', () =>
   notebookRoute.POST(post('/api/query-notebook', { query: QUESTION, portal: PORTAL })));
+// S2-B W5: compare-stream in loop, after the two all-sources drives above, which it does not change.
+process.env.SOURCE_ROUTING = 'in-loop';
+const IN_LOOP = await drive('/api/compare-stream, in-loop', () =>
+  compareStreamRoute.POST(post('/api/compare-stream', { query: QUESTION, model: 'fixture-fast', portal: PORTAL, mcpOnly: true })));
+delete process.env.SOURCE_ROUTING;
 
 // --- Readers -------------------------------------------------------------------------
 
@@ -434,3 +457,218 @@ test('#495 at the routes: after a restart with a different Boston address, the r
     process.env.BOSTON_OPENCONTEXT_MCP_URL = saved;
   }
 });
+
+// --- S2-B W5 (npstorey/civic-ai-tools#309): whether a question was put for each load -----------------------
+//
+// G0-B1 A: `ConsentPause.ask` returns `{ decision, held }`, the load step keeps `{ decision, asked }` per source,
+// and the loop writes `tool.load_asked` from `LoadStepResult.asked` when it is defined. G0-B2 A, the value per
+// path: `false` for an alias the directory does not list, an On source, no pause, a pause that could not hold
+// (`notHeld`), and a source loaded under Allow all given at another source's pause; `true` after a held pause,
+// whatever its decision; no attribute when `ask` threw or `load` threw; a repeat load states the value of the
+// load whose decision it reuses. The F7 rulings (ORCH, seat): (1) the repeat load of the source whose own pause
+// gave Allow all is `true`; (2) a source declined, then Allow all at another source's pause, then loaded: `false`,
+// since the declined source was never loaded and this load, its first, proceeds on the Allow-all decision, which
+// was about another source; (3) a held pause, a load that threw, then a repeat load is `true`, the first span
+// carrying no attribute.
+//
+// WHAT MAKES IT ABLE TO FAIL. Every value is read off the span and off the record's graph, and `false` and
+// "absent" are told apart: the harness writes `civic:loadAsked` only when the span states one.
+
+type LoadAsked = boolean | 'absent';
+interface LoadRow { outcome: string | undefined; asked: LoadAsked }
+
+const LOOP_ANSWER = 'An answer, with what could not be checked.';
+const { runToolLoop } = await import('../../lib/model-loop/run-tool-loop.ts');
+const { startScriptedModelServer } = await import('../../lib/model-loop/test-harness.ts');
+const { createModelClient } = await import('../../lib/model-client.ts');
+const { TraceBuilder, CIVICAITOOLS_TRACE_CONFIG, hash } = await import('../../lib/evidence/trace.ts');
+const routingMode = await import('../../lib/mcp/routing-mode.ts');
+const { readMcpEnvFromProcess } = await import('../../lib/mcp/registry.ts');
+const { createConsentPause } = await import('../../lib/sources/decision.ts');
+const { buildFlowsStatementFor } = await import('../../lib/flows/statement.ts');
+
+/** A load span's `tool.load_outcome` and `tool.load_asked`, in the run's order. */
+function loadRows(trace: Json): LoadRow[] {
+  const spans = (trace as { resourceSpans: Array<{ scopeSpans: Array<{ spans: Array<{ name: string; attributes: Array<{ key: string; value: { stringValue?: string; boolValue?: boolean } }> }> }> }> }).resourceSpans[0].scopeSpans[0].spans;
+  return spans
+    .filter((s) => s.name === 'mcp_tool_call' && s.attributes.some((a) => a.key === 'tool.operation_type' && a.value.stringValue === 'load_source'))
+    .map((s) => {
+      const outcome = s.attributes.find((a) => a.key === 'tool.load_outcome')?.value.stringValue;
+      const asked = s.attributes.find((a) => a.key === 'tool.load_asked');
+      return { outcome, asked: asked === undefined ? 'absent' : (asked.value.boolValue ?? (`not a boolean: ${JSON.stringify(asked.value)}` as never)) };
+    });
+}
+
+/** The record's load activities: `civic:loadOutcome` and `civic:loadAsked`, in the graph's order. */
+function graphRows(pkg: { provenance?: unknown }): LoadRow[] {
+  const graph = (pkg.provenance as { '@graph': Array<Record<string, unknown>> })['@graph'];
+  return graph.filter((n) => 'civic:loadOutcome' in n).map((n) => ({
+    outcome: n['civic:loadOutcome'] as string,
+    asked: 'civic:loadAsked' in n ? (n['civic:loadAsked'] as boolean) : 'absent',
+  }));
+}
+
+function packageRun(trace: Json, toolCalls: unknown) {
+  return buildEvidencePackage({
+    trace,
+    prompt: QUESTION,
+    output: LOOP_ANSWER,
+    toolCalls: toolCalls as never,
+    model: 'vendor/model-fixture-1',
+    tokenUsage: { promptTokens: 10, completionTokens: 5 },
+    promptVisibility: 'full_text',
+    title: 'Potholes',
+    summary: 'Potholes.',
+    type: 'content/analysis/v1',
+    captureMethod: 'chat-flow-stream',
+    contentProfile: 'datHere',
+    extensions: { 'org.civicaitools.notebook': { nbformat: 4, nbformat_minor: 5, cells: [], metadata: {} } },
+  });
+}
+
+/** What the scripted pause answers for a source: G0-B1 A's shape, or a throw. */
+type PauseAnswer = { decision: 'allow' | 'off' | 'allow-all' | 'not-now' | 'no-answer'; held: boolean } | 'throw';
+type PauseKind = { kind: 'none' } | { kind: 'not-held' } | { kind: 'scripted'; answers: Record<string, PauseAnswer>; failComposeAfterAsk?: string };
+
+interface LoopRun { trace: Json; toolCalls: unknown[]; asks: string[] }
+
+/**
+ * One in-loop run through the loop core, every configured source Ask first (the gate enforced, no stored state):
+ * the model loads `aliases` one per turn, then answers. `not-held` is the real pause with no decision store
+ * (`notHeld`); `scripted` answers by source id. `failComposeAfterAsk` makes the composition that follows that
+ * source's pause throw once (the run's clock refuses one `toISOString`), so the load step throws.
+ */
+async function loopRun(aliases: string[], pause: PauseKind): Promise<LoopRun> {
+  const configured = readMcpEnvFromProcess();
+  const directory = routingMode.directorySet(configured, { enforced: true, states: {} });
+  let failNextIso = false;
+  const now = new Date();
+  now.toISOString = function toISOString(this: Date) {
+    if (failNextIso) { failNextIso = false; throw new Error('fixture: the composition failed'); }
+    return Date.prototype.toISOString.call(this);
+  };
+  const asks: string[] = [];
+  const scripted = pause.kind === 'scripted'
+    ? {
+        async ask(sourceId: string) {
+          asks.push(sourceId);
+          const answer = pause.answers[sourceId];
+          if (answer === undefined || answer === 'throw') throw new Error('fixture: the pause failed');
+          if (pause.failComposeAfterAsk === sourceId) failNextIso = true;
+          return answer;
+        },
+      }
+    : pause.kind === 'not-held'
+      ? createConsentPause({ store: null, statement: buildFlowsStatementFor(null), configured })
+      : undefined;
+  // Cast: at tree 3 `ConsentPause.ask` returns the bare decision (G0-B1 A widens it).
+  const session = await routingMode.createInLoopRouting({ configured, directory, selection: [], now, ...(scripted ? { pause: scripted as never } : {}) });
+  const server = await startScriptedModelServer([
+    ...aliases.map((alias, i) => ({ toolCalls: [{ id: `call-load-${i}`, name: 'load_source', args: { alias } }] })),
+    { content: LOOP_ANSWER },
+  ]);
+  const savedBase = process.env.MODEL_API_BASE_URL;
+  process.env.MODEL_API_BASE_URL = server.url;
+  const builder = new TraceBuilder(CIVICAITOOLS_TRACE_CONFIG);
+  builder.startRoot('analysis', {});
+  try {
+    const result = await runToolLoop({
+      client: createModelClient({ apiKey: 'placeholder-model-key-s2b-w5' }),
+      endpointModel: 'fake/model',
+      requestSettings: undefined,
+      prompt: QUESTION,
+      systemPrompt: session.firstSystemPrompt,
+      tools: session.firstTools,
+      executeToolCall: session.executeToolCall,
+      loadStep: session.loadStep,
+      trace: { builder, parentSpanId: builder.rootSpanId, systemPromptHash: hash(session.firstSystemPrompt), resolveToolSource: session.resolveToolSource },
+      onEvent: () => {},
+    });
+    builder.endRoot();
+    return { trace: builder.finalize() as unknown as Json, toolCalls: result.toolCalls, asks };
+  } finally {
+    process.env.MODEL_API_BASE_URL = savedBase;
+    await new Promise<void>((resolve) => server.server.close(() => resolve()));
+  }
+}
+
+const held = (decision: Exclude<PauseAnswer, 'throw'>['decision']): PauseAnswer => ({ decision, held: true });
+
+const LOOP_CASES: Array<{ name: string; aliases: string[]; pause: PauseKind; expected: LoadRow[]; asks?: string[] }> = [
+  {
+    name: 'no pause: an Ask-first source is declined and no question is put',
+    aliases: ['socrata'],
+    pause: { kind: 'none' },
+    expected: [{ outcome: 'declined', asked: false }],
+  },
+  {
+    name: 'a pause that cannot hold (notHeld, no decision store): no-answer, no question put, and the repeat states the same',
+    aliases: ['socrata', 'socrata'],
+    pause: { kind: 'not-held' },
+    expected: [{ outcome: 'no-answer', asked: false }, { outcome: 'no-answer', asked: false }],
+  },
+  {
+    name: 'a held pause, whatever its decision (allow, off, not-now, no-answer), then a repeat of the allowed source',
+    aliases: ['socrata', 'data_commons', 'boston', 'nyc_record', 'socrata'],
+    pause: { kind: 'scripted', answers: { socrata: held('allow'), 'data-commons': held('off'), 'boston-opencontext': held('not-now'), 'nyc-record': held('no-answer') } },
+    expected: [
+      { outcome: 'loaded', asked: true },
+      { outcome: 'declined', asked: true },
+      { outcome: 'declined', asked: true },
+      { outcome: 'no-answer', asked: true },
+      { outcome: 'loaded', asked: true },
+    ],
+    asks: ['socrata', 'data-commons', 'boston-opencontext', 'nyc-record'],
+  },
+  {
+    name: 'Allow all at a held pause: true; another Ask-first source after it, never asked: false (G0-B2 A); the repeat of the Allow-all source: true (F7 1)',
+    aliases: ['socrata', 'data_commons', 'socrata'],
+    pause: { kind: 'scripted', answers: { socrata: held('allow-all') } },
+    expected: [{ outcome: 'loaded', asked: true }, { outcome: 'loaded', asked: false }, { outcome: 'loaded', asked: true }],
+    asks: ['socrata'],
+  },
+  {
+    name: 'a source declined at its pause, Allow all at another source\'s pause, then the declined source loaded: false — its first load, on the Allow-all decision about another source (F7 2, G0-B2 A)',
+    aliases: ['data_commons', 'socrata', 'data_commons'],
+    pause: { kind: 'scripted', answers: { 'data-commons': held('off'), socrata: held('allow-all') } },
+    expected: [{ outcome: 'declined', asked: true }, { outcome: 'loaded', asked: true }, { outcome: 'loaded', asked: false }],
+    asks: ['data-commons', 'socrata'],
+  },
+  {
+    name: 'a pause that threw: no attribute, and the repeat, which asks nothing, states none either',
+    aliases: ['socrata', 'socrata'],
+    pause: { kind: 'scripted', answers: { socrata: 'throw' } },
+    expected: [{ outcome: 'no-answer', asked: 'absent' }, { outcome: 'no-answer', asked: 'absent' }],
+    asks: ['socrata'],
+  },
+  {
+    name: 'a held pause, then a load that threw: no attribute; the repeat reuses the held decision: true (F7 3)',
+    aliases: ['socrata', 'socrata'],
+    pause: { kind: 'scripted', answers: { socrata: held('allow') }, failComposeAfterAsk: 'socrata' },
+    expected: [{ outcome: 'unavailable', asked: 'absent' }, { outcome: 'loaded', asked: true }],
+    asks: ['socrata'],
+  },
+];
+
+const LOOP_RUNS = new Map<string, LoopRun>();
+for (const c of LOOP_CASES) LOOP_RUNS.set(c.name, await loopRun(c.aliases, c.pause));
+
+test('S2-B W5, compare-stream in loop: an On source\'s load and a load of an alias the directory does not list state tool.load_asked false', () => {
+  const trace = traceOf(IN_LOOP);
+  assert.deepEqual(loadRows(trace), [{ outcome: 'loaded', asked: false }, { outcome: 'not-offered', asked: false }]);
+  const toolCalls = (events(IN_LOOP).find((e) => e.type === 'complete' && e.panel === 'withMcp')?.data as { tools_called?: unknown[] } | undefined)?.tools_called;
+  assert.ok(Array.isArray(toolCalls), 'premise: the in-loop drive completed');
+  assert.deepEqual(graphRows(packageRun(trace, toolCalls).pkg), [{ outcome: 'loaded', asked: false }, { outcome: 'not-offered', asked: false }]);
+});
+
+for (const c of LOOP_CASES) {
+  test(`S2-B W5, the loop core: ${c.name}`, () => {
+    const run = LOOP_RUNS.get(c.name)!;
+    // tool.load_asked first: the criterion; then the outcomes the paths are told apart by.
+    assert.deepEqual(loadRows(run.trace).map((r) => r.asked), c.expected.map((r) => r.asked), 'tool.load_asked per load span');
+    assert.deepEqual(loadRows(run.trace).map((r) => r.outcome), c.expected.map((r) => r.outcome), 'premise: tool.load_outcome per load span');
+    if (c.asks) assert.deepEqual(run.asks, c.asks, 'premise: the sources the pause was asked about');
+    // The derived graph states civic:loadAsked on exactly the load activities whose span stated it.
+    assert.deepEqual(graphRows(packageRun(run.trace, run.toolCalls).pkg), c.expected, 'civic:loadAsked per load activity');
+  });
+}

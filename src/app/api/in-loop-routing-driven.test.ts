@@ -463,6 +463,19 @@ function packageOf(d: Drive) {
 const sha = (text: string) => createHash('sha256').update(text, 'utf8').digest('hex');
 const ROUTER_VERSION = (JSON.parse(fs.readFileSync(path.join(process.cwd(), 'node_modules/@typedstandards/civic-typed-router/package.json'), 'utf8')) as { version: string }).version;
 
+/**
+ * S2-B W4: the inventory an in-loop run was routed against, in the record's form (ADR-0033 amendment 3):
+ * the installed router's `CIVIC_INVENTORY`, its `version` in build-metadata form `<version>+<hash12>`, computed
+ * here from the package, never typed. The definition's components name it by `id` and that `version`.
+ */
+const { CIVIC_INVENTORY } = router;
+const INVENTORY_REFERENCE = {
+  id: CIVIC_INVENTORY.id,
+  version: `${CIVIC_INVENTORY.version}+${CIVIC_INVENTORY.hash.slice(0, 12)}`,
+  hash: CIVIC_INVENTORY.hash,
+};
+const INVENTORY_COMPONENT = { id: INVENTORY_REFERENCE.id, version: INVENTORY_REFERENCE.version };
+
 /** The Socrata block the router composes from the loopback answers. */
 async function socrataBlock(): Promise<string> {
   return router.socrataGuidanceText({
@@ -486,7 +499,10 @@ test('criterion 5, compare-stream: the root span states routing, the definition 
   ];
   assert.deepEqual(JSON.parse(root['analysis.components'] ?? 'null'), components);
   assert.equal(root['analysis.tool_definitions'], JSON.stringify(last.body.tools));
-  const definition = router.civicRouter.harnessDefinition({ configured, selection: ['socrata'], chosenBy: 'model', components });
+  // The property kept: the hash is the router's definition over the loaded set and the record's components.
+  // S2-B W4 (npstorey/civic-ai-tools#309): the definition's components also name the inventory the run was routed
+  // against, which the record's components do not (the W4 test at the end of this file holds both).
+  const definition = router.civicRouter.harnessDefinition({ configured, selection: ['socrata'], chosenBy: 'model', components: [...components, INVENTORY_COMPONENT] });
   assert.equal(root['analysis.definition_hash'], definition.hash);
   // As composed (C4): the directory set's reasons, not recomputed after loads.
   // R6 W3 (#632, contract item 10): with the gate on and every source On, the
@@ -518,7 +534,8 @@ test('criterion 5: a packaged in-loop record states routing, the definition hash
   const root = rootAttributes(traceOf(IN_LOOP));
   assert.deepEqual(composition.routing, { method: 'in-loop', version: ROUTER_VERSION });
   assert.equal(composition.definitionHash, root['analysis.definition_hash']);
-  assert.deepEqual(Object.keys(composition).slice(-2), ['routing', 'definitionHash'], 'routing and definitionHash are not the block\'s last two keys');
+  // The property kept: routing and definitionHash close the block, in the harness's order; S2-B W4 adds considered after them.
+  assert.deepEqual(Object.keys(composition).slice(-3), ['routing', 'definitionHash', 'considered'], 'routing, definitionHash and considered are not the block\'s last three keys');
   assert.deepEqual((composition.components as Array<{ id: string }>).map((c) => c.id), ['socrata-mcp-server@https://github.com/npstorey/socrata-mcp-server', '@typedstandards/civic-typed-router']);
   const environment = pkg.extensions?.['org.civicaitools.environment'] as Json;
   const requests = mcpRequests(IN_LOOP);
@@ -779,3 +796,83 @@ for (const [label, which] of [[`portal ${OTHER_PORTAL}`, 3], [`dataset_id ${OTHE
   });
 }
 
+// --- S2-B W4 (npstorey/civic-ai-tools#309): the inventory an in-loop run was routed against -----------------
+//
+// G0-B7 A: an in-loop run's root span states `analysis.considered` (a third in-loop attribute), and the record
+// packaged from it states `composition.considered`, the same object: the inventory by reference (`id`, `version`
+// in `<version>+<hash12>` form, `hash`), `total` its entries, `listed` the directory set the model was shown,
+// `rule` `directory-set`, `ruleVersion` `'1'`. An all-sources run states neither (the decoy). The harness
+// definition's components name the inventory; the record's `components[]` do not, so `definitionHash` moves for
+// every in-loop record from this release.
+//
+// WHY THE FORM. The harness carries the span's object into the record unchanged and refuses a `version` that is not
+// `<YYYY-MM-DD>.<n>+<hash12>`: the F3 decoy builds the composition block from the span's value with the bare
+// `CIVIC_INVENTORY.version` and is refused. At tree 3 no route writes the attribute.
+
+const harness = await import('@typedstandards/civic-typed-harness');
+const EXPECTED_CONSIDERED = {
+  inventory: INVENTORY_REFERENCE,
+  total: router.civicRouter.manifest.length,
+  listed: DIRECTORY_IDS.length,
+  rule: 'directory-set',
+  ruleVersion: '1',
+};
+
+test('S2-B W4 premise: the installed router\'s inventory is civic 2026-11-09.1, seven entries, and the drives\' directory set lists four', () => {
+  assert.equal(CIVIC_INVENTORY.id, 'civic');
+  assert.equal(CIVIC_INVENTORY.version, '2026-11-09.1');
+  assert.equal(router.civicRouter.manifest.length, 7);
+  assert.deepEqual(DIRECTORY_IDS, ['socrata', 'data-commons', 'boston-opencontext', 'nyc-record']);
+});
+
+for (const d of [IN_LOOP, NOTEBOOK_IN_LOOP, PACK]) {
+  test(`S2-B W4, ${d.name}: the root span states analysis.considered once: the inventory, seven entries, the four listed, directory-set version 1`, () => {
+    const root = spans(traceOf(d)).find((s) => !s.parentSpanId)!;
+    const written = root.attributes.filter((a) => a.key === 'analysis.considered');
+    assert.equal(written.length, 1, `analysis.considered is written ${written.length} times`);
+    // Byte for byte: the harness's key order, the inventory in the record's form.
+    assert.equal(written[0].value.stringValue, JSON.stringify(EXPECTED_CONSIDERED));
+  });
+}
+
+test('S2-B W4: the record packaged from the in-loop run states composition.considered, last, equal to the span\'s', () => {
+  const { pkg } = packageOf(IN_LOOP);
+  const composition = pkg.extensions?.['org.civicaitools.composition'] as Json;
+  assert.deepEqual(composition.considered, EXPECTED_CONSIDERED);
+  assert.equal((composition.considered as { inventory: { version: string } }).inventory.version, `${CIVIC_INVENTORY.version}+${CIVIC_INVENTORY.hash.slice(0, 12)}`);
+  assert.equal(Object.keys(composition).at(-1), 'considered');
+  assert.deepEqual(JSON.parse(rootAttributes(traceOf(IN_LOOP))['analysis.considered'] ?? 'null'), composition.considered);
+});
+
+test('S2-B W4 decoy (G0-B7 A): an all-sources run states no considered, on the span or in the record', () => {
+  for (const d of [UNSET, ALL_SOURCES, THIRD_VALUE]) {
+    assert.equal(Object.hasOwn(rootAttributes(traceOf(d)), 'analysis.considered'), false, `${d.name}: the root span states analysis.considered`);
+  }
+  const composition = packageOf(UNSET).pkg.extensions?.['org.civicaitools.composition'] as Json;
+  assert.equal(Object.hasOwn(composition, 'considered'), false, 'the all-sources record carries a considered key');
+});
+
+test('S2-B W4: the definition\'s components name the inventory and the record\'s components do not, so definitionHash moves', (t) => {
+  const root = rootAttributes(traceOf(IN_LOOP));
+  const recordComponents = (packageOf(IN_LOOP).pkg.extensions?.['org.civicaitools.composition'] as Json).components as Array<{ id: string; version?: string; guidanceHash?: string }>;
+  const spanComponents = JSON.parse(root['analysis.components'] ?? 'null') as Array<{ id: string }>;
+  assert.deepEqual(spanComponents.map((c) => c.id), recordComponents.map((c) => c.id), 'premise: the record\'s components are the span\'s');
+  assert.equal(recordComponents.some((c) => c.id === INVENTORY_REFERENCE.id), false, 'the record\'s components name the inventory');
+  const before = router.civicRouter.harnessDefinition({ configured, selection: ['socrata'], chosenBy: 'model', components: recordComponents });
+  const after = router.civicRouter.harnessDefinition({ configured, selection: ['socrata'], chosenBy: 'model', components: [...recordComponents, INVENTORY_COMPONENT] });
+  assert.ok(after.components.some((c) => c.id === INVENTORY_REFERENCE.id && c.version === INVENTORY_REFERENCE.version), 'the definition\'s components do not name the inventory');
+  t.diagnostic(`definitionHash for this run: before (record components only) ${before.hash}; after (with ${INVENTORY_COMPONENT.id} ${INVENTORY_COMPONENT.version}) ${after.hash}`);
+  assert.notEqual(before.hash, after.hash, 'premise: naming the inventory moves the definition hash');
+  assert.equal(root['analysis.definition_hash'], after.hash, 'the run\'s definition hash is not the definition that names the inventory');
+});
+
+test('S2-B W4 decoy (F3): a considered whose inventory version is the bare CIVIC_INVENTORY.version is refused by the harness; the span\'s is accepted', () => {
+  const stated = JSON.parse(rootAttributes(traceOf(IN_LOOP))['analysis.considered'] ?? 'null') as typeof EXPECTED_CONSIDERED | null;
+  assert.ok(stated, 'premise: the in-loop root span states analysis.considered');
+  assert.doesNotThrow(() => harness.buildCompositionExtension({ considered: stated! }));
+  const bare = { ...stated!, inventory: { ...stated!.inventory, version: CIVIC_INVENTORY.version } };
+  assert.throws(
+    () => harness.buildCompositionExtension({ considered: bare }),
+    (error: unknown) => error instanceof harness.RecordFieldError && /inventory\.version/.test((error as Error).message),
+  );
+});
