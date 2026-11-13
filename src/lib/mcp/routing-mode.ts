@@ -45,7 +45,7 @@
  */
 
 import type { ChatCompletionTool } from 'openai/resources/chat/completions';
-import { civicRouter, LOAD_SOURCE_TOOL_NAME, type SourceOffered, type SourceSelection } from '@typedstandards/civic-typed-router';
+import { CIVIC_INVENTORY, civicRouter, LOAD_SOURCE_TOOL_NAME, type SourceOffered, type SourceSelection } from '@typedstandards/civic-typed-router';
 import type { McpRegistryEnv } from './registry.ts';
 import { routedSourceId } from './registry.ts';
 import { composeDirectoryPrompt, composeInLoopSystemPrompt, routerComponent, withPortalLockGuidance, type CompositionComponent } from './socrata-skill.ts';
@@ -178,6 +178,18 @@ export type InLoopToolTransport = (name: string, args: Record<string, unknown>, 
 export type PauseDecision = 'allow' | 'off' | 'allow-all' | 'not-now' | 'no-answer';
 
 /**
+ * How a pause ended, and whether it held (S2-B, G0-B1 A): `held` is true when
+ * the reader was asked (the pause held, whatever its decision), false when no
+ * question could be put (`notHeld`: no store, no facts, the run's holds spent,
+ * the reader gone). `no-answer` is the decision both ways; `held` tells them
+ * apart, and the load records it as `tool.load_asked`.
+ */
+export interface PauseResult {
+  decision: PauseDecision;
+  held: boolean;
+}
+
+/**
  * The just-in-time pause (#644 W2, D4): what a load of an Ask-first source
  * asks. `ask` holds until the reader decides or the bound passes, and reports
  * the pause through `report` (the loop's `consent_pause` event). It is
@@ -186,7 +198,7 @@ export type PauseDecision = 'allow' | 'off' | 'allow-all' | 'not-now' | 'no-answ
  * none, so their Ask-first loads are declined with no hold.
  */
 export interface ConsentPause {
-  ask(sourceId: string, report: (payload: ConsentPausePayload) => void): Promise<PauseDecision>;
+  ask(sourceId: string, report: (payload: ConsentPausePayload) => void): Promise<PauseResult>;
 }
 
 export interface InLoopRoutingInput {
@@ -247,12 +259,34 @@ export interface InLoopRouting {
   record(): InLoopRecord;
 }
 
-/** The four root-span facts an in-loop run computes after its loop (C5). */
+/**
+ * What an in-loop run states it was routed against (ADR-0033 amendment 3;
+ * S2-B W4, G0-B7 A): the source inventory by reference, `version` in the
+ * record's form `<version>+<hash12>`, the number of its entries, the number
+ * the model was shown (the directory set), and the rule that chose them.
+ */
+export interface InLoopConsidered {
+  inventory: { id: string; version: string; hash: string };
+  total: number;
+  listed: number;
+  rule: 'directory-set';
+  ruleVersion: '1';
+}
+
+/** The router's inventory in the record's reference form (`<version>+<hash12>`). */
+export const CIVIC_INVENTORY_REFERENCE: InLoopConsidered['inventory'] = Object.freeze({
+  id: CIVIC_INVENTORY.id,
+  version: `${CIVIC_INVENTORY.version}+${CIVIC_INVENTORY.hash.slice(0, 12)}`,
+  hash: CIVIC_INVENTORY.hash,
+});
+
+/** The root-span facts an in-loop run computes after its loop (C5), and what it was routed against (W4). */
 export interface InLoopRecord {
   toolDefinitions: ChatCompletionTool[];
   components: CompositionComponent[];
   routing: { method: 'in-loop'; version: string };
   definitionHash: string;
+  considered: InLoopConsidered;
 }
 
 /**
@@ -293,8 +327,10 @@ export async function createInLoopRouting(input: InLoopRoutingInput): Promise<In
   const withLock = (prompt: string) => withPortalLockGuidance(prompt, lockedPortal, configured, directoryIds);
   const loadTool = loadSourceTool(configured, directoryIds);
   const loadedIds: string[] = [];
-  // How each Ask-first source's pause ended, so a second load asks nothing.
-  const asked = new Map<string, PauseDecision>();
+  // How each Ask-first source's pause ended, so a second load asks nothing,
+  // and whether a question was put (G0-B1 A): `undefined` when `ask` threw,
+  // which records "unknown", never `false`.
+  const asked = new Map<string, { decision: PauseDecision; asked: boolean | undefined }>();
   // Allow all at a pause of this run (UX-2 P4b, S4): no later load pauses.
   let allowedAll = false;
   const loadedNow = (): string[] => directoryIds.filter((id) => loadedIds.includes(id));
@@ -309,27 +345,46 @@ export async function createInLoopRouting(input: InLoopRoutingInput): Promise<In
   const loadStep: LoadStep = {
     toolName: LOAD_SOURCE_TOOL_NAME,
     async load(alias, context) {
+      // `tool.load_asked` per path (G0-B2 A): whether a question was put about
+      // this source, on this load or on the earlier load whose decision this
+      // one reuses; `undefined` writes no attribute.
       const entry = alias === undefined ? undefined : directory.find((candidate) => candidate.alias === alias);
-      if (!entry) return { outcome: 'not-offered', text: LOAD_RESULT_TEXT.notOffered };
-      if (entry.state !== 'on' && !allowedAll) {
-        if (!pause) return { outcome: 'declined', text: LOAD_RESULT_TEXT.declined(entry.alias) };
-        let decision = asked.get(entry.sourceId);
-        if (decision === undefined) {
-          try {
-            decision = await pause.ask(entry.sourceId, (payload) => context.reportPause?.(payload));
-          } catch {
-            // Not expected (ruling A): a pause that could not finish heard no answer.
-            decision = 'no-answer';
+      if (!entry) return { outcome: 'not-offered', text: LOAD_RESULT_TEXT.notOffered, asked: false };
+      let questioned: boolean | undefined = false;
+      if (entry.state !== 'on') {
+        const prior = asked.get(entry.sourceId);
+        if (allowedAll) {
+          // Under Allow all the load proceeds. It reuses this source's own
+          // decision only when that allowed it (its own pause, Allow or Allow
+          // all); otherwise it loads on Allow all, a question about another
+          // source, and puts none about this one.
+          questioned = prior && (prior.decision === 'allow' || prior.decision === 'allow-all') ? prior.asked : false;
+        } else {
+          if (!pause) return { outcome: 'declined', text: LOAD_RESULT_TEXT.declined(entry.alias), asked: false };
+          let answer = prior;
+          if (answer === undefined) {
+            try {
+              const result = await pause.ask(entry.sourceId, (payload) => context.reportPause?.(payload));
+              answer = { decision: result.decision, asked: result.held };
+            } catch {
+              // Not expected (ruling A): a pause that could not finish heard no
+              // answer, and whether it asked is not known.
+              answer = { decision: 'no-answer', asked: undefined };
+            }
+            asked.set(entry.sourceId, answer);
           }
-          asked.set(entry.sourceId, decision);
+          const { decision } = answer;
+          questioned = answer.asked;
+          const pausedPart = questioned === undefined ? {} : { asked: questioned };
+          if (decision === 'off' || decision === 'not-now') return { outcome: 'declined', text: LOAD_RESULT_TEXT.declined(entry.alias), ...pausedPart };
+          if (decision === 'no-answer') return { outcome: 'no-answer', text: LOAD_RESULT_TEXT.noAnswer(entry.alias), ...pausedPart };
+          if (decision === 'allow-all') allowedAll = true;
+          // Allow, or Allow all: the source loads as an On source does.
         }
-        if (decision === 'off' || decision === 'not-now') return { outcome: 'declined', text: LOAD_RESULT_TEXT.declined(entry.alias) };
-        if (decision === 'no-answer') return { outcome: 'no-answer', text: LOAD_RESULT_TEXT.noAnswer(entry.alias) };
-        if (decision === 'allow-all') allowedAll = true;
-        // Allow, or Allow all: the source loads as an On source does.
       }
+      const askedPart = questioned === undefined ? {} : { asked: questioned };
       if (loadedIds.includes(entry.sourceId)) {
-        return { outcome: 'loaded', text: LOAD_RESULT_TEXT.alreadyLoaded(entry.alias), systemPrompt: current.systemPrompt, tools: current.tools };
+        return { outcome: 'loaded', text: LOAD_RESULT_TEXT.alreadyLoaded(entry.alias), systemPrompt: current.systemPrompt, tools: current.tools, ...askedPart };
       }
       // Composed over the candidate set first, committed only once composed.
       const candidate = directoryIds.filter((id) => loadedIds.includes(id) || id === entry.sourceId);
@@ -340,11 +395,19 @@ export async function createInLoopRouting(input: InLoopRoutingInput): Promise<In
         tools: [loadTool, ...offeredMcpTools(mcpToolsFor(lockedPortal), configured, loadedNow())],
         components: composed.components,
       };
-      return { outcome: 'loaded', text: LOAD_RESULT_TEXT.loaded(entry.alias), systemPrompt: current.systemPrompt, tools: current.tools };
+      return { outcome: 'loaded', text: LOAD_RESULT_TEXT.loaded(entry.alias), systemPrompt: current.systemPrompt, tools: current.tools, ...askedPart };
     },
   };
 
   const listed = new Set(directoryIds);
+  // What the run was routed against (W4): fixed at its start, as the directory is.
+  const considered: InLoopConsidered = {
+    inventory: { ...CIVIC_INVENTORY_REFERENCE },
+    total: civicRouter.manifest.length,
+    listed: directory.length,
+    rule: 'directory-set',
+    ruleVersion: '1',
+  };
   return {
     directory,
     firstSystemPrompt: first.systemPrompt,
@@ -378,13 +441,16 @@ export async function createInLoopRouting(input: InLoopRoutingInput): Promise<In
       routing: { method: 'in-loop', version: routerComponent().version as string },
       // The loaded set, intersected with the directory set first and passed as
       // the selection, so the definition's `sources` match its components (the
-      // router's flags); the model chose them.
+      // router's flags); the model chose them. The definition's components
+      // also name the inventory the run was routed against (S2-B W4), which
+      // the record's `components` do not: the record states it as `considered`.
       definitionHash: civicRouter.harnessDefinition({
         configured,
         selection: loadedNow(),
         chosenBy: 'model',
-        components: current.components,
+        components: [...current.components, { id: considered.inventory.id, version: considered.inventory.version }],
       }).hash,
+      considered,
     }),
   };
 }

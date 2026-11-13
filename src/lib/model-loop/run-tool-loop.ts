@@ -111,6 +111,13 @@ export interface LoadStepResult {
   systemPrompt?: string;
   /** The next request's tools, when `outcome` is `loaded`. */
   tools?: ChatCompletionTool[];
+  /**
+   * Whether a question was put to the reader about this load's source, on
+   * this load or on the earlier load whose decision it reuses (S2-B, G0-B1 A;
+   * the bundle's `trace.loadSpan.loadAsked`). Written as `tool.load_asked`
+   * when defined; absent when the step cannot tell, and on a load that threw.
+   */
+  asked?: boolean;
 }
 
 /** What the loop tells a load about where it was made. */
@@ -979,6 +986,7 @@ export async function runToolLoop(options: ToolLoopOptions): Promise<ToolLoopRes
           trace!.builder.endSpan(loadSpanId, {
             'tool.load_outcome': answer.outcome,
             'tool.duration_ms': loadDuration,
+            ...(answer.asked !== undefined ? { 'tool.load_asked': answer.asked } : {}),
           });
         }
         emit({ type: 'tool_complete', iteration: currentIteration, call: loadEntry, priorCalls: loadPriorCalls, durationMs: loadDuration });

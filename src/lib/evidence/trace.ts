@@ -55,8 +55,9 @@ export const RUN_RECORD_ATTRIBUTE = {
 } as const;
 
 /**
- * The two root-span attributes an in-loop run adds (#644 W1; ADR-0033's
- * amendment 2, harness 0.10.0), after the six. Kept beside
+ * The three root-span attributes an in-loop run adds (#644 W1; ADR-0033's
+ * amendment 2, harness 0.10.0; the third, amendment 3, harness 0.12.0, S2-B
+ * W4), after the six. Kept beside
  * `RUN_RECORD_ATTRIBUTE` rather than in it: `run-record-attributes.test.ts`
  * pins that object to exactly six names.
  */
@@ -68,6 +69,11 @@ export const IN_LOOP_RUN_RECORD_ATTRIBUTE = {
   /** The router's harness definition hash, lowercase hex SHA-256, a plain
    *  string. In-loop runs only. */
   definitionHash: 'analysis.definition_hash',
+  /** JSON `{ inventory: { id, version, hash }, total, listed, rule,
+   *  ruleVersion }`, exactly those keys: the source inventory the run was
+   *  routed against, `version` in `<version>+<hash12>` form, and how many of
+   *  its entries the model was shown. In-loop runs only (G0-B7 A). */
+  considered: 'analysis.considered',
 } as const;
 
 /** What a run states about itself, before encoding. */
@@ -83,12 +89,20 @@ export interface RunRecordInput {
   routing?: { method: string; version: string };
   /** The harness definition's hash (#644 W1); omitted under all-sources. */
   definitionHash?: string;
+  /** What the run was routed against (S2-B W4); omitted under all-sources. */
+  considered?: {
+    inventory: { id: string; version: string; hash: string };
+    total: number;
+    listed: number;
+    rule: string;
+    ruleVersion: string;
+  };
 }
 
 /** The root-span attributes for a run, ready for `startRoot` or `endRoot`:
- *  five, and each of the last three only when passed, in the harness's order. */
+ *  five, and each of the last four only when passed, in the harness's order. */
 export function runRecordAttributes(run: RunRecordInput): Record<string, string> {
-  const { flowsStatement, routing, definitionHash } = run;
+  const { flowsStatement, routing, definitionHash, considered } = run;
   return {
     [RUN_RECORD_ATTRIBUTE.assertedDate]: run.assertedDate,
     [RUN_RECORD_ATTRIBUTE.mcpServers]: JSON.stringify(run.mcpServers),
@@ -102,5 +116,17 @@ export function runRecordAttributes(run: RunRecordInput): Record<string, string>
     // Exactly the two keys, in the harness's order (#644 W1).
     ...(routing ? { [IN_LOOP_RUN_RECORD_ATTRIBUTE.routing]: JSON.stringify({ method: routing.method, version: routing.version }) } : {}),
     ...(definitionHash !== undefined ? { [IN_LOOP_RUN_RECORD_ATTRIBUTE.definitionHash]: definitionHash } : {}),
+    // Exactly the five keys and the inventory's three, in the harness's order (S2-B W4).
+    ...(considered
+      ? {
+          [IN_LOOP_RUN_RECORD_ATTRIBUTE.considered]: JSON.stringify({
+            inventory: { id: considered.inventory.id, version: considered.inventory.version, hash: considered.inventory.hash },
+            total: considered.total,
+            listed: considered.listed,
+            rule: considered.rule,
+            ruleVersion: considered.ruleVersion,
+          }),
+        }
+      : {}),
   };
 }

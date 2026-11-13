@@ -15,8 +15,8 @@
 //      0.12.0 the attribute is not read, so a record of a pack's call could
 //      not name the pack.
 //
-// 0.12.0 also reads `analysis.considered` and `tool.load_asked`; neither is
-// written by this repository at this pin. It keeps produce-core `^0.9.0`, and
+// 0.12.0 also reads `analysis.considered` and `tool.load_asked`; this repository
+// writes both from S2-B's P2 on (in-loop runs; load spans). It keeps produce-core `^0.9.0`, and
 // a record built without the three inputs has the same bytes (no golden
 // fixture moves).
 //

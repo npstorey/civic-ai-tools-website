@@ -711,6 +711,7 @@ export function buildEvidencePackage(input: PackageInput): { pkg: EvidencePackag
       // and its key absent, for a run that recorded none (every all-sources run).
       routing: run.routing,
       definitionHash: run.definitionHash,
+      considered: run.considered,
       extensions: input.extensions,
     },
     { host: requirePublicationHost() },

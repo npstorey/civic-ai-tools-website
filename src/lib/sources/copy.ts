@@ -465,16 +465,19 @@ export const ECHO_LIMIT = 40;
 
 /**
  * Why a source the model requested was not loaded, by the load's outcome, in
- * the chooser line only (R10 P1 fix round 1). None of them claims a question
- * put to the reader: `declined` is also the outcome when no pause could be held
- * (`routing-mode.ts:301`), and `no-answer` when the reader could not be asked
- * (`decision.ts`, `notHeld`). `WHERE_IT_WENT_REASONS` above is owner-approved
- * and unchanged.
+ * the chooser line only: bundle revision 3's three sentences, verbatim
+ * (`bundle.json:142`; S2-B W9, the research check's R6 = KEEP; pinned to the
+ * installed bundle's digest by `chooser-reasons-revision-3.test.ts`). None of
+ * them claims a question put to the reader: `declined` is also the outcome when
+ * no pause could be held, and `no-answer` when the reader could not be asked
+ * (`decision.ts`, `notHeld`); a record states whether a question was put only
+ * in `tool.load_asked`. `WHERE_IT_WENT_REASONS` above is owner-approved and
+ * unchanged.
  */
 export const CHOOSER_REASONS = {
-  declined: 'Ask first, so it was not used for this question.',
-  noAnswer: 'Ask first: not used, because this site could not ask, or no answer arrived in time.',
-  unavailable: 'Unavailable. This site could not load it for this question.',
+  declined: 'Not allowed, so it was not used for this question.',
+  noAnswer: 'Not used, because the site that ran this question could not ask, or no answer arrived in time.',
+  unavailable: 'Unavailable. The site that ran this question could not load it.',
 } as const;
 
 /** The card in "Model + environment" (R10 P1, #682): the same fact as the chooser line. Hypotheses. */

@@ -526,7 +526,7 @@ export function scriptedPause(decision, askedSources) {
   return {
     async ask(sourceId) {
       askedSources.add(sourceId);
-      return decision ?? 'no-answer';
+      return { decision: decision ?? 'no-answer', held: true };
     },
   };
 }

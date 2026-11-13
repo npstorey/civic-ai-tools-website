@@ -87,7 +87,7 @@ import { buildFlowsStatement, type FlowsLinks, type FlowsSource, type FlowsState
 import { hostingVariantInForce, type McpRegistryEnv } from '../mcp/registry.ts';
 import { readConsentRow, writeConsentRow } from './consent-store.ts';
 import { consentCookieHeader, consentDate, encodeConsentCookie, isSecureRequest, readConsentCookie } from './consent.ts';
-import type { ConsentPause, PauseDecision } from '../mcp/routing-mode.ts';
+import type { ConsentPause, PauseDecision, PauseResult } from '../mcp/routing-mode.ts';
 import type { ConsentPausePayload } from '../streaming.ts';
 
 // --- The bounds --------------------------------------------------------------------
@@ -248,7 +248,7 @@ export function createConsentPause(input: ConsentPauseInput): ConsentPause {
   let spentMs = 0;
 
   return {
-    async ask(sourceId, report): Promise<PauseDecision> {
+    async ask(sourceId, report): Promise<PauseResult> {
       const facts = pauseFacts(input.statement, input.configured, sourceId);
       // The reader's stream may already be gone; that is not the pause's failure.
       const send = (payload: ConsentPausePayload) => {
@@ -258,10 +258,13 @@ export function createConsentPause(input: ConsentPauseInput): ConsentPause {
           /* nobody is listening */
         }
       };
-      const notHeld = (): PauseDecision => {
+      // No question could be put (G0-B1 A: `held: false`, so the load records none).
+      const notHeld = (): PauseResult => {
         if (facts) send({ ...facts, expiresAt: new Date(now()).toISOString(), holds: false });
-        return 'no-answer';
+        return { decision: 'no-answer', held: false };
       };
+      // The pause held: the reader was asked, whatever the decision.
+      const heldWith = (decision: PauseDecision): PauseResult => ({ decision, held: true });
       const budget = CONSENT_PAUSE_RUN_BUDGET_MS - spentMs;
       if (!facts || !input.store || budget <= 0) return notHeld();
       // Nobody is left to answer: no entry is written for them.
@@ -289,16 +292,16 @@ export function createConsentPause(input: ConsentPauseInput): ConsentPause {
       try {
         for (;;) {
           const elapsed = now() - start;
-          if (elapsed >= holdMs || gone?.aborted) return 'no-answer';
+          if (elapsed >= holdMs || gone?.aborted) return heldWith('no-answer');
           await pauseFor(Math.min(CONSENT_PAUSE_POLL_MS, holdMs - elapsed));
-          if (gone?.aborted) return 'no-answer';
+          if (gone?.aborted) return heldWith('no-answer');
           let value: unknown;
           try {
             value = await input.store.get(name);
           } catch {
-            return 'no-answer';
+            return heldWith('no-answer');
           }
-          if (isEntry(value) && value.decision !== undefined) return value.decision;
+          if (isEntry(value) && value.decision !== undefined) return heldWith(value.decision);
         }
       } finally {
         spentMs += now() - start;
