@@ -1,7 +1,11 @@
 // The heading over an executed-sandbox answer (UX pass, row 19): "Executed-
-// sandbox response" was two engineer's words; it now reads "Answer, executed
+// sandbox response" was two engineer's words; it then read "Answer, executed
 // in a signed sandbox", over the running panel and the finished answer alike.
-// No test read the heading at the base.
+// HF (#729, OA-772 = A): the heading stays an `h2`, in place, for a screen
+// reader, and is hidden from sight (`ui-visually-hidden`); it reads "Answer".
+// The finished answer's status row still says "Executed in a signed sandbox"
+// (composer-dock.test.ts, HF criterion 3). Red at HF's base (da02a73), where
+// the heading is visible and reads the longer words.
 //
 // WHAT IS DRIVEN. `/ask`'s mount (`QuerySurface`, answer-first, notebook mode
 // by default) on the surface harness, signed in, through the consent card's
@@ -25,6 +29,7 @@ import {
   sessions,
   textOf,
 } from '../sources/surface-test-harness.ts';
+import { classesOf } from '../ui/ui-test-helpers.ts';
 
 registerSurfaceHooks({ ...CONSENT_SURFACE_STUBS });
 
@@ -68,7 +73,11 @@ function answers() {
 }
 
 
-test('row 19: the heading over a notebook-mode answer reads "Answer, executed in a signed sandbox"', async () => {
+const HEADING = 'Answer';
+const OLD_HEADING = 'Answer, executed in a signed sandbox';
+const HIDDEN_CLASS = 'ui-visually-hidden';
+
+test(`row 19, HF (OA-772 = A): the heading over a notebook-mode answer is an h2 reading "${HEADING}", carrying ${HIDDEN_CLASS}; "${OLD_HEADING}" shows nowhere`, async () => {
   sessions.server = { user: { id: 'gh-fixture-account', dbId: '99999999-9999-4999-8999-999999999999' } };
   sessions.client = { status: 'authenticated', data: { user: { name: 'Fixture' } } };
   sessions.rows.clear();
@@ -79,8 +88,12 @@ test('row 19: the heading over a notebook-mode answer reads "Answer, executed in
   await page.type(box!, 'How many 311 complaints were there in Brooklyn in 2024?');
   await page.submit(page.elements().find((el) => el.type === 'form')!);
   await page.click(page.button('Allow'));
-  const headings = page.elements().filter((el) => el.type === 'h2').map((el) => textOf(el));
-  assert.ok(headings.includes('Answer, executed in a signed sandbox'), `the notebook answer's heading is not the reader's: ${headings.join(' | ')}`);
+  const h2s = page.elements().filter((el) => el.type === 'h2');
+  const headings = h2s.map((el) => textOf(el));
+  const run = h2s.filter((el) => textOf(el) === HEADING);
+  assert.equal(run.length, 1, `the notebook answer's heading is not one h2 reading "${HEADING}": ${headings.join(' | ')}`);
+  assert.ok(classesOf(run[0]).includes(HIDDEN_CLASS), `the notebook answer's heading does not carry ${HIDDEN_CLASS}: [${classesOf(run[0]).join(' ')}]`);
+  assert.ok(!page.text().includes(OLD_HEADING), `"${OLD_HEADING}" still shows`);
   assert.ok(!headings.includes('Executed-sandbox response'), 'the old heading is still shown');
   page.unmount();
 });

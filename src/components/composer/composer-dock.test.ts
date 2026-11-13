@@ -26,6 +26,10 @@
 //   the bar (`composer-bar`) holds any open slot and then the box, and the lines follow it; no chips.
 // - The results block opens with the bubble, then its heading, then the pause prompt (leg H; the cards' "Stated, not
 //   asked": the order in the answer area).
+// - HF (#729, OA-772 = A): the run's heading stays one `h2`, in place, and carries `ui-visually-hidden`, mid-stream,
+//   after the answer and after a run that errored or failed. Sandbox's reads "Answer"; Standard's stays "Results".
+//   "Answer, executed in a signed sandbox" shows nowhere. A finished executed answer still says, visibly, that it ran
+//   in a signed sandbox: its status row reads "Executed in a signed sandbox", inside no hidden element (a guard).
 // - The docked rule in `globals.css` is `position: sticky; bottom: 0` with a `z-index` below the header's 50
 //   (#728 line 3; `Header.tsx:279-281`), carried by the bar's rule since the re-cut; the docked root is
 //   `display: contents` (addendum 3, 3.3). The page gains no bottom padding (the seat's ruling S2); that, and the
@@ -42,7 +46,9 @@
 // the shapes a `queryCount > 0` dock, or a line counted in component state, would fail. Leg H's base (1827ab8)
 // docks only after an answer, renders no bubble, keeps the framing and the italic quote after a send, and keeps the
 // sent words in the undocked box while the first run streams: each leg H test below is red there at an assertion,
-// except the guards, which say so.
+// except the guards, which say so. HF's base (da02a73) renders each run heading visible, and Sandbox's reads
+// "Answer, executed in a signed sandbox": each HF test below is red there at an assertion, except its guard, which is
+// green there by design and is shown able to fail on a notebook with no provenance stamp.
 //
 // BLIND SPOTS, stated. No layout: "below the answer" is read as document order and the stylesheet's rule, not a
 // box; criterion 5's instrument measures the box. No focus. The harness's unmount can leave bus subscriptions
@@ -376,15 +382,15 @@ const NOTEBOOK = {
   ],
 };
 
-/** Finish the latest executed run: an answer, the notebook, done. */
-async function finishNotebook(surface: Surface): Promise<void> {
+/** Finish the latest executed run: an answer, the notebook (`NOTEBOOK` unless a test hands its own), done. */
+async function finishNotebook(surface: Surface, notebook: Json = NOTEBOOK): Promise<void> {
   const stream = streams[streams.length - 1];
   assert.ok(stream, 'premise: the page started an executed run');
   stream.push({ type: 'phase', name: 'A', message: 'Discovering datasets…' });
   stream.push({ type: 'phase_a_answer', content: 'A fixture answer.' });
   stream.push({ type: 'phase', name: 'B', message: 'Synthesizing notebook…' });
   stream.push({ type: 'phase', name: 'C', message: 'Executing in sandbox…' });
-  stream.push({ type: 'notebook', notebook: NOTEBOOK, sandboxId: 'fixture-sandbox-p3b1', executionDuration_ms: 1000, validation: { ok: true, issues: [] } });
+  stream.push({ type: 'notebook', notebook, sandboxId: 'fixture-sandbox-p3b1', executionDuration_ms: 1000, validation: { ok: true, issues: [] } });
   stream.push({ type: 'phase', name: 'complete', message: 'Done.' });
   stream.close();
   await settle(surface);
@@ -558,12 +564,12 @@ test('criterion 1, leg H (dock at send; reverses "/ask docks after the run finis
   assert.deepEqual(queries.map((q) => q.path), ['/api/query-notebook'], 'premise: /ask ran the question in the sandbox');
   assert.equal(streams.length, 1, 'premise: the executed run is under way (a held stream)');
   assert.equal(isDocked(page), true, 'not docked while the executed run streams: the box docks at the send');
-  assert.ok(before(page, resultsBlock(page, 'Answer, executed in a signed sandbox'), composerOf(page)), 'mid-stream, the docked composer is not after the results');
+  assert.ok(before(page, resultsBlock(page, 'Answer'), composerOf(page)), 'mid-stream, the docked composer is not after the results');
   await finishNotebook(page);
 
   assert.equal(isDocked(page), true, 'the composer is not docked after a finished executed run');
   assert.equal(boxOf(page).props.placeholder, X23, 'the docked placeholder');
-  assert.ok(before(page, resultsBlock(page, 'Answer, executed in a signed sandbox'), composerOf(page)), 'the docked composer is not after the results');
+  assert.ok(before(page, resultsBlock(page, 'Answer'), composerOf(page)), 'the docked composer is not after the results');
   const lines = firstTimeLines(page);
   assert.equal(lines.length, 1, `first-time lines after the first answer: ${lines.length}`);
   assertX24OneParagraph(lines[0], '/ask signed in');
@@ -657,9 +663,9 @@ test('criterion 6, leg H (dock at send; reverses relay 57\'s "an errored first r
   const page = await mountPage(ASK('notebook'));
   await askFromBox(page, 'How many 311 complaints were there in Brooklyn in 2024?');
   assert.deepEqual(queries.map((q) => q.path), ['/api/query-notebook'], 'premise: /ask ran the question in the sandbox');
-  assert.ok(resultsBlock(page, 'Answer, executed in a signed sandbox'), 'premise: the results block renders the failed run');
+  assert.ok(resultsBlock(page, 'Answer'), 'premise: the results block renders the failed run');
   assert.equal(isDocked(page), true, 'a first executed run that ended in an error left the composer undocked: it started, so it docks at the send');
-  assert.ok(before(page, resultsBlock(page, 'Answer, executed in a signed sandbox'), composerOf(page)), 'the docked composer is not after the failed run');
+  assert.ok(before(page, resultsBlock(page, 'Answer'), composerOf(page)), 'the docked composer is not after the failed run');
   assert.equal(firstTimeLines(page).length, 0, 'the first-time line shows after a first executed run that ended in an error, before any answer (#729 6838758130)');
 });
 
@@ -732,7 +738,7 @@ test('criterion 4 (#728 line 3), S2; re-pointed to the bar (contract v5 1A; adde
 const MOUNTS = [
   { name: 'the home page (signed out, the comparison)', mount: 'home', mode: 'standard', heading: 'Results' },
   { name: '/ask Standard (signed in)', mount: 'ask', mode: 'standard', heading: 'Results' },
-  { name: '/ask Sandbox (signed in)', mount: 'ask', mode: 'notebook', heading: 'Answer, executed in a signed sandbox' },
+  { name: '/ask Sandbox (signed in)', mount: 'ask', mode: 'notebook', heading: 'Answer' },
 ] as const;
 
 async function mountFor(m: (typeof MOUNTS)[number]): Promise<Surface> {
@@ -1050,4 +1056,103 @@ test('leg H, the first-time line (the seat, #729 6838758130), state 3, GUARD (gr
   await finishComparison(page);
   assert.equal(isDocked(page), true, 'premise: docked after the answer');
   assert.equal(firstTimeLines(page).length, 1, 'no first-time line at the first answer after a run that ended with no answer');
+});
+
+// === HF, the heading follow-up (#729, OA-772 = A): the run's heading hidden, in place =================================
+
+/** The Sandbox heading before HF: after HF it shows nowhere (criterion 2). */
+const OLD_SANDBOX_HEADING = 'Answer, executed in a signed sandbox';
+
+/**
+ * HF criterion 1: the results container (the bubble's parent) holds one `h2`, the run's heading, reading `heading`
+ * and carrying the visually-hidden utility; "Answer, executed in a signed sandbox" is nowhere on the page.
+ */
+function assertRunHeadingHidden(surface: Surface, heading: string, where: string): void {
+  const bubbles = surfaceParts(surface, BUBBLE);
+  assert.equal(bubbles.length, 1, `${where}: premise: data-part="${BUBBLE}": ${bubbles.length}`);
+  const block = parentOf(surface, bubbles[0]);
+  assert.ok(block, `${where}: premise: the bubble has a parent`);
+  const h2s = childrenOf(block!).filter((el) => el.type === 'h2');
+  assert.equal(h2s.length, 1, `${where}: the results container holds ${h2s.length} h2 children, not one: ${JSON.stringify(h2s.map((el) => textOf(el)))}`);
+  const read = { text: textOf(h2s[0]), hidden: classesOf(h2s[0]).includes(HIDDEN_CLASS) };
+  assert.deepEqual(read, { text: heading, hidden: true }, `${where}: the run's heading is not one h2 reading "${heading}" and carrying ${HIDDEN_CLASS}: it reads "${read.text}", classes [${classesOf(h2s[0]).join(' ')}]`);
+  assert.ok(!surface.text().includes(OLD_SANDBOX_HEADING), `${where}: "${OLD_SANDBOX_HEADING}" still shows`);
+}
+
+for (const m of MOUNTS) {
+  test(`HF criterion 1, ${m.name}: mid-stream and after the answer, the run's heading is one h2 in the results container, in place, reading "${m.heading}" and carrying ${HIDDEN_CLASS}; the order h1, then the bubble, then the h2 holds`, async () => {
+    const page = await mountFor(m);
+    await askFromBox(page, `Q-hf (${m.mount} ${m.mode}): how many 311 noise complaints were there in Brooklyn?`);
+    for (const state of ['mid-stream', 'after the answer'] as const) {
+      if (state === 'mid-stream') await midStream(page, m.mode); else await finishRun(page, m.mode);
+      const where = `${m.name}, ${state}`;
+      assertRunHeadingHidden(page, m.heading, where);
+      assertHeadingBubbleOrder(page, m.heading, where);
+    }
+  });
+
+  test(`HF criterion 1, ${m.name}: after a first run that ${m.mode === 'notebook' ? 'failed (the run\'s error event)' : 'errored (the route\'s 503)'}, the run's heading is one h2 in the results container, reading "${m.heading}" and carrying ${HIDDEN_CLASS}; the order h1, then the bubble, then the h2 holds`, async () => {
+    const page = await mountFor(m);
+    nextAnswers.push(m.mode === 'notebook'
+      ? () => sse([{ type: 'error', message: 'The notebook could not finish running. Please try again.', code: 'generic' }])
+      : () => new Response('Service unavailable', { status: 503 }));
+    await askFromBox(page, `Q-hf-error (${m.mount} ${m.mode}): how many 311 noise complaints were there in Brooklyn?`);
+    assert.equal(queries.length, 1, 'premise: the question reached the route');
+    assert.equal(streams.length, 0, 'premise: the run ended with no stream to hold');
+    const where = `${m.name}, after a run that ${m.mode === 'notebook' ? 'failed' : 'errored'}`;
+    assertRunHeadingHidden(page, m.heading, where);
+    assertHeadingBubbleOrder(page, m.heading, where);
+  });
+}
+
+// --- HF criterion 3: the finished Sandbox answer still says, visibly, that it ran in a signed sandbox -----------------
+
+const SANDBOX_STATUS = 'Executed in a signed sandbox';
+const UNSTATED_STATUS = 'Whether this notebook ran is not stated';
+/** `NOTEBOOK` with no provenance stamp (`org.civicaitools.notebook` taken out): the guard's can-fail fixture. */
+const NOTEBOOK_UNSTAMPED: Json = {
+  ...NOTEBOOK,
+  metadata: { extensions: { 'org.civicaitools.execution': NOTEBOOK.metadata.extensions['org.civicaitools.execution'] } },
+};
+
+/**
+ * Null when the page's one status row (`data-part="status-row"`) reads "Executed in a signed sandbox" and sits inside
+ * no hidden element (the visually-hidden utility, `hidden`, `aria-hidden`, `display: none`, `visibility: hidden`, or a
+ * closed `<details>` outside its `<summary>`); otherwise what is wrong.
+ */
+function statusRowSaysSandbox(surface: Surface): string | null {
+  const rows = surfaceParts(surface, 'status-row');
+  if (rows.length !== 1) return `data-part="status-row": ${rows.length}, not one`;
+  const text = textOf(rows[0]);
+  if (!text.includes(SANDBOX_STATUS)) return `the status row reads "${text}", not "${SANDBOX_STATUS}"`;
+  let child: HostElement | null = null;
+  for (let el: HostElement | null = rows[0]; el; child = el, el = parentOf(surface, el)) {
+    const style = (el.props.style ?? {}) as { display?: string; visibility?: string };
+    const ariaHidden = el.props['aria-hidden'];
+    if (classesOf(el).includes(HIDDEN_CLASS) || el.props.hidden || ariaHidden === true || ariaHidden === 'true'
+      || style.display === 'none' || style.visibility === 'hidden'
+      || (el.type === 'details' && !el.props.open && child?.type !== 'summary')) {
+      return `the status row sits inside a hidden <${el.type}> (classes [${classesOf(el).join(' ')}])`;
+    }
+  }
+  return null;
+}
+
+test(`HF criterion 3, GUARD (green on the base by design), /ask Sandbox: after a finished executed run, data-part="status-row" reads "${SANDBOX_STATUS}", inside no hidden element`, async () => {
+  const page = await mountFor(MOUNTS[2]);
+  await askFromBox(page, 'Q-hf-status: how many 311 noise complaints were there in Brooklyn?');
+  assert.deepEqual(queries.map((q) => q.path), ['/api/query-notebook'], 'premise: /ask ran the question in the sandbox');
+  await finishNotebook(page);
+  assert.equal(statusRowSaysSandbox(page), null, 'the finished Sandbox answer does not say, visibly, that it ran in a signed sandbox');
+});
+
+test(`HF criterion 3, the guard shown able to fail, /ask Sandbox: on a notebook with no provenance stamp the status row reads "${UNSTATED_STATUS}", and the guard's check reports it`, async () => {
+  const page = await mountFor(MOUNTS[2]);
+  await askFromBox(page, 'Q-hf-status-unstamped: how many 311 noise complaints were there in Brooklyn?');
+  await finishNotebook(page, NOTEBOOK_UNSTAMPED);
+  const rows = surfaceParts(page, 'status-row');
+  assert.equal(rows.length, 1, `premise: one status row, found ${rows.length}`);
+  assert.ok(textOf(rows[0]).includes(UNSTATED_STATUS), `premise: the unstamped notebook's status row reads "${textOf(rows[0])}"`);
+  const why = statusRowSaysSandbox(page);
+  assert.ok(why !== null && why.includes(UNSTATED_STATUS), `the guard's check passed a status row with no sandbox line: ${String(why)}`);
 });

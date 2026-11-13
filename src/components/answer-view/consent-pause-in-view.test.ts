@@ -426,7 +426,7 @@ test('criterion 1, /ask (the executed run): a holding pause shows the prompt, in
   assertNoScroll(from, '/ask');
   const prompt = onePrompt(p, '/ask');
   assertPrompt(prompt, '/ask');
-  assertPromptInAnswerArea(p, prompt, 'Answer, executed in a signed sandbox', '/ask');
+  assertPromptInAnswerArea(p, prompt, 'Answer', '/ask');
   stream.push({ type: 'phase_a_progress', ...LOAD_DONE });
   await settle(p);
   assert.equal(prompts(p).length, 0, `the prompt stays after the run moved past the pause: ${summary(p)}`);
