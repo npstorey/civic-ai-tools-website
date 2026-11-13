@@ -41,6 +41,12 @@ const PUBLISH_BUTTON_STYLE: React.CSSProperties = {
 interface McpResponseDisplayProps {
   content: string;
   queryText?: string;
+  /**
+   * Whether the question opens the answer as an italic quote. Default true: `/explore`'s mount, unchanged. The query
+   * surface (the home page and `/ask`) passes false, since it shows the question in its own bubble above the answer
+   * (UX-2 P3b-1 leg H, A4 = A). `queryText` still feeds the copy, the notebook and the publish dialog either way.
+   */
+  showQueryQuote?: boolean;
   progressLog?: ProgressLogEntry[];
   progressGroups?: ProgressGroup[];
   toolsCalled?: ToolCall[];
@@ -337,6 +343,7 @@ function detectIncompleteResponse(content: string): boolean {
 export default function McpResponseDisplay({
   content,
   queryText,
+  showQueryQuote = true,
   progressLog = [],
   progressGroups = [],
   toolsCalled = [],
@@ -641,8 +648,8 @@ export default function McpResponseDisplay({
           padding: '24px',
         }}
       >
-        {/* Query text */}
-        {queryText && (
+        {/* Query text (left out where the surface shows the question in its bubble) */}
+        {queryText && showQueryQuote && (
           <div
             style={{
               borderLeft: '3px solid var(--accent)',

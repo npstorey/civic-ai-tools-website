@@ -9,13 +9,35 @@
  * behaviour. Mounted on the apex demo page today; extracted so the same
  * surface can be mounted elsewhere without duplicating the wiring.
  *
- * `children` renders inside the form's narrow container, above the form —
- * the slot each mount uses for its own framing copy. Everything that is
- * purely framing (hero copy, calls to action, positioning) stays with the
- * page; only the form and its outputs live here.
+ * `children` renders in the form's narrow container, above the form — the
+ * slot each mount uses for its own framing copy. Everything that is purely
+ * framing (hero copy, calls to action, positioning) stays with the page; only
+ * the form and its outputs live here. A mount hands its `h1` over apart from
+ * the rest (`heading`, with its wrapper's spacing as `framingStyle`): from the
+ * first send the framing gives way to the reader's question (UX-2 P3b-1 leg H,
+ * A1 = A, A5 = A), and the page keeps its one `h1`, visually hidden.
+ *
+ * THE DOCK (UX-2 P3b-1; leg H, the owner's design change, dock at send: plan
+ * v3, #729 6825049451 and 6835240316). The first send that starts a run moves
+ * the form below the results and docks it there (sticky at the viewport's
+ * bottom, `composer--docked`), for the surface's life: mid-stream, after a
+ * refused or errored run, and after the answer. A send the consent guard holds
+ * starts no run (the guard holds it before `onSubmit`), so it does not dock.
+ * The form is one keyed child that changes place, so it moves rather than
+ * remounts.
+ *
+ * THE FIRST-TIME LINE (X24; the seat's ruling, #729 6838758130). Docked, it
+ * shows under the box from the first send, except after a run that ended with
+ * no answer (refused or errored) and before any answer: then it is hidden until
+ * the first answer arrives. It goes at the session's second question: a submit
+ * made once an answer has arrived on this surface — the box (a chip only fills
+ * it), "Continue this analysis", or the demoted comparison's run. A submit made
+ * before any answer (the first send, a retry after a failed run, the form's
+ * resend after Allow) is not counted. That is kept in session storage, so a
+ * remount in the same session does not show it again.
  */
 
-import { useState, useRef } from 'react';
+import { cloneElement, useState, useRef, type CSSProperties, type ReactElement } from 'react';
 import QueryForm from '@/components/QueryForm';
 import { useDefaultPortalArg } from '@/components/DefaultPortalProvider';
 import ComparisonDisplay from '@/components/ComparisonDisplay';
@@ -33,22 +55,20 @@ import {
   type QuerySurfacePresentation,
 } from '@/lib/query-presentation';
 
+/** Session storage: the first-time line has been answered by a second question this session (UX-2 P3b-1). */
+const FIRST_TIME_LINE_STORAGE_KEY = 'civicaitools.firstTimeLineDone';
+const parseFirstTimeLineDone = (raw: string | null): 'done' | null => (raw === 'done' ? 'done' : null);
+
 interface QuerySurfaceProps {
-  /** Framing content rendered above the form, inside its container. */
+  /** Framing content rendered above the form, inside its container, before the first send only. */
   children?: React.ReactNode;
   /**
-   * Whether to close a completed comparison with the footnote suggesting the
-   * reader run the tools locally for complex multi-step analysis.
-   *
-   * Default `true` — the apex demo's existing behavior, unchanged and
-   * unconfigured (the marketing page passes nothing). The signed-in `(app)`
-   * mount passes `false`: there, the footnote would send a user who just
-   * signed in to the surface built for exactly this work somewhere else to
-   * do it, and the limit it implicitly apologizes for is the app tier, not
-   * the demo's. On the apex the footnote is honest — that surface IS the
-   * rate-limited demo, and pointing past it is the point.
+   * The page's `h1`, handed over apart from the rest of its framing (UX-2 P3b-1 leg H). Before the first send it
+   * renders first in the framing's wrapper; from the send it stays, alone, carrying `ui-visually-hidden`.
    */
-  showLocalSetupFootnote?: boolean;
+  heading?: ReactElement<{ className?: string }>;
+  /** The style of the wrapper around `heading` and `children` before the first send: the page's own spacing. */
+  framingStyle?: CSSProperties;
   /**
    * How this mount presents the standard-mode result (s6 P2, #229; Q62 G0).
    *
@@ -80,7 +100,8 @@ interface QuerySurfaceProps {
 
 export default function QuerySurface({
   children,
-  showLocalSetupFootnote = true,
+  heading,
+  framingStyle,
   presentation = 'comparison',
   defaultMode = 'standard',
   advancedOptions = 'always',
@@ -116,6 +137,37 @@ export default function QuerySurface({
   // executed). The next submit picks the toggle up.
   const answerFirstActive = answerFirstConfigured && streaming.mcpOnly;
 
+  // The dock (UX-2 P3b-1 leg H): the first send that starts a run docks the form, for good (`handleSubmit`).
+  const [docked, setDocked] = useState(false);
+  // The run on show has finished with an answer — standard: every panel the run has is complete and one has content;
+  // notebook: the run ended with a notebook. `answeredOnce` latches the first time it does on this surface.
+  const answered = lastMode === 'standard'
+    ? !streaming.isLoading
+      && isComparisonRunComplete(streaming.mcpOnly, streaming.withoutMcp.isComplete, streaming.withMcp.isComplete)
+      && (streaming.withMcp.content !== '' || streaming.withoutMcp.content !== '')
+    : !notebook.state.isLoading && notebook.state.notebook != null;
+  const running = streaming.isLoading || notebook.state.isLoading;
+  const [answeredOnce, setAnsweredOnce] = useState(false);
+  // A run that ended with no answer (refused or errored) before any answer: the first-time line waits for one.
+  const [endedWithoutAnswer, setEndedWithoutAnswer] = useState(false);
+  if (answered && !answeredOnce) {
+    // The "adjust state when a value changes" render-time pattern.
+    setAnsweredOnce(true);
+  }
+  if (docked && !running && !answered && !answeredOnce && !endedWithoutAnswer) {
+    setEndedWithoutAnswer(true);
+  }
+  const [firstTimeLineDone, setFirstTimeLineDone] = useSessionChoice(FIRST_TIME_LINE_STORAGE_KEY, parseFirstTimeLineDone);
+  /**
+   * The session's second question is a submit made once an answer has arrived on this surface: the first-time line
+   * has done its job. Before any answer nothing is counted, so the line still shows at the first answer
+   * (composer-dock.test.ts: the refused first send, Allow's resend, and the errored first runs fail if it is).
+   */
+  const countQuestion = () => {
+    if (answeredOnce) setFirstTimeLineDone('done');
+  };
+  const showFirstTimeLine = docked && firstTimeLineDone !== 'done' && (answeredOnce || !endedWithoutAnswer);
+
   // Extract display name from model ID (e.g., "anthropic/claude-sonnet-4" -> "Claude Sonnet 4")
   const getModelDisplayName = (modelId: string) => {
     const name = modelId.split('/')[1] || modelId;
@@ -132,6 +184,9 @@ export default function QuerySurface({
     // be a literal here, so choosing "All portals" silently ran against one
     // deployment's city and every surface downstream said so.
     const effectivePortal = portal || defaultPortal;
+    countQuestion();
+    // Dock at send (leg H): set after the count, so a send is read against the state it was made in.
+    setDocked(true);
     setUsedModel(model);
     setLastQuery(query);
     setLastPortal(effectivePortal);
@@ -156,6 +211,7 @@ export default function QuerySurface({
   };
 
   const handleContinue = (continuationPrompt: string) => {
+    countQuestion();
     setTimeout(() => {
       resultsRef.current?.scrollIntoView({ behavior: preferredScrollBehavior(), block: 'start' });
     }, 100);
@@ -171,6 +227,7 @@ export default function QuerySurface({
   // to expand without running it.
   const handleRunComparison = () => {
     if (!lastQuery) return;
+    countQuestion();
     setComparisonChoice('on');
     setTimeout(() => {
       resultsRef.current?.scrollIntoView({ behavior: preferredScrollBehavior(), block: 'start' });
@@ -183,56 +240,75 @@ export default function QuerySurface({
     if (lastQuery) notebook.start(lastQuery, usedModel, lastPortal);
   };
 
+  // One element, keyed, placed above the results or (docked) below them: React moves it rather than remounting it,
+  // so the question typed and the guard's state survive the dock.
+  const form = (
+    <QueryForm
+      key="query-form"
+      onSubmit={handleSubmit}
+      // Any run, Standard or Sandbox, docked or not, disables the box and its arrow (UX-2 P3b-1, 1A; addendum 3, 3.1):
+      // a send during a Sandbox run would otherwise restart it (`useNotebookStream.start` aborts the run in progress).
+      isLoading={streaming.isLoading || notebook.state.isLoading}
+      queryCount={queryCount}
+      defaultMode={defaultMode}
+      advancedOptions={advancedOptions}
+      comparisonControl={
+        answerFirstConfigured
+          ? {
+              restored: comparisonRestored,
+              onChange: (restored) => setComparisonChoice(restored ? 'on' : 'off'),
+            }
+          : undefined
+      }
+      docked={docked}
+      showFirstTimeLine={showFirstTimeLine}
+    />
+  );
+
+  // The reader's question, first in each results container (leg H; A2 = B, A3/D2 = yes): the question as sent, which
+  // "Continue this analysis" keeps (it sends a built prompt and leaves `lastQuery` as it was). No screen-reader name:
+  // after the page's hidden h1 it reads as the question, then the run's heading.
+  const bubble = lastQuery ? <div data-part="question-bubble" className="query-bubble">{lastQuery}</div> : null;
+
   return (
     <>
-      {/* Framing + Form: narrow container */}
-      <div style={{ maxWidth: '900px', margin: '0 auto', padding: '48px 24px 0' }}>
-        {children}
-
-        {/* Query Form */}
-        <div style={{ marginBottom: '48px' }}>
-          <QueryForm
-            onSubmit={handleSubmit}
-            isLoading={streaming.isLoading}
-            queryCount={queryCount}
-            defaultMode={defaultMode}
-            advancedOptions={advancedOptions}
-            comparisonControl={
-              answerFirstConfigured
-                ? {
-                    restored: comparisonRestored,
-                    onChange: (restored) => setComparisonChoice(restored ? 'on' : 'off'),
-                  }
-                : undefined
-            }
-          />
-        </div>
+      {/* Framing: narrow container. Before the first send, the page's framing; from it, only the page's h1, hidden. */}
+      <div key="framing" style={{ maxWidth: '900px', margin: '0 auto', padding: '48px 24px 0' }}>
+        {!docked ? (
+          heading ? <div style={framingStyle}>{heading}{children}</div> : children
+        ) : heading ? (
+          cloneElement(heading, { className: [heading.props.className, 'ui-visually-hidden'].filter(Boolean).join(' ') })
+        ) : null}
       </div>
 
-      {/* Results: wide container matching header max-w-6xl */}
-      {lastMode === 'standard' && streaming.error && (
-        <div className="max-w-6xl mx-auto px-6">
-          <div
-            style={{
-              marginBottom: '32px',
-              padding: '16px 24px',
-              backgroundColor: 'rgba(236, 19, 30, 0.1)',
-              color: 'var(--error)',
-              borderRadius: '4px',
-              border: '1px solid var(--error)',
-            }}
-          >
-            {streaming.error}
-          </div>
-        </div>
-      )}
+      {/* Query Form, before the first answer (its narrow column is the composer's own, `composer--form`) */}
+      {!docked && form}
 
+      {/* Results: wide container matching header max-w-6xl. From the send it is at least the window's height below the
+          header, and a scroll to it stops below the sticky header (`query-results`, leg H). */}
       {lastMode === 'standard' && (streaming.isLoading || streaming.withoutMcp.content || streaming.withMcp.content ||
         streaming.withoutMcp.isComplete || streaming.withMcp.isComplete || streaming.error) && (
-        <div ref={resultsRef} className="max-w-6xl mx-auto px-6" style={{ marginBottom: '24px' }}>
-          <h2 style={{ marginBottom: '16px' }}>Results</h2>
+        <div key="results" ref={resultsRef} className="query-results max-w-6xl mx-auto px-6" style={{ marginBottom: '24px' }}>
+          {bubble}
+          <h2 className="ui-page-section-heading" style={{ marginBottom: '16px' }}>Results</h2>
           {/* R9 P1 (#672): where the submit scroll leaves the reader, a run's open question, with its two answers. */}
           <ConsentPausePrompt />
+          {/* A run the route answered with an error: inside the answer area, after the bubble and the heading (the
+              seat, #729 6838758130). */}
+          {streaming.error && (
+            <div
+              style={{
+                marginBottom: '32px',
+                padding: '16px 24px',
+                backgroundColor: 'rgba(236, 19, 30, 0.1)',
+                color: 'var(--error)',
+                borderRadius: '4px',
+                border: '1px solid var(--error)',
+              }}
+            >
+              {streaming.error}
+            </div>
+          )}
           <ComparisonDisplay
             withoutMcp={null}
             withMcp={null}
@@ -242,6 +318,8 @@ export default function QuerySurface({
             streamingWithoutMcp={streaming.withoutMcp}
             streamingWithMcp={streaming.withMcp}
             queryText={lastQuery}
+            // The bubble above shows the question; the answer leaves out its italic quote (A4 = A). /explore keeps it.
+            showQueryQuote={false}
             portal={lastPortal}
             model={usedModel}
             evidenceTrace={streaming.evidenceTrace}
@@ -251,41 +329,15 @@ export default function QuerySurface({
             answerFirst={answerFirstActive}
             onRunComparison={answerFirstConfigured ? handleRunComparison : undefined}
           />
-          {/* The footnote closes a finished run, however many panes the run
-              had — a demoted (one-pane) run is finished when its only pane
-              is. On the apex (mcpOnly always false) this is exactly the old
-              both-panes condition. */}
-          {showLocalSetupFootnote && isComparisonRunComplete(
-            streaming.mcpOnly,
-            streaming.withoutMcp.isComplete,
-            streaming.withMcp.isComplete,
-          ) && (
-            <p
-              style={{
-                marginTop: '16px',
-                fontSize: '14px',
-                color: 'var(--text-muted)',
-                textAlign: 'center',
-              }}
-            >
-              For complex multi-step analysis, try{' '}
-              <a
-                href="https://github.com/npstorey/civic-ai-tools"
-                target="_blank"
-                rel="noopener noreferrer"
-              >
-                civic-ai-tools
-              </a>{' '}
-              locally with Claude Code or Cursor.
-            </p>
-          )}
         </div>
       )}
 
       {lastMode === 'notebook' && (notebook.state.isLoading || notebook.state.notebook || notebook.state.error) && (
-        <div ref={resultsRef} className="max-w-6xl mx-auto px-6" style={{ marginBottom: '24px' }}>
-          {/* UX pass row 19: the reader's words for the mode, as the record page says it. */}
-          <h2 style={{ marginBottom: '16px' }}>Answer, executed in a signed sandbox</h2>
+        <div key="notebook-results" ref={resultsRef} className="query-results max-w-6xl mx-auto px-6" style={{ marginBottom: '24px' }}>
+          {bubble}
+          {/* UX pass row 19: the reader's words for the mode, as the record page says it. The design system's one
+              section heading (leg H, the cards' stated (b)). */}
+          <h2 className="ui-page-section-heading" style={{ marginBottom: '16px' }}>Answer, executed in a signed sandbox</h2>
           {/* R9 P1 (#672): the run's open question, as above. */}
           <ConsentPausePrompt />
           <NotebookOutput
@@ -297,6 +349,9 @@ export default function QuerySurface({
           />
         </div>
       )}
+
+      {/* Query Form, docked below the results from the first send that starts a run */}
+      {docked && form}
     </>
   );
 }

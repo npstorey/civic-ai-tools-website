@@ -9,7 +9,7 @@ import { DEFAULT_HOST_LINKS, type HostLinks } from '@/lib/host-links';
  *
  * WHY A CONTEXT AND NOT PROP THREADING. Three of the four sign-in
  * affordances live inside `QuerySurface` — in `QueryForm`,
- * `RateLimitBanner`, and `McpResponseDisplay` — and the surface is mounted
+ * `RateLimitBanner` (retired by UX-2 P3b-1), and `McpResponseDisplay` — and the surface is mounted
  * by `(marketing)/page.tsx`, which is itself a client component. A client
  * component cannot read `process.env`, so no prop chain from a server
  * ancestor exists to extend; threading would mean converting the apex page

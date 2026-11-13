@@ -17,8 +17,11 @@
 // box above the viewport when a pause arrives (its top at -397 px at 390 px
 // wide, -289 px at 1280 px), so a prompt under the question box would be out
 // of view; the prompt sits at the top of the answer area, the part of the page
-// the reader is looking at, right after the question box in the page's order.
-// On /explore the question row stays in view, and the prompt sits under it.
+// the reader is looking at. Since UX-2 P3b-1 leg H the box docks at the send
+// (plan v3, #729 6825049451): on the home page and /ask the prompt sits in the
+// answer area, before the run's steps and ahead of the docked box, which follows
+// the results. On /explore the question row stays in view, and the prompt sits
+// under it.
 //
 // AMENDMENT 3 (the owner's preview read, the seat's ruling). At 393 x 852 the
 // page's own scroll to the step card took the prompt 237 px above the
@@ -86,17 +89,30 @@ const mediaQueries: string[] = [];
 let viewportHeight = 852;
 const IN_VIEW = { top: 120, bottom: 160 };
 let promptBox: { top: number; bottom: number } = IN_VIEW;
-/** What `document` hands back for a rendered element: its scroll, recorded, and its box (the prompt's as stubbed). */
+/** Leg H fix 2: the docked composer's bar, where a test places it (sticky at the window's bottom); out of view otherwise. */
+const NO_BAR = { top: 0, bottom: 0 };
+let barBox: { top: number; bottom: number } = NO_BAR;
+/** The window's own scrolls (`scrollBy`), recorded: the prompt brought out from under the docked bar. */
+const windowScrolls: Array<{ top?: number; behavior?: string }> = [];
+/** What `document` hands back for a rendered element: its scroll, recorded, and its box (the prompt's and the bar's as stubbed). */
 const nodeFor = (element: HostElement) => ({
   scrollIntoView: (options: unknown) => { scrolls.push({ element, options }); },
   getBoundingClientRect: () => {
-    const box = element.props['data-part'] === 'consent-pause-prompt' ? promptBox : { top: 0, bottom: 0 };
+    const box = element.props['data-part'] === 'consent-pause-prompt' ? promptBox : element.props['data-part'] === 'composer-bar' ? barBox : { top: 0, bottom: 0 };
     return { ...box, left: 0, right: 0, width: 0, height: box.bottom - box.top, x: 0, y: box.top };
   },
 });
 
-/** `[a="b"][c="d"]` → the rendered elements whose props carry every pair. Anything else matches nothing. */
+/** The docked composer's bar: a `composer-bar` inside a composer carrying `composer--docked`. */
+const DOCKED_BAR = '.composer--docked > .composer-bar';
+function dockedBars(): HostElement[] {
+  const docked = (page?.elements() ?? []).filter((el) => el.props['data-part'] === 'composer' && String(el.props.className ?? '').split(/\s+/).includes('composer--docked'));
+  return docked.flatMap((c) => [...within(c.props.children)].filter((el) => el.props['data-part'] === 'composer-bar'));
+}
+
+/** `[a="b"][c="d"]` → the rendered elements whose props carry every pair; the docked bar's selector, its bar. Anything else matches nothing. */
 function select(selector: string): HostElement[] {
+  if (selector === DOCKED_BAR) return dockedBars();
   const pairs = [...selector.matchAll(/\[([\w-]+)="([^"]*)"\]/g)].map((m) => [m[1], m[2]] as const);
   if (pairs.length === 0 || pairs.map(([k, v]) => `[${k}="${v}"]`).join('') !== selector.replace(/\s+/g, '')) return [];
   return (page?.elements() ?? []).filter((el) => pairs.every(([k, v]) => el.props[k] === v));
@@ -111,6 +127,7 @@ Object.assign(globalThis as Record<string, unknown>, {
     sessionStorage: { getItem: (k: string) => storage.get(k) ?? null, setItem: (k: string, v: string) => { storage.set(k, String(v)); }, removeItem: (k: string) => { storage.delete(k); } },
     location: { href: `${ORIGIN}/`, origin: ORIGIN, pathname: '/' },
     scrollTo() {},
+    scrollBy: (options: { top?: number; behavior?: string }) => { windowScrolls.push(options); },
     get innerHeight() { return viewportHeight; },
     matchMedia: (query: string) => {
       mediaQueries.push(query);
@@ -186,6 +203,8 @@ afterEach(() => {
   reducedMotion = false;
   scrolls.length = 0;
   promptBox = IN_VIEW;
+  barBox = NO_BAR;
+  windowScrolls.length = 0;
   viewportHeight = 852;
 });
 async function mountPage(element: ReturnType<typeof h>): Promise<Surface> {
@@ -283,6 +302,21 @@ function before(surface: Surface, a: HostElement, b: HostElement): boolean {
 /** The question box as the last render has it (an element read before a re-render is not in it). */
 const questionBox = (surface: Surface) => surface.elements().find((el) => el.type === 'textarea' && el.props['aria-label'] === 'Ask a question about open data')!;
 
+/**
+ * Leg H (dock at send): the prompt sits in the answer area (the results block under the run's heading), before the
+ * run's steps, and ahead of the docked box, which follows the results.
+ */
+function assertPromptInAnswerArea(surface: Surface, prompt: HostElement, heading: string, where: string): void {
+  const h2 = surface.elements().find((el) => el.type === 'h2' && textOf(el) === heading);
+  assert.ok(h2, `${where}: premise: the run's heading "${heading}"`);
+  const block = surface.elements().find((el) => (Array.isArray(el.props.children) ? el.props.children : [el.props.children]).includes(h2));
+  assert.ok(block && [...within(block.props.children)].includes(prompt), `${where}: the prompt is not in the answer area`);
+  assert.ok(before(surface, prompt, stepCards(surface)[0]), `${where}: the prompt does not come before the run's steps`);
+  const composer = surface.elements().find((el) => el.props['data-part'] === 'composer');
+  assert.ok(composer && String(composer.props.className ?? '').split(/\s+/).includes('composer--docked'), `${where}: the composer is not docked while the run streams (leg H: it docks at the send)`);
+  assert.ok(before(surface, prompt, questionBox(surface)), `${where}: the prompt does not come ahead of the docked box`);
+}
+
 const describeScrolls = (made: Scroll[]) => JSON.stringify(made.map((m) => ({ part: m.element.props['data-part'], options: m.options })));
 
 /** Amendment 3: the prompt was already in the viewport when the pause arrived, so the page did not move at all. */
@@ -310,8 +344,9 @@ async function askOnQueryForm(surface: Surface): Promise<HostElement> {
 
 async function askOnExplore(surface: Surface): Promise<void> {
   await surface.click(surface.button('Try your own'));
-  const box = surface.elements().find((el) => el.type === 'input' && el.props.className === 'live-query-input');
-  assert.ok(box, 'premise: no live question input');
+  // UX-2 P3b-1: /explore's question box is the shared composer's, found by its accessible name.
+  const box = surface.elements().find((el) => el.type === 'textarea' && el.props['aria-label'] === 'Ask a question about open data');
+  assert.ok(box, 'premise: no live question box');
   await surface.type(box!, QUESTION);
   await surface.submit(surface.elements().find((el) => el.type === 'form')!);
   await settle(surface, 600);
@@ -330,7 +365,7 @@ function rowCopy(surface: Surface): string {
 // --- Criterion 1: the home page ----------------------------------------------------------------------
 
 for (const [reduced, out] of [[false, false], [false, true], [true, true]] as const) {
-  test(`criterion 1, the home page (a comparison surface)${reduced ? ', reduced motion' : ''}: ${out ? `the prompt above the viewport (-237 px at 393 x 852, the owner's read) is scrolled into view (${reduced ? 'auto' : 'smooth'}), never the card` : 'the prompt in the viewport: nothing scrolls'}; the compact prompt offers both buttons until a decision`, async () => {
+  test(`criterion 1, the home page (a comparison surface)${reduced ? ', reduced motion' : ''}: ${out ? `the prompt above the viewport (-237 px at 393 x 852, the owner's read) is scrolled into view (${reduced ? 'auto' : 'smooth'}), never the card` : 'the prompt in the viewport: nothing scrolls'}; the compact prompt offers both buttons until a decision; leg H (dock at send): the prompt sits in the answer area, before the run's steps and ahead of the docked box`, async () => {
     ANON();
     answers();
     reducedMotion = reduced;
@@ -355,9 +390,8 @@ for (const [reduced, out] of [[false, false], [false, true], [true, true]] as co
     if (reduced) assert.ok(mediaQueries.includes('(prefers-reduced-motion: reduce)'), 'the reduced-motion query was never read');
     const prompt = onePrompt(p, 'the home page');
     assertPrompt(prompt, 'the home page');
-    // Near the question box: after it in the page, and before the run's steps.
-    assert.ok(before(p, questionBox(p), prompt), 'the prompt comes before the question box');
-    assert.ok(before(p, prompt, stepCards(p)[0]), 'the prompt comes after the run\'s step card');
+    // Leg H: in the answer area, before the run's steps, ahead of the docked box.
+    assertPromptInAnswerArea(p, prompt, 'Results', 'the home page');
     // The source row's own copy (the Settings overlay's row since UX-2 P4b) is byte-identical (the card is the only addition).
     assert.equal(rowCopy(p), rowBefore, 'the row\'s copy changed when the pause arrived');
     // A decision from the prompt posts the pause's own key; then the prompt goes and the card shows the outcome.
@@ -373,11 +407,11 @@ for (const [reduced, out] of [[false, false], [false, true], [true, true]] as co
 
 // --- Criterion 1: /ask, notebook mode -------------------------------------------------------------------
 
-test('criterion 1, /ask (the executed run): a holding pause shows the prompt, in view, with no scroll; a later line of the run (the hold over) takes the prompt away', async () => {
+test('criterion 1, /ask (the executed run): a holding pause shows the prompt, in view, with no scroll; leg H (dock at send): it sits in the answer area, before the run\'s steps and ahead of the docked box; a later line of the run (the hold over) takes the prompt away', async () => {
   SIGNED_IN_DB();
   answers();
   await consentWith({ 'boston-opencontext': 'ask-first' });
-  const p = await mountPage(h(QuerySurface, { showLocalSetupFootnote: false, presentation: 'answer-first', defaultMode: 'notebook' }));
+  const p = await mountPage(h(QuerySurface, { presentation: 'answer-first', defaultMode: 'notebook' }));
   await askOnQueryForm(p);
   const stream = streams[0];
   assert.ok(stream, 'premise: the question was sent');
@@ -392,12 +426,55 @@ test('criterion 1, /ask (the executed run): a holding pause shows the prompt, in
   assertNoScroll(from, '/ask');
   const prompt = onePrompt(p, '/ask');
   assertPrompt(prompt, '/ask');
-  assert.ok(before(p, questionBox(p), prompt) && before(p, prompt, stepCards(p)[0]), '/ask: the prompt is not between the question box and the run\'s steps');
+  assertPromptInAnswerArea(p, prompt, 'Answer, executed in a signed sandbox', '/ask');
   stream.push({ type: 'phase_a_progress', ...LOAD_DONE });
   await settle(p);
   assert.equal(prompts(p).length, 0, `the prompt stays after the run moved past the pause: ${summary(p)}`);
   stream.close();
 });
+
+// --- Leg H fix 2: the prompt clears the docked bar ----------------------------------------------------------
+//
+// Since leg H the composer docks at the send, so while a run streams its bar (sticky, bottom 0) covers the window's
+// bottom. A prompt whose lower part lies under the bar, or below the window, is not in view: the visible bottom is the
+// bar's top. The prompt is brought out from under it by a scroll of the window (`scrollBy`) that puts its bottom above
+// the bar's top. The harness has no layout, so the boxes are stubbed (an 844 px window, the bar from 766 to 844, as
+// the instrument measures it at 1280) and the assertion reads the scroll made.
+
+for (const [where, box] of [
+  ['has its lower part under the bar', { top: 730, bottom: 790 }],
+  ['lies below the window', { top: 900, bottom: 960 }],
+] as const) {
+  test(`leg H fix 2, the home page (docked at the send): a pause whose prompt ${where} scrolls the window so the whole prompt is above the docked bar`, async () => {
+    ANON();
+    answers();
+    await consentWith({ 'boston-opencontext': 'ask-first' });
+    const p = await mountPage(withSettings(h(Home)));
+    await askOnQueryForm(p);
+    const stream = streams[0];
+    assert.ok(stream, 'premise: the question was sent');
+    await settle(p, SCROLL_WAIT);
+    assert.equal(dockedBars().length, 1, 'premise: the composer is docked while the run streams');
+    stream.push({ type: 'progress', panel: 'withMcp', message: 'Reading your question...', phase: 'analyze' });
+    stream.push({ type: 'progress', panel: 'withMcp', ...LOAD_START });
+    await settle(p);
+    viewportHeight = 844;
+    barBox = { top: 766, bottom: 844 };
+    promptBox = box;
+    const from = scrolls.length;
+    stream.push({ type: 'progress', panel: 'withMcp', message: PAUSE_LINE, phase: 'consent_pause', pause: pauseOf(nextKey()) });
+    await settle(p, SCROLL_WAIT);
+    onePrompt(p, `a prompt that ${where}`);
+    const made = windowScrolls.filter((x) => typeof x.top === 'number');
+    assert.equal(made.length, 1, `a prompt that ${where} was not brought out from under the docked bar: window scrolls ${JSON.stringify(windowScrolls)}, element scrolls ${describeScrolls(scrolls.slice(from))}`);
+    const bottomAfter = box.bottom - made[0].top!;
+    const topAfter = box.top - made[0].top!;
+    assert.ok(bottomAfter <= barBox.top, `after the scroll the prompt's bottom (${bottomAfter}) is under the bar's top (${barBox.top})`);
+    assert.ok(topAfter >= 80, `after the scroll the prompt's top (${topAfter}) is under the header's 80 px`);
+    assert.equal(made[0].behavior, 'smooth', 'the scroll\'s behavior');
+    stream.close();
+  });
+}
 
 // --- Criterion 1: the hold's end on the clock --------------------------------------------------------------
 

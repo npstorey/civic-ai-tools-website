@@ -239,7 +239,7 @@ test('criterion 3 (#667), /ask in notebook mode: after Allow on one pause and Do
   sessions.rows.clear();
   answers();
   await consentWith({ [A]: 'ask-first', [B]: 'ask-first' });
-  const page = await mount(h(QuerySurface, { showLocalSetupFootnote: false, presentation: 'answer-first', defaultMode: 'notebook' }));
+  const page = await mount(h(QuerySurface, { presentation: 'answer-first', defaultMode: 'notebook' }));
   mounted.push(page);
   await ask(page);
   const stream = streams[0];

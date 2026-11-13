@@ -112,7 +112,19 @@ export function preferredScrollBehavior(): ScrollBehavior {
   }
 }
 
-/** The prompt's place in the viewport: nothing moves when all of it is visible below the sticky header; else it is brought in. */
+/** The docked composer's bar (UX-2 P3b-1): sticky at the window's bottom from the send that starts a run. */
+const DOCKED_BAR = '.composer--docked > .composer-bar';
+/** Space kept between the prompt's bottom and the docked bar's top when the prompt is brought out from under it. */
+const BAR_GAP = 12;
+
+/**
+ * The prompt's place in the viewport: nothing moves when all of it is visible between the sticky header and the
+ * visible bottom; else it is brought in. The visible bottom is the window's, or, while the composer is docked (leg H:
+ * from the send, so for the whole run), the docked bar's top, since the bar covers the window below it. A prompt that
+ * is above the header is brought in by its own scroll (its top margin clears the header). A prompt whose lower part is
+ * under the docked bar, or below the window, is brought up by a scroll of the window that puts its bottom just above
+ * the bar: `scrollIntoView` would align it with the window's bottom, under the bar.
+ */
 function bringPromptIntoView(): void {
   if (typeof document === 'undefined' || typeof window === 'undefined') return;
   const prompt = document.querySelector?.('[data-part="consent-pause-prompt"]');
@@ -120,7 +132,16 @@ function bringPromptIntoView(): void {
   const box = prompt.getBoundingClientRect?.();
   const header = document.querySelector?.('header')?.getBoundingClientRect?.();
   const top = header && header.bottom > 0 ? header.bottom : 0;
-  if (box && box.top >= top && box.bottom <= window.innerHeight) return;
+  const bar = document.querySelector?.(DOCKED_BAR)?.getBoundingClientRect?.();
+  const bottom = bar && bar.top > top && bar.top < window.innerHeight ? bar.top : window.innerHeight;
+  if (box && box.top >= top && box.bottom <= bottom) return;
+  if (box && bottom < window.innerHeight && box.top >= top && typeof window.scrollBy === 'function') {
+    // Under the docked bar, or below the window: up by as much as clears the bar, and never past the header.
+    const clear = box.bottom - bottom + BAR_GAP;
+    const room = box.top - top - BAR_GAP;
+    window.scrollBy({ top: Math.max(0, Math.min(clear, room)), behavior: preferredScrollBehavior() });
+    return;
+  }
   prompt.scrollIntoView({ block: 'nearest', behavior: preferredScrollBehavior() });
 }
 

@@ -203,7 +203,7 @@ test('criterion 3 (the Settings overlay): after its revoke, /ask shows the card 
   tab.unmount();
 
   net.clear();
-  const ask = await mount(h(QuerySurface, { showLocalSetupFootnote: false, presentation: 'answer-first', defaultMode: 'notebook' }));
+  const ask = await mount(h(QuerySurface, { presentation: 'answer-first', defaultMode: 'notebook' }));
   const box = ask.elements().filter((el) => el.type === 'textarea');
   assert.equal(box.length, 1, 'premise: /ask has its question box');
   await ask.type(box[0], 'What was the median household income in the Bronx?');

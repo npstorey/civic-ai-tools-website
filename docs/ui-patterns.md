@@ -229,6 +229,11 @@ lists (UX-1 P7); later phases convert the other surfaces named under "Replaces",
   source as the heading's own id. The privacy page's list is the model.
 - **Replaces:** the seven page widths and the `h1` overrides on `/records`, `/auth/device` and the
   record page, and the example-chip row (`QueryForm.tsx`).
+- **Uses:** the composer's example questions are `ChipRow`'s first use (UX-2 P3b-1,
+  `src/components/composer/Composer.tsx`): one `<button>` per offered example, built by the form, in
+  a row named by the composer's chip-row label ("Example questions"). The row shows before the first
+  send only: the composer docks at the send that starts a run (UX-2 P3b-1 leg H), and docked the row is
+  not rendered. `/explore`'s composer has no chips.
 
 ## Not primitives
 

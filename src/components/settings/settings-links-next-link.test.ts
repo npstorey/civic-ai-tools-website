@@ -102,7 +102,9 @@ for (const file of SURFACES) {
   });
 }
 
-for (const file of ['src/components/QueryForm.tsx', 'src/components/explore/TraceControls.tsx', 'src/components/evidence/AttestationDialog.tsx']) {
+// UX-2 P3b-1: the home page's, /ask's and /explore's refusal slot moved from QueryForm.tsx and TraceControls.tsx into
+// the composer they both mount, so the composer is the surface that renders it there.
+for (const file of ['src/components/composer/Composer.tsx', 'src/components/evidence/AttestationDialog.tsx']) {
   test(`UX-2 P4b: ${file} renders the refusal through NoSourcesOnLine, whose link is a next/link`, () => {
     const source = fs.readFileSync(path.join(ROOT, file), 'utf8');
     assert.match(source, /<NoSourcesOnLine \/>/, `${file} does not render NoSourcesOnLine`);

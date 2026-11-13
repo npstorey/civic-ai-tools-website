@@ -1426,3 +1426,122 @@ footer a:visited {
   padding-top: 48px;
   padding-bottom: 48px;
 }
+
+/* The composer (UX-2 P3b-1, `src/components/composer/Composer.tsx`): one
+   component, not a primitive (docs/ui-patterns.md), so no ui- prefix. In the
+   home page's and /ask's column it takes the narrow form width the surface's
+   container gave it before. */
+.composer--form {
+  max-width: 900px;
+  margin: 0 auto 48px;
+  padding: 0 24px;
+}
+
+/* The lines under the box (1B), and the guard's slots: one column, the box's
+   left edge, the gaps the form had. */
+
+/* Each line under the box (1B: "one text size, 13 px"): the where-line, the
+   first-time line and the account line take their size, leading and colour
+   from this one rule. The account line's empty count overrides the colour
+   with the error token. */
+.composer-line {
+  margin: 0;
+  font-size: 13px;
+  line-height: 1.5;
+  color: var(--text-secondary);
+}
+.composer-lines {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  margin-top: 12px;
+}
+
+.composer-slots {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+/* Docked below a finished answer (R1 B; the re-cut's O1 = A, addendum 3 3.3).
+   The root gives up its own box, so the bar is a layout child of the surface:
+   a sticky element cannot leave its containing block (S14), and inside the
+   root it would stick only within the root. Only the bar sticks, its
+   background and top rule spanning the page; the box and the lines keep the
+   900 px column. The lines stay in the page's flow below the bar. No page
+   padding (the seat's ruling S2). */
+.composer--docked {
+  display: contents;
+}
+
+/* The bar: held at the viewport's bottom while the reader scrolls the answer,
+   in its own place below the answer's last line at the end. Its z-index stays
+   under the header's 50, a stacking context that holds the drawer, and under
+   every dialog (#728 line 3). */
+.composer--docked > .composer-bar {
+  position: sticky;
+  bottom: 0;
+  z-index: 40;
+  padding-top: 12px;
+  padding-bottom: 12px;
+  background-color: var(--background);
+  border-top: 1px solid var(--border-color);
+}
+
+.composer--docked .composer-col {
+  box-sizing: border-box;
+  max-width: 900px;
+  margin-left: auto;
+  margin-right: auto;
+  padding: 0 24px;
+}
+
+/* Docked, a slot opens above the box (O7 = A). */
+.composer--docked > .composer-bar .composer-slots {
+  margin-bottom: 12px;
+}
+
+.composer--docked > .composer-lines {
+  padding-bottom: 12px;
+}
+
+/* The query surface's answer area (UX-2 P3b-1 leg H, `src/components/shared/QuerySurface.tsx`). Each results
+   container: the send's scroll stops with the bubble 48 px under the sticky site header, the ruled space above it
+   (the header's measured height, `--header-height`, set by Header.tsx, plus 48 px; 72 px stands in for the header
+   until it is measured, about its height at every width, 68.8-71.8 px). From the send the container is at least as
+   tall as the window below the header, so the docked bar's place in the flow falls below the window and the bar sticks
+   at the window's bottom while the answer is still short. */
+.query-results {
+  scroll-margin-top: calc(var(--header-height, 72px) + 48px);
+  min-height: calc(100vh - 80px);
+}
+
+/* The reader's question, first in each results container, right-aligned in the answer's wide column (A2 = B), by the
+   chat convention. */
+.query-bubble {
+  width: fit-content;
+  max-width: 80%;
+  margin: 0 0 16px auto;
+  padding: 10px 16px;
+  border-radius: 18px;
+  background-color: var(--card-background);
+  color: var(--text-primary);
+  font-size: 15px;
+  line-height: 1.5;
+  overflow-wrap: anywhere;
+}
+
+/* Visually hidden: kept in the page and its accessibility tree, out of the layout and out of sight. The query
+   surface's page h1 takes it from the first send (UX-2 P3b-1 leg H, A1 = A, A5 = A). */
+.ui-visually-hidden {
+  position: absolute !important;
+  width: 1px !important;
+  height: 1px !important;
+  padding: 0 !important;
+  margin: -1px !important;
+  overflow: hidden !important;
+  clip: rect(0, 0, 0, 0) !important;
+  clip-path: inset(50%) !important;
+  white-space: nowrap !important;
+  border: 0 !important;
+}

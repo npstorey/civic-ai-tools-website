@@ -64,7 +64,17 @@ import { attr, byRole, byTag, classesOf, one, openingTag, parentOf, readText, wi
 registerSurfaceHooks({
   ...CONSENT_SURFACE_STUBS,
   'next/image': `export default function Image() { return null; }`,
+  // UX-2 P3b-1 (criterion 4, #728 line 13): the path the Header is rendered on, set per case through
+  // `globalThis.__headerPathname`; '/' (the shared stub's path) when a case sets none.
+  'next/navigation': `
+    const S = globalThis.__w3Sessions;
+    export function useRouter() { return { push(url) { S.pushed.push(url); }, replace(url) { S.pushed.push(url); }, refresh() {}, back() {}, prefetch() {} }; }
+    export function usePathname() { return globalThis.__headerPathname ?? '/'; }
+    export function useSearchParams() { return new URLSearchParams(''); }
+    export function redirect(url) { throw new Error('redirect ' + url); }
+    export function notFound() { throw new Error('not found'); }`,
 });
+const PATHNAME = globalThis as unknown as { __headerPathname?: string };
 
 // The page the Header is rendered on, as the browser globals see it. The
 // cross-host session probe (a split topology, signed out) is answered by no
@@ -662,6 +672,91 @@ test('globals.css declares no --breakpoint-*, so lg stays Tailwind\'s default 10
   const css = fs.readFileSync(path.join(SRC, 'app', 'globals.css'), 'utf8');
   const declared = css.split('\n').map((line, i) => [i + 1, line] as const).filter(([, line]) => line.includes('--breakpoint-'));
   assert.deepEqual(declared, [], `globals.css lines naming --breakpoint-: ${JSON.stringify(declared)}`);
+});
+
+// UX-2 P3b-1, criterion 4 (#728 line 6): the test above proves only that this stylesheet overrides nothing. What `lg`
+// is comes from the installed Tailwind's theme (`globals.css:1` imports it), so a Tailwind release that moved `lg`
+// would move the bar's breakpoint with every assertion above still green. A guard: green while `lg` is 64rem.
+
+/** The value of `--breakpoint-lg` in a Tailwind theme stylesheet, or null when it declares none. */
+function breakpointLg(themeCss: string): string | null {
+  const match = /--breakpoint-lg\s*:\s*([^;]+);/.exec(themeCss);
+  return match ? match[1].trim() : null;
+}
+
+test('UX-2 P3b-1 criterion 4 (#728 line 6): the installed Tailwind theme declares lg as 64rem (1024 px), and a theme that moved it is read as moved', () => {
+  const theme = fs.readFileSync(path.join(ROOT, 'node_modules', 'tailwindcss', 'theme.css'), 'utf8');
+  assert.equal(breakpointLg(theme), '64rem', `the installed Tailwind theme's --breakpoint-lg is ${JSON.stringify(breakpointLg(theme))}, not 64rem: the bar's breakpoint moved`);
+  // The decoy: the same theme with lg at 60rem must not read as 64rem.
+  const decoy = theme.replace(/--breakpoint-lg\s*:\s*64rem;/, '--breakpoint-lg: 60rem;');
+  assert.notEqual(decoy, theme, 'premise: the decoy theme differs from the installed one');
+  assert.equal(breakpointLg(decoy), '60rem', 'the decoy theme (lg at 60rem) is not read as 60rem: the guard cannot see a moved lg');
+});
+
+// --- UX-2 P3b-1, criterion 4 (#728 line 13): the page being shown -------------------------------------
+//
+// Ask carries `aria-current="page"` on `/ask`, in the bar and in the drawer (both render it through `renderLink`);
+// "My analyses" carries it on `/dashboard`, in the avatar menu (a `Menu` item, the seat's ruling S1). Nothing carries
+// it on any other path, so a signed-out reader on the home page (where a split topology points Ask at `/`) never sees
+// Ask marked current.
+
+/** The labels carrying `aria-current="page"` in the bar, the open drawer and the open avatar menu, on `pathname`. */
+async function currentMarks(env: Env, state: Session, pathname: string): Promise<{ bar: string[]; drawer: string[]; account: string[] }> {
+  PATHNAME.__headerPathname = pathname;
+  try {
+    const marked = (els: HostElement[]) => els.filter((el) => attr(el, 'aria-current') !== null).map((el) => `${norm(readText(el))}=${attr(el, 'aria-current')}`);
+    const s = await mountHeader(env, state);
+    const linkLabels = (els: HostElement[]) => els.filter((el) => el.type === 'a').map((el) => norm(readText(el)));
+    const barEls = within(desktopNav(s));
+    assert.ok(linkLabels(barEls).includes('Ask'), `premise: the bar holds Ask: ${JSON.stringify(linkLabels(barEls))}`);
+    const bar = marked(barEls);
+    await s.click(mobileToggle(s));
+    const drawerEls = within(one(byRole(s, 'dialog'), 'role="dialog" (the drawer)'));
+    assert.ok(linkLabels(drawerEls).includes('Ask'), `premise: the drawer holds Ask: ${JSON.stringify(linkLabels(drawerEls))}`);
+    const drawer = marked(drawerEls);
+    await s.click(mobileToggle(s));
+    let account: string[] = [];
+    if (state === 'in') {
+      await s.click(avatarTrigger(s));
+      const holder = parentOf(s, avatarTrigger(s));
+      assert.ok(holder, 'premise: the avatar trigger has a parent element');
+      const accountEls = within(holder!);
+      assert.ok(linkLabels(accountEls).includes('My analyses'), `premise: the open avatar menu holds "My analyses": ${JSON.stringify(linkLabels(accountEls))}`);
+      account = marked(accountEls);
+    }
+    s.unmount();
+    return { bar, drawer, account };
+  } finally {
+    delete PATHNAME.__headerPathname;
+  }
+}
+
+for (const [config, env] of [['split', CONFIGS.split.env], ['serveMarketing', CONFIGS.serveMarketing.env]] as const) {
+  test(`UX-2 P3b-1 criterion 4 (#728 line 13), ${config}: Ask is the current page on /ask, in the bar and the drawer, and on no other path`, async () => {
+    const read: Record<string, { bar: string[]; drawer: string[]; account: string[] }> = {};
+    for (const pathname of ['/ask', '/dashboard', '/', '/records']) read[pathname] = await currentMarks(env, 'in', pathname);
+    assert.deepEqual(read['/ask'], { bar: ['Ask=page'], drawer: ['Ask=page'], account: [] }, `signed in on /ask: ${JSON.stringify(read['/ask'])}`);
+    for (const pathname of ['/', '/records']) {
+      assert.deepEqual(read[pathname], { bar: [], drawer: [], account: [] }, `signed in on ${pathname}, something is marked current: ${JSON.stringify(read[pathname])}`);
+    }
+  });
+
+  test(`UX-2 P3b-1 criterion 4 (#728 line 13), ${config}: "My analyses" is the current page on /dashboard, in the avatar menu, and Ask is not`, async () => {
+    const onDashboard = await currentMarks(env, 'in', '/dashboard');
+    assert.deepEqual(onDashboard, { bar: [], drawer: [], account: ['My analyses=page'] }, `signed in on /dashboard: ${JSON.stringify(onDashboard)}`);
+    const onAsk = await currentMarks(env, 'in', '/ask');
+    assert.deepEqual(onAsk.account, [], `signed in on /ask, the avatar menu marks ${JSON.stringify(onAsk.account)} current`);
+  });
+}
+
+test('UX-2 P3b-1 criterion 4 (#728 line 13): signed out on the marketing host\'s home page, where Ask links to /, Ask is not marked current', async () => {
+  const read = await currentMarks(CONFIGS.split.env, 'out', '/');
+  assert.deepEqual(read, { bar: [], drawer: [], account: [] }, `signed out on /: ${JSON.stringify(read)}`);
+  // The shape that can fail: a mark keyed on the link's href rather than the path would mark Ask here.
+  const s = await mountHeader(CONFIGS.split.env, 'out');
+  const ask = topLevel(s).find((e) => e.label === 'Ask');
+  s.unmount();
+  assert.deepEqual(ask, { kind: 'link', label: 'Ask', href: '/' }, 'premise: signed out on a split topology, Ask links to /');
 });
 
 // --- UX-2 P4b, criterion 2: the Settings entry points in the Header ------------------------------

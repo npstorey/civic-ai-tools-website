@@ -167,7 +167,9 @@ async function askOnQueryForm(surface: Surface): Promise<void> {
 
 async function askOnExplore(surface: Surface): Promise<void> {
   await surface.click(surface.button('Try your own'));
-  const box = one(surface, 'live question input', (el) => el.type === 'input' && el.props.className === 'live-query-input');
+  // UX-2 P3b-1: /explore's question box is the shared composer's (the finder reads its accessible name, as the
+  // other surfaces' do); its submit is the composer's form, the page's only one.
+  const box = one(surface, 'live question box', (el) => el.type === 'textarea' && el.props['aria-label'] === 'Ask a question about open data');
   await surface.type(box, QUESTION);
   await surface.submit(one(surface, 'live question form', (el) => el.type === 'form'));
   await new Promise((resolve) => setTimeout(resolve, 600));
@@ -265,7 +267,7 @@ test('criterion 3 (d), the executed run (/ask, notebook mode): the pause reaches
   sessions.rows.clear();
   answers();
   await consentWith({ 'boston-opencontext': 'ask-first' });
-  const page = await mountTracked(h(QuerySurface, { showLocalSetupFootnote: false, presentation: 'answer-first', defaultMode: 'notebook' }));
+  const page = await mountTracked(h(QuerySurface, { presentation: 'answer-first', defaultMode: 'notebook' }));
   await askOnQueryForm(page);
   assert.equal(streams.length, 1, 'premise: the question was sent');
   const stream = streams[0];

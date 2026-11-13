@@ -96,3 +96,18 @@ test('Menu link items render as links that keep the item role', async () => {
   assert.notEqual(items[1].type, 'a', 'a disabled href item is not a link');
   assert.equal(attr(items[1], 'aria-disabled'), 'true');
 });
+
+// UX-2 P3b-1 (#728 line 13; the seat's ruling S1): an item can name the page being shown. Only that item's link
+// carries `aria-current="page"`; an item without the field renders as before, with no `aria-current` at all.
+test('Menu: a link item marked current carries aria-current="page"; no other item carries aria-current', async () => {
+  const s = await mount(h(Menu, { trigger: 'T', open: true, items: [
+    { id: 'here', label: 'Fixture here', href: '/fixture/here', current: true },
+    { id: 'there', label: 'Fixture there', href: '/fixture/there' },
+    { id: 'not-current', label: 'Fixture not current', href: '/fixture/not', current: false },
+    { id: 'action', label: 'Fixture action' },
+  ] }));
+  const items = byRole(s, 'menuitem');
+  assert.equal(items.length, 4, 'premise: four menuitems');
+  assert.deepEqual(items.map((el) => attr(el, 'aria-current')), ['page', null, null, null], 'aria-current on each item, in order');
+  assert.equal(items[0].type, 'a', 'the current item is still a link');
+});

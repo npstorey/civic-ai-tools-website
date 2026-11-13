@@ -353,7 +353,6 @@ civic-ai-tools-website/
 │   ├── ComparisonDisplay.tsx         # Side-by-side results
 │   ├── ResponsePanel.tsx             # Single response with metadata
 │   ├── ToolCallsList.tsx             # Show which MCP tools were used
-│   ├── RateLimitBanner.tsx           # Show remaining requests
 │   ├── DemoVideo.tsx                 # Embedded demo video
 │   └── LoadingSpinner.tsx
 ├── lib/

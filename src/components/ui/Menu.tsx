@@ -49,6 +49,8 @@ export interface MenuItem {
   href?: string;
   /** Disabled-with-reason: the item is muted and this is its second line. */
   disabledReason?: ReactNode;
+  /** A navigation item that names the page being shown: its link carries `aria-current="page"` (UX-2 P3b-1). */
+  current?: boolean;
 }
 
 export interface MenuProps {
@@ -285,6 +287,7 @@ export function Menu({
                   href={item.href}
                   role={role}
                   aria-checked={checked}
+                  aria-current={item.current ? 'page' : undefined}
                   className="ui-menu-item"
                   tabIndex={-1}
                   onClick={() => choose(item.id)}
