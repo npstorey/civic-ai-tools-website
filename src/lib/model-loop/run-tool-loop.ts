@@ -56,6 +56,7 @@ import { hash as traceHash } from '../evidence/trace.ts';
 import { deriveOperationType, isTool, toolSpanNames, upstreamToolName } from '../mcp/operation-types.ts';
 import type { ToolFailureKind } from '../notebook-author/tool-to-cell.ts';
 import { PortalLockedCallError, portalOutsideLock } from '../portal-lock.ts';
+import { injectPackFilter, packCallOutsideFilter, packFilterOf, PackFilterRefusedError } from '../mcp/pack-filter.ts';
 import type { LoadOutcome } from '@typedstandards/civic-typed-harness';
 
 export interface TraceContext {
@@ -1039,6 +1040,14 @@ export async function runToolLoop(options: ToolLoopOptions): Promise<ToolLoopRes
        * well as `portal`, so a `domain` naming another portal is refused, and
        * a `domain` naming the locked portal agrees with what is injected.
        */
+      /**
+       * A pack's call (S2-B W3, npstorey/civic-ai-tools#309): the pack's fixed
+       * portal and dataset are injected where the call omits them, BEFORE the
+       * run portal on the next line would be, so a pack call never carries a portal its
+       * pack does not read. Like the run portal, never into a malformed set.
+       */
+      const pack = packFilterOf(name);
+      if (pack && !argumentsMalformed) injectPackFilter(upstreamToolName(name), args, pack);
       if (portal && !argumentsMalformed && isTool(name, 'get_data') && !args.portal) args.portal = portal;
 
       /**
@@ -1056,6 +1065,11 @@ export async function runToolLoop(options: ToolLoopOptions): Promise<ToolLoopRes
         lockedPortal && !argumentsMalformed && portalOutsideLock(upstreamToolName(name), args, lockedPortal) !== null
           ? new PortalLockedCallError(lockedPortal)
           : null;
+      // The pack's twin of the lock (S2-B W3): a pack call naming a portal,
+      // dataset or identifier outside its pack's fixed values is refused
+      // before anything is sent, and recorded like any other rejected call.
+      const packRefusal =
+        pack && !argumentsMalformed && packCallOutsideFilter(upstreamToolName(name), args, pack) ? new PackFilterRefusedError(pack) : null;
 
       const operationType = deriveOperationType(name, args);
       const reason = generateToolReason(args, name);
@@ -1091,6 +1105,10 @@ export async function runToolLoop(options: ToolLoopOptions): Promise<ToolLoopRes
         'tool.upstream_name': spanNames.upstreamName,
         'mcp.alias': spanNames.alias,
         'mcp.server.id': spanNames.serverId,
+        // A pack's call goes to its base's server and is attributed to the
+        // base above; the pack is named here (G0-B5 A; harness 0.12.0 reads it
+        // as `civic:packId`). Written on a refused pack call too.
+        ...(pack ? { 'mcp.pack_id': pack.packId } : {}),
       });
 
       // Started outside the `try`, so the time until a rejection is measured
@@ -1099,6 +1117,7 @@ export async function runToolLoop(options: ToolLoopOptions): Promise<ToolLoopRes
       try {
         if (argumentsMalformed) throw malformedToolArgumentsError();
         if (lockRefusal) throw lockRefusal;
+        if (packRefusal) throw packRefusal;
 
         const result = await boundToolCall(executeToolCall(name, args), name, toolTimeoutMs);
         const toolDuration = Date.now() - toolStartTime;

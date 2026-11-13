@@ -107,7 +107,8 @@ const NOW = new Date('2026-10-19T12:00:00.000Z');
 const TODAY = '2026-10-19';
 const PROMPT = 'How many potholes were reported in 2025?';
 const configured = readMcpEnvFromProcess();
-const ALL_IDS = ['socrata', 'data-commons', 'boston-opencontext'];
+// S2-B: router 0.8.0 offers NYC City Record (a pack over Socrata) wherever Socrata is.
+const ALL_IDS = ['socrata', 'data-commons', 'boston-opencontext', 'nyc-record'];
 
 type Json = Record<string, unknown>;
 type ToolSchema = { type: string; function: { name: string; parameters?: { properties?: { alias?: { enum?: string[] } } } } };
@@ -164,7 +165,7 @@ test('criterion 3: the first in-loop request carries the directory and one tool,
   // One tool, `load_source`, its enum the directory's aliases in manifest order.
   assert.deepEqual(toolNames(first), ['load_source']);
   const tool = (first.tools as ToolSchema[])[0];
-  assert.deepEqual(tool.function.parameters?.properties?.alias?.enum, ['socrata', 'data_commons', 'boston']);
+  assert.deepEqual(tool.function.parameters?.properties?.alias?.enum, ['socrata', 'data_commons', 'boston', 'nyc_record']);
 
   // The system prompt is the router's directory over the directory set, byte for byte.
   const system = systemOf(first);
@@ -209,18 +210,18 @@ test('criterion 3: while the consent gate is dormant the directory lists every c
 test('criterion 3: once the gate is enforced, the directory is configured ∩ (On ∪ Ask first), and no stored state is Ask first', () => {
   assert.deepEqual(
     directorySet(configured, { enforced: true, states: {} }).map((d) => [d.sourceId, d.state]),
-    [['socrata', 'ask-first'], ['data-commons', 'ask-first'], ['boston-opencontext', 'ask-first']],
+    [['socrata', 'ask-first'], ['data-commons', 'ask-first'], ['boston-opencontext', 'ask-first'], ['nyc-record', 'ask-first']],
   );
   assert.deepEqual(
     directorySet(configured, { enforced: true, states: { socrata: 'on', 'data-commons': 'off', 'boston-opencontext': 'ask-first', 'nyc-charter': 'on' } })
       .map((d) => [d.sourceId, d.alias, d.state]),
-    [['socrata', 'socrata', 'on'], ['boston-opencontext', 'boston', 'ask-first']],
+    [['socrata', 'socrata', 'on'], ['boston-opencontext', 'boston', 'ask-first'], ['nyc-record', 'nyc_record', 'ask-first']],
   );
 });
 
 test('criterion 3: in-loop is never entered with an empty directory set', () => {
   const all = directorySet(configured, { enforced: false, states: {} });
-  const allOff = directorySet(configured, { enforced: true, states: { socrata: 'off', 'data-commons': 'off', 'boston-opencontext': 'off' } });
+  const allOff = directorySet(configured, { enforced: true, states: { socrata: 'off', 'data-commons': 'off', 'boston-opencontext': 'off', 'nyc-record': 'off' } });
   assert.deepEqual(allOff, []);
   assert.equal(entersInLoop('in-loop', all), true);
   assert.equal(entersInLoop('in-loop', allOff), false);

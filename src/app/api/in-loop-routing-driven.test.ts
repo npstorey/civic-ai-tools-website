@@ -365,7 +365,8 @@ function systemText(request: { body: Json }): string {
 }
 
 const configured = readMcpEnvFromProcess();
-const DIRECTORY_IDS = ['socrata', 'data-commons', 'boston-opencontext'];
+// S2-B: router 0.8.0 offers NYC City Record (a pack over Socrata) wherever Socrata is, On in the consent sent.
+const DIRECTORY_IDS = ['socrata', 'data-commons', 'boston-opencontext', 'nyc-record'];
 const today = () => new Date().toISOString().slice(0, 10);
 
 // --- Criterion 2 ------------------------------------------------------------------------
@@ -491,8 +492,9 @@ test('criterion 5, compare-stream: the root span states routing, the definition 
   // R6 W3 (#632, contract item 10): with the gate on and every source On, the
   // record states the router's `selected` where it stated `configured` before
   // W3 — the signed-byte move the gate record names.
-  assert.deepEqual(JSON.parse(root['analysis.sources_offered'] ?? 'null').map((s: { reason: string }) => s.reason), ['selected', 'selected', 'selected', 'not-configured', 'not-configured', 'not-configured', 'not-configured']);
-  // Router 0.6.0 (R8 W3): the three new hosted sources, switches unset, are not configured.
+  assert.deepEqual(JSON.parse(root['analysis.sources_offered'] ?? 'null').map((s: { reason: string }) => s.reason), ['selected', 'selected', 'selected', 'not-configured', 'not-configured', 'selected', 'not-configured']);
+  // Router 0.6.0 (R8 W3): the three new hosted sources, switches unset, are not configured; since router 0.8.0
+  // (S2-B) NYC City Record, sixth in the manifest, is a pack over Socrata, configured and On, so `selected`.
   // skill.text_hash is the final prompt's.
   const skill = spans(traceOf(IN_LOOP)).find((s) => s.name === 'skill_fetch');
   assert.equal(Object.fromEntries(attrPairs(skill!))['skill.text_hash'], sha(systemText(last)));
@@ -604,7 +606,8 @@ test('R10 P1 criterion 4: adaptRecord over the packaged in-loop record shows the
     { text: T.inLoop },
     { text: `${T.loaded}Socrata.` },
     { text: `${T.askedNotLoaded}${T.none}.` },
-    { text: `${T.neverAsked}Data Commons${T.separator}Boston OpenContext.` },
+    // S2-B: NYC City Record, in the directory set since router 0.8.0, is never asked about either.
+    { text: `${T.neverAsked}Data Commons${T.separator}Boston OpenContext${T.separator}NYC City Record.` },
   ]);
 });
 
@@ -750,7 +753,8 @@ test('S2-B W2: the record packaged from the run attributes the pack\'s calls to 
 for (const [label, source] of [['the pack\'s id', PACK_ID], ['the pack\'s sourceId', 'nyc-record']] as const) {
   test(`S2-B W2 decoy: a trace whose pack calls write mcp.source = ${label} fails W2's record assertions`, () => {
     const { pkg } = packageFrom(decoyTrace(source), toolCallsOf(PACK));
-    assert.throws(() => assertPackCallRecorded(pkg), assert.AssertionError);
+    // Fails at the attribution, not on something unrelated inside the assertions (the ORCH's tightening of tree 1).
+    assert.throws(() => assertPackCallRecorded(pkg), (error: unknown) => error instanceof assert.AssertionError && /not attributed to the base/.test(error.message));
   });
 }
 

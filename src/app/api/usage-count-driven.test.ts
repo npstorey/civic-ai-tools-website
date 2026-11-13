@@ -518,7 +518,8 @@ function expectedRow(surface: Surface, outcome: 'complete' | 'error') {
     signedIn: true,
     model: 'vendor/model-fixture-1',
     outcome,
-    sourcesOffered: 'data-commons,socrata',
+    // S2-B: router 0.8.0 offers NYC City Record (a pack over Socrata) wherever Socrata is.
+    sourcesOffered: 'data-commons,nyc-record,socrata',
     sourcesUsed: 'socrata',
     count: 1,
   };

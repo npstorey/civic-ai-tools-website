@@ -233,7 +233,7 @@ const MODEL_ORIGIN = `http://127.0.0.1:${(model.address() as AddressInfo).port}`
 
 for (const name of [
   'DATA_COMMONS_API_KEY', 'SITE_PORTAL_LOCKED', 'SITE_DEFAULT_PORTAL', 'MODEL_API_KEY', 'OPENAI_API_KEY',
-  'MODEL_API_KIND', 'MODEL_API_AUTH', 'EXECUTOR_DRIVER', 'NYC_CHARTER_HOSTING', 'NYC_CHECKBOOK_HOSTING', 'NYC_RECORD_HOSTING',
+  'MODEL_API_KIND', 'MODEL_API_AUTH', 'EXECUTOR_DRIVER', 'NYC_CHARTER_HOSTING', 'NYC_CHECKBOOK_HOSTING',
   'NYS_LEGISLATION_HOSTING', 'SOURCE_ROUTING', 'APP_HOST', 'NEXTAUTH_URL',
   'NEXT_PUBLIC_ANALYTICS_SERVICE', 'NEXT_PUBLIC_ANALYTICS_ID', 'NEXT_PUBLIC_GA_MEASUREMENT_ID',
 ]) delete process.env[name];
@@ -290,8 +290,9 @@ globals.__r9p1aRoutes.record = { id: 'rec-r9-p1a', slug: 'r9-p1a', basePackageSt
 // --- The consent in force: the row, or the cookie ----------------------------------------
 
 type States = Record<string, 'on' | 'ask-first' | 'off'>;
-const ALL_ASK_FIRST: States = { socrata: 'ask-first', 'data-commons': 'ask-first', 'boston-opencontext': 'ask-first' };
-const ALL_OFF: States = { socrata: 'off', 'data-commons': 'off', 'boston-opencontext': 'off' };
+// S2-B: every configured source, NYC City Record included since router 0.8.0 (a pack over Socrata).
+const ALL_ASK_FIRST: States = { socrata: 'ask-first', 'data-commons': 'ask-first', 'boston-opencontext': 'ask-first', 'nyc-record': 'ask-first' };
+const ALL_OFF: States = { socrata: 'off', 'data-commons': 'off', 'boston-opencontext': 'off', 'nyc-record': 'off' };
 /** One source On beside an Off and an Ask first: served at the base too, the reasons' reference. */
 const ONE_ON: States = { socrata: 'on', 'data-commons': 'off', 'boston-opencontext': 'ask-first' };
 /** The same Off and Ask first with the On source moved to Ask first: no source On. */

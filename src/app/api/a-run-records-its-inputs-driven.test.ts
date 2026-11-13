@@ -317,6 +317,8 @@ async function expectedBlocks(): Promise<Record<string, string>> {
     socrata: await router.socrataGuidanceText(context(null), view),
     'data-commons': await router.dataCommonsGuidanceText(context(DATA_COMMONS_INSTRUCTIONS), view),
     'boston-opencontext': await router.bostonGuidanceText(context(null), view),
+    // S2-B: NYC City Record's pack, offered wherever Socrata is since router 0.8.0: its inline guidance, aliased.
+    'nyc-record': await router.NYC_RECORD_ENTRY.guidance.fetchText(context(null) as never, view),
   };
 }
 
@@ -365,9 +367,11 @@ for (const d of [COMPARE_STREAM, NOTEBOOK]) {
       // entry come with it.
       { sourceId: 'nyc-charter', alias: 'nyc_charter', reason: 'not-configured' },
       // Router 0.6.0's three hosted sources, their switches unset: the three
-      // rows the R8 W3 G0 record names for the pin (6299541942 §3).
+      // rows the R8 W3 G0 record names for the pin (6299541942 §3). Since
+      // router 0.8.0 (S2-B) NYC City Record is a pack over Socrata, configured
+      // and On, so `selected`.
       { sourceId: 'nyc-checkbook', alias: 'nyc_checkbook', reason: 'not-configured' },
-      { sourceId: 'nyc-record', alias: 'nyc_record', reason: 'not-configured' },
+      { sourceId: 'nyc-record', alias: 'nyc_record', reason: 'selected' },
       { sourceId: 'nys-legislation', alias: 'nys_legislation', reason: 'not-configured' },
     ]);
   });
@@ -383,6 +387,8 @@ for (const d of [COMPARE_STREAM, NOTEBOOK]) {
       { id: 'socrata-mcp-server@https://github.com/npstorey/socrata-mcp-server', guidanceHash: sha(blocks.socrata), guidanceOrigin: 'fallback' },
       { id: 'datacommons-mcp@https://github.com/datacommonsorg/agent-toolkit', guidanceHash: sha(blocks['data-commons']), guidanceOrigin: 'endpoint' },
       { id: 'opencontext@https://data-mcp.boston.gov/mcp', guidanceHash: sha(blocks['boston-opencontext']), guidanceOrigin: 'inline' },
+      // S2-B: the pack's component as router 0.8.0's composition states it (its credit is P3's, W6).
+      { id: 'nyc-record@https://data.cityofnewyork.us/d/dg92-zbpx', guidanceHash: sha(blocks['nyc-record']), guidanceOrigin: 'inline' },
       { id: '@typedstandards/civic-typed-router', version: ROUTER_VERSION },
     ]);
   });

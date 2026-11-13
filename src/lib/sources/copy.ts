@@ -323,6 +323,15 @@ export interface SourceDescription {
   publisher: string;
   /** The connector's repository, which the publisher's name links to. */
   link: string;
+  /**
+   * For a pack, a source with no server of its own (NYC City Record since
+   * router 0.8.0, S2-B): the source whose server reaches it. Its row's first
+   * sentence names that source and that source's publisher and link
+   * (`REACH_SENTENCE.throughSocrata`); `publisher` and `link` above are then
+   * those of the connector its example queries are taken from
+   * (`NYC_RECORD_EXAMPLES_SENTENCE`), which this site does not run.
+   */
+  base?: 'socrata';
 }
 
 /**
@@ -362,6 +371,7 @@ export const SOURCE_DESCRIPTIONS: Readonly<Record<string, SourceDescription>> = 
     what: "notices in The City Record, New York City's official journal: procurement, public hearings and other agency notices.",
     publisher: 'BetaNYC',
     link: 'https://github.com/BetaNYC/nyc-record-mcp',
+    base: 'socrata',
   },
   'nys-legislation': {
     what: "New York State's bills and the votes on them, and the State's laws, from the State Senate's Open Legislation service.",
@@ -380,6 +390,19 @@ export const REACH_SENTENCE = {
   after: ' publishes, running at ',
   unstated: 'This site reaches it through an MCP server, a connector whose publisher is not stated, running at ',
   end: '.',
+  /** A pack's first sentence opens so (S2-B, R1 as ruled, D1 = A); then the Socrata entry's publisher, `after`, where it runs, `end`. */
+  throughSocrata: "This site reaches it through the Socrata source's MCP server, a connector that ",
+} as const;
+
+/**
+ * City Record's second reach sentence (S2-B, R1 as ruled, D1 = A): `before` +
+ * its entry's publisher, linked to its entry's link + `after`. The example
+ * queries are the pack's guidance, taken from the connector this site ran
+ * until router 0.8.0 and runs no longer.
+ */
+export const NYC_RECORD_EXAMPLES_SENTENCE = {
+  before: ' The model is given example queries for these notices, taken from ',
+  after: "'s City Record connector, which this site does not run.",
 } as const;
 
 /**

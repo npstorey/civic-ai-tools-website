@@ -244,7 +244,7 @@ async function driveModel() {
  *  endpoint, which is the first request any tool call makes. */
 async function driveMcp() {
   const mcp = await fresh('src/lib/mcp/client.ts');
-  await swallow(() => mcp.callMcpTool('get_data', { portal: 'probe', dataset_id: 'probe' }));
+  await swallow(() => mcp.callMcpTool('socrata__get_data', { portal: 'probe', dataset_id: 'probe' }));
 }
 
 /**

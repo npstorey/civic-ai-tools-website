@@ -23,6 +23,7 @@
 // tool lists do not overlap.
 
 import { test } from 'node:test';
+import { civicRouter } from '@typedstandards/civic-typed-router';
 import assert from 'node:assert/strict';
 import {
   buildMcpRegistry,
@@ -109,5 +110,8 @@ test('the shipped tool lists do not overlap, so the configured registry builds',
     hosted.length,
     'the shipped tool lists share a name — client.ts builds this registry at module-evaluation time',
   );
-  assert.equal(Object.keys(registry.toolIndex).length, hosted.length);
+  // S2-B: a pack's tools (NYC City Record's two, since router 0.8.0) are indexed to its base's server too.
+  const packTools = [...civicRouter.dispatchMap.values()].filter((t) => t.base !== undefined && Object.hasOwn(registry.servers, t.base)).length;
+  assert.equal(packTools, 2, 'premise: City Record\'s two tools are indexed to the Socrata server');
+  assert.equal(Object.keys(registry.toolIndex).length, hosted.length + packTools);
 });

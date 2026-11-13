@@ -13,7 +13,7 @@
  * agree instead by test (`./source-name.test.ts`).
  */
 import type { FlowsKeptBy, FlowsRecipient, FlowsSource } from '../flows/statement.ts';
-import { KEPT_FOR_OPERATOR, REACH_SENTENCE, SOURCE_DESCRIPTIONS } from './copy.ts';
+import { KEPT_FOR_OPERATOR, NYC_RECORD_EXAMPLES_SENTENCE, REACH_SENTENCE, SOURCE_DESCRIPTIONS } from './copy.ts';
 
 const SUFFIX = ' MCP Server';
 
@@ -118,10 +118,29 @@ export interface SourceRowLines {
  * what-line, and the reach sentence with the statement's `publisher`,
  * unlinked, or saying the publisher is not stated. The map is read on every
  * call. Every surface that prints a source's publisher calls this.
+ *
+ * A pack's entry (`base`, S2-B R1): the first sentence names the base's
+ * connector and its publisher, linked as the base's row links it, then where
+ * it runs; the second names the connector its example queries are taken
+ * from, linked as the entry links it, which this site does not run.
  */
 export function sourceRowLines(source: Pick<FlowsSource, 'sourceId' | 'publisher' | 'host' | 'variant'>): SourceRowLines {
   const where = sourceWhere(source);
   const entry = Object.prototype.hasOwnProperty.call(SOURCE_DESCRIPTIONS, source.sourceId) ? SOURCE_DESCRIPTIONS[source.sourceId] : undefined;
+  if (entry !== undefined && entry.base !== undefined) {
+    const base = SOURCE_DESCRIPTIONS[entry.base];
+    return {
+      what: entry.what,
+      reach: [
+        REACH_SENTENCE.throughSocrata,
+        { link: base.link, text: base.publisher },
+        `${REACH_SENTENCE.after}${where}${REACH_SENTENCE.end}`,
+        NYC_RECORD_EXAMPLES_SENTENCE.before,
+        { link: entry.link, text: entry.publisher },
+        NYC_RECORD_EXAMPLES_SENTENCE.after,
+      ],
+    };
+  }
   if (entry !== undefined) {
     return { what: entry.what, reach: [REACH_SENTENCE.before, { link: entry.link, text: entry.publisher }, `${REACH_SENTENCE.after}${where}${REACH_SENTENCE.end}`] };
   }

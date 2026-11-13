@@ -302,7 +302,8 @@ for (const d of IN_LOOP) {
     const allSources = ALL_SOURCES[d.name];
     assert.equal(allSources.row.sourcesUsed, 'data-commons', 'premise — the all-sources run used Data Commons');
     assert.equal(d.row.sourcesOffered, allSources.row.sourcesOffered);
-    assert.equal(d.row.sourcesOffered, 'boston-opencontext,data-commons,socrata');
+    // S2-B: router 0.8.0 offers NYC City Record (a pack over Socrata) wherever Socrata is.
+    assert.equal(d.row.sourcesOffered, 'boston-opencontext,data-commons,nyc-record,socrata');
   });
 }
 

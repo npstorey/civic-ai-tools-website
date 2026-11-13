@@ -394,7 +394,8 @@ test('R6-WEB-D condition 2, the cookie branch: Allow sets the cookie PUT /api/so
   const hash = statementHash(statement);
   const cookie = consentCookieForTests({ socrata: 'on', 'data-commons': 'ask-first' }, statement);
 
-  const byPut = await put({ socrata: 'on', 'data-commons': 'on' }, hash, { cookie });
+  // S2-B: the PUT names every configured source, which since router 0.8.0 includes NYC City Record (On in the cookie).
+  const byPut = await put({ socrata: 'on', 'data-commons': 'on', 'nyc-record': 'on' }, hash, { cookie });
   assert.equal(byPut.status, 200, `PUT answered ${byPut.status}: ${await byPut.text()}`);
   const key = await mint('data-commons');
   const byAllow = await post({ key, decision: 'allow' }, { cookie });

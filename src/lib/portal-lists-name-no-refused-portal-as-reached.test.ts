@@ -243,6 +243,11 @@ const CLASSIFIED: Classified[] = [
   { file: 'src/lib/model-loop/run-tool-loop.ts', text: "...(args.portal ? { 'tool.portal_domain': String(args.portal) } : {}),", kind: 'per-call',
     why: 'one call’s own span (two reads on one line)' },
   { file: 'src/lib/model-loop/run-tool-loop.ts', text: "...(args.portal ? { 'tool.portal_domain': String(args.portal) } : {}),", kind: 'per-call', why: 'see above' },
+  { file: 'src/lib/mcp/pack-filter.ts', text: "if (args.portal === undefined || args.portal === null || args.portal === '') args.portal = filter.portal;", kind: 'per-call',
+    why: 'S2-B W3: a pack call is given its pack\'s fixed portal before it runs, when it names none (three reads and a write on one line)' },
+  { file: 'src/lib/mcp/pack-filter.ts', text: "if (args.portal === undefined || args.portal === null || args.portal === '') args.portal = filter.portal;", kind: 'per-call', why: 'see above' },
+  { file: 'src/lib/mcp/pack-filter.ts', text: "if (args.portal === undefined || args.portal === null || args.portal === '') args.portal = filter.portal;", kind: 'per-call', why: 'see above' },
+  { file: 'src/lib/mcp/pack-filter.ts', text: "if (args.portal === undefined || args.portal === null || args.portal === '') args.portal = filter.portal;", kind: 'per-call', why: 'see above' },
 ];
 
 const key = (s: { file: string; text: string }) => `${s.file} :: ${s.text}`;

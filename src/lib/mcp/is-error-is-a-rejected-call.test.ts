@@ -203,7 +203,7 @@ async function drive(datasets: string[]): Promise<Run> {
     {
       toolCalls: datasets.map((dataset, i) => ({
         id: `c${i + 1}`,
-        name: 'get_data',
+        name: 'socrata__get_data',
         args: { type: 'query', dataset_id: dataset, select: 'count(*)', portal: PORTAL },
       })),
     },
@@ -468,7 +468,7 @@ for (const [framing, dataset, callId] of [['SSE', DECOY_SSE, 'c1'], ['plain-JSON
 
 async function rejectionOf(dataset: string): Promise<Error> {
   try {
-    await callMcpTool('get_data', { type: 'query', dataset_id: dataset, select: 'count(*)', portal: PORTAL });
+    await callMcpTool('socrata__get_data', { type: 'query', dataset_id: dataset, select: 'count(*)', portal: PORTAL });
   } catch (error) {
     assert.ok(error instanceof Error);
     return error as Error;

@@ -251,7 +251,8 @@ test('UX-2 P4b criterion 5: after off, a second run\'s directory reads the sourc
   assert.equal(response.status, 200);
   const after = cookieFrom(response.headers.get('set-cookie'));
   const second = directorySet(configured, { enforced: true, states: flat(after.states) }) as Array<{ sourceId: string }>;
-  assert.deepEqual(second.map((e) => e.sourceId), ['socrata'], 'the second run still lists the declined source');
+  // S2-B: router 0.8.0 configures NYC City Record wherever Socrata is (a pack over its server), On by default.
+  assert.deepEqual(second.map((e) => e.sourceId), ['socrata', 'nyc-record'], 'the second run still lists the declined source');
 });
 
 // --- allow-all: "Allow all data sources" ------------------------------------------------------------

@@ -218,7 +218,7 @@ test('UX-2 P4b criterion 2: Data sources holds one row per configured source, ea
   const statement = await consentWith();
   const s = await overlay();
   const sources = statement.sources as Mod[];
-  assert.equal(sources.length, 3, 'premise: three sources are configured');
+  assert.equal(sources.length, 4, 'premise: four sources are configured');
   const rows = rowsOf(s);
   assert.deepEqual(rows.map((r) => r.props['data-source']), sources.map((x) => x.sourceId), 'the rows are not the configured sources, in order');
   for (const row of rows) {
@@ -249,7 +249,7 @@ test('UX-2 P4b criterion 2: signed out, a change writes PUT /api/sources/consent
   const puts = net.sent.filter((r) => r.method === 'PUT' && r.path === '/api/sources/consent');
   assert.equal(puts.length, 1, `the change did not write one PUT (${puts.length})`);
   const body = JSON.parse(puts[0].body) as { states: Record<string, string>; flowsVersion: string };
-  assert.deepEqual(body.states, { socrata: 'on', 'data-commons': 'on', 'boston-opencontext': 'off' }, 'the PUT does not carry every configured source\'s state');
+  assert.deepEqual(body.states, { socrata: 'on', 'data-commons': 'on', 'boston-opencontext': 'off', 'nyc-record': 'on' }, 'the PUT does not carry every configured source\'s state');
   assert.equal(body.flowsVersion, statementHash(statement));
   const cookie = readConsentCookie(new Request(`${ORIGIN}/`, { headers: { cookie: [...net.jar].map(([k, v]) => `${k}=${v}`).join('; ') } }));
   assert.equal(cookie?.states?.['boston-opencontext']?.state, 'off', 'the cookie does not hold the change');
@@ -292,10 +292,10 @@ test('UX-2 P4b criterion 2: the search narrows the rows by name, says how many a
   answers();
   await consentWith();
   const s = await overlay();
-  assert.equal(rowsOf(s).length, 3, 'premise: three rows before a search');
+  assert.equal(rowsOf(s).length, 4, 'premise: four rows before a search');
   await s.type(searchOf(s), 'boston');
   assert.deepEqual(rowsOf(s).map((r) => r.props['data-source']), ['boston-opencontext'], 'the search did not narrow the rows to Boston');
-  assert.ok(s.text().includes('1 of 3 sources shown'), `the count line is not item 24's: ${s.text().slice(0, 400)}`);
+  assert.ok(s.text().includes('1 of 4 sources shown'), `the count line is not item 24's: ${s.text().slice(0, 400)}`);
   await s.type(searchOf(s), 'no-source-is-called-this');
   assert.equal(rowsOf(s).length, 0, 'a query matching nothing left rows');
   assert.ok(s.text().includes(NO_MATCH), 'the empty line is not item 22\'s');

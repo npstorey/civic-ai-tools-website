@@ -94,10 +94,10 @@ registerHooks({
   },
 });
 
-// --- The configuration: three sources -------------------------------------------------
+// --- The configuration: four sources (S2-B: NYC City Record, a pack over Socrata since router 0.8.0, is offered wherever Socrata is) ---
 
 for (const name of [
-  'NYC_CHARTER_HOSTING', 'NYC_CHECKBOOK_HOSTING', 'NYC_RECORD_HOSTING', 'NYS_LEGISLATION_HOSTING', 'DATA_COMMONS_API_KEY',
+  'NYC_CHARTER_HOSTING', 'NYC_CHECKBOOK_HOSTING', 'NYS_LEGISLATION_HOSTING', 'DATA_COMMONS_API_KEY',
   'APP_HOST', 'NEXTAUTH_URL', 'SITE_DEPLOYMENT_GUIDE_URL', 'SOURCE_ROUTING',
   'NEXT_PUBLIC_ANALYTICS_SERVICE', 'NEXT_PUBLIC_ANALYTICS_ID', 'NEXT_PUBLIC_GA_MEASUREMENT_ID',
 ]) delete process.env[name];
@@ -116,8 +116,8 @@ const DB_ID = '9a1e0000-0000-4000-8000-0000000000a1';
 const statement = await buildFlowsStatement();
 const CONFIGURED: string[] = statement.sources.map((s: { sourceId: string }) => s.sourceId);
 
-test('premise: three sources are configured, so every branch below has an Ask-first source to keep or lose', () => {
-  assert.deepEqual(CONFIGURED, ['socrata', 'data-commons', 'boston-opencontext']);
+test('premise: four sources are configured, so every branch below has an Ask-first source to keep or lose', () => {
+  assert.deepEqual(CONFIGURED, ['socrata', 'data-commons', 'boston-opencontext', 'nyc-record']);
 });
 
 // --- Driving the gate ------------------------------------------------------------------------
@@ -168,9 +168,9 @@ const NO_SOURCES_ON_BYTES = JSON.stringify({
   reask: { base: false, sources: [] },
 });
 
-const ALL_OFF: States = { socrata: 'off', 'data-commons': 'off', 'boston-opencontext': 'off' };
-const ALL_ASK_FIRST: States = { socrata: 'ask-first', 'data-commons': 'ask-first', 'boston-opencontext': 'ask-first' };
-const OFF_AND_ASK_FIRST: States = { socrata: 'off', 'data-commons': 'ask-first', 'boston-opencontext': 'off' };
+const ALL_OFF: States = { socrata: 'off', 'data-commons': 'off', 'boston-opencontext': 'off', 'nyc-record': 'off' };
+const ALL_ASK_FIRST: States = { socrata: 'ask-first', 'data-commons': 'ask-first', 'boston-opencontext': 'ask-first', 'nyc-record': 'ask-first' };
+const OFF_AND_ASK_FIRST: States = { socrata: 'off', 'data-commons': 'ask-first', 'boston-opencontext': 'off', 'nyc-record': 'off' };
 /** No stored state for Boston: Ask first (D6), the only source a run could reach. */
 const OFF_AND_NONE: States = { socrata: 'off', 'data-commons': 'off' };
 const ONE_ON: States = { socrata: 'ask-first', 'data-commons': 'on', 'boston-opencontext': 'off' };

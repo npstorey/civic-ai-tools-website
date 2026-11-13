@@ -21,11 +21,50 @@ re-read and says the same, or when a source is configured (D5, D7). The
 statement's `date` is the latest date on which one of the statements it
 carries was read.
 
-`src/lib/flows/changelog.test.ts` recomputes each entry's versions under its
-configuration and fails when they differ from the code. An entry also gives
+`src/lib/flows/changelog.test.ts` recomputes the newest entry's versions under
+its configuration and fails when they differ from the code. An earlier entry
+is history: the test fails if its versions or its words change. Today's code
+can give a different statement under an earlier entry's configuration. It does
+since the 2026-11-09 entry, where NYC City Record stopped being a server of its
+own. An entry also gives
 the statement's **hash** (the SHA-256 of the bytes `/api/flows` serves) under
 that configuration when the entry moves the hash but no version: such a
 change re-asks no one.
+
+## 2026-11-09 — NYC City Record through the Socrata source (npstorey/civic-ai-tools#309 W8)
+
+NYC City Record no longer has a server of its own on this site. Its requests
+now go to the Socrata source's MCP server, and from there to
+`data.cityofnewyork.us`, the portal that holds its dataset (`dg92-zbpx`). The
+switch `NYC_RECORD_HOSTING` is retired, and this site no longer runs
+`@betanyc/nyc-record-mcp`.
+
+- City Record's row has one recipient: the Socrata server at its configured
+  host, with the Socrata source's holders. Its sandbox, and its own entry for
+  `data.cityofnewyork.us`, are gone.
+- For `data.cityofnewyork.us` the statement now names one set of holders, the
+  Socrata source's. The City of New York, which the 2026-10-21 entry named for
+  that host, is no longer named.
+- City Record's `version` moves; the base `version` does not. A reader who
+  answered before this change is asked again about City Record, and about
+  nothing else.
+
+**Configuration:** the 2026-10-21 entry's, without `NYC_RECORD_HOSTING=sandbox`.
+City Record has no setting of its own: it is configured when Socrata is
+(`SOCRATA_MCP_URL`).
+
+**Base `version`:** `2489d0dda25a79b3286c380379c6d2c8202e66a77fe5b4f493f558a7ce190f9c` (unchanged)
+
+| Source | Its `version` | Where it runs | What its holders say they keep |
+|---|---|---|---|
+| `socrata` | `fe99ec852eb7bfa3c95ce0db20cf5d2c7411b79b1e61c5ddbad3c19190a61629` | `socrata-mcp.civicaitools.org` | unchanged |
+| `data-commons` | `a0d757284510792921c7889ed537e75ebbc9890a1f96c71b0fe393bc46ceb334` | Google's hosted endpoint, the default address | unchanged |
+| `nyc-charter` | `e381ddafc6d461ef1fdb913270aaac637d51801909613f6d7dc495fbcf6c7e61` | this site's sandbox | unchanged |
+| `nyc-checkbook` | `bb350a722fbf9a740096edbb561d00182bd4c9841d3254336a61ebfadeb17ec4` | this site's sandbox (`@betanyc/nyc-checkbook-mcp` 1.6.3), which may reach `www.checkbooknyc.com` | unchanged |
+| `nyc-record` | `ad4994622fa30487bfa46fbc0e74d6e7f9ed57a03afb9edc6a40ed529b6417ce` | `socrata-mcp.civicaitools.org`, the Socrata source's server | the same two as `socrata`'s. The server's operator: what it keeps is for this site's operator to state. The portal platform (Tyler Technologies): not stated (read 2026-10-19). |
+| `nys-legislation` | `83b334e65e930c58f4adca15b11fe59e04e212c978fbd60d1b645693d587adf8` | this site's sandbox (`@betanyc/nys-openlegislation-mcp` 2.4.0), which may reach `legislation.nysenate.gov` | unchanged |
+
+**`date`:** 2026-10-20 (unchanged).
 
 ## 2026-10-21 — three more hosted sources (#644 W3)
 

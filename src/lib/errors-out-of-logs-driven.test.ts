@@ -352,7 +352,7 @@ sourceMode = 'bad-initialize-body';
 const INSTRUCTIONS_LINES = await captureConsole(() => mcpClient.getServerInstructions('socrata'));
 sourceMode = 'tool-reason-phrase';
 const REASON_LINES = await captureConsole(() =>
-  mcpClient.callMcpTool('get_data', { type: 'query', dataset_id: 'abcd-1234', portal: 'data.example.org' }).catch(() => null));
+  mcpClient.callMcpTool('socrata__get_data', { type: 'query', dataset_id: 'abcd-1234', portal: 'data.example.org' }).catch(() => null));
 
 // The skill fetch, failing on the source's reason phrase — then the composer
 // with a source whose text fetch rejects with the ORM's real error.

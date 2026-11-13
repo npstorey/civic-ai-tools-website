@@ -94,9 +94,12 @@ const sourceNameExports = sourceNameModule as unknown as Mod;
 interface ManifestLike { sourceId: string; id: string; publisher?: string }
 interface EntryLike { what: string; publisher: string; link: string }
 
-/** Criterion 2's one exception: Boston's `id` carries its endpoint, not a page. */
+/** Criterion 2's exceptions: Boston's `id` carries its endpoint, not a page; and since router 0.8.0 NYC City
+ *  Record's `id` is its pack's dataset address, while its entry links the connector its example queries are taken
+ *  from (S2-B, R1 as the owner ruled it, D1 = A: "BetaNYC, linked as today"). */
 const LINK_EXCEPTIONS: Readonly<Record<string, string>> = {
   'boston-opencontext': 'https://github.com/CityOfBoston/OpenContext',
+  'nyc-record': 'https://github.com/BetaNYC/nyc-record-mcp',
 };
 
 /** The address in a manifest `id`: the part after the "@" that precedes "https://". */

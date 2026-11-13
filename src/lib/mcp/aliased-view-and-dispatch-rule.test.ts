@@ -84,11 +84,17 @@ const CHARTER_FIVE: readonly string[] = [
 /** Router 0.6.0's three hosted entries (R8 W3): NYC Checkbook's 10 tools,
  *  NYC City Record's 7 and NYS Open Legislation's 24, in manifest order after
  *  Charter's five, each aliased. The move the W3 G0 record names for the pin;
- *  the sixteen above are unchanged. */
-const NEW_HOSTED_FORTY_ONE: readonly string[] = (['nyc-checkbook', 'nyc-record', 'nys-legislation'] as const).flatMap((sourceId) => {
+ *  the sixteen above are unchanged.
+ *
+ *  S2-B: since router 0.8.0 NYC City Record is a pack over Socrata, with two
+ *  tools (`get_data` and `fetch`) and no switch: the vocabulary after Charter's
+ *  five is 36, and the two hosted entries' 34 are what a switch withholds. */
+const toolsOf = (sourceIds: readonly string[]): string[] => sourceIds.flatMap((sourceId) => {
   const entry = CIVIC_MANIFEST.find((candidate) => candidate.sourceId === sourceId)!;
   return entry.toolNames.map((tool) => `${entry.alias}__${tool}`);
 });
+const AFTER_CHARTER_THIRTY_SIX: readonly string[] = toolsOf(['nyc-checkbook', 'nyc-record', 'nys-legislation']);
+const HOSTED_THIRTY_FOUR: readonly string[] = toolsOf(['nyc-checkbook', 'nys-legislation']);
 
 const FULL: McpRegistryEnv = {
   socrataUrl: 'https://socrata.invalid',
@@ -97,7 +103,7 @@ const FULL: McpRegistryEnv = {
 };
 const NO_BOSTON: McpRegistryEnv = { socrataUrl: FULL.socrataUrl, dataCommonsUrl: FULL.dataCommonsUrl };
 /** Every optional source on, the four hosted ones included. */
-const ALL_ON: McpRegistryEnv = { ...FULL, nycCharterHosting: 'sandbox', nycCheckbookHosting: 'sandbox', nycRecordHosting: 'sandbox', nysLegislationHosting: 'sandbox' };
+const ALL_ON: McpRegistryEnv = { ...FULL, nycCharterHosting: 'sandbox', nycCheckbookHosting: 'sandbox', nysLegislationHosting: 'sandbox' };
 
 const names = (tools: typeof mcpTools) => tools.map((t) => (t.type === 'function' ? t.function.name : t.type));
 
@@ -105,12 +111,13 @@ const names = (tools: typeof mcpTools) => tools.map((t) => (t.type === 'function
 
 test('the tools array names every tool <alias>__<upstream>, and is the router\'s own aliased array', () => {
   // The vocabulary: the eleven, in their order, then Charter's five at the end
-  // (the router 0.3.0 move, #617 P3), then router 0.6.0's forty-one (R8 W3).
+  // (the router 0.3.0 move, #617 P3), then router 0.6.0's forty-one (R8 W3),
+  // thirty-six since router 0.8.0 (S2-B).
   assert.deepEqual(names(mcpTools).slice(0, 11).sort(), ELEVEN.map(([, exposed]) => exposed).sort());
   assert.deepEqual(names(mcpTools).slice(11, 16), [...CHARTER_FIVE]);
-  assert.equal(NEW_HOSTED_FORTY_ONE.length, 41);
-  assert.deepEqual(names(mcpTools).slice(16), [...NEW_HOSTED_FORTY_ONE]);
-  assert.equal(names(mcpTools).length, 57);
+  assert.equal(AFTER_CHARTER_THIRTY_SIX.length, 36);
+  assert.deepEqual(names(mcpTools).slice(16), [...AFTER_CHARTER_THIRTY_SIX]);
+  assert.equal(names(mcpTools).length, 52);
   assert.equal(JSON.stringify(mcpTools), JSON.stringify(civicRouter.aliasedMcpTools));
   for (const lock of [undefined, 'data.cityofnewyork.us']) {
     assert.equal(JSON.stringify(mcpToolsFor(lock)), JSON.stringify(civicRouter.aliasedMcpToolsFor(lock)), `lock ${lock}`);
@@ -138,11 +145,12 @@ test('the withheld tools are named as the model would have been offered them', (
   // nothing is.
   assert.deepEqual(withheldToolNames(ALL_ON), []);
   // Router 0.6.0 (R8 W3): the three new hosted sources' forty-one likewise,
-  // while their switches are unset.
-  assert.deepEqual(withheldToolNames(FULL), [...CHARTER_FIVE, ...NEW_HOSTED_FORTY_ONE]);
+  // while their switches are unset; since router 0.8.0 the two hosted ones'
+  // thirty-four (City Record is a pack, offered wherever Socrata is).
+  assert.deepEqual(withheldToolNames(FULL), [...CHARTER_FIVE, ...HOSTED_THIRTY_FOUR]);
   assert.deepEqual(
     new Set(withheldToolNames(NO_BOSTON)),
-    new Set([...ELEVEN.filter(([, , source]) => source === 'boston-opencontext').map(([, exposed]) => exposed), ...CHARTER_FIVE, ...NEW_HOSTED_FORTY_ONE]),
+    new Set([...ELEVEN.filter(([, , source]) => source === 'boston-opencontext').map(([, exposed]) => exposed), ...CHARTER_FIVE, ...HOSTED_THIRTY_FOUR]),
   );
 });
 
@@ -155,7 +163,10 @@ test('deriveOperationType, sourceIdForToolName and routedSourceId answer the sam
     assert.equal(sourceIdForToolName(exposed), sourceId, `source of ${exposed}`);
     assert.equal(sourceIdForToolName(upstream), sourceId, `source of ${upstream}`);
     assert.equal(routedSourceId(exposed, FULL), sourceId, `routed source of ${exposed}`);
-    assert.equal(routedSourceId(upstream, FULL), sourceId, `routed source of ${upstream}`);
+    // S2-B (G1-1 = A): since router 0.8.0 a bare get_data or fetch is refused as ambiguous (NYC City Record's
+    // pack has both), so no source is routed for it; every other bare name routes as its exposed name does.
+    const ambiguous = upstream === 'get_data' || upstream === 'fetch';
+    assert.equal(routedSourceId(upstream, FULL), ambiguous ? undefined : sourceId, `routed source of ${upstream}`);
   }
   // A Boston tool on an instance that did not configure Boston: no source for
   // either spelling, which the loop records as `unknown`.
@@ -166,7 +177,8 @@ test('deriveOperationType, sourceIdForToolName and routedSourceId answer the sam
 // --- 3. The index ------------------------------------------------------------------
 
 test('the registry indexes the exposed names, and names the variable for an unconfigured source by its exposed names', () => {
-  assert.deepEqual(new Set(Object.keys(buildMcpRegistry(FULL).toolIndex)), new Set(ELEVEN.map(([, exposed]) => exposed)));
+  // S2-B: and NYC City Record's two (a pack's tools are indexed to its base's server).
+  assert.deepEqual(new Set(Object.keys(buildMcpRegistry(FULL).toolIndex)), new Set([...ELEVEN.map(([, exposed]) => exposed), 'nyc_record__get_data', 'nyc_record__fetch']));
   const noBoston = buildMcpRegistry(NO_BOSTON);
   for (const [, exposed, sourceId] of ELEVEN) {
     if (sourceId !== 'boston-opencontext') continue;
@@ -319,12 +331,24 @@ test('dispatch over four sources: with the stub not offered, the bare name is ac
   assert.equal(routeToolCall(registry, 'search', FOUR.dispatchMap).server.sourceId, 'socrata');
 });
 
-test('the shipped dispatch map: no two civic sources share an upstream name, so every bare name is accepted', () => {
+// S2-B (G1-1 = A): since router 0.8.0 NYC City Record's pack shares `get_data` and `fetch` with Socrata, so the
+// bare name of each is refused naming both full names; every other bare name is accepted.
+test('the shipped dispatch map: a bare name one civic source has is accepted; get_data and fetch are refused naming both full names', () => {
   const routeToolCall = routeToolCallOf();
   const registry = buildMcpRegistry(FULL);
   for (const [upstream, exposed, sourceId] of ELEVEN) {
-    const viaBare = routeToolCall(registry, upstream);
     const viaExposed = routeToolCall(registry, exposed);
+    if (upstream === 'get_data' || upstream === 'fetch') {
+      assert.throws(
+        () => routeToolCall(registry, upstream),
+        (error: unknown) => error instanceof Error && error.name === 'AmbiguousToolNameError' && error.message.includes(`"socrata__${upstream}"`) && error.message.includes(`"nyc_record__${upstream}"`),
+        `bare ${upstream} is not refused naming both full names`,
+      );
+      assert.equal(viaExposed.server.sourceId, sourceId);
+      assert.equal(viaExposed.upstreamName, upstream);
+      continue;
+    }
+    const viaBare = routeToolCall(registry, upstream);
     assert.equal(viaBare.server.sourceId, sourceId);
     assert.equal(viaExposed.server.sourceId, sourceId);
     assert.equal(viaBare.upstreamName, upstream);

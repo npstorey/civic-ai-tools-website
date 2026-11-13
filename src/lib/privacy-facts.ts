@@ -71,6 +71,7 @@ import {
   NO_GUIDE_SENTENCE,
   NOTIFY_WITH_ACCOUNTS,
   NOTIFY_WITHOUT_ACCOUNTS,
+  NYC_RECORD_EXAMPLES_SENTENCE,
   PRIVACY_CONSENT_SECTIONS,
   PRIVACY_ENDPOINT_HEADING,
   PRIVACY_ENDPOINT_SENTENCES,
@@ -1399,7 +1400,7 @@ export function sourceRow(source: FlowsStatement['sources'][number]): Statement 
     if (line.statementUrl) parts.push(' (', { link: line.statementUrl, text: 'its statement' }, line.readOn ? `, read ${line.readOn})` : ')');
   });
   parts.push(`. How current its data is: ${source.freshness}`);
-  return statement(`source-row-${source.sourceId}`, parts, [FLOWS_TRACE, k('SOURCE_DESCRIPTIONS'), k('REACH_SENTENCE'), 'env:SOCRATA_MCP_URL', 'env:BOSTON_OPENCONTEXT_MCP_URL', ...CIVIC_MANIFEST.filter((entry) => entry.sourceId === source.sourceId && entry.hostings.some((variant) => variant.kind === 'npm-package')).map((entry): Trace => `env:${entry.configuration.addressVariable}`)]);
+  return statement(`source-row-${source.sourceId}`, parts, [FLOWS_TRACE, k('SOURCE_DESCRIPTIONS'), k('REACH_SENTENCE'), ...(parts.includes(NYC_RECORD_EXAMPLES_SENTENCE.before) ? [k('NYC_RECORD_EXAMPLES_SENTENCE')] : []), 'env:SOCRATA_MCP_URL', 'env:BOSTON_OPENCONTEXT_MCP_URL', ...CIVIC_MANIFEST.filter((entry) => entry.sourceId === source.sourceId && entry.hostings.some((variant) => variant.kind === 'npm-package')).map((entry): Trace => `env:${entry.configuration.addressVariable}`)]);
 }
 
 function consentSections(analytics: AnalyticsConfig | null): PrivacySection[] {

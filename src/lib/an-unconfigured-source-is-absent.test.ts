@@ -197,7 +197,7 @@ const model = http.createServer((req, res) => {
       return;
     }
     const toolCalls = [
-      { id: 'call-get-data', type: 'function', function: { name: 'get_data', arguments: JSON.stringify({ type: 'query', dataset_id: 'aaaa-1111', limit: 1 }) } },
+      { id: 'call-get-data', type: 'function', function: { name: 'socrata__get_data', arguments: JSON.stringify({ type: 'query', dataset_id: 'aaaa-1111', limit: 1 }) } },
       { id: 'call-stray', type: 'function', function: { name: STRAY_TOOL, arguments: JSON.stringify({ query: 'noise complaints' }) } },
     ];
     res.writeHead(200, { 'Content-Type': 'application/json' });
@@ -426,7 +426,8 @@ test('(2) every outbound request of the whole file went to a loopback fixture �
 
 test('(4) a ckan__ call the model makes anyway is one failed call, not_configured, and the run still answers', () => {
   for (const d of DRIVES) {
-    const answered = callsNamed(d, 'get_data');
+    // By full name (S2-B, G1-1 = A): a bare get_data is refused as ambiguous since router 0.8.0.
+    const answered = callsNamed(d, 'socrata__get_data');
     assert.ok(answered.length > 0, `${d.name}: premise — the get_data call is not on the record (status ${d.status}):\n${d.body.slice(0, 600)}`);
     for (const c of answered) assert.notEqual(c.failed, true, `${d.name}: premise — get_data failed`);
     const stray = callsNamed(d, STRAY_TOOL);

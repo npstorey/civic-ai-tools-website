@@ -67,7 +67,7 @@ registerSurfaceHooks({ ...CONSENT_SURFACE_STUBS });
 // --- The configurations -------------------------------------------------------------------
 
 const READ = [
-  'SOCRATA_MCP_URL', 'NYC_CHARTER_HOSTING', 'NYC_CHECKBOOK_HOSTING', 'NYC_RECORD_HOSTING', 'NYS_LEGISLATION_HOSTING',
+  'SOCRATA_MCP_URL', 'NYC_CHARTER_HOSTING', 'NYC_CHECKBOOK_HOSTING', 'NYS_LEGISLATION_HOSTING',
   'NYS_LEGISLATION_API_KEY', 'BOSTON_OPENCONTEXT_MCP_URL', 'DATA_COMMONS_MCP_URL', 'DATA_COMMONS_API_KEY', 'MODEL_API_BASE_URL',
   'VERCEL_ENV', 'GITHUB_CLIENT_ID', 'GITHUB_CLIENT_SECRET', 'OIDC_ISSUER', 'OIDC_CLIENT_ID', 'OIDC_CLIENT_SECRET',
   'NEXT_PUBLIC_ANALYTICS_SERVICE', 'NEXT_PUBLIC_ANALYTICS_ID', 'NEXT_PUBLIC_GA_MEASUREMENT_ID', 'APP_HOST', 'NEXTAUTH_URL',
@@ -76,7 +76,9 @@ const READ = [
 for (const name of READ) delete process.env[name];
 process.env.EXECUTOR_DRIVER = 'vercel-sandbox';
 
-/** The reference instance's six sources (the change log's 2026-10-21 entry), and the consent-text tests' three. */
+/** The reference instance's six sources (the change log's 2026-10-21 entry), and the consent-text tests' three.
+ *  S2-B: since router 0.8.0 NYC City Record is a pack over Socrata, offered wherever Socrata is, so `three`
+ *  configures it too (On by default, Ask first when a stubbed consent names no state for it). */
 const SIX = ['socrata', 'data-commons', 'nyc-charter', 'nyc-checkbook', 'nyc-record', 'nys-legislation'];
 const THREE = ['socrata', 'data-commons', 'nyc-charter'];
 
@@ -86,7 +88,6 @@ function configure(sources: 'six' | 'three'): void {
   process.env.NYC_CHARTER_HOSTING = 'sandbox';
   if (sources === 'six') {
     process.env.NYC_CHECKBOOK_HOSTING = 'sandbox';
-    process.env.NYC_RECORD_HOSTING = 'sandbox';
     process.env.NYS_LEGISLATION_HOSTING = 'sandbox';
     process.env.NYS_LEGISLATION_API_KEY = 'fixture';
   }
@@ -328,7 +329,7 @@ test('criterion 2: the lead at the three fixture sources, all On by default', as
   answers();
   const page = await mount(h(Panel));
   assert.deepEqual(shown(page, THREE), { socrata: 'on', 'data-commons': 'on', 'nyc-charter': 'on' }, 'premise: the three default On');
-  assert.equal(leadOf(page), `These are the settings Allow will use: three sources On.${LEAD_END}`);
+  assert.equal(leadOf(page), `These are the settings Allow will use: four sources On.${LEAD_END}`);
   page.unmount();
 });
 
@@ -338,10 +339,10 @@ test('criterion 2: the lead at a configuration with a source Off by default, one
   answers({ socrata: 'on', 'data-commons': 'ask-first', 'nyc-charter': 'off' });
   const page = await mount(h(Panel));
   assert.deepEqual(shown(page, THREE), { socrata: 'on', 'data-commons': 'ask-first', 'nyc-charter': 'off' }, 'premise: the stubbed defaults are shown');
-  assert.equal(leadOf(page), `These are the settings Allow will use: one source On, one Ask first, one Off.${LEAD_END}`);
+  assert.equal(leadOf(page), `These are the settings Allow will use: one source On, two Ask first, one Off.${LEAD_END}`);
   // With no source On, the first group named carries the noun.
   await page.check(radio(page, 'socrata', 'off'));
-  assert.equal(leadOf(page), `These are the settings Allow will use: one source Ask first, two Off.${LEAD_END}`);
+  assert.equal(leadOf(page), `These are the settings Allow will use: two sources Ask first, two Off.${LEAD_END}`);
   await endPending(page);
 });
 
@@ -380,7 +381,8 @@ for (const config of ['three', 'six'] as const) {
       assert.equal(textOf(inside[0]), 'More about this source', `${id}'s drawer's summary reads "${textOf(inside[0])}"`);
       const lines = inside.slice(1).map((el) => textOf(el));
       assert.equal(lines.length, 3, `${id}'s drawer holds ${lines.length} lines: ${lines.join(' | ')}`);
-      assert.match(lines[0], /^This site reaches it through an MCP server, a connector /, `${id}'s drawer's first line is not the reach line`);
+      // S2-B, R1 as ruled (D1 = A): a pack's reach line opens with the Socrata source's server.
+      assert.match(lines[0], /^This site reaches it through (an|the Socrata source's) MCP server, a connector /, `${id}'s drawer's first line is not the reach line`);
       assert.match(lines[1], /^Who holds its logs: /, `${id}'s drawer's second line is not the logs line`);
       assert.match(lines[2], /^How current its data is: /, `${id}'s drawer's third line is not the currency line`);
       // None of the three outside the drawer.

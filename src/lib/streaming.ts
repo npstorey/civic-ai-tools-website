@@ -4,6 +4,7 @@ import { deriveOperationType, isTool, upstreamToolName } from './mcp/operation-t
 import { isSourceRefusal } from './mcp/tool-call-failure.ts';
 import { ambiguousToolNameOf } from './mcp/tool-name-refusal.ts';
 import { PortalLockedCallError } from './portal-lock.ts';
+import { PackFilterRefusedError, type PackFilter } from './mcp/pack-filter.ts';
 import type { ToolFailureKind } from './notebook-author/tool-to-cell.ts';
 import type { FlowsLinks, FlowsSource } from './flows/statement.ts';
 import { readerSourceName } from './sources/source-name.ts';
@@ -943,6 +944,33 @@ export function portalLockRefusalForLlm(lockedPortal: string): string {
 }
 
 /**
+ * What the model is told when the loop core refused a pack's call because it
+ * did not match the pack's fixed portal and dataset (S2-B, R9a as the owner
+ * ruled it; npstorey/civic-ai-tools#309): the twin of
+ * `portalLockRefusalForLlm`. The call was never sent. {source} is the site's
+ * reader name for the pack, and the portal and dataset are the values its tool
+ * schemas fix (`./mcp/pack-filter.ts`); the values the call asked for are not
+ * repeated. "Did not match" holds for every refusal the check makes, a `fetch`
+ * identifier included. A pack that fixes a portal only gets the portal-only
+ * words. No retry wording.
+ */
+export function packFilterRefusalForLlm(filter: Pick<PackFilter, 'source' | 'portal' | 'datasetId'>): string {
+  const { source, portal, datasetId } = filter;
+  if (datasetId !== undefined) {
+    return (
+      `${TOOL_FAILURE_PREAMBLE} This tool belongs to ${source}, which reads one dataset only, ${datasetId} on ${portal}. This request did not match that portal and dataset, so it was not sent.` +
+      ` Do not ask ${source}'s tools for any other portal or dataset. If the question can be answered from that dataset, or from another data source you have tools for, make that request instead;` +
+      ` if it cannot, tell the user in plain language that ${source} covers that one dataset only, and do not include any raw error text, status codes, server names, or system details.`
+    );
+  }
+  return (
+    `${TOOL_FAILURE_PREAMBLE} This tool belongs to ${source}, which reads one portal only, ${portal}. This request did not match that portal, so it was not sent.` +
+    ` Do not ask ${source}'s tools for any other portal. If the question can be answered from that portal, or from another data source you have tools for, make that request instead;` +
+    ` if it cannot, tell the user in plain language that ${source} covers that one portal only, and do not include any raw error text, status codes, server names, or system details.`
+  );
+}
+
+/**
  * What the model is told when dispatch refused a bare tool name that two or
  * more offered sources have (#599 W3; D6's dispatch rule). The call was never
  * sent. The candidates are names from this app's own dispatch map, every one a
@@ -980,6 +1008,9 @@ export function describeToolFailureForLlm(_toolName: string, input: unknown): st
   // call itself (#436, ruling D7) and nothing was sent, so no source answered
   // and "try again" would only repeat it.
   if (input instanceof PortalLockedCallError) return portalLockRefusalForLlm(input.lockedPortal);
+  // The pack's twin (S2-B W3): refused by the loop core before anything was
+  // sent; recognised by type, as the lock's is.
+  if (input instanceof PackFilterRefusedError) return packFilterRefusalForLlm(input.filter);
   // Dispatch refused a bare name two offered sources share (#599 W3, D6),
   // before anything was sent. Recognised by its marker, not its words.
   const ambiguous = ambiguousToolNameOf(input);

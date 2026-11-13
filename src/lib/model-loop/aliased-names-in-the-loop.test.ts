@@ -205,7 +205,9 @@ test('every mcp_tool_call span states mcp.source, tool.upstream_name, mcp.alias 
     ['socrata__get_data', 'get_data', 'socrata', 'socrata', id('socrata')],
     ['data_commons__get_observations', 'get_observations', 'data-commons', 'data_commons', id('data-commons')],
     ['boston__ckan__search_datasets', 'ckan__search_datasets', 'boston-opencontext', 'boston', id('boston-opencontext')],
-    ['get_data', 'get_data', 'socrata', 'socrata', id('socrata')],
+    // S2-B (G1-1 = A): since router 0.8.0 a bare get_data is refused as ambiguous (NYC City Record's pack has one
+    // too), so no source answered it and the span states `unknown`, as for a call no server took.
+    ['get_data', 'get_data', 'unknown', 'unknown', 'unknown'],
     ['no_such_tool', 'no_such_tool', 'unknown', 'unknown', 'unknown'],
   ]);
 });

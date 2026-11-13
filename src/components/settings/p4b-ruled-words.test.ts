@@ -206,7 +206,13 @@ const BASE_248 = '          "text": "If you are signed in, we keep your answer o
 const jsonText = (s: string) => JSON.stringify(s).slice(1, -1);
 
 test('criterion 3 (H2): the privacy golden moves on exactly :10, :25, :243, :258 and :274; :15 and :248 equal the base', () => {
-  const lines = fs.readFileSync(GOLDEN, 'utf8').split('\n');
+  // S2-B (W10): the golden gains one row, `source-row-nyc-record` (NYC City Record, offered wherever Socrata is since
+  // router 0.8.0), five lines after NYC Charter's row: "},", "{", its id, trace and text. Read without them, the golden
+  // is H2's, line for line.
+  const all = fs.readFileSync(GOLDEN, 'utf8').split('\n');
+  const at = all.findIndex((line) => line.trim() === '"id": "source-row-nyc-record",');
+  assert.ok(at > 2, 'premise: the golden has S2-B\'s City Record row');
+  const lines = [...all.slice(0, at - 2), ...all.slice(at + 3)];
   assert.equal(lines.length, BASE_LINES, 'the golden gained or lost lines');
   assert.equal(lines[14], BASE_15, ':15 moved');
   assert.equal(lines[247], BASE_248, ':248 moved');

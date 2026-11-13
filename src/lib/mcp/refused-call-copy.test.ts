@@ -141,10 +141,10 @@ async function run(): Promise<Run> {
     {
       toolCalls: [
         // No run-level portal is passed below, so the loop injects none and this call names none.
-        { id: 'c1', name: 'get_data', args: { type: 'catalog', query: 'noise complaints' } },
-        { id: 'c2', name: 'fetch', args: { id: FETCH_ID } },
-        { id: 'c3', name: 'get_data', args: { type: 'query', dataset_id: TIMEOUT_DATASET, select: 'count(*)', portal: PORTAL } },
-        { id: 'c4', name: 'get_data', args: { type: 'query', dataset_id: UNAVAILABLE_DATASET, select: 'count(*)', portal: PORTAL } },
+        { id: 'c1', name: 'socrata__get_data', args: { type: 'catalog', query: 'noise complaints' } },
+        { id: 'c2', name: 'socrata__fetch', args: { id: FETCH_ID } },
+        { id: 'c3', name: 'socrata__get_data', args: { type: 'query', dataset_id: TIMEOUT_DATASET, select: 'count(*)', portal: PORTAL } },
+        { id: 'c4', name: 'socrata__get_data', args: { type: 'query', dataset_id: UNAVAILABLE_DATASET, select: 'count(*)', portal: PORTAL } },
       ],
     },
     { content: ANSWER },
@@ -253,4 +253,29 @@ test('scope: a failure no source answered — nothing refused it — keeps the c
   // (arguments that never parsed, a body that never parsed, a thrown error) was
   // not refused by anyone, and "the source refused it" would be false of it.
   assert.equal(streaming.describeToolFailureForLlm('get_data', new Error('obscure non-mcp failure')), BASE_NOT_A_SOURCE_ANSWER_COPY);
+});
+
+// --- S2-B W3 (npstorey/civic-ai-tools#309): the pack refusal, the lock's twin ------------------
+//
+// R9a as the owner ruled it: a pack call that does not match its pack's fixed
+// portal and dataset is refused by the loop core before anything is sent, and
+// the model is told so in fixed words chosen by the error's type, as the
+// lock's are. It holds to the same riders: the preamble first, the call said
+// to be not sent, no retry wording, no word of the call's own values, and the
+// closing rider. The values named are the pack's (its reader name and the
+// fixed portal and dataset), never the call's.
+
+test('S2-B R9a: a refused pack call reaches the model as the pack refusal, by type, under the riders', async () => {
+  const { PackFilterRefusedError, packFilterOf } = await import('./pack-filter.ts');
+  const filter = packFilterOf('nyc_record__get_data');
+  assert.ok(filter, 'premise: City Record is a pack with a filter');
+  const text = streaming.describeToolFailureForLlm('nyc_record__get_data', new PackFilterRefusedError(filter!));
+  assert.equal(text, streaming.packFilterRefusalForLlm(filter!), 'the refusal is not chosen by its type');
+  assert.ok(text.startsWith('This data request returned no data. Do not estimate, guess, or fabricate any values to fill the gap.'), 'the preamble does not open it');
+  assert.ok(text.includes('so it was not sent'), 'it does not say the call was not sent');
+  assert.ok(text.includes('NYC City Record') && text.includes('dg92-zbpx') && text.includes('data.cityofnewyork.us'), 'it does not name the pack and its fixed values');
+  assert.doesNotMatch(text, RETRY, `the pack refusal tells the model to retry:\n${text}`);
+  for (const asked of ['data.sfgov.org', 'erm2-nwe9']) assert.ok(!text.includes(asked), `the refusal repeats the call's value ${asked}`);
+  assert.ok(text.endsWith('do not include any raw error text, status codes, server names, or system details.'), 'the closing rider is not the twin\'s');
+  assert.equal(streaming.classifyStreamError(new PackFilterRefusedError(filter!)), 'generic', 'the refusal classifies as something specific: the reader would not get the generic words (R9b)');
 });

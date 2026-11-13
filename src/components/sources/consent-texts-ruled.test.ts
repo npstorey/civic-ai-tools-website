@@ -185,7 +185,8 @@ const T8_DB = 'We keep your answer for this browser session in a cookie, or on y
 const T8_NO_DB = 'We keep your answer for this browser session in a cookie.';
 // R9 P2 (#661, D3 = A of the UX pass): the panel's lead before consent counts the states Allow will use, at the
 // reference configuration's three sources, all On by default. It replaces row 2(a)'s "Allow uses these settings."
-const T9_PANEL = 'These are the settings Allow will use: three sources On. Set them now, or change them after you allow.';
+// S2-B: four since router 0.8.0, which offers NYC City Record (On by default) wherever Socrata is.
+const T9_PANEL = 'These are the settings Allow will use: four sources On. Set them now, or change them after you allow.';
 const T9_TAB = 'This site asks before your next question.';
 const T10 = "A dated log of every change to where a question can go is kept with the site's code.";
 const T11 = (holder: string) => `${holder}: what it keeps is for this site's operator to state`;
@@ -225,6 +226,7 @@ const NAME: Record<string, string> = {
   'data-commons': 'Data Commons',
   'boston-opencontext': 'Boston OpenContext',
   'nyc-charter': 'NYC Charter, Laws and Rules',
+  'nyc-record': 'NYC City Record',
 };
 
 function assertNoneReplaced(text: string, where: string, except: readonly string[] = []): void {
@@ -361,7 +363,7 @@ test('criterion 2 (S2; UX-2 P4b D6 B): the card lists no endpoint row, set or un
 
 // --- The panel: no consent; in force; a re-ask with stored states -----------------------------------
 
-const CONFIGURED = ['socrata', 'data-commons', 'nyc-charter'];
+const CONFIGURED = ['socrata', 'data-commons', 'nyc-charter', 'nyc-record'];
 
 test('criterion 1, the panel with no consent: T9\'s lead, T12\'s link and T13\'s names', async () => {
   await under({}, async () => {

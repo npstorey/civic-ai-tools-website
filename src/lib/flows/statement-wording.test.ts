@@ -136,10 +136,16 @@ test('criterion 12 (flag 3): the setting\'s figure is lifecycle.ts\'s SNAPSHOT_E
 
 // --- None of it re-asks (criterion 12; green at the base, and must stay green) ------------------
 
+// S2-B: since router 0.8.0 NYC City Record is a pack over Socrata, offered wherever Socrata is, so the first entry's
+// configuration now has a City Record row the entry never recorded: a source new to that configuration. Every other
+// version is still the first entry's.
+const NEW_SINCE = ['nyc-record'];
+
 test('criterion 12 (guard): the base version and every source version are the first entry\'s', () => {
   assert.ok(LOGGED_BASE, 'premise: the log records a base version');
   assert.equal(STATEMENT.version, LOGGED_BASE, 'the wording change moved the base version: everyone would be asked again');
-  for (const source of STATEMENT.sources) {
+  assert.deepEqual(STATEMENT.sources.map((s) => s.sourceId).filter((id) => loggedSource(id) === undefined), NEW_SINCE, 'premise: the sources the first entry did not record');
+  for (const source of STATEMENT.sources.filter((s) => !NEW_SINCE.includes(s.sourceId))) {
     assert.equal(source.version, loggedSource(source.sourceId), `the wording change moved ${source.sourceId}'s version`);
   }
 });
@@ -148,8 +154,10 @@ test('criterion 12 (guard): an anonymous cookie given against the first entry is
   const cookie = {
     v: 1 as const,
     flows: LOGGED_BASE!,
-    states: Object.fromEntries(STATEMENT.sources.map((s) => [s.sourceId, { state: 'on' as const, since: '2026-10-19', version: loggedSource(s.sourceId)! }])),
+    states: Object.fromEntries(STATEMENT.sources.filter((s) => !NEW_SINCE.includes(s.sourceId)).map((s) => [s.sourceId, { state: 'on' as const, since: '2026-10-19', version: loggedSource(s.sourceId)! }])),
   };
+  // S2-B: the cookie names the three sources the first entry recorded; City Record, new to this configuration since
+  // router 0.8.0, has no stored state in it, and the cookie stays in force.
   assert.deepEqual(cookieConsentInForce(cookie, STATEMENT), { inForce: true, reask: { base: false, sources: [] } });
 });
 
@@ -168,5 +176,8 @@ test('criterion 12 (guard): a signed-in row given against the statement before t
 test('criterion 12: the change log has a dated entry after the first, recording the statement\'s new hash', () => {
   const entries = [...LOG.matchAll(/^## (\d{4}-\d{2}-\d{2})\b/gm)].map((m) => m[1]);
   assert.ok(entries.length >= 2, `the log has ${entries.length} entr${entries.length === 1 ? 'y' : 'ies'}; W3 adds one`);
-  assert.ok(LOG.includes(statementHash(STATEMENT)), `no entry records the statement's hash under the first entry's configuration (${statementHash(STATEMENT)})`);
+  // S2-B (the seat's ruling 3): an entry before the newest is history, held to what it recorded. The 2026-10-20 entry
+  // records the hash the code gave under the first entry's configuration until router 0.8.0 added City Record's row.
+  assert.ok(LOG.includes('**Hash:** `7edd882ed18028dfc1dbd6a94bc103523f268e280846b1e72f4bb8fb65019a4d`'), 'the 2026-10-20 entry does not record the hash it was written with');
+  assert.notEqual(statementHash(STATEMENT), '7edd882ed18028dfc1dbd6a94bc103523f268e280846b1e72f4bb8fb65019a4d', 'premise: City Record\'s row moved the hash under the first entry\'s configuration');
 });

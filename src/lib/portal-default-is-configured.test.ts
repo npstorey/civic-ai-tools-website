@@ -289,16 +289,10 @@ const EXCEPTIONS: readonly Exception[] = [
     why: "The October 2026 model evaluation's record of San Francisco's portal move (the old host redirecting to the new one) and the reference answer read from the new host; it reports what the portals did, and nothing runs from it.",
   },
   {
-    path: 'docs/deploy.md',
-    classification: 'server-endpoint',
-    hits: 2,
-    why: "The deployment guide naming NYC City Record's one upstream host, in the hosted-sources table and in its switch's row (R8 W3): the host that server queries and its sandbox may reach, the same for every instance, never a portal a run chooses.",
-  },
-  {
     path: 'docs/flows-changelog.md',
     classification: 'server-endpoint',
-    hits: 2,
-    why: "The flows change log's 2026-10-21 entry naming NYC City Record's one upstream host, twice in that source's row (R8 G9 leg 4): the host that server queries and its sandbox may reach, the same for every instance, never a portal a run chooses.",
+    hits: 5,
+    why: "The flows change log naming NYC City Record's one host: twice in the 2026-10-21 entry's row for that source (R8 G9 leg 4), the host that server queried and its sandbox could reach; three times in the S2-B entry, the portal City Record's requests now reach through the Socrata server and the holder no longer named for it. The same for every instance, never a portal a run chooses.",
   },
   // The installed router package (#599 W2): the model-facing text that left
   // src/lib/mcp/{socrata-skill,tools,boston-skill,registry}.ts, where it was
@@ -339,11 +333,14 @@ const EXCEPTIONS: readonly Exception[] = [
   },
   // Router 0.6.0 (R8 W3): NYC City Record's entry names the one host its
   // server queries, in a header comment and in its variant's outbound list.
+  // Router 0.8.0 (S2-B): City Record is a pack over Socrata whose filter fixes
+  // that portal, named in its header comments, its seven query recipes and
+  // their intro, its filter and its inventory id.
   {
     path: 'node_modules/@typedstandards/civic-typed-router/dist/civic/nyc-record.js',
     classification: 'server-endpoint',
-    hits: 2,
-    why: "The one host the NYC City Record server queries (its City Record Online dataset), named in the entry's header comment and as the sandbox's outbound allowance (`outbound`); that server's upstream, every instance's the same, never a portal a run chooses.",
+    hits: 12,
+    why: "The one portal the NYC City Record pack reads (its City Record Online dataset, dg92-zbpx), fixed by the pack's filter and named in its header comments, its query recipes, the filter and its inventory id; the pack's, every instance's the same, never a portal a run chooses or inherits.",
   },
 ];
 

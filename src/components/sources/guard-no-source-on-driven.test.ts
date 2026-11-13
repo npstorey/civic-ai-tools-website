@@ -54,10 +54,10 @@ registerSurfaceHooks({
 const kv = new FakeDecisionKv();
 (globalThis as unknown as { __w2DecisionKv: FakeDecisionKv }).__w2DecisionKv = kv;
 
-// --- The configuration: three sources (Data Commons has a default address) --------------------------------------------------
+// --- The configuration: four sources (Data Commons has a default address; NYC City Record, a pack over Socrata since router 0.8.0, is offered wherever Socrata is) ---
 
 for (const name of [
-  'DATA_COMMONS_MCP_URL', 'DATA_COMMONS_API_KEY', 'NYC_CHARTER_HOSTING', 'NYC_CHECKBOOK_HOSTING', 'NYC_RECORD_HOSTING', 'NYS_LEGISLATION_HOSTING',
+  'DATA_COMMONS_MCP_URL', 'DATA_COMMONS_API_KEY', 'NYC_CHARTER_HOSTING', 'NYC_CHECKBOOK_HOSTING', 'NYS_LEGISLATION_HOSTING',
   'MODEL_API_BASE_URL', 'VERCEL_ENV', 'GITHUB_CLIENT_ID', 'GITHUB_CLIENT_SECRET', 'OIDC_ISSUER', 'OIDC_CLIENT_ID', 'OIDC_CLIENT_SECRET',
   'NEXT_PUBLIC_ANALYTICS_SERVICE', 'NEXT_PUBLIC_ANALYTICS_ID', 'NEXT_PUBLIC_GA_MEASUREMENT_ID', 'APP_HOST', 'NEXTAUTH_URL',
   'SITE_DEPLOYMENT_GUIDE_URL', 'NEXT_PUBLIC_CAPTURE_TRACES', 'SOURCE_ROUTING', 'KV_REST_API_URL', 'KV_REST_API_TOKEN',
@@ -193,14 +193,14 @@ async function guardOn(instance: Instance, states: States): Promise<{ result: st
   });
 }
 
-const SOURCES = ['socrata', 'data-commons', 'boston-opencontext'];
+const SOURCES = ['socrata', 'data-commons', 'boston-opencontext', 'nyc-record'];
 const all = (state: 'on' | 'ask-first' | 'off'): States => Object.fromEntries(SOURCES.map((id) => [id, state]));
 const ALL_ASK_FIRST = all('ask-first');
 const ALL_OFF = all('off');
 const OFF_AND_ASK_FIRST: States = { socrata: 'off', 'data-commons': 'off', 'boston-opencontext': 'ask-first' };
 const ONE_ON: States = { socrata: 'on', 'data-commons': 'off', 'boston-opencontext': 'ask-first' };
 
-test('premise: three sources are configured', async () => {
+test('premise: four sources are configured', async () => {
   const statement = await buildFlowsStatement();
   assert.deepEqual(statement.sources.map((s: { sourceId: string }) => s.sourceId), SOURCES);
 });

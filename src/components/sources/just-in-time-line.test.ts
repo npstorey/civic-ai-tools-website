@@ -97,9 +97,9 @@ async function homeWith(states: Record<string, string> | null): Promise<Surface>
 
 const lineOf = (page: Surface) => page.elements().filter((el) => el.props['data-part'] === 'where-this-question-goes').map((el) => textOf(el));
 
-test('row 11: premise, the four configured sources in manifest order', async () => {
+test('row 11: premise, the five configured sources in manifest order', async () => {
   const statement = await buildFlowsStatement();
-  assert.deepEqual(statement.sources.map((s: { sourceId: string }) => s.sourceId), ['socrata', 'data-commons', 'boston-opencontext', 'nyc-charter']);
+  assert.deepEqual(statement.sources.map((s: { sourceId: string }) => s.sourceId), ['socrata', 'data-commons', 'boston-opencontext', 'nyc-charter', 'nyc-record']);
 });
 
 test('row 11 (P3b-1 re-cut, D5 B): every source On, the line counts them and names none', async () => {
