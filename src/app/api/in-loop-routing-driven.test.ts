@@ -620,7 +620,9 @@ test('R10 P1 criterion 4: adaptRecord over the packaged in-loop record shows the
   assert.deepEqual(environment.find((i) => i.label === CARD.definitionLabel), { label: CARD.definitionLabel, value: (composition.definitionHash as string).slice(0, 12), mono: true });
   assert.equal(typeof chooserLines, 'function', 'source-chooser.ts exports no chooserLines');
   assert.deepEqual(chooserLines(model.whereItWent?.chooser), [
-    { text: T.inLoop },
+    // The property kept: the in-loop sentence opens the line. S2-B F9 (case 1; bundle `:70`, `:88`): the record
+    // carries composition.considered, so that entry's two sentences follow it, the inventory by its id as written.
+    { text: `${T.inLoop} The model was shown 4 of the 7 sources in the source inventory civic (version ${INVENTORY_REFERENCE.version}). Those were the sources set up on the site that ran this question, less any turned off for it.` },
     { text: `${T.loaded}Socrata.` },
     { text: `${T.askedNotLoaded}${T.none}.` },
     // S2-B: NYC City Record, in the directory set since router 0.8.0, is never asked about either.
@@ -875,4 +877,64 @@ test('S2-B W4 decoy (F3): a considered whose inventory version is the bare CIVIC
     () => harness.buildCompositionExtension({ considered: bare }),
     (error: unknown) => error instanceof harness.RecordFieldError && /inventory\.version/.test((error as Error).message),
   );
+});
+
+// --- S2-B W6, D3 and R5 (npstorey/civic-ai-tools#309): the pack's credit, its base, and the chooser line ------
+//
+// W6 (bundle `:49`; card G0-B8 A): the pack's component is its id with `version` `<version>+<hash12>`, read from the
+// installed manifest entry's `pack` member, and its guidance fields when its block is in the prompt. The pack
+// drive loads City Record and not Socrata, so its base is stated too, as `{ id }`, at its manifest position. The
+// definition's components carry the per-source components, so the credit moves this run's definition hash.
+//
+// D3 = A and R5: the record page names the loaded pack with bundle `:331`'s fallback clause, the id whole in one code
+// part, and states R5's definition once after the groups. The in-loop drive, which loads Socrata only, is the decoy.
+//
+// RED at tree 5b (d99f2532): the pack's component has no version and no base is stated; the Loaded line names no pack.
+
+const PACK_ENTRY = router.civicRouter.manifest.find((entry) => entry.sourceId === 'nyc-record')!;
+const PACK_CREDIT = `${PACK_ENTRY.pack!.version}+${PACK_ENTRY.pack!.hash.slice(0, 12)}`;
+const PACK_DEFINITION = 'A pack is a source with no server of its own. Its requests go through the server of the source named after “using”, limited to what the pack fixes in advance, such as one dataset.';
+
+test('S2-B W6: the pack drive\'s trace and record credit the pack and state its base, which the run did not load', () => {
+  const stated = JSON.parse(rootAttributes(traceOf(PACK))['analysis.components'] ?? 'null') as Array<{ id: string; version?: string; guidanceHash?: string; guidanceOrigin?: string }>;
+  assert.deepEqual(stated.map((c) => c.id), [SOCRATA_SERVER_ID, PACK_ID, '@typedstandards/civic-typed-router']);
+  assert.deepEqual(stated[0], { id: SOCRATA_SERVER_ID }, 'the base is not stated as { id } alone');
+  const pack = stated[1];
+  assert.equal(pack.version, PACK_CREDIT);
+  assert.equal(PACK_CREDIT, '1+b4a208462f8d');
+  assert.match(pack.guidanceHash ?? '', /^[0-9a-f]{64}$/);
+  assert.equal(pack.guidanceOrigin, 'inline');
+  const record = (packageFrom(traceOf(PACK), toolCallsOf(PACK)).pkg.extensions?.['org.civicaitools.composition'] as Json).components;
+  assert.deepEqual(record, stated, 'the record\'s components are not the span\'s');
+});
+
+test('S2-B W6: the pack drive\'s definition hash is the definition over the credited components and the stated base', (t) => {
+  const root = rootAttributes(traceOf(PACK));
+  const stated = JSON.parse(root['analysis.components'] ?? 'null') as Array<{ id: string; version?: string }>;
+  assert.equal(stated.find((c) => c.id === PACK_ID)?.version, PACK_CREDIT, 'the run does not credit the pack');
+  const uncredited = stated.filter((c) => c.id !== SOCRATA_SERVER_ID).map((c) => (c.id === PACK_ID ? Object.fromEntries(Object.entries(c).filter(([k]) => k !== 'version')) : c)) as typeof stated;
+  const before = router.civicRouter.harnessDefinition({ configured, selection: ['nyc-record'], chosenBy: 'model', components: [...uncredited, INVENTORY_COMPONENT] });
+  const after = router.civicRouter.harnessDefinition({ configured, selection: ['nyc-record'], chosenBy: 'model', components: [...stated, INVENTORY_COMPONENT] });
+  t.diagnostic(`pack drive definitionHash: before (no credit, no base) ${before.hash}; after ${after.hash}`);
+  assert.notEqual(before.hash, after.hash, 'premise: the credit and the base move the definition hash');
+  assert.equal(root['analysis.definition_hash'], after.hash, 'the run\'s definition hash is not the definition over the credited components');
+});
+
+test('S2-B D3 and R5: adaptRecord over the pack drive\'s record names the pack on the Loaded line, the id whole in a code part, then the definition once', async () => {
+  const { adaptRecord } = (await import(ADAPT_RECORD)) as Loose;
+  const { chooserLines } = (await import(SOURCE_CHOOSER)) as Loose;
+  const model = adaptRecord({ stored: packageFrom(traceOf(PACK), toolCallsOf(PACK)).pkg, resolution: null, row: { slug: 's2b-d3', summary: 'City Record notices.', contentProfile: 'datHere', captureMethod: 'chat-flow-stream' }, instance: null, servedStatement: null });
+  const lines = chooserLines(model.whereItWent?.chooser) as Loose[];
+  const loaded = lines.find((l) => String(l.text).startsWith('Loaded: '));
+  assert.equal(loaded?.text, `Loaded: NYC City Record (a pack recorded as ${PACK_ID}, using Socrata).`);
+  assert.deepEqual(loaded?.parts, [{ text: 'Loaded: NYC City Record (a pack recorded as ' }, { text: PACK_ID, code: true }, { text: ', using Socrata).' }]);
+  assert.deepEqual(lines.filter((l) => l.kind === 'definition'), [{ text: PACK_DEFINITION, kind: 'definition' }]);
+  assert.deepEqual(lines.at(-1), { text: PACK_DEFINITION, kind: 'definition' });
+});
+
+test('S2-B R5 decoy: adaptRecord over the in-loop drive\'s record, which loads no pack, shows no clause and no definition', async () => {
+  const { chooserLines } = (await import(SOURCE_CHOOSER)) as Loose;
+  const model = await recordView(IN_LOOP);
+  const lines = chooserLines(model.whereItWent?.chooser) as Loose[];
+  assert.equal(lines.some((l) => l.kind !== undefined || l.parts !== undefined || String(l.text).includes('A pack is')), false);
 });

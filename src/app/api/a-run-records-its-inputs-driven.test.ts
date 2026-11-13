@@ -411,7 +411,7 @@ for (const d of [COMPARE_STREAM, NOTEBOOK]) {
       { id: 'datacommons-mcp@https://github.com/datacommonsorg/agent-toolkit', guidanceHash: sha(blocks['data-commons']), guidanceOrigin: 'endpoint' },
       { id: 'opencontext@https://data-mcp.boston.gov/mcp', guidanceHash: sha(blocks['boston-opencontext']), guidanceOrigin: 'inline' },
       // S2-B: the pack's component as router 0.8.0's composition states it (its credit is P3's, W6).
-      { id: 'nyc-record@https://data.cityofnewyork.us/d/dg92-zbpx', guidanceHash: sha(blocks['nyc-record']), guidanceOrigin: 'inline' },
+      { id: 'nyc-record@https://data.cityofnewyork.us/d/dg92-zbpx', version: '1+b4a208462f8d', guidanceHash: sha(blocks['nyc-record']), guidanceOrigin: 'inline' },
       { id: '@typedstandards/civic-typed-router', version: ROUTER_VERSION },
     ]);
   });
