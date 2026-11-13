@@ -60,7 +60,9 @@ test('C4: Charter\'s components[] entry is its id and the version 0.3.1+b784cb76
 
 test('C4: the addressed sources\' entries carry no version (the client reads no serverInfo)', async () => {
   const composed = await composeSystemPrompt({ configured: CHARTER_ON, now: new Date('2026-10-16T12:00:00Z') });
-  for (const source of CIVIC_MANIFEST.filter((entry) => !entry.hostings.some((variant) => variant.kind === 'npm-package'))) {
+  // The property kept: an addressed server states no version. S2-B W6 (npstorey/civic-ai-tools#309): a pack is no
+  // server, and states its own version and hash (`<version>+<hash12>`, bundle revision 3 `components[]`).
+  for (const source of CIVIC_MANIFEST.filter((entry) => !entry.hostings.some((variant) => variant.kind === 'npm-package') && entry.pack === undefined)) {
     const entry = composed.components.find((component) => component.id === source.id);
     assert.ok(entry, `premise: ${source.sourceId} is offered`);
     assert.equal(Object.hasOwn(entry!, 'version'), false, `${source.sourceId} states a version it never read`);

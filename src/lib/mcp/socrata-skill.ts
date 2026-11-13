@@ -102,9 +102,24 @@ export const DEFAULT_SOURCE_SELECTION: SourceSelection = undefined;
 /** The view every text below is composed in: the package's aliased view. */
 const VIEW = civicRouter.aliasedView;
 
-/** The cross-source preamble for `sources`, in the aliased view: what the
- *  composed prompt carries for that set of offered sources. */
+/**
+ * The cross-source preamble for `sources`, in the aliased view: what the
+ * composed prompt carries for that set of offered sources.
+ *
+ * It composes the three code sources' entries only (`ALL_SOURCES`). A pack's
+ * entry and a hosted source's are the router's, composed by `composePrompt`
+ * inside the prompt itself; the type does not catch one, because
+ * `offeredSkillSources` lists them under `SourceId` (router 0.8.0 offers NYC
+ * City Record wherever Socrata is). Such an id is refused here by name (S2-B,
+ * npstorey/civic-ai-tools#309), rather than failing on a missing entry. The
+ * one caller outside the tests is `CROSS_SOURCE_PREAMBLE` below.
+ */
 export function crossSourcePreamble(sources: readonly SourceId[]): string {
+  for (const sourceId of sources) {
+    if (!(ALL_SOURCES as readonly string[]).includes(sourceId)) {
+      throw new Error(`crossSourcePreamble composes the three code sources' entries only; "${sourceId}" is not one (its entry is the router's)`);
+    }
+  }
   return composePreamble(sources.map((sourceId) => ({ sourceId, preambleEntry: civicPreambleEntry(sourceId, VIEW) })));
 }
 
@@ -477,12 +492,42 @@ function recordingFetchers(): RecordingFetchers {
   };
 }
 
+/** A pack's `components[]` version (S2-B W6; bundle revision 3, `:49`): its
+ *  own version, `+`, and the first twelve characters of its inventory hash. */
+export function packComponentVersion(pack: { version: string; hash: string }): string {
+  return `${pack.version}+${pack.hash.slice(0, 12)}`;
+}
+
+/**
+ * The site's own check before a trace is written (S2-B W6, card G0-B8 A): a
+ * components list that states a pack (a manifest entry with a `base`) and not
+ * its base is refused. Bundle revision 3 (`:49`): "Its base's entry is present
+ * whenever the pack's is, because the base's server answers the pack's calls."
+ * Every list a trace or a record states comes from `componentsOf`, which calls
+ * this last.
+ */
+export function checkPackBases(components: readonly CompositionComponent[]): void {
+  const ids = new Set(components.map((component) => component.id));
+  for (const entry of civicRouter.manifest) {
+    if (entry.base === undefined || !ids.has(entry.id)) continue;
+    const base = civicRouter.manifest.find((candidate) => candidate.sourceId === entry.base);
+    if (!base || !ids.has(base.id)) {
+      throw new Error(`components: the pack ${entry.id} is stated without its base ${base?.id ?? entry.base}`);
+    }
+  }
+}
+
 /**
  * The components of a composed `prompt`: one per source in `composed`, in
  * manifest order, then the router's. Each source's block is recomposed from
  * the kept answers by the same manifest entry the router called (no second
  * fetch) and hashed when the prompt carries it verbatim; a block the prompt
  * does not carry is stated with no hash.
+ *
+ * A pack (S2-B W6) states `<version>+<hash12>` (`packComponentVersion`), and its
+ * base is stated whenever it is: a base the run did not compose is added as
+ * `{ id }` at its manifest position, with no guidance (G0-B8 A; the prompt is
+ * unchanged). `checkPackBases` runs last.
  */
 async function componentsOf(
   prompt: string,
@@ -492,9 +537,14 @@ async function componentsOf(
   configured: McpRegistryEnv,
 ): Promise<CompositionComponent[]> {
   const offered = new Set(composed);
+  // The bases of the packs composed, each stated whether or not it was composed itself.
+  const bases = new Set(civicRouter.manifest.flatMap((entry) => (offered.has(entry.sourceId) && entry.base !== undefined ? [entry.base] : [])));
   const components: CompositionComponent[] = [];
   for (const entry of civicRouter.manifest) {
-    if (!offered.has(entry.sourceId)) continue;
+    if (!offered.has(entry.sourceId)) {
+      if (bases.has(entry.sourceId)) components.push({ id: entry.id });
+      continue;
+    }
     const seen: FetchOutcome[] = [];
     let unserved = false;
     const replay = (outcome: FetchOutcome | undefined) => {
@@ -527,10 +577,13 @@ async function componentsOf(
       // The npm-package variant in force (#632 D11): a hosted source states the
       // version it runs; a remote one states none.
       ...(hosted ? { version: hostedComponentVersion(hosted) } : {}),
+      // A pack states its own version and hash (S2-B W6).
+      ...(entry.pack ? { version: packComponentVersion(entry.pack) } : {}),
       ...(contributed ? { guidanceHash: sha256Hex(block), guidanceOrigin: originOf(seen) } : {}),
     });
   }
   components.push({ id: routerPackage.name, version: routerPackage.version });
+  checkPackBases(components);
   return components;
 }
 

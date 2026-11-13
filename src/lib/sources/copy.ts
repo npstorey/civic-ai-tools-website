@@ -460,6 +460,39 @@ export const SOURCE_CHOOSER_TEXT = {
   unrecognized: (method: string) => `What chose these sources is recorded as “${method}”, a method this site does not recognize.`,
 } as const;
 
+/**
+ * A loaded pack on the chooser line (S2-B D3 = A and R5 = D4 A, npstorey/civic-ai-tools#309): the source's
+ * reader name, then bundle revision 3's fallback clause (`:331`, "a pack recorded as {packId}, using {the host's
+ * name for the base}"; no author), in parentheses: "NYC City Record (a pack recorded as <id>, using Socrata)".
+ * This site resolves no inventory, so it never names the pack or its author from one. The id is the record's,
+ * whole, in code style (the seat's 6779017419). `definition` is R5's sentence, shown once after the groups and
+ * only when a clause shows. Pinned by `chooser-considered-revision-3.test.ts`.
+ */
+export const SOURCE_CHOOSER_PACK = {
+  open: ' (a pack recorded as ',
+  using: ', using ',
+  close: ')',
+  definition: 'A pack is a source with no server of its own. Its requests go through the server of the source named after “using”, limited to what the pack fixes in advance, such as one dataset.',
+} as const;
+
+/**
+ * What an in-loop record says it considered (S2-B F9, case 1; bundle revision 3 `:88`, verbatim): two sentences
+ * after the in-loop sentence, when the record carries `composition.considered`. The inventory is named by its id
+ * as written (this site has no name for it) with its version, both whole; a rule this site has no words for is
+ * named as recorded, through `echoCapped`. Absent: no count is stated, and none is derived from `sourcesOffered`.
+ * Pinned to the bundle's digest by `chooser-considered-revision-3.test.ts`.
+ */
+export const SOURCE_CHOOSER_CONSIDERED = {
+  shown: (listed: number, total: number, inventory: string, version: string) =>
+    `The model was shown ${listed} of the ${total} sources in the source inventory ${inventory} (version ${version}).`,
+  /** The rule's words, by rule and rule version. */
+  rules: {
+    'directory-set': { '1': 'Those were the sources set up on the site that ran this question, less any turned off for it.' },
+  } as Readonly<Record<string, Readonly<Record<string, string>>>>,
+  unknownRule: (rule: string, ruleVersion: string) =>
+    `They were chosen by a rule recorded as ${rule}, version ${ruleVersion}, which this site has no words for.`,
+} as const;
+
 /** The longest recorded method value the chooser line and the card echo; a longer one is cut, with "…". */
 export const ECHO_LIMIT = 40;
 

@@ -14,6 +14,7 @@ import { codeCell, markdownCell } from './cells.ts';
 import { CIVIC_MANIFEST } from '@typedstandards/civic-typed-router';
 import { upstreamToolName } from '../mcp/operation-types.ts';
 import { npmPackageVariants } from '../mcp/registry.ts';
+import { RETIRED_HOSTED_SERVERS, type RetiredHostedServer } from '../mcp/retired-sources.ts';
 
 /**
  * `call`, named by its upstream name (#599 W3). Since W3 a record names a tool
@@ -383,6 +384,20 @@ function hostedEntryFor(name: string) {
   return CIVIC_MANIFEST.find((entry) => npmPackageVariants(entry).length > 0 && entry.toolNames.includes(name));
 }
 
+// A tool of a server this site no longer runs (S2-B W11, npstorey/civic-ai-tools#309; card G0-B4 A). Records
+// sealed while NYC City Record ran its own server name that server's seven tools, which no manifest declares
+// from router 0.8.0 on, so the router no longer reads the alias off the name and `hostedEntryFor` finds no
+// entry. Each returned what an answer rests on, as Charter's `get_section` does, and no helper here calls it:
+// a step stated as not reproduced, in both generators, through the one predicate. Known by the frozen entry
+// in `RETIRED_HOSTED_SERVERS`: the call's name is `<alias>__<tool>`, or the bare tool name, which no live
+// source declares.
+
+/** The retired server a recorded tool name belongs to, if any. */
+function retiredServerFor(name: string): RetiredHostedServer | undefined {
+  return Object.values(RETIRED_HOSTED_SERVERS).find((retired) =>
+    retired.toolNames.some((tool) => name === tool || name === `${retired.alias}__${tool}`));
+}
+
 /**
  * Whether a tool call is a step in the analysis pipeline — the ONE definition
  * both notebook generators use (`./synthesize.ts` through `renderFetchToolCell`
@@ -404,7 +419,7 @@ export function isAnalysisStep(candidate: StepCandidate): boolean {
   if (call.failed) return true;
   if (call.name === undefined) return true;
   if (call.name === 'get_data') return call.args.type === 'query';
-  return RERUNNABLE_STEP_TOOLS.has(call.name) || NOT_RERUNNABLE_STEP_TOOLS.has(call.name);
+  return RERUNNABLE_STEP_TOOLS.has(call.name) || NOT_RERUNNABLE_STEP_TOOLS.has(call.name) || retiredServerFor(call.name) !== undefined;
 }
 
 export interface ToolCellOutput {
@@ -1006,11 +1021,25 @@ function renderFailedToolCell(
  * claim is measured rather than stated.
  */
 function renderNotRerunnableStepCell(call: PhaseAToolCall): ToolCellOutput {
+  // R8's words are City Record's; a later retirement brings its own words with its entry.
+  const retired = retiredServerFor(call.name);
+  const cityRecord = retired !== undefined && retired === RETIRED_HOSTED_SERVERS['nyc-record'] ? retired : undefined;
   const hosted = hostedEntryFor(call.name);
   // The entry's npm-package variant, whatever the configuration (#632 D11):
   // the notebook names what the source runs.
   const pinned = hosted ? npmPackageVariants(hosted)[0] : undefined;
-  const why = hosted && pinned
+  const why = cityRecord
+    ? [
+      // The research check's R8 (the owner's D4 = A), verbatim. The server is named as R8 spells it, never from
+      // the manifest's `displayName`, which now names the pack; the pin is the frozen entry's.
+      `The original analysis called \`${call.name}\`, a tool of BetaNYC's City Record MCP server. ` +
+        `The site that ran the analysis used the pinned package \`${cityRecord.package}@${cityRecord.version}\` for that server. ` +
+        'It no longer runs that server: City Record notices now come through the Socrata source. ' +
+        'This notebook has no helper that calls that tool, so no cell here repeats the request, and nothing here states what it returned.',
+      '',
+      'No code cell is generated for it, and nothing is cited for it: this document did not read that source.',
+    ]
+    : hosted && pinned
     ? [
       `The original analysis read a section of law through \`${call.name}\`, a tool of the ` +
         `${hosted.displayName}, which the instance runs from the pinned package ` +
