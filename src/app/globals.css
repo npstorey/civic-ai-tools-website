@@ -1506,11 +1506,13 @@ footer a:visited {
 }
 
 /* The query surface's answer area (UX-2 P3b-1 leg H, `src/components/shared/QuerySurface.tsx`). Each results
-   container: the send's scroll stops below the sticky site header (80 px, as the consent prompt's, ConsentStep.tsx),
-   and from the send it is at least as tall as the window below that stop, so the docked bar's place in the flow falls
-   below the window and the bar sticks at the window's bottom while the answer is still short. */
+   container: the send's scroll stops with the bubble 48 px under the sticky site header, the ruled space above it
+   (the header's measured height, `--header-height`, set by Header.tsx, plus 48 px; 72 px stands in for the header
+   until it is measured, about its height at every width, 68.8-71.8 px). From the send the container is at least as
+   tall as the window below the header, so the docked bar's place in the flow falls below the window and the bar sticks
+   at the window's bottom while the answer is still short. */
 .query-results {
-  scroll-margin-top: 80px;
+  scroll-margin-top: calc(var(--header-height, 72px) + 48px);
   min-height: calc(100vh - 80px);
 }
 
