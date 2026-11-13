@@ -89,17 +89,30 @@ const mediaQueries: string[] = [];
 let viewportHeight = 852;
 const IN_VIEW = { top: 120, bottom: 160 };
 let promptBox: { top: number; bottom: number } = IN_VIEW;
-/** What `document` hands back for a rendered element: its scroll, recorded, and its box (the prompt's as stubbed). */
+/** Leg H fix 2: the docked composer's bar, where a test places it (sticky at the window's bottom); out of view otherwise. */
+const NO_BAR = { top: 0, bottom: 0 };
+let barBox: { top: number; bottom: number } = NO_BAR;
+/** The window's own scrolls (`scrollBy`), recorded: the prompt brought out from under the docked bar. */
+const windowScrolls: Array<{ top?: number; behavior?: string }> = [];
+/** What `document` hands back for a rendered element: its scroll, recorded, and its box (the prompt's and the bar's as stubbed). */
 const nodeFor = (element: HostElement) => ({
   scrollIntoView: (options: unknown) => { scrolls.push({ element, options }); },
   getBoundingClientRect: () => {
-    const box = element.props['data-part'] === 'consent-pause-prompt' ? promptBox : { top: 0, bottom: 0 };
+    const box = element.props['data-part'] === 'consent-pause-prompt' ? promptBox : element.props['data-part'] === 'composer-bar' ? barBox : { top: 0, bottom: 0 };
     return { ...box, left: 0, right: 0, width: 0, height: box.bottom - box.top, x: 0, y: box.top };
   },
 });
 
-/** `[a="b"][c="d"]` → the rendered elements whose props carry every pair. Anything else matches nothing. */
+/** The docked composer's bar: a `composer-bar` inside a composer carrying `composer--docked`. */
+const DOCKED_BAR = '.composer--docked > .composer-bar';
+function dockedBars(): HostElement[] {
+  const docked = (page?.elements() ?? []).filter((el) => el.props['data-part'] === 'composer' && String(el.props.className ?? '').split(/\s+/).includes('composer--docked'));
+  return docked.flatMap((c) => [...within(c.props.children)].filter((el) => el.props['data-part'] === 'composer-bar'));
+}
+
+/** `[a="b"][c="d"]` → the rendered elements whose props carry every pair; the docked bar's selector, its bar. Anything else matches nothing. */
 function select(selector: string): HostElement[] {
+  if (selector === DOCKED_BAR) return dockedBars();
   const pairs = [...selector.matchAll(/\[([\w-]+)="([^"]*)"\]/g)].map((m) => [m[1], m[2]] as const);
   if (pairs.length === 0 || pairs.map(([k, v]) => `[${k}="${v}"]`).join('') !== selector.replace(/\s+/g, '')) return [];
   return (page?.elements() ?? []).filter((el) => pairs.every(([k, v]) => el.props[k] === v));
@@ -114,6 +127,7 @@ Object.assign(globalThis as Record<string, unknown>, {
     sessionStorage: { getItem: (k: string) => storage.get(k) ?? null, setItem: (k: string, v: string) => { storage.set(k, String(v)); }, removeItem: (k: string) => { storage.delete(k); } },
     location: { href: `${ORIGIN}/`, origin: ORIGIN, pathname: '/' },
     scrollTo() {},
+    scrollBy: (options: { top?: number; behavior?: string }) => { windowScrolls.push(options); },
     get innerHeight() { return viewportHeight; },
     matchMedia: (query: string) => {
       mediaQueries.push(query);
@@ -189,6 +203,8 @@ afterEach(() => {
   reducedMotion = false;
   scrolls.length = 0;
   promptBox = IN_VIEW;
+  barBox = NO_BAR;
+  windowScrolls.length = 0;
   viewportHeight = 852;
 });
 async function mountPage(element: ReturnType<typeof h>): Promise<Surface> {
@@ -416,6 +432,49 @@ test('criterion 1, /ask (the executed run): a holding pause shows the prompt, in
   assert.equal(prompts(p).length, 0, `the prompt stays after the run moved past the pause: ${summary(p)}`);
   stream.close();
 });
+
+// --- Leg H fix 2: the prompt clears the docked bar ----------------------------------------------------------
+//
+// Since leg H the composer docks at the send, so while a run streams its bar (sticky, bottom 0) covers the window's
+// bottom. A prompt whose lower part lies under the bar, or below the window, is not in view: the visible bottom is the
+// bar's top. The prompt is brought out from under it by a scroll of the window (`scrollBy`) that puts its bottom above
+// the bar's top. The harness has no layout, so the boxes are stubbed (an 844 px window, the bar from 766 to 844, as
+// the instrument measures it at 1280) and the assertion reads the scroll made.
+
+for (const [where, box] of [
+  ['has its lower part under the bar', { top: 730, bottom: 790 }],
+  ['lies below the window', { top: 900, bottom: 960 }],
+] as const) {
+  test(`leg H fix 2, the home page (docked at the send): a pause whose prompt ${where} scrolls the window so the whole prompt is above the docked bar`, async () => {
+    ANON();
+    answers();
+    await consentWith({ 'boston-opencontext': 'ask-first' });
+    const p = await mountPage(withSettings(h(Home)));
+    await askOnQueryForm(p);
+    const stream = streams[0];
+    assert.ok(stream, 'premise: the question was sent');
+    await settle(p, SCROLL_WAIT);
+    assert.equal(dockedBars().length, 1, 'premise: the composer is docked while the run streams');
+    stream.push({ type: 'progress', panel: 'withMcp', message: 'Reading your question...', phase: 'analyze' });
+    stream.push({ type: 'progress', panel: 'withMcp', ...LOAD_START });
+    await settle(p);
+    viewportHeight = 844;
+    barBox = { top: 766, bottom: 844 };
+    promptBox = box;
+    const from = scrolls.length;
+    stream.push({ type: 'progress', panel: 'withMcp', message: PAUSE_LINE, phase: 'consent_pause', pause: pauseOf(nextKey()) });
+    await settle(p, SCROLL_WAIT);
+    onePrompt(p, `a prompt that ${where}`);
+    const made = windowScrolls.filter((x) => typeof x.top === 'number');
+    assert.equal(made.length, 1, `a prompt that ${where} was not brought out from under the docked bar: window scrolls ${JSON.stringify(windowScrolls)}, element scrolls ${describeScrolls(scrolls.slice(from))}`);
+    const bottomAfter = box.bottom - made[0].top!;
+    const topAfter = box.top - made[0].top!;
+    assert.ok(bottomAfter <= barBox.top, `after the scroll the prompt's bottom (${bottomAfter}) is under the bar's top (${barBox.top})`);
+    assert.ok(topAfter >= 80, `after the scroll the prompt's top (${topAfter}) is under the header's 80 px`);
+    assert.equal(made[0].behavior, 'smooth', 'the scroll\'s behavior');
+    stream.close();
+  });
+}
 
 // --- Criterion 1: the hold's end on the clock --------------------------------------------------------------
 
