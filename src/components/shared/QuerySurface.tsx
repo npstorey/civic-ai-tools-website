@@ -290,7 +290,9 @@ export default function QuerySurface({
         streaming.withoutMcp.isComplete || streaming.withMcp.isComplete || streaming.error) && (
         <div key="results" ref={resultsRef} className="query-results max-w-6xl mx-auto px-6" style={{ marginBottom: '24px' }}>
           {bubble}
-          <h2 className="ui-page-section-heading" style={{ marginBottom: '16px' }}>Results</h2>
+          {/* HF (#729, OA-772 = A): the run's heading stays an h2, in place, for a screen reader, and is hidden from
+              sight; the run's content starts at the bubble's own 16 px margin. */}
+          <h2 className="ui-visually-hidden">Results</h2>
           {/* R9 P1 (#672): where the submit scroll leaves the reader, a run's open question, with its two answers. */}
           <ConsentPausePrompt />
           {/* A run the route answered with an error: inside the answer area, after the bubble and the heading (the
@@ -335,9 +337,9 @@ export default function QuerySurface({
       {lastMode === 'notebook' && (notebook.state.isLoading || notebook.state.notebook || notebook.state.error) && (
         <div key="notebook-results" ref={resultsRef} className="query-results max-w-6xl mx-auto px-6" style={{ marginBottom: '24px' }}>
           {bubble}
-          {/* UX pass row 19: the reader's words for the mode, as the record page says it. The design system's one
-              section heading (leg H, the cards' stated (b)). */}
-          <h2 className="ui-page-section-heading" style={{ marginBottom: '16px' }}>Answer, executed in a signed sandbox</h2>
+          {/* UX pass row 19, then HF (#729, OA-772 = A): hidden from sight as above, and read as "Answer". The finished
+              answer's status row still says "Executed in a signed sandbox" (`AnswerView.tsx`, `data-part="status-row"`). */}
+          <h2 className="ui-visually-hidden">Answer</h2>
           {/* R9 P1 (#672): the run's open question, as above. */}
           <ConsentPausePrompt />
           <NotebookOutput
