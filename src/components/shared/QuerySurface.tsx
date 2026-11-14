@@ -79,8 +79,8 @@ interface QuerySurfaceProps {
    * answer is primary, the comparison is demoted to an expand option, and
    * demoted runs make one model call instead of two. The visitor can
    * restore the comparison per session — via the demoted element under the
-   * answer or the Advanced-options toggle — after which both arms run and
-   * render exactly as on the apex.
+   * answer or the harness menu's "Compare with a second harness" (UX-2 P3b-2)
+   * — after which both arms run and render exactly as on the apex.
    */
   presentation?: QuerySurfacePresentation;
   /**
@@ -91,11 +91,14 @@ interface QuerySurfaceProps {
    */
   defaultMode?: QueryMode;
   /**
-   * Whether the form offers Advanced options to a signed-out reader (UX pass
-   * row 7). Default 'always', every mount as before; the public home page
-   * passes 'hidden-signed-out'. Handed to `QueryForm` unchanged.
+   * Whether the form offers its signed-in choices to a signed-out reader (UX
+   * pass row 7; since UX-2 P3b-2, the harness menu's signed-out form). Default
+   * 'always', every mount as before; the public home page passes
+   * 'hidden-signed-out'. Handed to `QueryForm` unchanged.
    */
   advancedOptions?: 'always' | 'hidden-signed-out';
+  /** The home page's mount: the box reads `q` from the address once (UX-2 P3b-2, 2H). Handed to `QueryForm`. */
+  prefillFromAddress?: boolean;
 }
 
 export default function QuerySurface({
@@ -105,6 +108,7 @@ export default function QuerySurface({
   presentation = 'comparison',
   defaultMode = 'standard',
   advancedOptions = 'always',
+  prefillFromAddress = false,
 }: QuerySurfaceProps) {
   const [queryCount, setQueryCount] = useState(0);
   const [usedModel, setUsedModel] = useState<string>('');
@@ -262,6 +266,7 @@ export default function QuerySurface({
       }
       docked={docked}
       showFirstTimeLine={showFirstTimeLine}
+      prefillFromAddress={prefillFromAddress}
     />
   );
 

@@ -20,8 +20,10 @@
 // so an absent provider fails at an assertion rather than at a read.
 //
 // BLIND SPOT, stated. A source read cannot tell that the branch it finds is the
-// one that renders; a second, unreached copy would satisfy it. The form has one
-// response-mode block, and `useStoredMode(` is called once.
+// one that renders; a second, unreached copy would satisfy it. `useStoredMode(`
+// is called once. Since UX-2 P3b-2 the response-mode block is the harness
+// menu's Session type item, whose rendering is driven in
+// `src/components/composer/harness-menu.test.ts`.
 //
 // Run with: npm test
 
@@ -67,6 +69,7 @@ function at(source: string, needle: string, where: string): number {
 const count = (source: string, needle: string) => source.split(needle).length - 1;
 
 const FORM = 'src/components/QueryForm.tsx';
+const MENU = 'src/components/composer/HarnessMenu.tsx';
 const PROVIDER = 'src/components/NotebookModeProvider.tsx';
 const LAYOUT = 'src/app/layout.tsx';
 
@@ -82,22 +85,20 @@ test('#547 C3: the form derives notebook mode from sign-in AND whether this inst
   assert.ok(!form.includes('useStoredMode(isAuthenticated'), 'the mode is still enabled by sign-in alone');
 });
 
-test('#547 C3: the form shows notebook mode unavailable, with its reason, before the sign-in prompt', () => {
+test('#547 C3, re-pointed by UX-2 P3b-2: the response-mode block left the form; the harness menu\'s Session type item carries the unavailable reason, and nothing says "Response mode"', () => {
+  // UX-2 P3b-2 moved the form's response-mode block (its three branches: the toggle, notebooks unavailable, the
+  // sign-in prompt) into the harness menu's Session type item (2B item 4; v2 ruling 4). The mode's state stays the
+  // form's (the test above: `useStoredMode(` declared once and called once in QueryForm.tsx); the menu receives it.
+  // What renders where is driven in `src/components/composer/harness-menu.test.ts` (criteria 1 and 3); this pins
+  // only that the block's words and its reason moved, and that the label "Response mode" went with the gear (Words).
   const form = read(FORM);
-  const toggle = at(form, "notebookAffordance === 'toggle' ? (", FORM);
-  const radio = at(form, 'aria-label="Response mode"', FORM);
-  const unavailable = at(form, "notebookAffordance === 'unavailable' ? (", FORM);
-  const reason = at(form, '{NOTEBOOK_MODE_UNAVAILABLE_REASON}', FORM);
-  const signIn = at(form, 'Sign in to execute in a signed sandbox', FORM);
-  assert.ok(toggle < radio, 'the toggle branch does not render the response-mode control');
-  assert.ok(radio < unavailable, 'the unavailable branch opens inside the toggle branch');
-  assert.ok(unavailable < reason && reason < signIn, 'the reason is not in the unavailable branch, ahead of the sign-in prompt');
-  // Shown, not hidden: the unavailable branch renders the notebook option,
-  // disabled, beside the standard one.
-  const branch = form.slice(unavailable, signIn);
-  assert.match(branch, /Execute in a signed sandbox/, 'the unavailable branch hides the notebook option');
-  assert.match(branch, /aria-disabled="true"/, 'the notebook option is not marked disabled');
-  assert.ok(!/signIn\(/.test(branch), 'the unavailable branch offers sign-in');
+  const menu = read(MENU);
+  assert.ok(menu.length > 0, `${MENU} should exist`);
+  assert.equal(count(form, 'Response mode'), 0, 'the form still carries a "Response mode" block');
+  assert.equal(count(form, 'Execute in a signed sandbox'), 0, 'the form still offers "Execute in a signed sandbox"');
+  assert.equal(count(menu, 'Response mode'), 0, 'the harness menu says "Response mode"');
+  at(menu, 'NOTEBOOK_MODE_UNAVAILABLE_REASON', MENU);
+  at(menu, "'unavailable'", MENU);
   assert.equal(count(form, '{isAuthenticated ? ('), 0, 'the response-mode block still branches on sign-in alone');
 });
 
@@ -131,8 +132,8 @@ test('#547 C3: both mounts render the same form, and /ask keeps its notebook def
   at(home, 'advancedOptions="hidden-signed-out"', '(marketing)/page.tsx');
   assert.deepEqual(
     [...surfaceProps('src/app/(marketing)/page.tsx')].sort(),
-    ['advancedOptions', 'framingStyle', 'heading'],
-    'the home page\'s <QuerySurface> props: Advanced options and its framing (leg H), nothing that changes the form',
+    ['advancedOptions', 'framingStyle', 'heading', 'prefillFromAddress'],
+    'the home page\'s <QuerySurface> props: the signed-out menu, its framing (leg H) and the `?q=` prefill (UX-2 P3b-2, fix 7), nothing else that changes the form',
   );
   const surface = read('src/components/shared/QuerySurface.tsx');
   at(surface, '<QueryForm', 'QuerySurface.tsx');
