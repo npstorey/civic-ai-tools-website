@@ -98,7 +98,7 @@ const { HostLinksProvider } = await load('components/HostLinksProvider.tsx');
 const { SignInOptionsProvider } = await load('components/SignInOptionsProvider.tsx');
 const { NotebookModeProvider } = await load('components/NotebookModeProvider.tsx');
 const { cancelConsentPauses } = await load('components/sources/useSourceConsent.ts');
-const { SIGN_IN_PANEL_HREF } = await load('lib/auth-provider-options.ts');
+const { SIGN_IN_PANEL_HREF } = await load('lib/host-links.ts');
 const { NOTEBOOK_MODE_UNAVAILABLE_REASON } = await load('lib/notebook-availability.ts');
 const { ASK_FIRST_MEANS, ASK_FIRST_MEANS_WITH_PAUSE, SETTINGS_HREF } = await load('lib/sources/copy.ts');
 const flowsRoute = await load('app/api/flows/route.ts');
@@ -314,6 +314,11 @@ const WHERE = {
 };
 const oneOn = (): Record<string, string> => Object.fromEntries(IDS.map((id, i) => [id, i === 0 ? 'on' : 'off']));
 
+async function openLive(page: Surface): Promise<void> {
+  await page.click(page.button('Try your own'));
+  await settle(page);
+}
+
 // --- Criterion 1 (2B), /ask signed in ---------------------------------------------------------------------------------
 
 test('P3b-2 criterion 1 (2B; fixes 1, 3, 4, 6): /ask signed in: one harness menu in the composer, its trigger in the box after the arrow, reading "Default harness" and named with the full model; the wide panel holds the heading row, Model, Data sources, Session type, Compare, a rule and All settings, in order, with their values', async () => {
@@ -426,22 +431,32 @@ test('P3b-2 criterion 1 (2B item 4): on an instance that runs no notebooks, Sand
   ]);
 });
 
-test('P3b-2 criterion 1 and 9: with the menu open and each group expanded in turn, the composer says none of the gear\'s and region\'s words', async () => {
-  SIGNED_IN();
-  answers();
-  await consentWith();
-  const page = await mountPage(ASK());
-  await open(page);
-  const read: Record<string, string[]> = {};
-  for (const group of ['closed', W.model, W.ds, W.session]) {
-    if (group !== 'closed') await expand(page, group);
-    const text = textOf(composerOf(page));
-    read[group] = RETIRED.filter((w) => text.includes(w));
-  }
-  assert.deepEqual(read, { closed: [], [W.model]: [], [W.ds]: [], [W.session]: [] });
-  assert.ok(!page.markup().includes('aria-label="Response mode"'), 'a "Response mode" radiogroup is still rendered');
-  assert.ok(hasRow(panelOf(page), W.session), 'premise: the menu was read open');
-});
+for (const [surface, who, element, groups] of [
+  ['/ask signed in', 'in', () => ASK(), [W.model, W.ds, W.session]],
+  ['the home page signed out', 'out', () => HOME(), [W.ds]],
+  ['the home page signed in', 'in', () => HOME(), [W.model, W.ds, W.session]],
+  ['/explore signed in', 'in', () => EXPLORE(), [W.model, W.ds]],
+  ['/explore signed out', 'out', () => EXPLORE(), [W.ds]],
+] as const) {
+  test(`P3b-2 criteria 1 and 9 (Words, row 27: "on the three surfaces"): ${surface}: with the menu closed, then open with each group expanded in turn, the composer says none of the gear's and region's words`, async () => {
+    if (who === 'in') SIGNED_IN(); else ANON();
+    answers();
+    await consentWith();
+    const page = await mountPage(element());
+    if (surface.startsWith('/explore')) await openLive(page);
+    const read: Record<string, string[]> = {};
+    read.closed = RETIRED.filter((w) => textOf(composerOf(page)).includes(w));
+    await open(page);
+    for (const group of groups) {
+      await expand(page, group);
+      const text = textOf(composerOf(page));
+      read[group] = RETIRED.filter((w) => text.includes(w));
+    }
+    assert.deepEqual(read, Object.fromEntries([['closed', []], ...groups.map((g) => [g, []])]));
+    assert.ok(!page.markup().includes('aria-label="Response mode"'), 'a "Response mode" radiogroup is still rendered');
+    assert.ok(hasRow(panelOf(page), groups[groups.length - 1]), 'premise: the menu was read open');
+  });
+}
 
 // --- Criterion 2 (2B item 5): Compare -------------------------------------------------------------------------------
 
@@ -469,6 +484,25 @@ test('P3b-2 criterion 2 (2B item 5; #735): in Sandbox, Compare is disabled with 
   await page.click(rowIn(panel, W.compare));
   await settle(page);
   assert.equal(storage.get('civicaitools.showComparison'), 'off', 'Compare Off did not store it');
+});
+
+test('P3b-2 criterion 2 (#735; W2\'s KEEP condition): with the comparison stored On and Session type Sandbox, Compare is disabled with its reason and its value never reads On; the same stored choice in Standard reads On (the read can fail)', async () => {
+  SIGNED_IN();
+  answers();
+  await consentWith();
+  storage.set('civicaitools.showComparison', 'on');
+  const page = await mountPage(ASK());
+  let compare = rowIn(await open(page), W.compare);
+  assert.equal(storage.get('civicaitools.notebookMode') ?? 'notebook', 'notebook', 'premise: /ask is in Sandbox');
+  assert.equal(disabled(compare), true, 'in Sandbox, Compare is not disabled');
+  assert.ok(reasonsOf(compare).includes(W.compareReason), `in Sandbox, Compare's reason reads ${JSON.stringify(reasonsOf(compare))}`);
+  assert.notEqual(valueOf(compare), PENDING_COMPARE.on, 'in Sandbox, Compare reads On');
+  assert.equal(valueOf(compare), PENDING_COMPARE.off, 'in Sandbox, Compare does not read Off');
+  const panel = await expand(page, W.session);
+  await page.click(radiosOf(panel).find((el) => labelOf(el) === W.standard)!);
+  await settle(page);
+  compare = rowIn(await open(page), W.compare);
+  assert.deepEqual([disabled(compare), valueOf(compare)], [false, PENDING_COMPARE.on], 'the can-fail fixture: the stored choice in Standard reads On');
 });
 
 test('P3b-2 criterion 2 (Q12 = A): on the home page\'s mount, signed in, the menu holds no Compare item', async () => {
@@ -530,10 +564,6 @@ test('P3b-2 criterion 3 (v2 ruling 4; fix 10): where sign-in is not offered, sig
 
 // --- Criterion 5 (2E): /explore -------------------------------------------------------------------------------------
 
-async function openLive(page: Surface): Promise<void> {
-  await page.click(page.button('Try your own'));
-  await settle(page);
-}
 async function askLive(page: Surface, question: string): Promise<void> {
   await ask(page, question);
   await settle(page, 600);

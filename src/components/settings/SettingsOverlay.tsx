@@ -44,6 +44,8 @@ import { panelStates, useSourceConsent, type SourceStateValue } from '@/componen
 import { PANEL_KEPT_ON_ACCOUNT, PANEL_LEAD, PANEL_PRIVACY_LINK, SETTINGS_TEXT, panelLeadBeforeConsent, sourcesShownLine } from '@/lib/sources/copy';
 import { readerSourceName, sourceRowLines } from '@/lib/sources/source-name';
 import { matchingSources } from '@/lib/sources/source-search';
+import { useHostLinks } from '@/components/HostLinksProvider';
+import { HARNESS_SENTENCE, WHY_THESE_MODELS } from '@/components/composer/copy';
 
 export interface SettingsOverlayProps {
   mount?: 'intercepted' | 'page';
@@ -158,10 +160,18 @@ function DataSources() {
 function About() {
   const consent = useSourceConsent({ load: false });
   const accounts = consent.status?.accounts === true;
+  // UX-2 P3b-2 (fix 11): `/learn` is withheld on the app host, so the link goes to the marketing origin when the instance
+  // names one; a plain link, as the privacy link below is, so it leaves the overlay with the page.
+  const { marketingOrigin } = useHostLinks();
   return (
     <div style={{ fontSize: '14px', lineHeight: 1.6, color: 'var(--text-primary)' }}>
       <p style={PARA}>{PANEL_LEAD}</p>
       <p style={PARA}>{accounts ? SETTINGS_TEXT.aboutKeptWithAccounts : SETTINGS_TEXT.aboutKeptWithoutAccounts}</p>
+      {/* UX-2 P3b-2 (2F; Q2 = A, Q8 = A; C2 = A): the harness sentence, here only, and the link the gear's region carried. */}
+      <p style={PARA}>{HARNESS_SENTENCE}</p>
+      <p style={PARA}>
+        <a href={`${marketingOrigin ?? ''}/learn#model-selection`}>{WHY_THESE_MODELS}</a>
+      </p>
       <p style={PARA}>
         <a href="/privacy">{PANEL_PRIVACY_LINK}</a>
       </p>

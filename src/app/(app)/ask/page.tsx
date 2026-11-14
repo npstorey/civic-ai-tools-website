@@ -43,7 +43,7 @@ import { hasPublishedEvidence } from '@/lib/db/creator-evidence';
  *     demotes the side-by-side comparison to an expand option; demoted
  *     standard runs pass `mcpOnly` so only the with-data arm executes. The
  *     visitor restores the comparison per session — via the demoted element
- *     or the Advanced-options toggle — and restored runs execute both arms
+ *     or the harness menu's Compare item — and restored runs execute both arms
  *     exactly as the apex always has.
  *   - NOTEBOOK BY DEFAULT (same decision set). `defaultMode="notebook"`
  *     starts the form in executed-sandbox mode; an explicit mode choice is

@@ -576,21 +576,6 @@ footer a:visited {
   color: inherit;
 }
 
-/* Query form controls row - responsive layout */
-.form-controls-row {
-  display: grid;
-  grid-template-columns: 1fr 1fr;
-  gap: 16px;
-  align-items: end;
-}
-
-@media (max-width: 640px) {
-  .form-controls-row {
-    grid-template-columns: 1fr;
-    gap: 12px;
-  }
-}
-
 /* ==========================================================================
    The ui-* primitives (UX-1 P0): src/components/ui/, one block per primitive,
    in the design's order (P1-P9). docs/ui-patterns.md is the pattern list.
@@ -748,6 +733,11 @@ footer a:visited {
   bottom: calc(100% + 4px);
 }
 
+/* UX-2 P3b-2 (fix 1): the harness menu's panel, wide enough that its descriptions do not wrap at the 220 px minimum. */
+.ui-menu-panel--wide {
+  width: min(360px, calc(100vw - 32px));
+}
+
 .ui-menu-item,
 .ui-menu-item:visited {
   display: flex;
@@ -795,6 +785,75 @@ footer a:visited {
   font-size: 12px;
   font-weight: 400;
   color: var(--text-muted);
+}
+
+/* UX-2 P3b-2: the extension the composer's harness menu uses (docs/ui-patterns.md, P2). */
+.ui-menu-item-head {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 12px;
+  min-width: 0;
+}
+
+.ui-menu-item-value {
+  flex: 0 1 auto;
+  min-width: 0;
+  max-width: 60%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-weight: 400;
+  color: var(--text-muted);
+}
+
+.ui-menu-item-description {
+  font-size: 12px;
+  font-weight: 400;
+  color: var(--text-muted);
+}
+
+.ui-menu-item--child {
+  padding-left: 28px;
+}
+
+.ui-menu-heading {
+  padding: 8px 12px 4px;
+  font-size: 12px;
+  font-weight: 600;
+  line-height: 1.4;
+  color: var(--text-muted);
+}
+
+.ui-menu-rule {
+  margin: 4px 0;
+  border: 0;
+  border-top: 1px solid var(--border-color);
+}
+
+.ui-menu-item--footer,
+.ui-menu-item--footer:visited {
+  color: var(--accent);
+}
+
+/* The full-width button item, in the header's Sign in style (`ui-button-primary`). */
+.ui-menu-item.ui-menu-item--button,
+.ui-menu-item.ui-menu-item--button:visited {
+  width: calc(100% - 24px);
+  margin: 4px 12px 8px;
+  padding: 8px 16px;
+  align-items: center;
+  text-align: center;
+  font-weight: 600;
+  color: var(--white);
+  background-color: var(--accent);
+  border-radius: 4px;
+}
+
+.ui-menu-item.ui-menu-item--button:hover,
+.ui-menu-item.ui-menu-item--button:focus-visible {
+  color: var(--white);
+  background-color: var(--accent-hover);
 }
 
 /* P3 Sheet and P4 Dialog share the backdrop, the close control, the footer
@@ -1503,6 +1562,54 @@ footer a:visited {
 
 .composer--docked > .composer-lines {
   padding-bottom: 12px;
+}
+
+/* The box (UX-2 P3b-2, fix 3): its right padding keeps the arrow clear, and, with the harness menu's trigger in the
+   box, the trigger too. At 640 px and up the trigger sits in the box before the arrow; below, on its own line under
+   the box, inside the bar (O8 = A). At 900 px and up the trigger shows the model's name, cut at a fixed width so the
+   box's padding is fixed (its accessible name carries the whole name). */
+.ui-field textarea.composer-box {
+  padding-right: 48px;
+}
+
+.ui-field textarea.composer-box--harness {
+  padding-right: 200px;
+}
+
+.composer-harness {
+  position: absolute;
+  right: 48px;
+  bottom: 6px;
+}
+
+.composer-harness-model {
+  display: none;
+}
+
+@media (min-width: 900px) {
+  .ui-field textarea.composer-box--harness {
+    padding-right: 330px;
+  }
+
+  .composer-harness-model {
+    display: inline-block;
+    max-width: 130px;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    vertical-align: bottom;
+  }
+}
+
+@media (max-width: 639px) {
+  .ui-field textarea.composer-box--harness {
+    padding-right: 48px;
+  }
+
+  .composer-harness {
+    position: static;
+    align-self: flex-start;
+  }
 }
 
 /* The query surface's answer area (UX-2 P3b-1 leg H, `src/components/shared/QuerySurface.tsx`). Each results

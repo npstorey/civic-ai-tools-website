@@ -62,8 +62,23 @@ lists (UX-1 P7); later phases convert the other surfaces named under "Replaces",
 - **Panel:** `ui-menu-panel`, `role="menu"`, 220-360 px wide, at most 60vh tall with its own scroll,
   with `--shadow-menu`. `ui-menu-panel--end` anchors it at the trigger's end edge; `ui-menu-panel--up`
   flips it above the trigger when the room below is short (measured when the trigger opens it).
+  `wide?` gives it `ui-menu-panel--wide`, `min(360px, 100vw - 32px)` wide (UX-2 P3b-2, fix 1).
 - **Items:** `ui-menu-item`, a `menuitem`, or a `menuitemradio` with `aria-checked` in a radio menu.
-  An item with an `href` is a link.
+  An item with an `href` is a link. Since UX-2 P3b-2 (Q10 = A) an item may also carry:
+  - `value?`: a value at its right, `ui-menu-item-value`, cut by CSS when long (the label and the
+    value share `ui-menu-item-head`);
+  - `description?`: a line under its label, `ui-menu-item-description`;
+  - `children?`: an expandable group. Its row is a `menuitem` with `aria-expanded`; a click, Enter
+    or Space opens the group in place, its children `menuitemradio`s (`ui-menu-item--child`), each
+    `checked?` or not, reported through `onSelect`. The arrow keys walk the expanded children with
+    the rest. Every group closes when the menu closes;
+  - `kind?`: `'heading'` (`ui-menu-heading`, no role, not hidden from assistive technology),
+    `'rule'` (`<hr role="separator">`, `ui-menu-rule`), `'footer'` (a link item,
+    `ui-menu-item--footer`), or `'button'` (a full-width item, `ui-menu-item--button`, a link when it
+    has an `href`).
+- **Placement at open:** the upward flip; and, for a menu with a group, a cap on the panel's height
+  at the room on the side it opens, above measured to the sticky header's bottom edge
+  (`min(60vh, room)`, fix 2). A menu with no group carries no cap.
 - **States:**
   - trigger: idle, hover, open, disabled;
   - item: idle, hover (`--card-background`), selected (`--text-primary` 600), and
@@ -74,10 +89,12 @@ lists (UX-1 P7); later phases convert the other surfaces named under "Replaces",
   - the arrow keys, Home and End move among the enabled items;
   - Enter selects an item, then focus returns to the trigger;
   - Tab closes it.
-- **Not in this phase:** submenus. A later phase extends the contract for the model picker.
+- **No nested panels:** a group opens inline, in the same panel.
 - **Replaces:** the three Header dropdowns, the model and portal pickers (`QueryForm.tsx`), both
   `FilterDropdown`s (`DirectoryClient.tsx`, `PortalDirectoryClient.tsx`), and the avatar menu.
-- **New uses:** the composer's "+" and settings.
+- **New uses:** the composer's harness menu (UX-2 P3b-2, `src/components/composer/HarnessMenu.tsx`):
+  the gear, the Advanced-options region and the portal picker replaced by one `Menu` in the question
+  box, on the home page, `/ask` and `/explore`.
 
 ### P3 · Sheet (`ui-sheet`)
 
