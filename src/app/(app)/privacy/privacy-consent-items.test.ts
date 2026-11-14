@@ -231,7 +231,8 @@ test('criterion 4: the guard reports a source row removed from the page, and a r
 // --- Criterion 4: each source's row, from the flows statement ------------------------------
 
 /** T13 (#632 G7): each source's one reader name, written out. */
-const READER_NAME: Record<string, string> = { socrata: 'Socrata', 'data-commons': 'Data Commons', 'boston-opencontext': 'Boston OpenContext', 'nyc-charter': 'NYC Charter, Laws and Rules' };
+// S2-B: router 0.8.0 offers NYC City Record wherever Socrata is (a pack over its server), so the full configuration has it too.
+const READER_NAME: Record<string, string> = { socrata: 'Socrata', 'data-commons': 'Data Commons', 'boston-opencontext': 'Boston OpenContext', 'nyc-charter': 'NYC Charter, Laws and Rules', 'nyc-record': 'NYC City Record' };
 
 test('criterion 4 (full): each source\'s row gives its name, publisher, where it runs, what its holders say they keep, and its freshness', () => {
   const { html, statement } = RENDERED.full;
@@ -341,7 +342,7 @@ test('criterion 12: which plan this site\'s hosting account is on joins what is 
 // by X, runs at Y.", with no what-line, no link and neither trace.
 
 const sourceNameModule = (await import(pathToFileURL(path.join(SRC, 'lib', 'sources', 'source-name.ts')).href)) as Mod;
-const PL_CONFIGURED = ['socrata', 'data-commons', 'boston-opencontext', 'nyc-charter'];
+const PL_CONFIGURED = ['socrata', 'data-commons', 'boston-opencontext', 'nyc-charter', 'nyc-record'];
 
 /** D1 = A, each what-line as stored (and as the privacy page prints it). */
 const RULED_WHAT_STORED: Record<string, string> = {
@@ -349,6 +350,7 @@ const RULED_WHAT_STORED: Record<string, string> = {
   'data-commons': 'public statistics from government agencies and international organizations, gathered by Google.',
   'boston-opencontext': "the City of Boston's open data, from data.boston.gov.",
   'nyc-charter': "the text of New York City's Charter, Administrative Code and Rules.",
+  'nyc-record': "notices in The City Record, New York City's official journal: procurement, public hearings and other agency notices.",
 };
 /** D2 = A: the publisher as the row prints it, and the connector's repository. */
 const RULED_PUBLISHER: Record<string, { text: string; link: string }> = {
@@ -356,8 +358,14 @@ const RULED_PUBLISHER: Record<string, { text: string; link: string }> = {
   'data-commons': { text: 'Google', link: 'https://github.com/datacommonsorg/agent-toolkit' },
   'boston-opencontext': { text: 'the City of Boston', link: 'https://github.com/CityOfBoston/OpenContext' },
   'nyc-charter': { text: 'BetaNYC', link: 'https://github.com/BetaNYC/nyc-charter-laws-rules' },
+  'nyc-record': { text: 'BetaNYC', link: 'https://github.com/BetaNYC/nyc-record-mcp' },
 };
 const reachSentence = (publisher: string, where: string) => `This site reaches it through an MCP server, a connector that ${publisher} publishes, running at ${where}.`;
+/** S2-B, R1 as the owner ruled it (D1 = A): a pack's two sentences, Socrata's publisher and where it runs filled in. */
+const packReach = (where: string) =>
+  `This site reaches it through the Socrata source's MCP server, a connector that npstorey publishes, running at ${where}. The model is given example queries for these notices, taken from BetaNYC's City Record connector, which this site does not run.`;
+/** The reach line a source's row reads: a pack's (City Record's), or the reach sentence. */
+const reachFor = (id: string, where: string) => (id === 'nyc-record' ? packReach(where) : reachSentence(RULED_PUBLISHER[id].text, where));
 const reachUnstated = (where: string) => `This site reaches it through an MCP server, a connector whose publisher is not stated, running at ${where}.`;
 
 type PlSegment = string | { link: string; text: string } | { code: string };
@@ -375,20 +383,22 @@ function anchors(html: string): Array<{ href: string; target: string | null; rel
 
 test('PL criterion 1 (full): each source\'s row reads "<name>: <what-line> <reach sentence>" up to "Who holds its logs", the publisher linked to its connector', () => {
   const { html, statement } = RENDERED.full;
-  assert.deepEqual((statement.sources as Array<{ sourceId: string }>).map((s) => s.sourceId), PL_CONFIGURED, 'premise: the full configuration has the four sources');
+  assert.deepEqual((statement.sources as Array<{ sourceId: string }>).map((s) => s.sourceId), PL_CONFIGURED, 'premise: the full configuration has the five sources');
   const sections = withEnv(CONFIGS.full, () => facts.buildPrivacySections(null)) as Array<{ heading: string; statements: Array<{ id: string; parts: PlSegment[] }> }>;
   const each = sections.find((s) => s.heading === 'Each data source');
   assert.ok(each, 'premise: the page has "Each data source"');
   for (const source of statement.sources as Array<{ sourceId: string }>) {
     const id = source.sourceId;
     const where: string = sourceNameModule.sourceWhere(source);
-    const expected = `${READER_NAME[id]}: ${RULED_WHAT_STORED[id]} ${reachSentence(RULED_PUBLISHER[id].text, where)} Who holds its logs: `;
+    const expected = `${READER_NAME[id]}: ${RULED_WHAT_STORED[id]} ${reachFor(id, where)} Who holds its logs: `;
     const row = each!.statements.find((st) => st.id === `${SOURCE_ROW}${id}`);
     assert.ok(row, `no row for ${id}`);
     assert.ok(partsText(row!.parts).startsWith(expected), `${id}'s row does not start "${expected}": ${partsText(row!.parts).slice(0, 300)}`);
     const rendered = statements(html).find((s) => s.id === `${SOURCE_ROW}${id}`);
     assert.ok(rendered, `the page renders no row for ${id}`);
-    assert.ok(rendered!.text.startsWith(expected.trimEnd()), `${id}'s rendered row does not start "${expected.trimEnd()}": ${rendered!.text.slice(0, 300)}`);
+    // `text` reads each tag as a space, so a link followed by "'s" (City Record's second sentence, S2-B R1) reads "BetaNYC 's".
+    const renderedText = rendered!.text.replace(/ 's /g, "'s ");
+    assert.ok(renderedText.startsWith(expected.trimEnd()), `${id}'s rendered row does not start "${expected.trimEnd()}": ${renderedText.slice(0, 300)}`);
     const links = anchors(rendered!.html).filter((a) => a.href === RULED_PUBLISHER[id].link);
     assert.equal(links.length, 1, `${id}'s rendered row does not link ${RULED_PUBLISHER[id].link} once`);
     assert.equal(links[0].text, RULED_PUBLISHER[id].text, `${id}'s link does not read the publisher's name`);
@@ -471,7 +481,7 @@ test('PL criterion 6: each mapped source\'s row traces the map and the reach sen
   const map = copy?.SOURCE_DESCRIPTIONS as Record<string, unknown> | undefined;
   assert.ok(map && typeof map === 'object', `${COPY} exports no SOURCE_DESCRIPTIONS`);
   const mapped = (statement.sources as Array<{ sourceId: string }>).map((s) => s.sourceId).filter((id) => Object.hasOwn(map!, id));
-  assert.deepEqual(mapped, PL_CONFIGURED, 'premise: the four configured sources are mapped');
+  assert.deepEqual(mapped, PL_CONFIGURED, 'premise: the five configured sources are mapped');
   assert.deepEqual(missingRowTraces(html, mapped), [], 'a mapped row does not carry both traces');
   for (const trace of [MAP_TRACE, REACH_TRACE]) {
     const removed = html.replace(new RegExp(`(data-statement="${SOURCE_ROW}data-commons"[^>]*data-trace="[^"]*?) ?${trace.replace(/[.*+?^${}()|[\]\\/]/g, '\\$&')}`), '$1');

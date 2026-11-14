@@ -168,13 +168,13 @@ const CONFIGS: Record<string, Record<string, string>> = {
     NEXT_PUBLIC_ANALYTICS_ID: 'pa-fixture',
   },
   // R8 W3 (criterion 5 (a)): every hosted source on, router 0.6.0's three
-  // beside NYC Charter, State legislation with a placeholder key, never a real
-  // one; every page guard runs over it.
+  // beside NYC Charter (two since router 0.8.0, which made NYC City Record a
+  // pack over the Socrata server, S2-B), State legislation with a placeholder
+  // key, never a real one; every page guard runs over it.
   'every hosted source': {
     SOCRATA_MCP_URL: 'https://socrata.example.test',
     NYC_CHARTER_HOSTING: 'sandbox',
     NYC_CHECKBOOK_HOSTING: 'sandbox',
-    NYC_RECORD_HOSTING: 'sandbox',
     NYS_LEGISLATION_HOSTING: 'sandbox',
     NYS_LEGISLATION_API_KEY: 'placeholder-not-a-key-r8-w3',
   },
@@ -359,7 +359,7 @@ test('R8 W3 criterion 5 (a): every per-source statement traces its own source\'s
   const all = RENDERED['every hosted source'];
   for (const family of ['recipient-hosted-', 'recipient-hosted-exchange-', 'held-sandbox-platform-']) {
     const ids = statements(all).map((s) => s.id).filter((id) => check.perSourceStatement(id)?.family === family);
-    assert.deepEqual(ids.map((id) => check.perSourceStatement(id).sourceId).sort(), ['nyc-charter', 'nyc-checkbook', 'nyc-record', 'nys-legislation'], `premise: ${family} states every hosted source`);
+    assert.deepEqual(ids.map((id) => check.perSourceStatement(id).sourceId).sort(), ['nyc-charter', 'nyc-checkbook', 'nys-legislation'], `premise: ${family} states every hosted source`);
   }
   for (const name of [...Object.keys(CONFIGS), 'full']) {
     const found = statements(RENDERED[name]);

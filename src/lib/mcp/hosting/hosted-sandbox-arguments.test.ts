@@ -99,7 +99,7 @@ const sdk = {
 
 const VARIABLES = [
   'SOCRATA_MCP_URL', 'DATA_COMMONS_MCP_URL', 'BOSTON_OPENCONTEXT_MCP_URL', 'SOURCE_ROUTING', 'VERCEL_ENV',
-  'NYC_CHARTER_HOSTING', 'NYC_CHECKBOOK_HOSTING', 'NYC_RECORD_HOSTING', 'NYS_LEGISLATION_HOSTING', 'NYS_LEGISLATION_API_KEY',
+  'NYC_CHARTER_HOSTING', 'NYC_CHECKBOOK_HOSTING', 'NYS_LEGISLATION_HOSTING', 'NYS_LEGISLATION_API_KEY',
   'SOURCE_BRIDGE_SECRET', 'VERCEL_TOKEN', 'VERCEL_TEAM_ID', 'VERCEL_PROJECT_ID', 'VERCEL_OIDC_TOKEN',
 ];
 const KEY = 'NYS_LEGISLATION_API_KEY';
@@ -124,8 +124,9 @@ async function under<T>(env: Record<string, string>, body: () => Promise<T>): Pr
 const registry = await import('../registry.ts');
 const lifecycle = await import('./lifecycle.ts');
 
-const ALL_SWITCHES = { NYC_CHARTER_HOSTING: 'sandbox', NYC_CHECKBOOK_HOSTING: 'sandbox', NYC_RECORD_HOSTING: 'sandbox', NYS_LEGISLATION_HOSTING: 'sandbox' };
-const HOSTED_IDS = ['nyc-charter', 'nyc-checkbook', 'nyc-record', 'nys-legislation'];
+// S2-B: three since router 0.8.0, under which NYC City Record is a pack over the Socrata server, with no sandbox.
+const ALL_SWITCHES = { NYC_CHARTER_HOSTING: 'sandbox', NYC_CHECKBOOK_HOSTING: 'sandbox', NYS_LEGISLATION_HOSTING: 'sandbox' };
+const HOSTED_IDS = ['nyc-charter', 'nyc-checkbook', 'nys-legislation'];
 const entryOf = (sourceId: string) => CIVIC_MANIFEST.find((entry) => entry.sourceId === sourceId)!;
 const outboundOf = (sourceId: string): readonly string[] => {
   const variant = entryOf(sourceId).hostings.find((v) => v.kind === 'npm-package') as { outbound: readonly string[] };
@@ -162,10 +163,9 @@ test('R8 W3 criterion 2: after the install each sandbox\'s network policy is its
     assert.deepEqual(seen[sourceId].created.networkPolicy, { allow: ['registry.npmjs.org'] }, `${sourceId}: creation reaches more than the package registry`);
     assert.deepEqual(seen[sourceId].updates, [{ networkPolicy: outbound.length > 0 ? { allow: [...outbound] } : 'deny-all' }], `${sourceId}: the post-install policy is not the entry's outbound`);
   }
-  // The shape that can fail: three entries with one host each and one with none.
-  assert.deepEqual(HOSTED_IDS.map((id) => outboundOf(id).length), [0, 1, 1, 1]);
+  // The shape that can fail: two entries with one host each and one with none.
+  assert.deepEqual(HOSTED_IDS.map((id) => outboundOf(id).length), [0, 1, 1]);
   assert.deepEqual(seen['nyc-checkbook'].updates, [{ networkPolicy: { allow: ['www.checkbooknyc.com'] } }]);
-  assert.deepEqual(seen['nyc-record'].updates, [{ networkPolicy: { allow: ['data.cityofnewyork.us'] } }]);
   assert.deepEqual(seen['nys-legislation'].updates, [{ networkPolicy: { allow: ['legislation.nysenate.gov'] } }]);
   assert.deepEqual(seen['nyc-charter'].updates, [{ networkPolicy: 'deny-all' }]);
 });
@@ -176,7 +176,7 @@ test('R8 W3 criterion 3 (a): the key reaches only State legislation\'s sandbox e
   assert.deepEqual(Object.keys(nys.created.env).sort(), [KEY, 'SOURCE_BRIDGE_TOKEN'], 'State legislation\'s sandbox env is not the token and the key');
   assert.equal(nys.created.env[KEY], PLACEHOLDER_KEY);
   assert.deepEqual(nys.config?.childEnv, [KEY], 'the bridge config does not name the key as the one variable its child receives');
-  for (const sourceId of ['nyc-charter', 'nyc-checkbook', 'nyc-record']) {
+  for (const sourceId of ['nyc-charter', 'nyc-checkbook']) {
     assert.deepEqual(Object.keys(seen[sourceId].created.env), ['SOURCE_BRIDGE_TOKEN'], `${sourceId}'s sandbox env carries more than its token`);
     assert.deepEqual(Object.keys(seen[sourceId].config ?? {}).sort(), ['package', 'pinDir', 'port', 'version'], `${sourceId}'s bridge config is not the base's shape`);
   }

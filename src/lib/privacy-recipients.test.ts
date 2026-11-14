@@ -350,13 +350,15 @@ test('R6 W2 criterion 3: every recipient /api/flows names, under the three confi
 // configurations, none with router 0.6.0's switches, and stays as it is. This
 // one runs the fourth: the three new switches and a placeholder key (never a
 // real one). Its premise is that the lifecycle row's key is seen on an
-// upstream recipient, so a wrong key there fails it.
+// upstream recipient, so a wrong key there fails it. S2-B: two since router
+// 0.8.0, under which NYC City Record is a pack over Socrata with no switch and
+// no upstream recipient of its own.
 test('R8 W3: every recipient /api/flows names with the three new hosted sources on is a key of the guard\'s source', async () => {
   const held = heldSource();
   const source = [...RECIPIENTS, ...held];
   const build = flows!.buildFlowsStatement as (() => Promise<{ recipients: Array<{ key: string }>; sources: Array<{ recipients: Array<{ key: string; id?: string; role?: string; host?: string }> }> }>) | undefined;
   assert.equal(typeof build, 'function', `${FLOWS_STATEMENT} exports no buildFlowsStatement`);
-  const names = ['SOCRATA_MCP_URL', 'EXECUTOR_DRIVER', 'NYC_CHECKBOOK_HOSTING', 'NYC_RECORD_HOSTING', 'NYS_LEGISLATION_HOSTING', 'NYS_LEGISLATION_API_KEY'];
+  const names = ['SOCRATA_MCP_URL', 'EXECUTOR_DRIVER', 'NYC_CHECKBOOK_HOSTING', 'NYS_LEGISLATION_HOSTING', 'NYS_LEGISLATION_API_KEY'];
   const saved = Object.fromEntries(names.map((name) => [name, process.env[name]]));
   try {
     for (const name of names) delete process.env[name];
@@ -364,7 +366,6 @@ test('R8 W3: every recipient /api/flows names with the three new hosted sources 
       SOCRATA_MCP_URL: 'https://socrata.fixture.example',
       EXECUTOR_DRIVER: 'vercel-sandbox',
       NYC_CHECKBOOK_HOSTING: 'sandbox',
-      NYC_RECORD_HOSTING: 'sandbox',
       NYS_LEGISLATION_HOSTING: 'sandbox',
       NYS_LEGISLATION_API_KEY: 'placeholder-not-a-key-r8-w3',
     });
@@ -373,7 +374,7 @@ test('R8 W3: every recipient /api/flows names with the three new hosted sources 
     assert.ok(lifecycleKey, 'premise: the outbound-kinds table has the hosted-source lifecycle row');
     // An upstream host's recipient is `source:<sourceId>:<host>`; a source's own is `source:<sourceId>`.
     const upstream = statement.sources.flatMap((s) => s.recipients as Array<{ id: string; key: string; role?: string; host?: string }>).filter((r) => r.id.split(':').length === 3);
-    assert.equal(upstream.length, 3, `premise: the three upstream hosts are recipients of their own: ${JSON.stringify(upstream)}`);
+    assert.equal(upstream.length, 2, `premise: the two upstream hosts are recipients of their own: ${JSON.stringify(upstream)}`);
     assert.ok(upstream.every((r) => r.key === lifecycleKey), `premise: each upstream recipient carries the lifecycle row's key: ${upstream.map((r) => r.key).join(', ')}`);
     assert.deepEqual(recipientDrift(source, statementKeys(statement)).unmatched, [], 'with the three new hosted sources on, the statement names a recipient the guard\'s source does not list');
   } finally {

@@ -141,7 +141,7 @@ export interface ToolCallInput {
   failed?: boolean;
   /**
    * Why, when `failed` is true: the loop's closed set (`timeout`,
-   * `unavailable`, `not_configured`, `not_offered`, `unknown`). A string here, not that
+   * `unavailable`, `not_configured`, `not_offered`, `unknown`, `base_changed`). A string here, not that
    * union, because the publish body is an API any producer can post to.
    */
   failureKind?: string;
@@ -711,6 +711,7 @@ export function buildEvidencePackage(input: PackageInput): { pkg: EvidencePackag
       // and its key absent, for a run that recorded none (every all-sources run).
       routing: run.routing,
       definitionHash: run.definitionHash,
+      considered: run.considered,
       extensions: input.extensions,
     },
     { host: requirePublicationHost() },

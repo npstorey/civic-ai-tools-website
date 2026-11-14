@@ -1,4 +1,5 @@
-// R8 W3 criterion 4 (a): a run that calls router 0.6.0's three hosted
+// R8 W3 criterion 4 (a): a run that calls router 0.6.0's three hosted (two
+// since router 0.8.0 made NYC City Record a pack over Socrata, S2-B)
 // sources records each as NYC Charter is recorded (#617 ruling a2): its purl
 // in the run's server list (`analysis.mcp_servers`, which the packager signs),
 // `x.y.z+commit` in its `components[]` entry, and its answered calls in
@@ -110,7 +111,6 @@ Object.assign(process.env, {
   SOCRATA_MCP_URL: 'http://127.0.0.1:9/socrata',
   DATA_COMMONS_MCP_URL: 'http://127.0.0.1:9/dc/mcp',
   NYC_CHECKBOOK_HOSTING: 'sandbox',
-  NYC_RECORD_HOSTING: 'sandbox',
   NYS_LEGISLATION_HOSTING: 'sandbox',
   NYS_LEGISLATION_API_KEY: 'placeholder-not-a-key-r8-w3',
   SOURCE_BRIDGE_SECRET: 'r8-w3-record-secret-not-a-real-one-0123456789',
@@ -129,10 +129,10 @@ const { createModelClient } = await import('../../model-client.ts');
 const { TraceBuilder, CIVICAITOOLS_TRACE_CONFIG, runRecordAttributes, hash } = await import('../../evidence/trace.ts');
 const { buildEvidencePackage } = await import('../../evidence/packager.ts');
 
-const NEW = ['nyc-checkbook', 'nyc-record', 'nys-legislation'] as const;
+// S2-B: two since router 0.8.0, under which NYC City Record is a pack over the Socrata server with no sandbox.
+const NEW = ['nyc-checkbook', 'nys-legislation'] as const;
 const CALLS: Record<(typeof NEW)[number], { name: string; args: Record<string, unknown> }> = {
   'nyc-checkbook': { name: 'nyc_checkbook__search_contracts', args: { agency_code: '040', fiscal_year: 2025 } },
-  'nyc-record': { name: 'nyc_record__search_notices', args: { query: 'public hearing' } },
   'nys-legislation': { name: 'nys_legislation__search_bills', args: { term: 'climate' } },
 };
 const variantOf = (sourceId: string) => CIVIC_MANIFEST.find((e) => e.sourceId === sourceId)!.hostings.find((v) => v.kind === 'npm-package') as { package: string; version: string; commit: string };
@@ -185,8 +185,8 @@ const rootAttr = (key: string): string | undefined => {
 };
 
 test('R8 W3 criterion 4 (a): premise: each new source was called once, through its sandbox\'s bridge', () => {
-  assert.deepEqual(seenCalls.map((c) => c.name), ['search_contracts', 'search_notices', 'search_bills']);
-  assert.equal(created, 3, 'one sandbox per new source');
+  assert.deepEqual(seenCalls.map((c) => c.name), ['search_contracts', 'search_bills']);
+  assert.equal(created, NEW.length, 'one sandbox per new source');
   assert.ok(result.toolCalls.every((call) => !call.failed), `a call failed: ${JSON.stringify(result.toolCalls)}`);
 });
 

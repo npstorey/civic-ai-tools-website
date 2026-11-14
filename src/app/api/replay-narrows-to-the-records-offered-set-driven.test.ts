@@ -323,14 +323,19 @@ test('criterion 3 (c): a datHere record with named mcpServers entries replays wi
 // full vocabulary was every manifest source.
 //
 // R8 W3: the consented vocabulary is the consented sources' tools, read off
-// the manifest, not the vocabulary less Boston's: router 0.6.0's three hosted
-// sources are not configured in this fixture either, so they hold no state in
-// the replayer's consent and are not offered. Measured: with the gate on
+// the manifest, not the vocabulary less Boston's. S2-B (router 0.8.0): of
+// router 0.6.0's three new hosted sources, NYC Checkbook and NYS Open
+// Legislation are not configured in this fixture either, so they hold no state
+// in the replayer's consent and are not offered; NYC City Record is now a pack
+// over Socrata, configured wherever Socrata is, so the replayer's consent holds
+// it On, and a pack is routable on replay exactly when its base is
+// (`replayOfferedSet`, the rule the tool index applies in `registry.ts`): it is
+// offered, its two tools with it. Measured: with the gate on
 // (`CONSENT_GATE_ENFORCED`), the replay route always passes the replayer's
 // selection (`consent.selection`, an array), so `replayLoopOptions`' unfiltered
 // branch (`mcpTools`, replay-loop.ts:322-323) is not reached from the route;
 // only a caller that passes no selection reaches it.
-const CONSENTED_SOURCES = ['socrata', 'data-commons', 'nyc-charter'];
+const CONSENTED_SOURCES = ['socrata', 'data-commons', 'nyc-charter', 'nyc-record'];
 const CONSENTED_ALIASES = CIVIC_MANIFEST.filter((entry) => CONSENTED_SOURCES.includes(entry.sourceId)).map((entry) => `${entry.alias}__`);
 const CONSENTED_TOOL_NAMES = ALL_TOOL_NAMES.filter((name) => CONSENTED_ALIASES.some((prefix) => name.startsWith(prefix)));
 

@@ -1,7 +1,41 @@
 // The harness pin — @typedstandards/civic-typed-harness must be a version
 // that carries the signed-surface fixes named below (Wave N9 #384, family F2,
 // C4; Wave N10 #409, criterion 6; Wave N12 #470, criteria 7-9; sprint R2 #599
-// W4; sprint R6 #632 W2; sprint R8 #644 W1; sprint R10 civic-ai-tools#289 P5).
+// W4; sprint R6 #632 W2; sprint R8 #644 W1; sprint R10 civic-ai-tools#289 P5;
+// sprint S2-B, npstorey/civic-ai-tools#309; S2-B P3R, the same issue).
+//
+// WHAT THE PIN PROTECTS, PART NINE — 0.13.0, and why the range moved to it
+// (S2-B P3R, hub ADR-0033's amendment 4; its CHANGELOG entry of 2026-11-12,
+// read before the move). Two things this instance now relies on:
+//
+//   1. `reportedName` and `reportedVersion` on a `components[]` entry: what a
+//      remote server stated of itself, as this instance's run read it, written
+//      after `guidanceOrigin` only when passed, so an entry built without them
+//      keeps its bytes. Below 0.13.0 the derivation does not carry them.
+//   2. `buildEvaluationPrompt`'s words for a failed call, `FAILED: no data was
+//      returned, and no row count is claimed`, which this instance's
+//      publication gate sends to its evaluator (`adversarial-eval-core.ts`).
+//
+// 0.13.0 also names `base_changed` among the reference producer's six labels
+// (a comment and a golden; the derivation states any label verbatim). It keeps
+// produce-core `^0.9.0`, so the core floors stay, and no existing golden
+// fixture moves.
+//
+// WHAT THE PIN PROTECTS, PART EIGHT — 0.12.0, and why the range moved to it
+// (sprint S2-B, hub ADR-0033's amendment 3). One thing this instance's
+// packager now relies on, in bytes it signs, on new records only:
+//
+//   1. `civic:packId`, read from the span attribute `mcp.pack_id` and stated
+//      on a call's activity after `civic:serverId`: the pack whose fixed
+//      arguments shaped a call that went to its base's server (NYC City
+//      Record, a pack over the Socrata server since router 0.8.0). Below
+//      0.12.0 the attribute is not read, so a record of a pack's call could
+//      not name the pack.
+//
+// 0.12.0 also reads `analysis.considered` and `tool.load_asked`; this repository
+// writes both from S2-B's P2 on (in-loop runs; load spans). It keeps produce-core `^0.9.0`, and
+// a record built without the three inputs has the same bytes (no golden
+// fixture moves).
 //
 // WHAT THE PIN PROTECTS, PART SEVEN — 0.11.0, and why the range moved to it
 // (sprint R10 P5, hub ADR-0038). One thing this instance's publish route now
@@ -284,17 +318,18 @@ const REPO_ROOT = path.join(path.dirname(fileURLToPath(import.meta.url)), '..', 
 const HARNESS = '@typedstandards/civic-typed-harness';
 const HARNESS_DIR = path.join(REPO_ROOT, 'node_modules', ...HARNESS.split('/'));
 
-/** The lowest version carrying ALL SEVEN sets of fixes this file names: the
+/** The lowest version carrying ALL NINE sets of fixes this file names: the
  *  0.3.1 graph-builder fixes, the 0.4.0 data-source fix, the 0.5.0
  *  configured-server fixes, 0.7.0's record fields, 0.9.0's two reasons and
  *  flows-statement reference, 0.10.0's routing statement and load span, and
- *  0.11.0's subtype constant above. */
-const FLOOR = '0.11.0';
+ *  0.11.0's subtype constant, 0.12.0's `civic:packId`, and 0.13.0's reported
+ *  keys and evaluator words above. */
+const FLOOR = '0.13.0';
 /** Exclusive ceiling: under semver a 0.x MINOR bump is a breaking change, so
- *  the pin admits later 0.11.x PATCHES (a fix that is still this behaviour)
- *  and refuses 0.12.0, which would be a contract this test has not read. The
- *  assertion is therefore a RANGE (`>=0.11.0 <0.12.0`) rather than equality to
- *  `0.11.0`: pinning the exact string would turn red on a patch release that
+ *  the pin admits later 0.13.x PATCHES (a fix that is still this behaviour)
+ *  and refuses 0.14.0, which would be a contract this test has not read. The
+ *  assertion is therefore a RANGE (`>=0.13.0 <0.14.0`) rather than equality to
+ *  `0.13.0`: pinning the exact string would turn red on a patch release that
  *  changed nothing this file cares about, which is a criterion that fails for
  *  the wrong reason.
  *
@@ -307,12 +342,16 @@ const FLOOR = '0.11.0';
  *  <0.10.0` until sprint R8 W1, which read 0.10.0's entry (no dependency
  *  change, so the core floors stay), and `>=0.10.0 <0.11.0` until sprint R10
  *  P5, which read 0.11.0's entry (no derivation change; verify-core moved to
- *  `^0.15.0` for the subtype's table row). Each ceiling did its
+ *  `^0.15.0` for the subtype's table row), and `>=0.11.0 <0.12.0` until sprint
+ *  S2-B, which read 0.12.0's entry (`civic:packId`; no dependency change, so
+ *  the core floors stay), and `>=0.12.0 <0.13.0` until S2-B P3R, which read
+ *  0.13.0's entry (the reported keys and the evaluator's words; no dependency
+ *  change, so the core floors stay). Each ceiling did its
  *  job: it held the next minor out until someone read the new contract and
  *  said what changed. Both numbers move together, in one commit, with the
  *  paragraph above rewritten — a floor raised without its ceiling would
  *  silently readmit the next unread minor. */
-const CEILING = '0.12.0';
+const CEILING = '0.14.0';
 
 type Semver = [number, number, number];
 
@@ -347,7 +386,7 @@ function readJson(file: string): Record<string, unknown> {
   return JSON.parse(fs.readFileSync(file, 'utf8')) as Record<string, unknown>;
 }
 
-test('harness pin: the INSTALLED civic-typed-harness satisfies >=0.11.0 <0.12.0 (it carries all seven sets of signed-surface fixes)', () => {
+test('harness pin: the INSTALLED civic-typed-harness satisfies >=0.13.0 <0.14.0 (it carries all nine sets of signed-surface fixes)', () => {
   const pkgJson = path.join(HARNESS_DIR, 'package.json');
   assert.ok(fs.existsSync(pkgJson), `${HARNESS} is not installed at ${pkgJson} — run npm ci`);
 
@@ -357,8 +396,11 @@ test('harness pin: the INSTALLED civic-typed-harness satisfies >=0.11.0 <0.12.0 
   const installed = parseSemver(version as string, `installed ${HARNESS}`);
   assert.ok(
     compareSemver(installed, parseSemver(FLOOR, 'floor')) >= 0,
-    `installed ${HARNESS} is ${version as string}; ${FLOOR} is the first release that exports the ` +
-      'Producer Profile subtype this host declares (`CIVICAITOOLS_V1_PRODUCER_PROFILE`; hub ADR-0038; ' +
+    `installed ${HARNESS} is ${version as string}; ${FLOOR} is the first release that states what a remote server ` +
+      'reported of itself (`reportedName`, `reportedVersion`; hub ADR-0033 amendment 4; npstorey/civic-ai-tools#309, P3R). ' +
+      '0.12.0 is the floor that states the pack a call ' +
+      'went through (`civic:packId` from `mcp.pack_id`; hub ADR-0033 amendment 3; npstorey/civic-ai-tools#309). ' +
+      '0.11.0 is the floor that exports the Producer Profile subtype this host declares (`CIVICAITOOLS_V1_PRODUCER_PROFILE`; hub ADR-0038; ' +
       'civic-ai-tools#289 P5). 0.10.0 is the floor that states how a run\'s ' +
       'sources were chosen (`routing`, `definitionHash`) and what each `load_source` call did ' +
       '(`civic:loadOutcome`; hub ADR-0033 amendment 2; #644). 0.9.0 is the floor that states the reader\'s ' +
@@ -441,12 +483,17 @@ test('harness pin: exactly one copy of each core — no nested @typedstandards/p
   // loop below exists for. `npm update @typedstandards/produce-core
   // --package-lock-only` moved it, within its unchanged `^0.9.0`, to 0.9.1,
   // which declares `^0.15.0`; the lockfile then holds one copy of each.
+  //
+  // RE-READ AT 0.12.0 (sprint S2-B). 0.12.0 still declares produce-core
+  // `^0.9.0` and nothing else, so neither core pin moves for it; verify-core
+  // moved to `^0.15.2` beside it. `npm install --package-lock-only` moved
+  // exactly the harness, router and verify-core entries and nested no copy.
   const nested = path.join(HARNESS_DIR, 'node_modules', '@typedstandards', 'produce-core');
   assert.equal(
     fs.existsSync(nested),
     false,
     `a second produce-core is nested at ${nested}; the harness's dependency range must admit the ` +
-      "root copy (0.11.0 declares '^0.9.0'), so npm install resolves one.",
+      "root copy (0.12.0 declares '^0.9.0'), so npm install resolves one.",
   );
   const PRODUCE_DIR = path.join(REPO_ROOT, 'node_modules', '@typedstandards', 'produce-core');
   for (const owner of [HARNESS_DIR, PRODUCE_DIR]) {

@@ -52,7 +52,7 @@ registerSurfaceHooks({ ...CONSENT_SURFACE_STUBS, 'next/script': 'export default 
 // --- The configurations -------------------------------------------------------------------
 
 const READ = [
-  'SOCRATA_MCP_URL', 'NYC_CHARTER_HOSTING', 'NYC_CHECKBOOK_HOSTING', 'NYC_RECORD_HOSTING', 'NYS_LEGISLATION_HOSTING',
+  'SOCRATA_MCP_URL', 'NYC_CHARTER_HOSTING', 'NYC_CHECKBOOK_HOSTING', 'NYS_LEGISLATION_HOSTING',
   'NYS_LEGISLATION_API_KEY', 'BOSTON_OPENCONTEXT_MCP_URL', 'DATA_COMMONS_MCP_URL', 'DATA_COMMONS_API_KEY', 'MODEL_API_BASE_URL',
   'MODEL_API_KIND', 'VERCEL_ENV', 'GITHUB_CLIENT_ID', 'GITHUB_CLIENT_SECRET', 'OIDC_ISSUER', 'OIDC_CLIENT_ID', 'OIDC_CLIENT_SECRET',
   'NEXT_PUBLIC_ANALYTICS_SERVICE', 'NEXT_PUBLIC_ANALYTICS_ID', 'NEXT_PUBLIC_GA_MEASUREMENT_ID', 'APP_HOST', 'NEXTAUTH_URL',
@@ -65,7 +65,7 @@ type Config = 'six' | 'three' | 'two';
 const ENV: Record<Config, Record<string, string>> = {
   six: {
     SOCRATA_MCP_URL: 'https://socrata.fixture.example', NYC_CHARTER_HOSTING: 'sandbox', NYC_CHECKBOOK_HOSTING: 'sandbox',
-    NYC_RECORD_HOSTING: 'sandbox', NYS_LEGISLATION_HOSTING: 'sandbox', NYS_LEGISLATION_API_KEY: 'fixture',
+    NYS_LEGISLATION_HOSTING: 'sandbox', NYS_LEGISLATION_API_KEY: 'fixture',
     EXECUTOR_DRIVER: 'vercel-sandbox', VERCEL_ENV: 'production', GITHUB_CLIENT_ID: 'fixture', GITHUB_CLIENT_SECRET: 'fixture',
     NEXT_PUBLIC_ANALYTICS_SERVICE: 'plausible', NEXT_PUBLIC_ANALYTICS_ID: 'fixture.example',
   },
@@ -120,7 +120,10 @@ const HEADING = 'Allow this site to send your question to a model service?';
 const EFFECT = 'Allow sends your question to the model service. It sends the searches the model writes to data sources that are On or that you allow when asked.';
 const ASK1 = 'You can change or withdraw this in Data source settings.';
 const T6 = 'The privacy page has the full statement.';
-const COUNT: Record<Config, { n: number; words: string }> = { six: { n: 14, words: '14' }, three: { n: 5, words: 'five' }, two: { n: 4, words: 'four' } };
+// S2-B: router 0.8.0 makes NYC City Record a pack over the Socrata server, offered wherever Socrata is, with one
+// recipient (the Socrata server's host) in place of its sandbox and its upstream: six keeps six sources and has 13
+// recipients; three and two each gain City Record (four and three sources, six and five recipients).
+const COUNT: Record<Config, { n: number; words: string }> = { six: { n: 13, words: '13' }, three: { n: 6, words: 'six' }, two: { n: 5, words: 'five' } };
 const SETTINGS_LINK = 'Data source settings';
 const ANALYTICS = 'An analytics service counts page visits. The privacy page names it and says how to object.';
 const COOKIE_NO_DB = 'We keep your answer for this browser session in a cookie.';
@@ -171,7 +174,7 @@ for (const config of ['six', 'three', 'two'] as const) {
   test(`criterion 1 (${config} sources; UX-2 P4b D6 B): above the buttons, exactly the cut layer`, async () => {
     const { surface, statement, above, below } = await show(config);
     try {
-      assert.equal(statement.sources.length, { six: 6, three: 3, two: 2 }[config], 'premise: the configuration\'s sources');
+      assert.equal(statement.sources.length, { six: 6, three: 4, two: 3 }[config], 'premise: the configuration\'s sources');
       assert.equal(recipientsOf(statement).length, COUNT[config].n, 'premise: the statement\'s recipient count');
       // The owner's card ruling: only the heading stands above the buttons (it was the heading, T1, T2, the effect, ASK1 and T6).
       assert.equal(above, HEADING, 'the text above the buttons is not the cut layer');
@@ -241,19 +244,26 @@ const sha = (value: unknown) => createHash('sha256').update(typeof value === 'st
  * consent sentences, and the privacy golden moves on exactly the five lines H2 names.
  * The flows statement, its base version and its hash are unchanged, so nobody is
  * asked again.
+ * S2-B re-captured `statement`, `hash` and `privacy` by the same computation: under
+ * router 0.8.0 NYC City Record is a pack over the Socrata server, offered wherever
+ * Socrata is, so its row moves (six) or is added (three), and the privacy page gains
+ * or rewrites its row. Each base `version` is unchanged.
+ * S2-B P3R re-captured `statement` and `hash` by the same computation (the seat's ruling 11): router 0.9.0 names
+ * NYC City Record's source `NYC City Record` (its manifest `displayName`), the one change in the statement's bytes;
+ * each base `version` and the privacy page are unchanged.
  */
 const BASE: Record<'six' | 'three', { statement: string; version: string; hash: string; privacy: string }> = {
   six: {
-    statement: 'df07040107fbcf939d9ad594cbdb8f21b22e538c90022b474483f0c2853f4669',
+    statement: 'ad7aca3dd4fa6c871565ea3e07d13b75532bf105f1149e4d6d85a6dba0cc6486',
     version: '2489d0dda25a79b3286c380379c6d2c8202e66a77fe5b4f493f558a7ce190f9c',
-    hash: '7683b5d59e2b39df3f941420a5ce44ad14539992d2b6850df60f7aa64fe4bc60',
-    privacy: '1ee0511b3f88a11f333f31df5c2089d45a26c9a8518a50ecb9f68b5f14882dd1',
+    hash: '1ee9511a279f58b523082c0dfb3c83125a9a6056929147496f3bb3e5c12e20bc',
+    privacy: 'd02b95b4be497772af64eb12c80a20b94b8cb16642de8295fa5aeeff0484422c',
   },
   three: {
-    statement: '522fc92cad73b13f15ede0acaf16ce32b139d4b1438a5ee84dbe0d414c88813a',
+    statement: 'b7bab42b2422402ed60b49f3113ce2177677cf53b85be2c941e05abdf9c88fff',
     version: 'ce0f4f09dff9d9d998a00cca59b12ee92486752ce9d94ed1eb310eae01c69325',
-    hash: '159e0475172c58c49d51f654dec0b74e75d24639452c7b1ff73eaf0558242696',
-    privacy: 'd07ebfb3bd2c2e59a388d715ec36a7a986313c69dcf8ddb8e30136021dff83d6',
+    hash: 'cfc7839f4e4064989e5ab43f4fc4b3830a72e7ea2e4af56102f7304b066a38c8',
+    privacy: '7ab08f254f4e46510caa0ef44329bdd152a058b589612a9eb1d836c2c8e6a227',
   },
 };
 const BASE_PRIVACY_CONSENT_SECTIONS = '7a5ef839e4dc3ea1d4bad48c51ac0a3ffaaf37ddc902b8b102f10d4c05f2b698';

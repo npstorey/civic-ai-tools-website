@@ -4,6 +4,7 @@
 // Run with: npm test
 
 import { test } from 'node:test';
+import { civicRouter } from '@typedstandards/civic-typed-router';
 import assert from 'node:assert/strict';
 import { deriveOperationType, sourceIdForToolName, upstreamToolName } from './operation-types.ts';
 import { mcpTools } from './tools.ts';
@@ -154,7 +155,9 @@ test('#323: every tool the model can call is either typed or knowingly untyped',
     // the `args.type` pass-through is kept to `get_data`. Each was measured
     // against each kind's readers and left untyped, because no kind is true of
     // it as a reader reads it (the reading Charter's four took). NYS Open
-    // Legislation's `search` derives `search` and is not listed.
+    // Legislation's `search` derives `search` and is not listed. S2-B: NYC City
+    // Record's seven went with router 0.8.0, under which it is a pack whose
+    // tools are Socrata's `get_data` (typed) and `fetch` (listed above).
     smart_search: "Checkbook NYC: free-text search over its spending, contract, budget and payroll records: \"search\" reads what a source holds on a topic, \"query\" would count them in records analyzed",
     search_contracts: "Checkbook NYC: filtered contract records: \"query\" would count them in records analyzed and narrate a SoQL-style query",
     get_contract: "Checkbook NYC: one contract's details: \"query\" would count it in records analyzed, \"metadata\" reads columns",
@@ -165,13 +168,6 @@ test('#323: every tool the model can call is either typed or knowingly untyped',
     get_agency_spending: "Checkbook NYC: one agency's spending for a year: \"query\" would count it in records analyzed, \"metrics\" reads dataset statistics",
     search_nycedc_contracts: "Checkbook NYC: filtered NYCEDC contract records: \"query\" would count them in records analyzed and narrate a SoQL-style query",
     search_nycha_contracts: "Checkbook NYC: filtered NYCHA contract records: \"query\" would count them in records analyzed and narrate a SoQL-style query",
-    search_notices: "The City Record: full-text search over notices: \"search\" reads what a source holds on a topic, \"query\" would count them in records analyzed",
-    get_notices_by_agency: "The City Record: one agency's notices: \"query\" would count them in records analyzed, \"catalog\" reads datasets",
-    get_notices_by_type: "The City Record: notices of one type: \"query\" would count them in records analyzed, \"catalog\" reads datasets",
-    get_procurement_notices: "The City Record: recent procurement notices: \"query\" would count them in records analyzed, \"catalog\" reads datasets",
-    get_public_hearings: "The City Record: recent hearings and meetings: \"query\" would count them in records analyzed, \"catalog\" reads datasets",
-    get_open_solicitations: "The City Record: open solicitations: \"query\" would count them in records analyzed, \"catalog\" reads datasets",
-    get_notices_by_date_range: "The City Record: notices in a date range: \"query\" would count them in records analyzed, \"catalog\" reads datasets",
     search_bills: "NYS Open Legislation: bills matching a keyword: \"search\" reads what a source holds on a topic, \"query\" would count them in records analyzed",
     get_bill: "NYS Open Legislation: one bill's text and status: \"query\" would count it in records analyzed, \"metadata\" reads columns",
     list_bills: "NYS Open Legislation: a session's bills: \"catalog\" reads datasets, \"query\" would count them in records analyzed",
@@ -204,7 +200,6 @@ test('#323: every tool the model can call is either typed or knowingly untyped',
     bostonOpencontextUrl: 'https://opencontext.invalid/mcp',
     nycCharterHosting: 'sandbox',
     nycCheckbookHosting: 'sandbox',
-    nycRecordHosting: 'sandbox',
     nysLegislationHosting: 'sandbox',
   };
   const exposedNames = mcpTools.flatMap((t) => (t.type === 'function' ? [t.function.name] : []));
@@ -219,8 +214,10 @@ test('#323: every tool the model can call is either typed or knowingly untyped',
     assert.notEqual(name, exposed, `mcpTools offers "${exposed}" under no alias`);
     assert.ok(sourceIdForToolName(exposed), `"${exposed}" resolves to no source`);
     // Dispatch attributes the exposed name to its own source (the record's
-    // `mcp.source`, through `routedSourceId`).
-    assert.equal(routedSourceId(exposed, ALL_ON), sourceIdForToolName(exposed), `dispatch and the index disagree on "${exposed}"`);
+    // `mcp.source`, through `routedSourceId`); a pack's tool to its base's, the
+    // server the call goes to (S2-B, G0-B5 A: City Record's calls are Socrata's).
+    const base = civicRouter.dispatchMap.get(exposed)?.base;
+    assert.equal(routedSourceId(exposed, ALL_ON), base ?? sourceIdForToolName(exposed), `dispatch and the index disagree on "${exposed}"`);
     const sharers = exposedNames.filter((other) => upstreamToolName(other) === name);
     if (sharers.length === 1) {
       assert.equal(sourceIdForToolName(exposed), sourceIdForToolName(name), `"${exposed}" and "${name}" resolve to different sources`);

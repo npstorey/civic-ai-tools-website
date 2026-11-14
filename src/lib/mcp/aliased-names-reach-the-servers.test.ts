@@ -140,15 +140,24 @@ test('socrata__get_data reaches the Socrata server with get_data on the wire', a
   assert.deepEqual(params.arguments, ARGS);
 });
 
-test('a bare get_data, which exactly one offered source has, is accepted and sends the same bytes', async () => {
+// S2-B (G1-1 = A): since router 0.8.0 NYC City Record's pack has get_data too, so the bare get_data is refused
+// naming both full names, before any request; a bare name exactly one offered source has (search, here) is still
+// accepted and sends the same bytes as its full name.
+test('a bare search, which exactly one offered source has, is accepted and sends the same bytes; a bare get_data, which two have, is refused naming both, before any request', async () => {
   let start = socrataRequests.length;
-  await callMcpTool('socrata__get_data', ARGS);
+  await callMcpTool('socrata__search', { query: '311' });
   const aliased = toolCallsSince(start);
   start = socrataRequests.length;
-  await callMcpTool('get_data', ARGS);
+  await callMcpTool('search', { query: '311' });
   const bare = toolCallsSince(start);
   assert.equal(bare.length, 1);
   assert.equal(bare[0].body, aliased[0].body, 'the bare and aliased spellings send different bytes');
+  start = socrataRequests.length;
+  await assert.rejects(
+    () => callMcpTool('get_data', ARGS),
+    (error: unknown) => error instanceof Error && error.name === 'AmbiguousToolNameError' && error.message.includes('"socrata__get_data"') && error.message.includes('"nyc_record__get_data"'),
+  );
+  assert.equal(toolCallsSince(start).length, 0, 'the refused bare get_data reached the server');
 });
 
 test('the other two Socrata tools and the Data Commons tools go out under their own names too', async () => {

@@ -25,7 +25,8 @@ test('callMcpTool against an unreachable MCP endpoint rejects promptly with a cl
   const t0 = Date.now();
   let caught: unknown;
   try {
-    await callMcpTool('get_data', { type: 'catalog', query: 'test', portal: 'data.cityofnewyork.us' });
+    // By full name (S2-B, G1-1 = A): since router 0.8.0 a bare get_data is refused as ambiguous before any request.
+    await callMcpTool('socrata__get_data', { type: 'catalog', query: 'test', portal: 'data.cityofnewyork.us' });
     assert.fail('expected callMcpTool to reject');
   } catch (error) {
     caught = error;

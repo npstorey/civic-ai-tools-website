@@ -242,7 +242,7 @@ async function outcomeOf(call: string, run: () => Promise<string | null>): Promi
   }
 }
 
-const tool = (dataset: string) => () => callMcpTool('get_data', { type: 'query', dataset_id: dataset, select: 'count(*)', portal: 'data.example.org' });
+const tool = (dataset: string) => () => callMcpTool('socrata__get_data', { type: 'query', dataset_id: dataset, select: 'count(*)', portal: 'data.example.org' });
 const prompt = (name: string) => () => callMcpPrompt(name, { modality: 'web' });
 
 const OUTCOMES: Outcome[] = [];

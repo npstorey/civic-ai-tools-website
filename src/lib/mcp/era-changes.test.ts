@@ -128,7 +128,7 @@ async function settle(run: () => Promise<string>): Promise<{ value?: string; err
   }
 }
 
-const tool = () => callMcpTool('get_data', { type: 'query', dataset_id: 'abcd-1234', select: 'count(*)', portal: 'data.example.org' });
+const tool = () => callMcpTool('socrata__get_data', { type: 'query', dataset_id: 'abcd-1234', select: 'count(*)', portal: 'data.example.org' });
 
 const LEGACY_CALL = await settle(tool);
 const beforeTurn = socrata.seen.length;

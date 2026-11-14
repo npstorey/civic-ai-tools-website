@@ -391,6 +391,18 @@ export function buildMcpRegistry(env: McpRegistryEnv, selection?: SourceSelectio
   }
 
   const toolIndex = buildToolIndex({ ...servers, ...hosted });
+  // A pack's tools (router 0.8.0; S2-B W2, npstorey/civic-ai-tools#309): the
+  // base's tools under the pack's alias, sent to the base's server. Each
+  // exposed name is indexed to the base, so `resolveToolCall` finds the base's
+  // server and the call is attributed to the base (`routedSourceId`), with the
+  // pack named by `mcp.pack_id` (`../model-loop/run-tool-loop.ts`). With the
+  // base absent, the pack's tools are refused per call naming the base's
+  // variable, below.
+  for (const target of civicRouter.dispatchMap.values()) {
+    if (target.base !== undefined && (servers[target.base] ?? hosted[target.base]) !== undefined) {
+      toolIndex[target.exposedName] = target.base;
+    }
+  }
 
   const unconfiguredTools: Record<string, string> = {};
   if (!env.socrataUrl) {
@@ -398,6 +410,13 @@ export function buildMcpRegistry(env: McpRegistryEnv, selection?: SourceSelectio
     for (const tool of SOCRATA_TOOLS) {
       unconfiguredTools[exposedToolName(alias, tool)] = 'SOCRATA_MCP_URL';
     }
+  }
+  // A pack whose base this instance cannot route: its tools name the
+  // variable that configures the base, as the base's own tools do (W3).
+  for (const target of civicRouter.dispatchMap.values()) {
+    if (target.base === undefined || Object.hasOwn(toolIndex, target.exposedName)) continue;
+    const baseVariable = CIVIC_MANIFEST.find((entry) => entry.sourceId === target.base)?.configuration.addressVariable;
+    if (baseVariable) unconfiguredTools[target.exposedName] = baseVariable;
   }
   for (const [sourceId, { variable, alias, tools }] of Object.entries(OPTIONAL_SOURCES)) {
     if (servers[sourceId] || hosted[sourceId]) continue;
@@ -457,6 +476,11 @@ export function configuredAddressForSource(
   configured: McpRegistryEnv,
   sourceId: string,
 ): string | undefined {
+  // A pack has no address of its own: its requests go to its base's server
+  // (router 0.8.0 keys a pack by its base's address), so the address is the
+  // base's (S2-B W8).
+  const base = CIVIC_MANIFEST.find((entry) => entry.sourceId === sourceId)?.base;
+  if (base !== undefined) return configuredAddressForSource(configured, base);
   if (!Object.hasOwn(MCP_SOURCE_ADDRESS_FIELD, sourceId)) return undefined;
   const field = MCP_SOURCE_ADDRESS_FIELD[sourceId as keyof typeof MCP_SOURCE_ADDRESS_FIELD];
   const value = configured[field];
@@ -726,7 +750,7 @@ function presentOrUndefined(raw: string | undefined): string | undefined {
  * infrastructure, so it keeps its coded default.
  */
 export function readMcpEnvFromProcess(): McpRegistryEnv {
-  // The package's reader over exactly these eight variables, each read by name
+  // The package's reader over exactly these seven variables, each read by name
   // here so the environment this module reads stays visible
   // (`scripts/env-reads-declared.test.mjs`); `process.env` is never handed over
   // whole.
@@ -736,10 +760,10 @@ export function readMcpEnvFromProcess(): McpRegistryEnv {
     DATA_COMMONS_API_KEY: process.env.DATA_COMMONS_API_KEY,
     BOSTON_OPENCONTEXT_MCP_URL: process.env.BOSTON_OPENCONTEXT_MCP_URL,
     // The switches that offer the hosted sources (#617 D7; router 0.6.0, R8
-    // W3): only `sandbox` turns one on; none names an address.
+    // W3): only `sandbox` turns one on; none names an address. NYC City
+    // Record's switch was retired by router 0.8.0 (a pack over Socrata).
     NYC_CHARTER_HOSTING: process.env.NYC_CHARTER_HOSTING,
     NYC_CHECKBOOK_HOSTING: process.env.NYC_CHECKBOOK_HOSTING,
-    NYC_RECORD_HOSTING: process.env.NYC_RECORD_HOSTING,
     NYS_LEGISLATION_HOSTING: process.env.NYS_LEGISLATION_HOSTING,
   };
   const read = readMcpEnv(variables);

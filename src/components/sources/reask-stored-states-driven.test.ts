@@ -75,7 +75,8 @@ const DB_ID = '51515151-5151-4151-8151-515151515151';
 /** Stored: Socrata Off, Data Commons On; NYC Charter, configured, has none. */
 const STORED: Record<string, 'on' | 'off'> = { socrata: 'off', 'data-commons': 'on' };
 const NONE = 'nyc-charter';
-const EXPECTED = { socrata: 'off', 'data-commons': 'on', 'nyc-charter': 'ask-first' };
+// S2-B: NYC City Record, offered wherever Socrata is since router 0.8.0 (a pack), has no stored state either.
+const EXPECTED = { socrata: 'off', 'data-commons': 'on', 'nyc-charter': 'ask-first', 'nyc-record': 'ask-first' };
 
 function* within(node: unknown): Generator<HostElement> {
   if (Array.isArray(node)) { for (const child of node) yield* within(child); return; }
@@ -97,7 +98,7 @@ function shownStates(panel: Surface): Record<string, string> {
 
 async function premises(): Promise<Mod> {
   const statement = await buildFlowsStatement();
-  assert.deepEqual(statement.sources.map((s: Mod) => s.sourceId), ['socrata', 'data-commons', 'nyc-charter'], 'premise: three sources are configured');
+  assert.deepEqual(statement.sources.map((s: Mod) => s.sourceId), ['socrata', 'data-commons', 'nyc-charter', 'nyc-record'], 'premise: four sources are configured');
   for (const id of Object.keys(EXPECTED)) {
     assert.equal(CIVIC_MANIFEST.find((e) => e.sourceId === id)?.consentDefault, 'on', `premise: ${id}'s default is On, so a default shown in place of a stored state can be seen`);
   }

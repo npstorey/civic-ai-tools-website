@@ -394,7 +394,8 @@ test('R6-WEB-D condition 2, the cookie branch: Allow sets the cookie PUT /api/so
   const hash = statementHash(statement);
   const cookie = consentCookieForTests({ socrata: 'on', 'data-commons': 'ask-first' }, statement);
 
-  const byPut = await put({ socrata: 'on', 'data-commons': 'on' }, hash, { cookie });
+  // S2-B: the PUT names every configured source, which since router 0.8.0 includes NYC City Record (On in the cookie).
+  const byPut = await put({ socrata: 'on', 'data-commons': 'on', 'nyc-record': 'on' }, hash, { cookie });
   assert.equal(byPut.status, 200, `PUT answered ${byPut.status}: ${await byPut.text()}`);
   const key = await mint('data-commons');
   const byAllow = await post({ key, decision: 'allow' }, { cookie });
@@ -465,7 +466,9 @@ test('R6-WEB-D condition 3: Not now writes no consent on either branch, and a no
     sleep: async (ms: number) => { clock += ms; },
   });
   const outcome = await pause.ask('data-commons', () => {});
-  assert.equal(outcome, 'no-answer');
+  // The property kept: a held pause nobody answers ends with no decision. S2-B (G0-B1 A,
+  // npstorey/civic-ai-tools#309): \`ask\` also says that it held, so the load can record a question was put.
+  assert.deepEqual(outcome, { decision: 'no-answer', held: true });
   assert.equal(globals.__w2Decision.writes, 0, 'a no-answer pause wrote the row');
   assert.ok(kv.calls.every((c) => c.key.startsWith(d.DECISION_KEY_PREFIX)), 'the pause wrote a store key other than its entry');
 });

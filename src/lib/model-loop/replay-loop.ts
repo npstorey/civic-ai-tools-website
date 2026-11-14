@@ -470,7 +470,7 @@ export function replayOfferedSet(
 ): ReplayOfferedSetWithLoads {
   const manifestIds = CIVIC_MANIFEST.map((entry) => entry.sourceId);
   const registry = buildMcpRegistry(configured);
-  const routable = (id: string) => Object.hasOwn(registry.servers, id) || Object.hasOwn(registry.hosted, id);
+  const routable = (id: string): boolean => Object.hasOwn(registry.servers, id) || Object.hasOwn(registry.hosted, id) || CIVIC_MANIFEST.some((entry) => entry.sourceId === id && entry.base !== undefined && routable(entry.base));
   const replayerOn = (id: string) => replayerSelection === undefined || replayerSelection.includes(id);
   const stated = statedOfferedSet(pkg);
   if (stated === null) {

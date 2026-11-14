@@ -361,6 +361,11 @@
           "id": "source-row-nyc-charter",
           "trace": "const:src/lib/flows/statement.ts#buildFlowsStatementFor const:src/lib/sources/copy.ts#SOURCE_DESCRIPTIONS const:src/lib/sources/copy.ts#REACH_SENTENCE env:SOCRATA_MCP_URL env:BOSTON_OPENCONTEXT_MCP_URL env:NYC_CHARTER_HOSTING",
           "text": "NYC Charter, Laws and Rules: the text of New York City's Charter, Administrative Code and Rules. This site reaches it through an MCP server, a connector that BetaNYC publishes, running at this site's sandbox. Who holds its logs: Vercel: not stated ( its statement , read 2026-10-20). How current its data is: Pinned to version 0.3.1 of the publisher's package and the index it bundles: the Charter and the Administrative Code are current through Local Law 2026/147, enacted September 12, 2026, and the Rules through rules effective October 4, 2026."
+        },
+        {
+          "id": "source-row-nyc-record",
+          "trace": "const:src/lib/flows/statement.ts#buildFlowsStatementFor const:src/lib/sources/copy.ts#SOURCE_DESCRIPTIONS const:src/lib/sources/copy.ts#REACH_SENTENCE const:src/lib/sources/copy.ts#NYC_RECORD_EXAMPLES_SENTENCE env:SOCRATA_MCP_URL env:BOSTON_OPENCONTEXT_MCP_URL",
+          "text": "NYC City Record: notices in The City Record, New York City's official journal: procurement, public hearings and other agency notices. This site reaches it through the Socrata source's MCP server, a connector that npstorey publishes, running at socrata.example.test. The model is given example queries for these notices, taken from BetaNYC 's City Record connector, which this site does not run. Who holds its logs: the operator of socrata.example.test: what it keeps is for this site's operator to state; Tyler Technologies: not stated ( its statement , read 2026-10-19). How current its data is: Live: every call queries the City Record Online dataset on NYC Open Data, which is updated daily."
         }
       ]
     },

@@ -23,7 +23,7 @@ import { getServerSession } from 'next-auth';
 import { authOptions } from '@/lib/auth';
 import { checkRateLimit, getMissingRateLimitSecretError, incrementRateLimit, isRateLimited } from '@/lib/rate-limit';
 import { mcpToolsFor, offeredMcpTools } from '@/lib/mcp/tools';
-import { callMcpTool } from '@/lib/mcp/client';
+import { callMcpTool, startRunServerReads, withReportedKeys } from '@/lib/mcp/client';
 import { configuredMcpServers, getMissingMcpRoutingError, readMcpEnvFromProcess, routedSourceId } from '@/lib/mcp/registry';
 import { getDefaultModel, resolveModel, ModelNotOfferedError } from '@/lib/model-resolver';
 import { ModelConfigurationError, getGenAiSystem, getMissingModelCredentialError, getModelApiKind } from '@/lib/model-client';
@@ -40,7 +40,7 @@ import {
   type StreamCallbacks,
 } from '@/lib/openrouter-streaming';
 import { errorClassOf, isStreamErrorKind, notebookExecutionErrorMessage, notebookFailureFacts, notebookTracebackForReader, startSseKeepAlive, streamErrorPayload, withoutCredentialsIn, type ConsentPausePayload, type StreamErrorCode } from '@/lib/streaming';
-import { TraceBuilder, hash as traceHash, CIVICAITOOLS_TRACE_CONFIG, runRecordAttributes } from '@/lib/evidence/trace';
+import { TraceBuilder, hash as traceHash, CIVICAITOOLS_TRACE_CONFIG, RUN_RECORD_ATTRIBUTE, runRecordAttributes } from '@/lib/evidence/trace';
 import { getConfiguredKeyId } from '@/lib/evidence/signing';
 import { storeRunPrompt } from '@/lib/evidence/prompt-blob';
 import { resolveRunPortal } from '@/lib/site-config';
@@ -300,6 +300,9 @@ export async function POST(request: NextRequest) {
   // selection is the reader's, configured ∩ On, from the consent store (R6 W2,
   // D3 = A), never from the request.
   // Under the lock one section is appended (#436, D7); unlocked, unchanged.
+  // What each server reports of itself, as this run reads it (S2-B P3R):
+  // opened before anything here contacts a server, read back by `runRecord`.
+  const serverReads = startRunServerReads();
   const configured = readMcpEnvFromProcess();
   const selection = consent.selection;
   // How the sources reach the model (#644 W1, D9), read once per request,
@@ -341,17 +344,29 @@ export async function POST(request: NextRequest) {
 
   // What this run states about itself (#599 W4, ADR-0033), as one function
   // so the root's start and an in-loop run's end state the same facts.
-  const runRecord = () => runRecordAttributes({
-    assertedDate: composition.assertedDate,
-    mcpServers: configuredMcpServers(configured),
-    toolDefinitions: offeredTools,
-    // The router's `not-selected` as the reader's state (D2 = A).
-    sourcesOffered: consent.recordReasons(composition.sourcesOffered),
-    components: composition.components,
-    // The flows statement in force (D2 = A).
-    flowsStatement: consent.reference,
-    ...(inLoop ? inLoop.record() : {}),
-  });
+  // The components carry what each remote server the run read reported of
+  // itself, folded in here, when the record is built (S2-B P3R).
+  const runRecord = () => {
+    const run = {
+      assertedDate: composition.assertedDate,
+      mcpServers: configuredMcpServers(configured),
+      toolDefinitions: offeredTools,
+      // The router's `not-selected` as the reader's state (D2 = A).
+      sourcesOffered: consent.recordReasons(composition.sourcesOffered),
+      components: composition.components,
+      // The flows statement in force (D2 = A).
+      flowsStatement: consent.reference,
+      ...(inLoop ? inLoop.record() : {}),
+    };
+    return runRecordAttributes({ ...run, components: withReportedKeys(run.components, serverReads, configured) });
+  };
+  // S2-B P3R (the seat's ruling 5): the components are written at the root's
+  // end in both modes, so they can state the reads the run made after it
+  // started; every other attribute of an all-sources run stays at the start.
+  const atStart = (attributes: Record<string, string>) =>
+    Object.fromEntries(Object.entries(attributes).filter(([key]) => key !== RUN_RECORD_ATTRIBUTE.components));
+  const componentsOnly = (attributes: Record<string, string>) =>
+    ({ [RUN_RECORD_ATTRIBUTE.components]: attributes[RUN_RECORD_ATTRIBUTE.components] });
 
   const trace = new TraceBuilder(CIVICAITOOLS_TRACE_CONFIG);
   trace.startRoot('executed_notebook', {
@@ -371,7 +386,7 @@ export async function POST(request: NextRequest) {
     // routing statement and the definition hash are known only after the
     // loop: they are left out here and written once, at the success
     // `endRoot` below, since `endSpan` appends and never replaces.
-    ...(inLoop ? afterLoopAttributes(runRecord(), false) : runRecord()),
+    ...(inLoop ? afterLoopAttributes(runRecord(), false) : atStart(runRecord())),
   });
 
   // What the usage count reads when the run ends (R6 W5, D9): `complete` once
@@ -505,7 +520,7 @@ export async function POST(request: NextRequest) {
       // record to reference (`src/lib/evidence/prompt-blob.ts`). Before
       // `publish_inputs`, so a publish finds it; it never throws.
       await storeRunPrompt(inLoop ? inLoop.systemPrompt() : systemPrompt);
-      trace.endRoot(inLoop ? afterLoopAttributes(runRecord(), true) : undefined);
+      trace.endRoot(inLoop ? afterLoopAttributes(runRecord(), true) : componentsOnly(runRecord()));
       await emit({
         type: 'publish_inputs',
         trace: trace.finalize() as unknown as Record<string, unknown>,

@@ -113,9 +113,10 @@ const SIGNED_IN_DB = () => {
 };
 
 const STATE_LABEL: Record<string, string> = { on: 'On', 'ask-first': 'Ask first', off: 'Off' };
-const CONFIGURED = ['socrata', 'data-commons', 'boston-opencontext', 'nyc-charter'];
+// S2-B: router 0.8.0 offers NYC City Record (a pack over Socrata) wherever Socrata is.
+const CONFIGURED = ['socrata', 'data-commons', 'boston-opencontext', 'nyc-charter', 'nyc-record'];
 /** T13 (#632 G7): each source's one reader name, written out. */
-const READER_NAME: Record<string, string> = { socrata: 'Socrata', 'data-commons': 'Data Commons', 'boston-opencontext': 'Boston OpenContext', 'nyc-charter': 'NYC Charter, Laws and Rules' };
+const READER_NAME: Record<string, string> = { socrata: 'Socrata', 'data-commons': 'Data Commons', 'boston-opencontext': 'Boston OpenContext', 'nyc-charter': 'NYC Charter, Laws and Rules', 'nyc-record': 'NYC City Record' };
 const readerName = (sourceId: string) => READER_NAME[sourceId];
 
 /** Each source's row: the one element carrying `data-source="<id>"`. */
@@ -147,7 +148,7 @@ for (const state of ['on', 'ask-first', 'off']) {
     ANON();
     const { panel } = await panelWith(Object.fromEntries(CONFIGURED.map((id) => [id, state])));
     const statement = await buildFlowsStatement();
-    assert.deepEqual(statement.sources.map((s: { sourceId: string }) => s.sourceId), CONFIGURED, 'premise: the four sources are configured');
+    assert.deepEqual(statement.sources.map((s: { sourceId: string }) => s.sourceId), CONFIGURED, 'premise: the five sources are configured');
     const order = panel.elements().filter((el) => typeof el.props['data-source'] === 'string').map((el) => el.props['data-source']);
     assert.deepEqual(order, CIVIC_MANIFEST.map((e) => e.sourceId).filter((id) => CONFIGURED.includes(id)), 'the rows are not one per configured source in manifest order');
     for (const entry of CIVIC_MANIFEST.filter((e) => CONFIGURED.includes(e.sourceId))) {
@@ -323,6 +324,7 @@ const RULED_WHAT: Record<string, string> = {
   'data-commons': 'Public statistics from government agencies and international organizations, gathered by Google.',
   'boston-opencontext': "The City of Boston's open data, from data.boston.gov.",
   'nyc-charter': "The text of New York City's Charter, Administrative Code and Rules.",
+  'nyc-record': "Notices in The City Record, New York City's official journal: procurement, public hearings and other agency notices.",
 };
 /** D2 = A: the publisher as the row prints it, and the connector's repository. */
 const RULED_PUBLISHER: Record<string, { text: string; link: string }> = {
@@ -330,8 +332,14 @@ const RULED_PUBLISHER: Record<string, { text: string; link: string }> = {
   'data-commons': { text: 'Google', link: 'https://github.com/datacommonsorg/agent-toolkit' },
   'boston-opencontext': { text: 'the City of Boston', link: 'https://github.com/CityOfBoston/OpenContext' },
   'nyc-charter': { text: 'BetaNYC', link: 'https://github.com/BetaNYC/nyc-charter-laws-rules' },
+  'nyc-record': { text: 'BetaNYC', link: 'https://github.com/BetaNYC/nyc-record-mcp' },
 };
 const reachSentence = (publisher: string, where: string) => `This site reaches it through an MCP server, a connector that ${publisher} publishes, running at ${where}.`;
+/** S2-B, R1 as the owner ruled it (D1 = A): a pack's (City Record's) two sentences, Socrata's publisher and where it runs filled in. */
+const packReach = (where: string) =>
+  `This site reaches it through the Socrata source's MCP server, a connector that npstorey publishes, running at ${where}. The model is given example queries for these notices, taken from BetaNYC's City Record connector, which this site does not run.`;
+/** `textOf` reads each element boundary as a space, so a link followed by "'s" reads "BetaNYC 's". */
+const joined = (text: string) => text.replace(/ 's /g, "'s ");
 const reachUnstated = (where: string) => `This site reaches it through an MCP server, a connector whose publisher is not stated, running at ${where}.`;
 
 for (const id of CONFIGURED) {
@@ -343,12 +351,12 @@ for (const id of CONFIGURED) {
     assert.ok(source, `premise: ${id} is configured`);
     const where: string = sourceName.sourceWhere(source);
     const row = rowOf(panel, id);
-    const lines = [...within(row)].map((el) => textOf(el));
-    const sentence = reachSentence(RULED_PUBLISHER[id].text, where);
+    const lines = [...within(row)].map((el) => joined(textOf(el)));
+    const sentence = id === 'nyc-record' ? packReach(where) : reachSentence(RULED_PUBLISHER[id].text, where);
     assert.ok(lines.includes(RULED_WHAT[id]), `${id}'s row has no line reading "${RULED_WHAT[id]}": ${textOf(row)}`);
     assert.ok(lines.includes(sentence), `${id}'s row has no line reading "${sentence}": ${textOf(row)}`);
     assert.ok(textOf(row).startsWith(`${readerName(id)} ${RULED_WHAT[id]} On Ask first Off `), `${id}'s row does not read name, what-line, control, in that order: ${textOf(row)}`);
-    assert.ok(textOf(drawerOf(row)).startsWith(`More about this source ${sentence} Who holds its logs: `), `${id}'s drawer does not read its summary, the reach sentence, logs, in that order: ${textOf(drawerOf(row))}`);
+    assert.ok(joined(textOf(drawerOf(row))).startsWith(`More about this source ${sentence} Who holds its logs: `), `${id}'s drawer does not read its summary, the reach sentence, logs, in that order: ${textOf(drawerOf(row))}`);
     const links = [...within(row)].filter((el) => el.type === 'a' && el.props.href === RULED_PUBLISHER[id].link);
     assert.equal(links.length, 1, `${id}'s row does not link ${RULED_PUBLISHER[id].link} once`);
     assert.equal(textOf(links[0]), RULED_PUBLISHER[id].text, `${id}'s link does not read the publisher's name`);

@@ -30,6 +30,12 @@
 // tools differ from the all-sources run's and the comparison can fail; its
 // refused call is to Boston, which no successful call touches.
 //
+// S2-B W2 and W3 (npstorey/civic-ai-tools#309), at the end of this file: an
+// in-loop run that loads NYC City Record, a pack over the Socrata server since
+// router 0.8.0, and calls its tools. The pack's calls reach the Socrata path
+// with the filter's portal and dataset, are attributed to the base, name the
+// pack, and a call outside the filter is refused before any request.
+//
 // No live endpoint, no credential: every key is a placeholder and every
 // address is loopback.
 //
@@ -126,17 +132,32 @@ const { consentCookieForTests } = (await import('../../lib/sources/consent-cooki
 
 const ONE_ROW = JSON.stringify({ data: [{ count: '512' }], total_rows: 1 });
 const MCP_CALLS: Array<{ path: string; tool?: string }> = [];
+/** The same calls with their arguments, for S2-B's pack drive (MCP_CALLS keeps its shape). */
+const MCP_CALL_ARGS: Array<{ path: string; tool?: string; args?: Record<string, unknown> }> = [];
+// S2-B P3R (the seat's ruling 12): the Socrata path reports what the deployed
+// server reported at the GR read, and lists its tools as it listed them there,
+// so the base check finds the pack's pin (`src/lib/mcp/fixtures/socrata-tools-at-gr.json`,
+// copied by script; `socrata-tools-at-gr.test.ts` holds each pinned entry to its pin).
+const GR = JSON.parse(fs.readFileSync(path.join(path.dirname(fileURLToPath(import.meta.url)), '../../lib/mcp/fixtures/socrata-tools-at-gr.json'), 'utf8')) as { serverInfo: { name: string; version: string }; tools: unknown[] };
+const MCP_LISTS: string[] = [];
 const mcp = http.createServer(async (req, res) => {
   let body = '';
   for await (const chunk of req) body += chunk;
-  const msg = body ? (JSON.parse(body) as { id?: unknown; method?: string; params?: { name?: string } }) : {};
+  const msg = body ? (JSON.parse(body) as { id?: unknown; method?: string; params?: { name?: string; arguments?: Record<string, unknown> } }) : {};
   if (msg.id === undefined) { res.writeHead(202); res.end(); return; }
   const reply = (payload: Record<string, unknown>) => JSON.stringify({ jsonrpc: '2.0', id: msg.id, ...payload });
   const route = req.url ?? '';
   if (msg.method === 'initialize') {
     const instructions = route.startsWith('/dc/') ? { instructions: DATA_COMMONS_INSTRUCTIONS } : {};
     res.writeHead(200, { 'content-type': 'application/json', 'mcp-session-id': 'civic-r8-w1' });
-    res.end(reply({ result: { protocolVersion: '2024-11-05', capabilities: { tools: {} }, serverInfo: { name: 'civic-r8-w1-fixture', version: '0' }, ...instructions } }));
+    const serverInfo = route.startsWith('/socrata/') ? GR.serverInfo : { name: 'civic-r8-w1-fixture', version: '0' };
+    res.end(reply({ result: { protocolVersion: '2024-11-05', capabilities: { tools: {} }, serverInfo, ...instructions } }));
+    return;
+  }
+  if (msg.method === 'tools/list') {
+    MCP_LISTS.push(route);
+    res.writeHead(200, { 'content-type': 'application/json' });
+    res.end(reply({ result: { tools: route.startsWith('/socrata/') ? GR.tools : [] } }));
     return;
   }
   if (msg.method === 'prompts/get') {
@@ -144,7 +165,10 @@ const mcp = http.createServer(async (req, res) => {
     res.end(reply({ error: { code: -32603, message: 'fixture: no skill guidance here' } }));
     return;
   }
-  if (msg.method === 'tools/call') MCP_CALLS.push({ path: route, tool: msg.params?.name });
+  if (msg.method === 'tools/call') {
+    MCP_CALLS.push({ path: route, tool: msg.params?.name });
+    MCP_CALL_ARGS.push({ path: route, tool: msg.params?.name, args: msg.params?.arguments });
+  }
   res.writeHead(200, { 'content-type': 'text/event-stream' });
   res.end(`event: message\ndata: ${reply({ result: { content: [{ type: 'text', text: ONE_ROW }] } })}\n\n`);
 });
@@ -165,12 +189,39 @@ type Call = { id: string; type: 'function'; function: { name: string; arguments:
 const call = (id: string, name: string, args: Record<string, unknown>): Call =>
   ({ id, type: 'function', function: { name, arguments: JSON.stringify(args) } });
 
+// S2-B's pack drive: the first turn loads City Record; the second calls its
+// tools five times, told apart by `limit`: (1) with the filter's portal and
+// dataset, (2) with neither, (3) naming another portal, (4) naming another
+// dataset, and a `fetch` of an identifier outside the dataset; the third
+// answers. The run's portal is `PORTAL`, never the filter's, so a call that
+// omits `portal` shows whose value is sent.
+const PACK_QUESTION = 'Which notices did the City Record publish about sidewalk repair?';
+const PACK_FILTER = { portal: 'data.cityofnewyork.us', dataset_id: 'dg92-zbpx' } as const;
+const OTHER_PORTAL = 'data.sfgov.org';
+const OTHER_DATASET = 'erm2-nwe9';
+const OUTSIDE_ID = `dataset:${PACK_FILTER.portal}:${OTHER_DATASET}`;
+
+function packTurn(assistantTurns: number): Call[] | null {
+  if (assistantTurns === 0) return [call('call-load-record', 'load_source', { alias: 'nyc_record' })];
+  if (assistantTurns === 1) {
+    return [
+      call('call-pack-filter', 'nyc_record__get_data', { type: 'query', ...PACK_FILTER, query: 'sidewalk repair', limit: 1 }),
+      call('call-pack-omitted', 'nyc_record__get_data', { type: 'query', query: 'sidewalk repair', limit: 2 }),
+      call('call-pack-portal', 'nyc_record__get_data', { type: 'query', portal: OTHER_PORTAL, dataset_id: PACK_FILTER.dataset_id, limit: 3 }),
+      call('call-pack-dataset', 'nyc_record__get_data', { type: 'query', portal: PACK_FILTER.portal, dataset_id: OTHER_DATASET, limit: 4 }),
+      call('call-pack-fetch', 'nyc_record__fetch', { id: OUTSIDE_ID }),
+    ];
+  }
+  return null;
+}
+
 function turnFor(body: Record<string, unknown>): Call[] | null {
   const tools = (body.tools ?? []) as Array<{ function: { name: string } }>;
   if (tools.length === 0) return null;
   const messages = (body.messages ?? []) as Array<{ role?: string }>;
   const assistantTurns = messages.filter((m) => m.role === 'assistant').length;
   const inLoop = tools.some((t) => t.function.name === 'load_source');
+  if (inLoop && JSON.stringify(body.messages ?? []).includes(PACK_QUESTION)) return packTurn(assistantTurns);
   if (!inLoop) {
     return assistantTurns === 0
       ? [
@@ -299,6 +350,12 @@ const NOTEBOOK_IN_LOOP = await drive('query-notebook, in-loop', 'in-loop', () =>
   notebookRoute.POST(post('/api/query-notebook', { query: QUESTION, portal: PORTAL })));
 const COMPARE_IN_LOOP = await drive('compare, in-loop', 'in-loop', () =>
   compareRoute.POST(post('/api/compare', { query: QUESTION, model: 'fixture-fast', portal: PORTAL })));
+const PACK_ARGS_FROM = MCP_CALL_ARGS.length;
+const PACK_LISTS_FROM = MCP_LISTS.length;
+const PACK = await drive('compare-stream, in-loop, City Record', 'in-loop', () =>
+  compareStreamRoute.POST(post('/api/compare-stream', { ...streamBody, query: PACK_QUESTION })));
+const PACK_MCP_CALLS = MCP_CALL_ARGS.slice(PACK_ARGS_FROM);
+const PACK_LISTS = MCP_LISTS.slice(PACK_LISTS_FROM);
 
 // --- Readers -------------------------------------------------------------------------
 
@@ -323,7 +380,8 @@ function systemText(request: { body: Json }): string {
 }
 
 const configured = readMcpEnvFromProcess();
-const DIRECTORY_IDS = ['socrata', 'data-commons', 'boston-opencontext'];
+// S2-B: router 0.8.0 offers NYC City Record (a pack over Socrata) wherever Socrata is, On in the consent sent.
+const DIRECTORY_IDS = ['socrata', 'data-commons', 'boston-opencontext', 'nyc-record'];
 const today = () => new Date().toISOString().slice(0, 10);
 
 // --- Criterion 2 ------------------------------------------------------------------------
@@ -420,6 +478,19 @@ function packageOf(d: Drive) {
 const sha = (text: string) => createHash('sha256').update(text, 'utf8').digest('hex');
 const ROUTER_VERSION = (JSON.parse(fs.readFileSync(path.join(process.cwd(), 'node_modules/@typedstandards/civic-typed-router/package.json'), 'utf8')) as { version: string }).version;
 
+/**
+ * S2-B W4: the inventory an in-loop run was routed against, in the record's form (ADR-0033 amendment 3):
+ * the installed router's `CIVIC_INVENTORY`, its `version` in build-metadata form `<version>+<hash12>`, computed
+ * here from the package, never typed. The definition's components name it by `id` and that `version`.
+ */
+const { CIVIC_INVENTORY } = router;
+const INVENTORY_REFERENCE = {
+  id: CIVIC_INVENTORY.id,
+  version: `${CIVIC_INVENTORY.version}+${CIVIC_INVENTORY.hash.slice(0, 12)}`,
+  hash: CIVIC_INVENTORY.hash,
+};
+const INVENTORY_COMPONENT = { id: INVENTORY_REFERENCE.id, version: INVENTORY_REFERENCE.version };
+
 /** The Socrata block the router composes from the loopback answers. */
 async function socrataBlock(): Promise<string> {
   return router.socrataGuidanceText({
@@ -437,20 +508,25 @@ test('criterion 5, compare-stream: the root span states routing, the definition 
   assert.deepEqual(JSON.parse(root['analysis.routing'] ?? 'null'), { method: 'in-loop', version: ROUTER_VERSION });
   const block = await socrataBlock();
   assert.ok(systemText(last).includes(block), 'premise — the final prompt carries the Socrata block the router composes');
+  // S2-B P3R (criterion 4): the run read the Socrata server, so its component states what it reported.
   const components = [
-    { id: 'socrata-mcp-server@https://github.com/npstorey/socrata-mcp-server', guidanceHash: sha(block), guidanceOrigin: 'fallback' },
+    { id: 'socrata-mcp-server@https://github.com/npstorey/socrata-mcp-server', guidanceHash: sha(block), guidanceOrigin: 'fallback', reportedName: 'socrata-mcp-server', reportedVersion: '0.9.2' },
     { id: '@typedstandards/civic-typed-router', version: ROUTER_VERSION },
   ];
   assert.deepEqual(JSON.parse(root['analysis.components'] ?? 'null'), components);
   assert.equal(root['analysis.tool_definitions'], JSON.stringify(last.body.tools));
-  const definition = router.civicRouter.harnessDefinition({ configured, selection: ['socrata'], chosenBy: 'model', components });
+  // The property kept: the hash is the router's definition over the loaded set and the record's components.
+  // S2-B W4 (npstorey/civic-ai-tools#309): the definition's components also name the inventory the run was routed
+  // against, which the record's components do not (the W4 test at the end of this file holds both).
+  const definition = router.civicRouter.harnessDefinition({ configured, selection: ['socrata'], chosenBy: 'model', components: [...components, INVENTORY_COMPONENT] });
   assert.equal(root['analysis.definition_hash'], definition.hash);
   // As composed (C4): the directory set's reasons, not recomputed after loads.
   // R6 W3 (#632, contract item 10): with the gate on and every source On, the
   // record states the router's `selected` where it stated `configured` before
   // W3 — the signed-byte move the gate record names.
-  assert.deepEqual(JSON.parse(root['analysis.sources_offered'] ?? 'null').map((s: { reason: string }) => s.reason), ['selected', 'selected', 'selected', 'not-configured', 'not-configured', 'not-configured', 'not-configured']);
-  // Router 0.6.0 (R8 W3): the three new hosted sources, switches unset, are not configured.
+  assert.deepEqual(JSON.parse(root['analysis.sources_offered'] ?? 'null').map((s: { reason: string }) => s.reason), ['selected', 'selected', 'selected', 'not-configured', 'not-configured', 'selected', 'not-configured']);
+  // Router 0.6.0 (R8 W3): the three new hosted sources, switches unset, are not configured; since router 0.8.0
+  // (S2-B) NYC City Record, sixth in the manifest, is a pack over Socrata, configured and On, so `selected`.
   // skill.text_hash is the final prompt's.
   const skill = spans(traceOf(IN_LOOP)).find((s) => s.name === 'skill_fetch');
   assert.equal(Object.fromEntries(attrPairs(skill!))['skill.text_hash'], sha(systemText(last)));
@@ -474,7 +550,8 @@ test('criterion 5: a packaged in-loop record states routing, the definition hash
   const root = rootAttributes(traceOf(IN_LOOP));
   assert.deepEqual(composition.routing, { method: 'in-loop', version: ROUTER_VERSION });
   assert.equal(composition.definitionHash, root['analysis.definition_hash']);
-  assert.deepEqual(Object.keys(composition).slice(-2), ['routing', 'definitionHash'], 'routing and definitionHash are not the block\'s last two keys');
+  // The property kept: routing and definitionHash close the block, in the harness's order; S2-B W4 adds considered after them.
+  assert.deepEqual(Object.keys(composition).slice(-3), ['routing', 'definitionHash', 'considered'], 'routing, definitionHash and considered are not the block\'s last three keys');
   assert.deepEqual((composition.components as Array<{ id: string }>).map((c) => c.id), ['socrata-mcp-server@https://github.com/npstorey/socrata-mcp-server', '@typedstandards/civic-typed-router']);
   const environment = pkg.extensions?.['org.civicaitools.environment'] as Json;
   const requests = mcpRequests(IN_LOOP);
@@ -559,10 +636,13 @@ test('R10 P1 criterion 4: adaptRecord over the packaged in-loop record shows the
   assert.deepEqual(environment.find((i) => i.label === CARD.definitionLabel), { label: CARD.definitionLabel, value: (composition.definitionHash as string).slice(0, 12), mono: true });
   assert.equal(typeof chooserLines, 'function', 'source-chooser.ts exports no chooserLines');
   assert.deepEqual(chooserLines(model.whereItWent?.chooser), [
-    { text: T.inLoop },
+    // The property kept: the in-loop sentence opens the line. S2-B F9 (case 1; bundle `:70`, `:88`): the record
+    // carries composition.considered, so that entry's two sentences follow it, the inventory by its id as written.
+    { text: `${T.inLoop} The model was shown 4 of the 7 sources in the source inventory civic (version ${INVENTORY_REFERENCE.version}). Those were the sources set up on the site that ran this question, less any turned off for it.` },
     { text: `${T.loaded}Socrata.` },
     { text: `${T.askedNotLoaded}${T.none}.` },
-    { text: `${T.neverAsked}Data Commons${T.separator}Boston OpenContext.` },
+    // S2-B: NYC City Record, in the directory set since router 0.8.0, is never asked about either.
+    { text: `${T.neverAsked}Data Commons${T.separator}Boston OpenContext${T.separator}NYC City Record.` },
   ]);
 });
 
@@ -575,4 +655,313 @@ test('R10 P1 criterion 4: adaptRecord over the packaged all-sources record shows
   assert.equal(environment.find((i) => i.label === CARD.definitionLabel), undefined);
   assert.equal(typeof chooserLines, 'function', 'source-chooser.ts exports no chooserLines');
   assert.deepEqual(chooserLines(model.whereItWent?.chooser), [{ text: T.notRecorded }]);
+});
+
+// --- S2-B W2 and W3 (npstorey/civic-ai-tools#309): City Record, a pack over the Socrata server ------
+//
+// G0-B5 A, both parts: a pack's call states the base's `mcp.source`
+// (`socrata`), `mcp.alias` (`socrata`) and `mcp.server.id`, and the pack's
+// inventory id as `mcp.pack_id`; the record states the same on the call's
+// activity (`civic:sourceId`, `civic:sourceAlias`, `civic:serverId`,
+// `civic:packId`), mints no agent for the pack, and its `dataSources[]` carries
+// Socrata's entry for the pack's dataset. At f0c1eca (router 0.6.0) the pack's
+// tools are not in the dispatch map: every call is refused before any request
+// ("No MCP server registered", `registry.ts:674`), so the Socrata path receives
+// nothing.
+//
+// WHAT MAKES IT ABLE TO FAIL. The refused calls name another portal and another
+// dataset, which no answered call touches, so a refused call that reached the
+// record would show as its own `dataSources` entry; the omitted call would
+// carry the run's portal (`PORTAL`) if that, not the filter's, were injected.
+// The two decoys rewrite only `mcp.source` on the answered pack calls (to the
+// pack's id, then to its `sourceId`) and must fail the same assertions.
+
+const PACK_ID = 'nyc-record@https://data.cityofnewyork.us/d/dg92-zbpx';
+const SOCRATA_SERVER_ID = 'socrata-mcp-server@https://github.com/npstorey/socrata-mcp-server';
+
+type SpanAttrs = Record<string, string | boolean | undefined>;
+
+/** The pack drive's tool-call spans, by the `limit` (or, for `fetch`, the name) each call carried. */
+function packSpan(trace: Json, which: number | 'fetch'): SpanAttrs | undefined {
+  return spans(trace)
+    .filter((s) => s.name === 'mcp_tool_call')
+    .map((s) => Object.fromEntries(attrPairs(s)) as SpanAttrs)
+    .find((a) => {
+      if (which === 'fetch') return a['tool.name'] === 'nyc_record__fetch';
+      if (a['tool.name'] !== 'nyc_record__get_data') return false;
+      try { return (JSON.parse(String(a['tool.arguments'] ?? '{}')) as { limit?: unknown }).limit === which; } catch { return false; }
+    });
+}
+
+/** What the run's loopback model was told about each tool result of its second turn: the evidence of a refusal's cause. */
+function packToolResults(): string {
+  const last = PACK.requests[PACK.requests.length - 1]?.body.messages as Array<{ role?: string; tool_call_id?: string; content?: unknown }> | undefined;
+  return (last ?? []).filter((m) => m.role === 'tool').map((m) => `${m.tool_call_id}: ${String(m.content).slice(0, 200)}`).join('\n');
+}
+
+function packageFrom(trace: Json, toolCalls: unknown) {
+  return buildEvidencePackage({
+    trace,
+    prompt: PACK_QUESTION,
+    output: ANSWER,
+    toolCalls: toolCalls as never,
+    model: 'vendor/model-fixture-1',
+    tokenUsage: { promptTokens: 10, completionTokens: 5 },
+    promptVisibility: 'full_text',
+    title: 'City Record notices',
+    summary: 'City Record notices.',
+    type: 'content/analysis/v1',
+    captureMethod: 'chat-flow-stream',
+    contentProfile: 'datHere',
+    extensions: { 'org.civicaitools.notebook': { nbformat: 4, nbformat_minor: 5, cells: [], metadata: {} } },
+  });
+}
+
+/** W2's record assertions, over any package: the decoys run the same function. */
+function assertPackCallRecorded(pkg: ReturnType<typeof packageFrom>['pkg']): void {
+  const graph = (pkg.provenance as { '@graph': Array<Record<string, unknown>> })['@graph'];
+  const activities = graph.filter((n) => String(n['dcterms:description'] ?? '').startsWith('MCP tool call: nyc_record__get_data') && n['civic:failed'] !== true);
+  assert.equal(activities.length, 2, `the record does not state the two answered pack calls: ${activities.length}`);
+  for (const activity of activities) {
+    assert.equal(activity['civic:sourceId'], 'socrata', 'the pack call\'s activity is not attributed to the base');
+    assert.equal(activity['civic:sourceAlias'], 'socrata', 'the pack call\'s activity does not state the base\'s alias');
+    assert.equal(activity['civic:serverId'], SOCRATA_SERVER_ID, 'the pack call\'s activity does not state the Socrata server');
+    assert.equal(activity['civic:packId'], PACK_ID, 'the pack call\'s activity does not name the pack');
+  }
+  const agents = graph.filter((n) => [n['@type']].flat().includes('prov:Agent'));
+  const packAgents = agents.filter((n) => n['civic:sourceId'] === PACK_ID || n['civic:sourceId'] === 'nyc-record');
+  assert.deepEqual(packAgents.map((n) => n['@id']), [], 'the record mints an agent for the pack');
+  const sources = pkg.dataSources as Array<{ sourceId: string; datasetId?: string; datasetUrl?: string }>;
+  assert.ok(
+    sources.some((d) => d.sourceId === 'socrata' && d.datasetId === PACK_FILTER.dataset_id && d.datasetUrl === `https://${PACK_FILTER.portal}/d/${PACK_FILTER.dataset_id}`),
+    `dataSources[] carries no Socrata entry for ${PACK_FILTER.dataset_id}: ${JSON.stringify(sources)}`,
+  );
+  const text = JSON.stringify(sources);
+  for (const absent of [OTHER_DATASET, OTHER_PORTAL, 'nyc-record']) {
+    assert.equal(text.includes(absent), false, `dataSources[] names ${absent}, which no answered call reached: ${text}`);
+  }
+}
+
+/** The pack drive's trace with `mcp.source` rewritten on every pack span that answered. */
+function decoyTrace(source: string): Json {
+  const trace = JSON.parse(JSON.stringify(traceOf(PACK))) as Json;
+  let rewritten = 0;
+  for (const span of spans(trace)) {
+    const attrs = Object.fromEntries(attrPairs(span)) as SpanAttrs;
+    if (span.name !== 'mcp_tool_call' || !String(attrs['tool.name'] ?? '').startsWith('nyc_record__') || attrs['tool.response_hash'] === undefined) continue;
+    const at = span.attributes.find((a) => a.key === 'mcp.source');
+    if (at) { at.value = { stringValue: source }; rewritten += 1; }
+  }
+  assert.equal(rewritten, 2, `premise: the decoy rewrites the two answered pack calls (${rewritten} found)`);
+  return trace;
+}
+
+test('S2-B W2: the pack\'s calls reach the Socrata path as get_data, with the filter\'s portal and dataset', () => {
+  assert.deepEqual(
+    PACK_MCP_CALLS.map((c) => ({ path: c.path, tool: c.tool, portal: c.args?.portal, dataset_id: c.args?.dataset_id, limit: c.args?.limit })),
+    [
+      { path: '/socrata/mcp', tool: 'get_data', ...PACK_FILTER, limit: 1 },
+      { path: '/socrata/mcp', tool: 'get_data', ...PACK_FILTER, limit: 2 },
+    ],
+    `the Socrata path did not receive the two pack calls; the model was told:\n${packToolResults()}`,
+  );
+});
+
+test('S2-B W2: the pack call\'s span states the base\'s source, alias and server, and the pack\'s id', () => {
+  const span = packSpan(traceOf(PACK), 1);
+  assert.ok(span, 'premise: the trace has a span for the pack call');
+  assert.deepEqual(
+    {
+      source: span!['mcp.source'], alias: span!['mcp.alias'], server: span!['mcp.server.id'], pack: span!['mcp.pack_id'],
+      upstream: span!['tool.upstream_name'], failed: span!['error'] ?? false,
+    },
+    { source: 'socrata', alias: 'socrata', server: SOCRATA_SERVER_ID, pack: PACK_ID, upstream: 'get_data', failed: false },
+    `the pack call's span is not the base's with the pack named; the model was told:\n${packToolResults()}`,
+  );
+});
+
+test('S2-B W2: the record packaged from the run attributes the pack\'s calls to the base, names the pack, and mints no agent for it', () => {
+  const { pkg } = packageFrom(traceOf(PACK), toolCallsOf(PACK));
+  assertPackCallRecorded(pkg);
+});
+
+for (const [label, source] of [['the pack\'s id', PACK_ID], ['the pack\'s sourceId', 'nyc-record']] as const) {
+  test(`S2-B W2 decoy: a trace whose pack calls write mcp.source = ${label} fails W2's record assertions`, () => {
+    const { pkg } = packageFrom(decoyTrace(source), toolCallsOf(PACK));
+    // Fails at the attribution, not on something unrelated inside the assertions (the ORCH's tightening of tree 1).
+    assert.throws(() => assertPackCallRecorded(pkg), (error: unknown) => error instanceof assert.AssertionError && /not attributed to the base/.test(error.message));
+  });
+}
+
+test('S2-B W3: the filter\'s values are sent when the call omits them, not the run\'s portal', () => {
+  const omitted = PACK_MCP_CALLS.find((c) => c.args?.limit === 2);
+  assert.ok(omitted, `the call that omitted portal and dataset_id never reached the Socrata path; the model was told:\n${packToolResults()}`);
+  assert.deepEqual({ portal: omitted!.args?.portal, dataset_id: omitted!.args?.dataset_id }, { ...PACK_FILTER });
+  assert.notEqual(omitted!.args?.portal, PORTAL);
+});
+
+for (const [label, which] of [[`portal ${OTHER_PORTAL}`, 3], [`dataset_id ${OTHER_DATASET}`, 4], [`a fetch of ${OUTSIDE_ID}`, 'fetch']] as const) {
+  test(`S2-B W3: a pack call naming ${label} is refused before any request and recorded as a rejected call naming the pack`, () => {
+    const sent = PACK_MCP_CALLS.filter((c) => (which === 'fetch' ? c.tool === 'fetch' : c.args?.limit === which));
+    assert.deepEqual(sent, [], 'the refused call reached the Socrata path');
+    const span = packSpan(traceOf(PACK), which);
+    assert.ok(span, 'premise: the trace has a span for the refused call');
+    assert.equal(span!['error'], true, 'the call is not recorded as rejected');
+    assert.equal(span!['mcp.pack_id'], PACK_ID, 'the rejected call does not name the pack');
+    const recorded = toolCallsOf(PACK).filter((c) => (which === 'fetch' ? c.name === 'nyc_record__fetch' : c.name === 'nyc_record__get_data' && c.args?.limit === which));
+    assert.equal(recorded.length, 1, 'premise: the completed tool calls hold the refused call once');
+    assert.equal(recorded[0].failed, true, 'the completed tool call is not marked failed');
+  });
+}
+
+// --- S2-B W4 (npstorey/civic-ai-tools#309): the inventory an in-loop run was routed against -----------------
+//
+// G0-B7 A: an in-loop run's root span states `analysis.considered` (a third in-loop attribute), and the record
+// packaged from it states `composition.considered`, the same object: the inventory by reference (`id`, `version`
+// in `<version>+<hash12>` form, `hash`), `total` its entries, `listed` the directory set the model was shown,
+// `rule` `directory-set`, `ruleVersion` `'1'`. An all-sources run states neither (the decoy). The harness
+// definition's components name the inventory; the record's `components[]` do not, so `definitionHash` moves for
+// every in-loop record from this release.
+//
+// WHY THE FORM. The harness carries the span's object into the record unchanged and refuses a `version` that is not
+// `<YYYY-MM-DD>.<n>+<hash12>`: the F3 decoy builds the composition block from the span's value with the bare
+// `CIVIC_INVENTORY.version` and is refused. At tree 3 no route writes the attribute.
+
+const harness = await import('@typedstandards/civic-typed-harness');
+const EXPECTED_CONSIDERED = {
+  inventory: INVENTORY_REFERENCE,
+  total: router.civicRouter.manifest.length,
+  listed: DIRECTORY_IDS.length,
+  rule: 'directory-set',
+  ruleVersion: '1',
+};
+
+test('S2-B W4 premise: the installed router\'s inventory is civic 2026-11-12.1, seven entries, and the drives\' directory set lists four', () => {
+  assert.equal(CIVIC_INVENTORY.id, 'civic');
+  assert.equal(CIVIC_INVENTORY.version, '2026-11-12.1');
+  assert.equal(router.civicRouter.manifest.length, 7);
+  assert.deepEqual(DIRECTORY_IDS, ['socrata', 'data-commons', 'boston-opencontext', 'nyc-record']);
+});
+
+for (const d of [IN_LOOP, NOTEBOOK_IN_LOOP, PACK]) {
+  test(`S2-B W4, ${d.name}: the root span states analysis.considered once: the inventory, seven entries, the four listed, directory-set version 1`, () => {
+    const root = spans(traceOf(d)).find((s) => !s.parentSpanId)!;
+    const written = root.attributes.filter((a) => a.key === 'analysis.considered');
+    assert.equal(written.length, 1, `analysis.considered is written ${written.length} times`);
+    // Byte for byte: the harness's key order, the inventory in the record's form.
+    assert.equal(written[0].value.stringValue, JSON.stringify(EXPECTED_CONSIDERED));
+  });
+}
+
+test('S2-B W4: the record packaged from the in-loop run states composition.considered, last, equal to the span\'s', () => {
+  const { pkg } = packageOf(IN_LOOP);
+  const composition = pkg.extensions?.['org.civicaitools.composition'] as Json;
+  assert.deepEqual(composition.considered, EXPECTED_CONSIDERED);
+  assert.equal((composition.considered as { inventory: { version: string } }).inventory.version, `${CIVIC_INVENTORY.version}+${CIVIC_INVENTORY.hash.slice(0, 12)}`);
+  assert.equal(Object.keys(composition).at(-1), 'considered');
+  assert.deepEqual(JSON.parse(rootAttributes(traceOf(IN_LOOP))['analysis.considered'] ?? 'null'), composition.considered);
+});
+
+test('S2-B W4 decoy (G0-B7 A): an all-sources run states no considered, on the span or in the record', () => {
+  for (const d of [UNSET, ALL_SOURCES, THIRD_VALUE]) {
+    assert.equal(Object.hasOwn(rootAttributes(traceOf(d)), 'analysis.considered'), false, `${d.name}: the root span states analysis.considered`);
+  }
+  const composition = packageOf(UNSET).pkg.extensions?.['org.civicaitools.composition'] as Json;
+  assert.equal(Object.hasOwn(composition, 'considered'), false, 'the all-sources record carries a considered key');
+});
+
+test('S2-B W4: the definition\'s components name the inventory and the record\'s components do not, so definitionHash moves', (t) => {
+  const root = rootAttributes(traceOf(IN_LOOP));
+  const recordComponents = (packageOf(IN_LOOP).pkg.extensions?.['org.civicaitools.composition'] as Json).components as Array<{ id: string; version?: string; guidanceHash?: string }>;
+  const spanComponents = JSON.parse(root['analysis.components'] ?? 'null') as Array<{ id: string }>;
+  assert.deepEqual(spanComponents.map((c) => c.id), recordComponents.map((c) => c.id), 'premise: the record\'s components are the span\'s');
+  assert.equal(recordComponents.some((c) => c.id === INVENTORY_REFERENCE.id), false, 'the record\'s components name the inventory');
+  const before = router.civicRouter.harnessDefinition({ configured, selection: ['socrata'], chosenBy: 'model', components: recordComponents });
+  const after = router.civicRouter.harnessDefinition({ configured, selection: ['socrata'], chosenBy: 'model', components: [...recordComponents, INVENTORY_COMPONENT] });
+  assert.ok(after.components.some((c) => c.id === INVENTORY_REFERENCE.id && c.version === INVENTORY_REFERENCE.version), 'the definition\'s components do not name the inventory');
+  t.diagnostic(`definitionHash for this run: before (record components only) ${before.hash}; after (with ${INVENTORY_COMPONENT.id} ${INVENTORY_COMPONENT.version}) ${after.hash}`);
+  assert.notEqual(before.hash, after.hash, 'premise: naming the inventory moves the definition hash');
+  assert.equal(root['analysis.definition_hash'], after.hash, 'the run\'s definition hash is not the definition that names the inventory');
+});
+
+test('S2-B W4 decoy (F3): a considered whose inventory version is the bare CIVIC_INVENTORY.version is refused by the harness; the span\'s is accepted', () => {
+  const stated = JSON.parse(rootAttributes(traceOf(IN_LOOP))['analysis.considered'] ?? 'null') as typeof EXPECTED_CONSIDERED | null;
+  assert.ok(stated, 'premise: the in-loop root span states analysis.considered');
+  assert.doesNotThrow(() => harness.buildCompositionExtension({ considered: stated! }));
+  const bare = { ...stated!, inventory: { ...stated!.inventory, version: CIVIC_INVENTORY.version } };
+  assert.throws(
+    () => harness.buildCompositionExtension({ considered: bare }),
+    (error: unknown) => error instanceof harness.RecordFieldError && /inventory\.version/.test((error as Error).message),
+  );
+});
+
+// --- S2-B W6, D3 and R5 (npstorey/civic-ai-tools#309): the pack's credit, its base, and the chooser line ------
+//
+// W6 (bundle `:49`; card G0-B8 A): the pack's component is its id with `version` `<version>+<hash12>`, read from the
+// installed manifest entry's `pack` member, and its guidance fields when its block is in the prompt. The pack
+// drive loads City Record and not Socrata, so its base is stated too, as `{ id }`, at its manifest position. The
+// definition's components carry the per-source components, so the credit moves this run's definition hash.
+//
+// D3 = A and R5: the record page names the loaded pack with bundle `:331`'s fallback clause, the id whole in one code
+// part, and states R5's definition once after the groups. The in-loop drive, which loads Socrata only, is the decoy.
+//
+// RED at tree 5b (d99f2532): the pack's component has no version and no base is stated; the Loaded line names no pack.
+
+const PACK_ENTRY = router.civicRouter.manifest.find((entry) => entry.sourceId === 'nyc-record')!;
+const PACK_CREDIT = `${PACK_ENTRY.pack!.version}+${PACK_ENTRY.pack!.hash.slice(0, 12)}`;
+const PACK_DEFINITION = 'A pack is a source with no server of its own. Its requests go through the server of the source named after “using”, limited to what the pack fixes in advance, such as one dataset.';
+
+test('S2-B W6: the pack drive\'s trace and record credit the pack and state its base, which the run did not load', () => {
+  const stated = JSON.parse(rootAttributes(traceOf(PACK))['analysis.components'] ?? 'null') as Array<{ id: string; version?: string; guidanceHash?: string; guidanceOrigin?: string }>;
+  assert.deepEqual(stated.map((c) => c.id), [SOCRATA_SERVER_ID, PACK_ID, '@typedstandards/civic-typed-router']);
+  // S2-B P3R (criterion 4): the base's bare { id }, with what the base reported on the read the check compared.
+  assert.deepEqual(stated[0], { id: SOCRATA_SERVER_ID, reportedName: 'socrata-mcp-server', reportedVersion: '0.9.2' }, 'the base is not stated as { id } with its report alone');
+  const pack = stated[1];
+  assert.equal(pack.version, PACK_CREDIT);
+  assert.equal(PACK_CREDIT, '1.1+ef1b4b6089e9');
+  assert.match(pack.guidanceHash ?? '', /^[0-9a-f]{64}$/);
+  assert.equal(pack.guidanceOrigin, 'inline');
+  const record = (packageFrom(traceOf(PACK), toolCallsOf(PACK)).pkg.extensions?.['org.civicaitools.composition'] as Json).components;
+  assert.deepEqual(record, stated, 'the record\'s components are not the span\'s');
+});
+
+test('S2-B W6: the pack drive\'s definition hash is the definition over the credited components and the stated base', (t) => {
+  const root = rootAttributes(traceOf(PACK));
+  const stated = JSON.parse(root['analysis.components'] ?? 'null') as Array<{ id: string; version?: string }>;
+  assert.equal(stated.find((c) => c.id === PACK_ID)?.version, PACK_CREDIT, 'the run does not credit the pack');
+  const uncredited = stated.filter((c) => c.id !== SOCRATA_SERVER_ID).map((c) => (c.id === PACK_ID ? Object.fromEntries(Object.entries(c).filter(([k]) => k !== 'version')) : c)) as typeof stated;
+  const before = router.civicRouter.harnessDefinition({ configured, selection: ['nyc-record'], chosenBy: 'model', components: [...uncredited, INVENTORY_COMPONENT] });
+  const after = router.civicRouter.harnessDefinition({ configured, selection: ['nyc-record'], chosenBy: 'model', components: [...stated, INVENTORY_COMPONENT] });
+  t.diagnostic(`pack drive definitionHash: before (no credit, no base) ${before.hash}; after ${after.hash}`);
+  assert.notEqual(before.hash, after.hash, 'premise: the credit and the base move the definition hash');
+  assert.equal(root['analysis.definition_hash'], after.hash, 'the run\'s definition hash is not the definition over the credited components');
+  // S2-B P3R (the seat's ruling 4): the reported keys sit beside `id`, so the definition is the same without them.
+  const unreported = stated.map((c) => Object.fromEntries(Object.entries(c).filter(([k]) => k !== 'reportedName' && k !== 'reportedVersion'))) as typeof stated;
+  assert.notDeepEqual(unreported, stated, 'premise: the stated components carry reported keys');
+  const withoutKeys = router.civicRouter.harnessDefinition({ configured, selection: ['nyc-record'], chosenBy: 'model', components: [...unreported, INVENTORY_COMPONENT] });
+  assert.equal(withoutKeys.hash, after.hash, 'the reported keys moved the definition hash');
+});
+
+test('S2-B P3R: the pack drive read the base\'s list once, on the Socrata path, for its two sent pack calls', () => {
+  assert.deepEqual(PACK_LISTS, ['/socrata/mcp'], `the pack drive's tools/list reads: ${JSON.stringify(PACK_LISTS)}`);
+  assert.equal(PACK_MCP_CALLS.length, 2, 'premise: two pack calls were sent');
+});
+
+test('S2-B D3 and R5: adaptRecord over the pack drive\'s record names the pack on the Loaded line, the id whole in a code part, then the definition once', async () => {
+  const { adaptRecord } = (await import(ADAPT_RECORD)) as Loose;
+  const { chooserLines } = (await import(SOURCE_CHOOSER)) as Loose;
+  const model = adaptRecord({ stored: packageFrom(traceOf(PACK), toolCallsOf(PACK)).pkg, resolution: null, row: { slug: 's2b-d3', summary: 'City Record notices.', contentProfile: 'datHere', captureMethod: 'chat-flow-stream' }, instance: null, servedStatement: null });
+  const lines = chooserLines(model.whereItWent?.chooser) as Loose[];
+  const loaded = lines.find((l) => String(l.text).startsWith('Loaded: '));
+  assert.equal(loaded?.text, `Loaded: NYC City Record (a pack recorded as ${PACK_ID}, using Socrata).`);
+  assert.deepEqual(loaded?.parts, [{ text: 'Loaded: NYC City Record (a pack recorded as ' }, { text: PACK_ID, code: true }, { text: ', using Socrata).' }]);
+  assert.deepEqual(lines.filter((l) => l.kind === 'definition'), [{ text: PACK_DEFINITION, kind: 'definition' }]);
+  assert.deepEqual(lines.at(-1), { text: PACK_DEFINITION, kind: 'definition' });
+});
+
+test('S2-B R5 decoy: adaptRecord over the in-loop drive\'s record, which loads no pack, shows no clause and no definition', async () => {
+  const { chooserLines } = (await import(SOURCE_CHOOSER)) as Loose;
+  const model = await recordView(IN_LOOP);
+  const lines = chooserLines(model.whereItWent?.chooser) as Loose[];
+  assert.equal(lines.some((l) => l.kind !== undefined || l.parts !== undefined || String(l.text).includes('A pack is')), false);
 });

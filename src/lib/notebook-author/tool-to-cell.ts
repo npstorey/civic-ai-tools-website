@@ -14,6 +14,7 @@ import { codeCell, markdownCell } from './cells.ts';
 import { CIVIC_MANIFEST } from '@typedstandards/civic-typed-router';
 import { upstreamToolName } from '../mcp/operation-types.ts';
 import { npmPackageVariants } from '../mcp/registry.ts';
+import { RETIRED_HOSTED_SERVERS, type RetiredHostedServer } from '../mcp/retired-sources.ts';
 
 /**
  * `call`, named by its upstream name (#599 W3). Since W3 a record names a tool
@@ -43,6 +44,9 @@ function byUpstreamName<T extends { name?: string }>(call: T): T {
  *   - `not_offered`     — the source is configured here, but this run was not
  *                         offered it, so nothing was sent (R6 W1).
  *   - `unknown`         — it failed and we cannot honestly say more.
+ *   - `base_changed`    — a pack's call, not sent because the server its
+ *                         requests go through did not match the pack's pins
+ *                         (S2-B P3R, the base check; bundle revision 4).
  *
  * `unknown` is a real member, not a placeholder: claiming a specific cause we
  * did not measure is exactly the false precision docs/design-principles.md
@@ -51,7 +55,7 @@ function byUpstreamName<T extends { name?: string }>(call: T): T {
  * has no branch for it — so such a call lands in `unknown` rather than being
  * asserted as a refusal.
  */
-export const TOOL_FAILURE_KINDS = ['timeout', 'unavailable', 'not_configured', 'not_offered', 'unknown'] as const;
+export const TOOL_FAILURE_KINDS = ['timeout', 'unavailable', 'not_configured', 'not_offered', 'unknown', 'base_changed'] as const;
 
 export type ToolFailureKind = (typeof TOOL_FAILURE_KINDS)[number];
 
@@ -383,6 +387,20 @@ function hostedEntryFor(name: string) {
   return CIVIC_MANIFEST.find((entry) => npmPackageVariants(entry).length > 0 && entry.toolNames.includes(name));
 }
 
+// A tool of a server this site no longer runs (S2-B W11, npstorey/civic-ai-tools#309; card G0-B4 A). Records
+// sealed while NYC City Record ran its own server name that server's seven tools, which no manifest declares
+// from router 0.8.0 on, so the router no longer reads the alias off the name and `hostedEntryFor` finds no
+// entry. Each returned what an answer rests on, as Charter's `get_section` does, and no helper here calls it:
+// a step stated as not reproduced, in both generators, through the one predicate. Known by the frozen entry
+// in `RETIRED_HOSTED_SERVERS`: the call's name is `<alias>__<tool>`, or the bare tool name, which no live
+// source declares.
+
+/** The retired server a recorded tool name belongs to, if any. */
+function retiredServerFor(name: string): RetiredHostedServer | undefined {
+  return Object.values(RETIRED_HOSTED_SERVERS).find((retired) =>
+    retired.toolNames.some((tool) => name === tool || name === `${retired.alias}__${tool}`));
+}
+
 /**
  * Whether a tool call is a step in the analysis pipeline — the ONE definition
  * both notebook generators use (`./synthesize.ts` through `renderFetchToolCell`
@@ -404,7 +422,7 @@ export function isAnalysisStep(candidate: StepCandidate): boolean {
   if (call.failed) return true;
   if (call.name === undefined) return true;
   if (call.name === 'get_data') return call.args.type === 'query';
-  return RERUNNABLE_STEP_TOOLS.has(call.name) || NOT_RERUNNABLE_STEP_TOOLS.has(call.name);
+  return RERUNNABLE_STEP_TOOLS.has(call.name) || NOT_RERUNNABLE_STEP_TOOLS.has(call.name) || retiredServerFor(call.name) !== undefined;
 }
 
 export interface ToolCellOutput {
@@ -790,16 +808,21 @@ function renderOpenContextQueryCell(
  * reader through this path — the same discipline `friendlyStreamError()` and
  * `notebookExecutionErrorMessage()` enforce in src/lib/streaming.ts, applied
  * to the notebook surface. "Data source", not "MCP server"
- * (design-principles.md Principle 9).
+ * (design-principles.md Principle 9); "server" in the `base_changed` entry is
+ * R5's ruled word for the base's server (the owner's D1, OA-790).
  */
 export const FAILURE_REASON: Record<ToolFailureKind, string> = {
   timeout: 'The data source did not respond in time, so the request returned no data.',
-  unavailable: 'The data source could not be reached, so the request returned no data.',
+  unavailable: 'The data source could not be reached or could not answer, so the request returned no data.',
   not_configured: 'No live data source was configured for this request, so it returned no data.',
   // Not an empty result: nothing was asked. Not "turned off": on a replay the
   // reader turned nothing off (R6 W1).
-  not_offered: 'This question did not use this data source, so nothing was sent to it.',
+  not_offered: 'This question was not using this data source at the time, so nothing was sent to it.',
   unknown: 'The request could not be completed, so it returned no data.',
+  // Not sent (S2-B P3R): the server a pack's requests go through did not
+  // match what the pack was written for.
+  base_changed:
+    "The site that ran this question did not send this request. This data source's requests go through another source's server, and that server did not match what this data source was written for.",
 };
 
 /**
@@ -950,9 +973,10 @@ function renderFailedToolCell(
     `The original analysis tried to ${describeAttempt(call, ctx)}. ` +
       `${describeToolFailure(call.failureKind)}`,
     '',
-    // A `not_offered` call was never sent, so it did not "return no data" (R6
-    // W1, the G5 string review); every other kind keeps the sentence it had.
-    call.failureKind === 'not_offered'
+    // A `not_offered` or `base_changed` call was never sent, so it did not
+    // "return no data" (R6 W1, the G5 string review; the owner's D1); every
+    // other kind keeps the sentence it had.
+    call.failureKind === 'not_offered' || call.failureKind === 'base_changed'
       ? 'No code cell is generated for it — a request that was not sent cannot be ' +
         'reproduced. The steps below rest only on the requests that did return data.'
       : 'No code cell is generated for it — a request that returned no data cannot be ' +
@@ -1006,11 +1030,25 @@ function renderFailedToolCell(
  * claim is measured rather than stated.
  */
 function renderNotRerunnableStepCell(call: PhaseAToolCall): ToolCellOutput {
+  // R8's words are City Record's; a later retirement brings its own words with its entry.
+  const retired = retiredServerFor(call.name);
+  const cityRecord = retired !== undefined && retired === RETIRED_HOSTED_SERVERS['nyc-record'] ? retired : undefined;
   const hosted = hostedEntryFor(call.name);
   // The entry's npm-package variant, whatever the configuration (#632 D11):
   // the notebook names what the source runs.
   const pinned = hosted ? npmPackageVariants(hosted)[0] : undefined;
-  const why = hosted && pinned
+  const why = cityRecord
+    ? [
+      // The research check's R8 (the owner's D4 = A), verbatim. The server is named as R8 spells it, never from
+      // the manifest's `displayName`, which now names the pack; the pin is the frozen entry's.
+      `The original analysis called \`${call.name}\`, a tool of BetaNYC's City Record MCP server. ` +
+        `The site that ran the analysis used the pinned package \`${cityRecord.package}@${cityRecord.version}\` for that server. ` +
+        'It no longer runs that server: City Record notices now come through the Socrata source. ' +
+        'This notebook has no helper that calls that tool, so no cell here repeats the request, and nothing here states what it returned.',
+      '',
+      'No code cell is generated for it, and nothing is cited for it: this document did not read that source.',
+    ]
+    : hosted && pinned
     ? [
       `The original analysis read a section of law through \`${call.name}\`, a tool of the ` +
         `${hosted.displayName}, which the instance runs from the pinned package ` +

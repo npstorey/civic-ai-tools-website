@@ -238,7 +238,7 @@ async function drive(run: () => Promise<string | null>): Promise<Driven> {
   return { ...settled, settledBy45, stallsAt45, timersCreated: clientTimersCreated - createdBefore, timersLive: liveClientTimers.size, stuck: false };
 }
 
-const getData = () => callMcpTool('get_data', { type: 'query', dataset_id: 'abcd-1234', select: 'count(*)', portal: 'data.example.org' });
+const getData = () => callMcpTool('socrata__get_data', { type: 'query', dataset_id: 'abcd-1234', select: 'count(*)', portal: 'data.example.org' });
 const getObservations = () => callMcpTool('get_observations', { variable_dcid: 'Count_Person', place_dcid: 'geoId/06' });
 const searchBoston = () => callMcpTool('ckan__search_datasets', { query: 'permits' });
 

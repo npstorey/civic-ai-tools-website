@@ -58,15 +58,21 @@ const CHARTER_EXPOSED = NYC_CHARTER_TOOL_NAMES.map((tool) => `nyc_charter__${too
 /** Router 0.6.0's three more hosted sources (R8 W3), each offered by its own
  *  switch, unset in UNSET and SET: their forty-one tools are withheld and
  *  refused naming each one's switch, beside Charter's five. ALL_ON switches
- *  all four on. */
-const NEW_HOSTED = civicRouter.manifest.filter((entry) => ['nyc-checkbook', 'nyc-record', 'nys-legislation'].includes(entry.sourceId));
+ *  all four on.
+ *
+ *  S2-B: two since router 0.8.0, under which NYC City Record is a pack over
+ *  Socrata, offered wherever Socrata is: their thirty-four tools, beside
+ *  Charter's five. */
+const NEW_HOSTED = civicRouter.manifest.filter((entry) => ['nyc-checkbook', 'nys-legislation'].includes(entry.sourceId));
+/** The website's preamble helper composes the three code sources' entries; a pack's entry is the router's (its goldens). */
+const CODE_SOURCES = <T extends string>(sources: readonly T[]): T[] => sources.filter((id) => id !== 'nyc-record');
 const NEW_HOSTED_EXPOSED = NEW_HOSTED.flatMap((entry) => entry.toolNames.map((tool) => `${entry.alias}__${tool}`));
 const HOSTED_EXPOSED = [...CHARTER_EXPOSED, ...NEW_HOSTED_EXPOSED];
 const HOSTED_PREFIXES = ['nyc_charter__', ...NEW_HOSTED.map((entry) => `${entry.alias}__`)];
 
 const UNSET: McpRegistryEnv = { socrataUrl: 'https://socrata.invalid', dataCommonsUrl: 'https://data-commons.invalid' };
 const SET: McpRegistryEnv = { ...UNSET, bostonOpencontextUrl: 'https://opencontext.invalid/mcp' };
-const ALL_ON: McpRegistryEnv = { ...SET, nycCharterHosting: 'sandbox', nycCheckbookHosting: 'sandbox', nycRecordHosting: 'sandbox', nysLegislationHosting: 'sandbox' };
+const ALL_ON: McpRegistryEnv = { ...SET, nycCharterHosting: 'sandbox', nycCheckbookHosting: 'sandbox', nysLegislationHosting: 'sandbox' };
 const hostedUnconfigured = {
   ...Object.fromEntries(CHARTER_EXPOSED.map((tool) => [tool, 'NYC_CHARTER_HOSTING'])),
   ...Object.fromEntries(NEW_HOSTED.flatMap((entry) => entry.toolNames.map((tool) => [`${entry.alias}__${tool}`, entry.configuration.addressVariable]))),
@@ -79,7 +85,7 @@ test('the registry: configured, the Boston server routes its six tools; unset, t
   const set = buildMcpRegistry(SET);
   assert.equal(set.servers['boston-opencontext']?.endpointUrl, 'https://opencontext.invalid/mcp');
   assert.deepEqual(set.unconfiguredTools, hostedUnconfigured, 'with Boston set, only the hosted sources\' tools (switches unset) are refused, each naming its own switch');
-  assert.deepEqual([...new Set(Object.values(hostedUnconfigured))], ['NYC_CHARTER_HOSTING', 'NYC_CHECKBOOK_HOSTING', 'NYC_RECORD_HOSTING', 'NYS_LEGISLATION_HOSTING']);
+  assert.deepEqual([...new Set(Object.values(hostedUnconfigured))], ['NYC_CHARTER_HOSTING', 'NYC_CHECKBOOK_HOSTING', 'NYS_LEGISLATION_HOSTING']);
   assert.deepEqual(buildMcpRegistry(ALL_ON).unconfiguredTools, {}, 'with every optional source on, nothing is refused');
   const unset = buildMcpRegistry(UNSET);
   assert.equal(unset.servers['boston-opencontext'], undefined);
@@ -87,7 +93,7 @@ test('the registry: configured, the Boston server routes its six tools; unset, t
     assert.equal(unset.toolIndex[tool], undefined, `${tool} is routable with the source unset`);
     assert.equal(unset.unconfiguredTools[tool], 'BOSTON_OPENCONTEXT_MCP_URL', `${tool} does not name its variable`);
   }
-  assert.deepEqual(Object.keys(unset.unconfiguredTools).sort(), [...CKAN_EXPOSED, ...HOSTED_EXPOSED].sort(), 'unset refuses more or fewer than Boston\'s six and the hosted sources\' forty-six');
+  assert.deepEqual(Object.keys(unset.unconfiguredTools).sort(), [...CKAN_EXPOSED, ...HOSTED_EXPOSED].sort(), 'unset refuses more or fewer than Boston\'s six and the hosted sources\' thirty-nine');
   assert.deepEqual(Object.keys(unset.servers), ['socrata', 'data-commons']);
   assert.deepEqual(Object.keys(set.servers), ['socrata', 'data-commons', 'boston-opencontext'], 'insertion order moved');
   // An empty string is unset, as `configuredAddressForSource` reads it.
@@ -116,11 +122,12 @@ test('the offered tools: configured, the very same array; unset, the list withou
   for (const locked of [undefined, 'records.city-a.example']) {
     const all = mcpToolsFor(locked);
     assert.equal(offeredMcpTools(all, ALL_ON), all, 'an instance with every optional source on is not handed the same array');
-    // SET: Boston on, the four hosted switches unset: the vocabulary less
-    // the hosted sources' forty-six (Charter's five, router 0.6.0's forty-one).
+    // SET: Boston on, the three hosted switches unset: the vocabulary less
+    // the hosted sources' thirty-nine (Charter's five, and thirty-four since
+    // router 0.8.0 made City Record a pack; router 0.6.0's forty-one before).
     const set = offeredMcpTools(all, SET);
     assert.deepEqual(set, all.filter((t) => t.type === 'function' && !HOSTED_PREFIXES.some((prefix) => t.function.name.startsWith(prefix))), 'SET is not the vocabulary less the hosted sources\' tools');
-    assert.equal(names(all).length - names(set).length, 46);
+    assert.equal(names(all).length - names(set).length, 39);
     const offered = offeredMcpTools(all, UNSET);
     assert.deepEqual(names(offered), names(set).filter((n) => !n.startsWith('boston__ckan__')));
     assert.equal(names(set).length - names(offered).length, 6);
@@ -129,15 +136,16 @@ test('the offered tools: configured, the very same array; unset, the list withou
 });
 
 test('the prompt pieces: configured, the pre-rule text; unset, the same lines less the source', () => {
-  assert.deepEqual(offeredSkillSources(SET), ['socrata', 'data-commons', 'boston-opencontext']);
-  assert.deepEqual(offeredSkillSources(UNSET), ['socrata', 'data-commons']);
-  assert.equal(crossSourcePreamble(offeredSkillSources(SET)), CROSS_SOURCE_PREAMBLE);
+  // S2-B: router 0.8.0 offers NYC City Record (a pack over Socrata) wherever Socrata is.
+  assert.deepEqual(offeredSkillSources(SET), ['socrata', 'data-commons', 'boston-opencontext', 'nyc-record']);
+  assert.deepEqual(offeredSkillSources(UNSET), ['socrata', 'data-commons', 'nyc-record']);
+  assert.equal(crossSourcePreamble(CODE_SOURCES(offeredSkillSources(SET))), CROSS_SOURCE_PREAMBLE);
   assert.equal(
-    outroFor(offeredSkillSources(SET)),
+    outroFor(CODE_SOURCES(offeredSkillSources(SET))),
     'When you get results, summarize clearly and cite the dataset ID (for Socrata), the variable DCID + source dataset (for Data Commons), or the resource UUID + dataset title (for Boston OpenContext).',
   );
 
-  const unset = crossSourcePreamble(offeredSkillSources(UNSET));
+  const unset = crossSourcePreamble(CODE_SOURCES(offeredSkillSources(UNSET)));
   for (const needle of NEEDLES) assert.ok(!unset.includes(needle), `the unset preamble carries ${needle}`);
   assert.match(unset, /^You have access to TWO MCP data sources/);
   // Every other line is a line of the three-source preamble, so every tool it
@@ -147,20 +155,23 @@ test('the prompt pieces: configured, the pre-rule text; unset, the same lines le
   assert.deepEqual(foreign, [], 'the unset preamble has a line the three-source preamble does not');
   assert.equal([...unset.matchAll(/Tools:\s*([^.\n]+)\./g)].length, 2);
 
-  const outro = outroFor(offeredSkillSources(UNSET));
+  const outro = outroFor(CODE_SOURCES(offeredSkillSources(UNSET)));
   assert.equal(outro, 'When you get results, summarize clearly and cite the dataset ID (for Socrata) or the variable DCID + source dataset (for Data Commons).');
 });
 
 test('the lock section names Boston OpenContext only where it is configured', () => {
-  assert.match(portalLockGuidance('records.city-a.example', SET), /\(Data Commons, and Boston OpenContext for Boston\) are separate, remain available/);
+  // S2-B: with City Record's pack, which router 0.8.0 offers wherever Socrata is, named last; since router 0.9.0
+  // its lock mention is "City Record for New York City notices" (the router's text, not this site's; S2-B P3R).
+  assert.match(portalLockGuidance('records.city-a.example', SET), /\(Data Commons, Boston OpenContext for Boston, and City Record for New York City notices\) are separate, remain available/);
   const unset = portalLockGuidance('records.city-a.example', UNSET);
   for (const needle of NEEDLES) assert.ok(!unset.includes(needle), `the unset lock section carries ${needle}`);
-  assert.match(unset, /the other data source described above \(Data Commons\) is separate, remains available, and keeps its own scope\.$/);
+  assert.match(unset, /the other data sources described above \(Data Commons, and City Record for New York City notices\) are separate, remain available, and keep their own scope\.$/);
 });
 
 test('trace attribution: the routed source, or none — never a throw', () => {
   assert.equal(routedSourceId('ckan__query_data', SET), 'boston-opencontext');
-  assert.equal(routedSourceId('get_data', SET), 'socrata');
+  // By full name (S2-B, G1-1 = A): a bare get_data is refused as ambiguous since router 0.8.0.
+  assert.equal(routedSourceId('socrata__get_data', SET), 'socrata');
   assert.equal(routedSourceId('get_observations', UNSET), 'data-commons');
   assert.equal(routedSourceId('ckan__query_data', UNSET), undefined);
   assert.equal(routedSourceId('no_such_tool', SET), undefined);

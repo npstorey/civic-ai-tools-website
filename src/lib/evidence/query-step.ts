@@ -103,8 +103,10 @@ export function describeQueryOutcome(
       : '';
     // A `not_offered` call was never sent (R6 W1), so it is not stated as a
     // request that did not complete: its reason alone, by the G5 string
-    // review. Still `failed`, so the refused-request count includes it.
-    if (kind === 'not_offered') return { kind: 'failed', text: `${FAILURE_REASON[kind]}${elapsed}` };
+    // review. Still `failed`, so the refused-request count includes it. A
+    // `base_changed` call was not sent either, and shows alone too (S2-B P3R,
+    // the owner's D1).
+    if (kind === 'not_offered' || kind === 'base_changed') return { kind: 'failed', text: `${FAILURE_REASON[kind]}${elapsed}` };
     return { kind: 'failed', text: `This request did not complete. ${FAILURE_REASON[kind]}${elapsed}` };
   }
   if (entry.resultRows !== undefined) {

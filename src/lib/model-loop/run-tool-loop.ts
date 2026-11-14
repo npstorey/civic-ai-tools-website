@@ -56,6 +56,11 @@ import { hash as traceHash } from '../evidence/trace.ts';
 import { deriveOperationType, isTool, toolSpanNames, upstreamToolName } from '../mcp/operation-types.ts';
 import type { ToolFailureKind } from '../notebook-author/tool-to-cell.ts';
 import { PortalLockedCallError, portalOutsideLock } from '../portal-lock.ts';
+import { injectPackFilter, packCallOutsideFilter, packFilterOf, PackFilterRefusedError } from '../mcp/pack-filter.ts';
+import { BaseChangedError, createBaseCheck, type BaseCheck, type BaseReader } from '../mcp/base-check.ts';
+
+/** The base check's read: the client's `tools/list` read, loaded when a pack call first needs it. */
+const readBase: BaseReader = async (baseSourceId) => (await import('../mcp/client.ts')).readServerTools(baseSourceId);
 import type { LoadOutcome } from '@typedstandards/civic-typed-harness';
 
 export interface TraceContext {
@@ -110,6 +115,13 @@ export interface LoadStepResult {
   systemPrompt?: string;
   /** The next request's tools, when `outcome` is `loaded`. */
   tools?: ChatCompletionTool[];
+  /**
+   * Whether a question was put to the reader about this load's source, on
+   * this load or on the earlier load whose decision it reuses (S2-B, G0-B1 A;
+   * the bundle's `trace.loadSpan.loadAsked`). Written as `tool.load_asked`
+   * when defined; absent when the step cannot tell, and on a load that threw.
+   */
+  asked?: boolean;
 }
 
 /** What the loop tells a load about where it was made. */
@@ -283,6 +295,13 @@ export interface ToolLoopOptions {
    * `llm_inference` span then states its own request's system prompt hash.
    */
   loadStep?: LoadStep;
+  /**
+   * The base check this run applies before each pack call (S2-B P3R,
+   * `../mcp/base-check.ts`). Omitted, the core makes its own for the run, so
+   * every caller's pack calls are checked; a test passes one to inject the
+   * read or the clock. Never passed to skip the check.
+   */
+  checkBase?: BaseCheck;
   /** Label for this loop's operator log lines. */
   logContext?: string;
 }
@@ -436,6 +455,9 @@ const UNRUN_TOOL_CALL_NOTE =
  * the notebook, "the source could not be reached" is the same fact either way.
  */
 function toolFailureKindOf(error: unknown): ToolFailureKind {
+  // S2-B P3R: a pack call whose base did not match its pins, recognised by
+  // type before any classification: nothing was sent (bundle revision 4).
+  if (error instanceof BaseChangedError) return 'base_changed';
   switch (classifyStreamError(error)) {
     case 'mcp_timeout':
       return 'timeout';
@@ -832,6 +854,7 @@ export async function runToolLoop(options: ToolLoopOptions): Promise<ToolLoopRes
     onEvent,
     trace,
     loadStep,
+    checkBase = createBaseCheck({ read: readBase }),
     logContext = 'model-loop',
   } = options;
 
@@ -978,6 +1001,7 @@ export async function runToolLoop(options: ToolLoopOptions): Promise<ToolLoopRes
           trace!.builder.endSpan(loadSpanId, {
             'tool.load_outcome': answer.outcome,
             'tool.duration_ms': loadDuration,
+            ...(answer.asked !== undefined ? { 'tool.load_asked': answer.asked } : {}),
           });
         }
         emit({ type: 'tool_complete', iteration: currentIteration, call: loadEntry, priorCalls: loadPriorCalls, durationMs: loadDuration });
@@ -1039,6 +1063,14 @@ export async function runToolLoop(options: ToolLoopOptions): Promise<ToolLoopRes
        * well as `portal`, so a `domain` naming another portal is refused, and
        * a `domain` naming the locked portal agrees with what is injected.
        */
+      /**
+       * A pack's call (S2-B W3, npstorey/civic-ai-tools#309): the pack's fixed
+       * portal and dataset are injected where the call omits them, BEFORE the
+       * run portal on the next line would be, so a pack call never carries a portal its
+       * pack does not read. Like the run portal, never into a malformed set.
+       */
+      const pack = packFilterOf(name);
+      if (pack && !argumentsMalformed) injectPackFilter(upstreamToolName(name), args, pack);
       if (portal && !argumentsMalformed && isTool(name, 'get_data') && !args.portal) args.portal = portal;
 
       /**
@@ -1056,6 +1088,11 @@ export async function runToolLoop(options: ToolLoopOptions): Promise<ToolLoopRes
         lockedPortal && !argumentsMalformed && portalOutsideLock(upstreamToolName(name), args, lockedPortal) !== null
           ? new PortalLockedCallError(lockedPortal)
           : null;
+      // The pack's twin of the lock (S2-B W3): a pack call naming a portal,
+      // dataset or identifier outside its pack's fixed values is refused
+      // before anything is sent, and recorded like any other rejected call.
+      const packRefusal =
+        pack && !argumentsMalformed && packCallOutsideFilter(upstreamToolName(name), args, pack) ? new PackFilterRefusedError(pack) : null;
 
       const operationType = deriveOperationType(name, args);
       const reason = generateToolReason(args, name);
@@ -1091,6 +1128,10 @@ export async function runToolLoop(options: ToolLoopOptions): Promise<ToolLoopRes
         'tool.upstream_name': spanNames.upstreamName,
         'mcp.alias': spanNames.alias,
         'mcp.server.id': spanNames.serverId,
+        // A pack's call goes to its base's server and is attributed to the
+        // base above; the pack is named here (G0-B5 A; harness 0.12.0 reads it
+        // as `civic:packId`). Written on a refused pack call too.
+        ...(pack ? { 'mcp.pack_id': pack.packId } : {}),
       });
 
       // Started outside the `try`, so the time until a rejection is measured
@@ -1099,6 +1140,11 @@ export async function runToolLoop(options: ToolLoopOptions): Promise<ToolLoopRes
       try {
         if (argumentsMalformed) throw malformedToolArgumentsError();
         if (lockRefusal) throw lockRefusal;
+        if (packRefusal) throw packRefusal;
+        // The base check (S2-B P3R): a pack's call is sent only after its base
+        // matched a pin, read at most once per five minutes in this run. Inside
+        // the timed region, so a refused call's span is timed to its refusal.
+        if (pack && !argumentsMalformed) await checkBase(pack);
 
         const result = await boundToolCall(executeToolCall(name, args), name, toolTimeoutMs);
         const toolDuration = Date.now() - toolStartTime;
@@ -1163,7 +1209,7 @@ export async function runToolLoop(options: ToolLoopOptions): Promise<ToolLoopRes
         // Do not add a second name, and do not reintroduce the raw text —
         // if a consumer needs more than the `ToolFailureKind` values
         // (`TOOL_FAILURE_KINDS`: `timeout`, `unavailable`, `not_configured`,
-        // `not_offered`, `unknown`), the vocabulary widens rather than the
+        // `not_offered`, `unknown`, `base_changed`), the vocabulary widens rather than the
         // span carrying prose.
         // `tool.duration_ms` is the SAME attribute name the success path
         // ends with at `:857` — one name for one measurement, so the PROV-O

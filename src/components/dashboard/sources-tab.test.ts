@@ -162,7 +162,7 @@ test('UX-2 P4b criterion 1: the Sources tab renders X22d\'s sentence and its lin
 });
 
 /** T13 (#632 G7): each source's one reader name, written out. */
-const READER_NAME: Record<string, string> = { socrata: 'Socrata', 'data-commons': 'Data Commons', 'boston-opencontext': 'Boston OpenContext', 'nyc-charter': 'NYC Charter, Laws and Rules' };
+const READER_NAME: Record<string, string> = { socrata: 'Socrata', 'data-commons': 'Data Commons', 'boston-opencontext': 'Boston OpenContext', 'nyc-charter': 'NYC Charter, Laws and Rules', 'nyc-record': 'NYC City Record' };
 
 
 /** An ISO date (or timestamp) as the Sources tab writes it, in words: "2026-10-20" → "20 October 2026" (UX pass row 14). */

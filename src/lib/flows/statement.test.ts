@@ -159,7 +159,8 @@ test('criterion 3 (default): the recipients name exactly the configured hosts', 
   const s = built(DEFAULT, 'the default');
   assert.deepEqual(hostsOf(s), ['api.datacommons.org', 'openrouter.ai', 'socrata.fixture.example']);
   assert.deepEqual(s.recipients.map((r) => r.role), ['model-endpoint', 'function-logs'], 'no sign-in, analytics or notebook executor is configured');
-  assert.deepEqual(s.sources.map((x) => x.sourceId), ['socrata', 'data-commons']);
+  // S2-B: router 0.8.0 offers NYC City Record (a pack over Socrata) wherever Socrata is; its host is Socrata's, above.
+  assert.deepEqual(s.sources.map((x) => x.sourceId), ['socrata', 'data-commons', 'nyc-record']);
 });
 
 test('criterion 3 (custom model endpoint): the model recipient names the configured host, and the base version moves', () => {

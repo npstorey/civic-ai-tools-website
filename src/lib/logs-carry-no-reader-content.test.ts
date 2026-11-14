@@ -361,7 +361,7 @@ _resetDefaultModelClientForTests();
 
 let toolCallResult = '';
 const TOOL_CALL_LOG = await captureConsole(async () => {
-  toolCallResult = await callMcpTool('get_data', {
+  toolCallResult = await callMcpTool('socrata__get_data', {
     type: 'query',
     dataset_id: 'abcd-1234',
     portal: PORTAL,

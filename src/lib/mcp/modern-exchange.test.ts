@@ -215,7 +215,7 @@ async function settle<T>(run: () => Promise<T>): Promise<{ value?: T; error?: Er
 }
 
 const count = (seen: Seen[], method: string) => seen.filter((s) => s.method === method).length;
-const tool = (dataset: string) => () => callMcpTool('get_data', { type: 'query', dataset_id: dataset, select: 'count(*)', portal: 'data.example.org' });
+const tool = (dataset: string) => () => callMcpTool('socrata__get_data', { type: 'query', dataset_id: dataset, select: 'count(*)', portal: 'data.example.org' });
 
 // --- socrata: the modern exchange -----------------------------------------------
 

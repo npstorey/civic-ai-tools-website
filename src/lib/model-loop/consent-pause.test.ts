@@ -541,7 +541,10 @@ test('R9 P1 (#668, note 3): a hold whose reader\'s stream is gone ends no-answer
   assert.equal(stored!.expiresAt, d.pausedAt[0] + 600_000, 'the entry\'s expiry moved');
   assert.equal(d.kv.calls.filter((c) => c.op === 'set').length, 1, 'the hold wrote the store again');
   const [span] = loadSpans(d.trace);
-  assert.deepEqual(Object.keys(span).sort(), ['tool.arguments', 'tool.duration_ms', 'tool.load_outcome', 'tool.name', 'tool.operation_type']);
+  // The property kept: the load span carries nothing of the pause (no key, no decision). S2-B W5 (G0-B1 A,
+  // npstorey/civic-ai-tools#309): it also states that a question was put, as the bundle's tool.load_asked.
+  assert.deepEqual(Object.keys(span).sort(), ['tool.arguments', 'tool.duration_ms', 'tool.load_asked', 'tool.load_outcome', 'tool.name', 'tool.operation_type']);
+  assert.equal(span['tool.load_asked'], true, 'a held pause states that a question was put');
 });
 
 // --- Criterion 7: the event and the load span carry nothing of the pause ------------------
@@ -553,6 +556,8 @@ test('criterion 7: the consent_pause event\'s args and message carry no key, and
   assert.equal(Object.hasOwn(event, 'args'), false);
   assert.equal(Object.hasOwn(event, 'message'), false, 'the loop event carries reader copy');
   const span = loadSpans(d.trace)[0];
-  assert.deepEqual(Object.keys(span).sort(), ['tool.arguments', 'tool.duration_ms', 'tool.load_outcome', 'tool.name', 'tool.operation_type']);
+  // The property kept: the base's five and nothing of the pause; S2-B W5 adds tool.load_asked, true after a held pause.
+  assert.deepEqual(Object.keys(span).sort(), ['tool.arguments', 'tool.duration_ms', 'tool.load_asked', 'tool.load_outcome', 'tool.name', 'tool.operation_type']);
+  assert.equal(span['tool.load_asked'], true, 'a held pause states that a question was put');
   assert.ok(!JSON.stringify(d.trace).includes(key), 'the key reached the trace');
 });

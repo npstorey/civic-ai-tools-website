@@ -43,7 +43,7 @@ const READ = [
   'GITHUB_CLIENT_ID', 'GITHUB_CLIENT_SECRET', 'OIDC_ISSUER', 'OIDC_CLIENT_ID', 'OIDC_CLIENT_SECRET', 'OIDC_PROVIDER_NAME',
   'NEXT_PUBLIC_ANALYTICS_SERVICE', 'NEXT_PUBLIC_ANALYTICS_ID', 'NEXT_PUBLIC_GA_MEASUREMENT_ID',
   'SOCRATA_MCP_URL', 'DATA_COMMONS_MCP_URL', 'DATA_COMMONS_API_KEY', 'BOSTON_OPENCONTEXT_MCP_URL',
-  'NYC_CHARTER_HOSTING', 'NYC_CHECKBOOK_HOSTING', 'NYC_RECORD_HOSTING', 'NYS_LEGISLATION_HOSTING', 'NYS_LEGISLATION_API_KEY',
+  'NYC_CHARTER_HOSTING', 'NYC_CHECKBOOK_HOSTING', 'NYS_LEGISLATION_HOSTING', 'NYS_LEGISLATION_API_KEY',
   'APP_HOST', 'NEXTAUTH_URL', 'SITE_DEPLOYMENT_GUIDE_URL',
 ];
 
@@ -59,12 +59,14 @@ const Panel = (await load('components/sources/SourcesPanel.tsx')).default as Com
 const facts = await load('lib/privacy-facts.ts');
 const { buildFlowsStatement } = await load('lib/flows/statement.ts');
 
-/** The three new sources, each with its switch. */
+/** The three new sources, each with its switch. S2-B: two since router 0.8.0, under which NYC City Record is a pack
+ *  over the Socrata server, offered wherever Socrata is with no switch and no upstream recipient of its own (S2-B W8,
+ *  `changelog.test.ts`); its what-line is still held below (criterion 7). */
 const NEW_SOURCES = [
   { sourceId: 'nyc-checkbook', env: { NYC_CHECKBOOK_HOSTING: 'sandbox' } },
-  { sourceId: 'nyc-record', env: { NYC_RECORD_HOSTING: 'sandbox' } },
   { sourceId: 'nys-legislation', env: { NYS_LEGISLATION_HOSTING: 'sandbox', NYS_LEGISLATION_API_KEY: PLACEHOLDER_KEY } },
 ] as const;
+const WHAT_SOURCES: ReadonlyArray<{ sourceId: string; env: Record<string, string> }> = [...NEW_SOURCES, { sourceId: 'nyc-record', env: {} }];
 
 /** The approved what-lines as the panel shows them (first letter upper-cased). */
 const PANEL_WHAT: Record<string, string> = {
@@ -103,7 +105,7 @@ async function surface(component: ComponentType<Record<string, unknown>>, props:
   return mount(h(component, props));
 }
 
-for (const { sourceId, env } of NEW_SOURCES) {
+for (const { sourceId, env } of WHAT_SOURCES) {
   test(`R8 W3 criterion 7 (${sourceId}): the panel row shows the what-line upper-cased, and the privacy row prints it as stored`, async () => {
     await under(env, async () => {
       const shown = await surface(Panel);
@@ -129,7 +131,6 @@ const UPSTREAM_RECEIVES = 'the requests the connector makes for data, which can 
 /** Each new source's one outbound host and its one manifest-stated holder. */
 const UPSTREAM: Record<string, { host: string; holder: string }> = {
   'nyc-checkbook': { host: 'www.checkbooknyc.com', holder: 'Office of the New York City Comptroller' },
-  'nyc-record': { host: 'data.cityofnewyork.us', holder: 'City of New York' },
   'nys-legislation': { host: 'legislation.nysenate.gov', holder: 'New York State Senate' },
 };
 

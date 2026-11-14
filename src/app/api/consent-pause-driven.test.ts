@@ -468,7 +468,10 @@ test('criterion 7: the decision token, matched as stored, appears in the held ru
 
 test('criterion 7: the held load span carries no attribute beyond the base\'s five', () => {
   const [span] = loadSpanAttributes(traceOf(HELD));
-  assert.deepEqual(Object.keys(span).sort(), ['tool.arguments', 'tool.duration_ms', 'tool.load_outcome', 'tool.name', 'tool.operation_type']);
+  // The property kept: nothing of the pause beyond the base's five. S2-B W5 (G0-B1 A, npstorey/civic-ai-tools#309)
+  // adds the bundle's tool.load_asked, true: the held pause put a question.
+  assert.deepEqual(Object.keys(span).sort(), ['tool.arguments', 'tool.duration_ms', 'tool.load_asked', 'tool.load_outcome', 'tool.name', 'tool.operation_type']);
+  assert.equal(span['tool.load_asked'], true, 'the held pause does not state that a question was put');
 });
 
 // --- query-notebook forwards the pause ----------------------------------------------------
@@ -626,7 +629,9 @@ for (const how of ['signal', 'cancel'] as const) {
       const trace = traceOf(d.rest);
       const loads = loadSpanAttributes(trace);
       assert.deepEqual(loads.map((a) => a['tool.load_outcome']), ['no-answer']);
-      assert.deepEqual(Object.keys(loads[0]).sort(), ['tool.arguments', 'tool.duration_ms', 'tool.load_outcome', 'tool.name', 'tool.operation_type']);
+      // The property kept: the base's five, nothing of the pause; S2-B W5 adds tool.load_asked, true (the pause held).
+      assert.deepEqual(Object.keys(loads[0]).sort(), ['tool.arguments', 'tool.duration_ms', 'tool.load_asked', 'tool.load_outcome', 'tool.name', 'tool.operation_type']);
+      assert.equal(loads[0]['tool.load_asked'], true, 'the held pause does not state that a question was put');
       assert.ok(!JSON.stringify(trace).includes(d.key), 'the key reached the trace');
     }
   });

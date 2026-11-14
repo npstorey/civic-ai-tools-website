@@ -76,7 +76,8 @@ const CHOOSER_GROUPS: CSSProperties = { margin: '2px 0 0', paddingLeft: '18px' }
 
 /** What chose the sources: its first sentence, then, in-loop, one line per group, and a sub-line per source requested and not loaded. */
 function ChooserLine({ chooser }: { chooser: SourceChooser }) {
-  const [first, ...groups] = chooserLines(chooser);
+  const [first, ...lines] = chooserLines(chooser);
+  const groups = lines.filter((line) => line.kind !== 'definition');
   return (
     <div data-part="where-it-went-chooser" style={{ margin: '8px 0 0' }}>
       <p style={{ margin: 0, color: 'var(--text-primary)' }}>{first.text}</p>
@@ -84,7 +85,7 @@ function ChooserLine({ chooser }: { chooser: SourceChooser }) {
         <ul style={CHOOSER_GROUPS}>
           {groups.map((line, i) => (
             <li key={i}>
-              {line.text}
+              {line.parts ? line.parts.map((part, j) => (part.code ? <code key={j} style={{ overflowWrap: 'anywhere' }}>{part.text}</code> : part.text)) : line.text}
               {line.items !== undefined && (
                 <ul style={CHOOSER_GROUPS}>
                   {line.items.map((item, j) => <li key={j}>{item}</li>)}
@@ -94,6 +95,7 @@ function ChooserLine({ chooser }: { chooser: SourceChooser }) {
           ))}
         </ul>
       )}
+      {lines.filter((line) => line.kind === 'definition').map((line, i) => <p key={i} style={{ margin: '2px 0 0' }}>{line.text}</p>)}
     </div>
   );
 }

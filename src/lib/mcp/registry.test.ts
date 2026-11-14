@@ -15,6 +15,8 @@ import {
   McpConfigurationError,
   resolveServerForTool,
   readMcpEnvFromProcess,
+  routeToolCall,
+  routedSourceId,
   skillRoutingTraceAttributes,
   type McpServerConfig,
 } from './registry.ts';
@@ -30,7 +32,9 @@ const TEST_ENV = {
 
 test('Socrata tool names route to the Socrata endpoint', () => {
   const registry = buildMcpRegistry(TEST_ENV);
-  for (const toolName of ['get_data', 'search', 'fetch']) {
+  // By full name (S2-B, G1-1 = A): since router 0.8.0 a bare get_data or fetch is refused as ambiguous, because
+  // NYC City Record, a pack over Socrata, has both.
+  for (const toolName of ['socrata__get_data', 'socrata__search', 'socrata__fetch']) {
     // An addressed server: these sources are configured with an address.
     const server = resolveServerForTool(registry, toolName) as McpServerConfig | undefined;
     assert.ok(server, `expected server for tool "${toolName}"`);
@@ -175,23 +179,24 @@ test('#258 C4: with no socrataUrl the registry omits the Socrata server and name
   assert.equal(resolveServerForTool(registry, 'ckan__query_data')!.sourceId, 'boston-opencontext');
   // A registry with every source on has nothing unconfigured. With a hosted
   // source's switch unset (router 0.3.0, #617 P3; router 0.6.0's three more,
-  // R8 W3), its tools are refused naming its own switch, and nothing else is.
+  // R8 W3, two since router 0.8.0 made NYC City Record a pack over Socrata), its
+  // tools are refused naming its own switch, and nothing else is.
   const switchedTools = (sourceIds: readonly string[]) => Object.fromEntries(
     civicRouter.manifest
       .filter((e) => sourceIds.includes(e.sourceId))
       .flatMap((e) => e.toolNames.map((t) => [`${e.alias}__${t}`, e.configuration.addressVariable])),
   );
   assert.deepEqual(
-    buildMcpRegistry({ ...TEST_ENV, nycCharterHosting: 'sandbox', nycCheckbookHosting: 'sandbox', nycRecordHosting: 'sandbox', nysLegislationHosting: 'sandbox' }).unconfiguredTools,
+    buildMcpRegistry({ ...TEST_ENV, nycCharterHosting: 'sandbox', nycCheckbookHosting: 'sandbox', nysLegislationHosting: 'sandbox' }).unconfiguredTools,
     {},
   );
   assert.deepEqual(
     buildMcpRegistry({ ...TEST_ENV, nycCharterHosting: 'sandbox' }).unconfiguredTools,
-    switchedTools(['nyc-checkbook', 'nyc-record', 'nys-legislation']),
+    switchedTools(['nyc-checkbook', 'nys-legislation']),
   );
   assert.deepEqual(
     buildMcpRegistry(TEST_ENV).unconfiguredTools,
-    switchedTools(['nyc-charter', 'nyc-checkbook', 'nyc-record', 'nys-legislation']),
+    switchedTools(['nyc-charter', 'nyc-checkbook', 'nys-legislation']),
   );
   assert.equal(
     Object.values(buildMcpRegistry(TEST_ENV).unconfiguredTools).filter((v) => v === 'NYC_CHARTER_HOSTING').length,
@@ -283,16 +288,16 @@ test('Every tool appears in exactly one server (no accidental overlap)', () => {
   assert.equal(allTools.size, 11, 'registry should host exactly 11 tools across three sources');
 });
 
-// R8 W3 criterion 1: router 0.6.0's three hosted entries, each offered by its
+// R8 W3 criterion 1: router 0.6.0's three hosted entries (two since router
+// 0.8.0, under which NYC City Record is a pack over Socrata), each offered by its
 // own switch, read by name in `readMcpEnvFromProcess`. Set alone (State
 // legislation with a placeholder key, never a real one), a switch puts exactly
 // its own source in the hosted map and offers exactly its own tools beside the
 // addressed sources'; red at the pin commit, where the reader passes Charter's
 // switch only and no switch reaches the router.
-const HOSTING_VARIABLES = ['NYC_CHARTER_HOSTING', 'NYC_CHECKBOOK_HOSTING', 'NYC_RECORD_HOSTING', 'NYS_LEGISLATION_HOSTING', 'NYS_LEGISLATION_API_KEY'] as const;
+const HOSTING_VARIABLES = ['NYC_CHARTER_HOSTING', 'NYC_CHECKBOOK_HOSTING', 'NYS_LEGISLATION_HOSTING', 'NYS_LEGISLATION_API_KEY'] as const;
 const NEW_HOSTED = [
   { sourceId: 'nyc-checkbook', variable: 'NYC_CHECKBOOK_HOSTING' },
-  { sourceId: 'nyc-record', variable: 'NYC_RECORD_HOSTING' },
   { sourceId: 'nys-legislation', variable: 'NYS_LEGISLATION_HOSTING' },
 ] as const;
 
@@ -323,5 +328,51 @@ test('R8 W3 criterion 1: each new switch, set alone, puts its source in the host
       if (saved[name] === undefined) delete process.env[name];
       else process.env[name] = saved[name];
     }
+  }
+});
+
+// --- S2-B W2 and W3 (npstorey/civic-ai-tools#309): NYC City Record, a pack over the Socrata server ----
+//
+// Since router 0.8.0 City Record's tools are the Socrata server's `get_data`
+// and `fetch`, exposed as `nyc_record__get_data` and `nyc_record__fetch`. A
+// call of one goes to the Socrata server under its upstream name, and the
+// call is attributed to the base (`socrata`), never to the pack's `sourceId`.
+// With `SOCRATA_MCP_URL` unset it is refused per call naming that variable,
+// as `socrata__get_data` is. At f0c1eca (router 0.6.0) neither name is in the
+// dispatch map and both refuse with "No MCP server registered".
+
+const PACK_TOOLS = ['nyc_record__get_data', 'nyc_record__fetch'] as const;
+
+test('S2-B W2: a pack call routes to the Socrata server under its upstream name, attributed to socrata', () => {
+  const registry = buildMcpRegistry(TEST_ENV);
+  for (const name of PACK_TOOLS) {
+    const call = routeToolCall(registry, name);
+    assert.equal(call.server.sourceId, 'socrata', `${name} is not routed to the Socrata server`);
+    assert.equal((call.server as McpServerConfig).endpointUrl, 'https://socrata-mcp.example.org/mcp');
+    assert.equal(call.exposedName, name);
+    assert.equal(call.upstreamName, name.slice('nyc_record__'.length), `${name} is not sent under its upstream name`);
+    assert.equal(routedSourceId(name, TEST_ENV), 'socrata', `${name} is not attributed to the base`);
+  }
+});
+
+test('S2-B W3: with no socrataUrl a pack call is refused per call naming SOCRATA_MCP_URL, as socrata__get_data is', () => {
+  const registry = buildMcpRegistry({ ...TEST_ENV, socrataUrl: undefined });
+  const refusal = (name: string): unknown => {
+    try {
+      routeToolCall(registry, name);
+    } catch (error) {
+      return error;
+    }
+    return undefined;
+  };
+  const control = refusal('socrata__get_data');
+  assert.ok(control instanceof McpConfigurationError && /SOCRATA_MCP_URL/.test(control.message), 'premise: socrata__get_data is refused naming SOCRATA_MCP_URL');
+  for (const name of PACK_TOOLS) {
+    const error = refusal(name);
+    assert.ok(
+      error instanceof McpConfigurationError && /SOCRATA_MCP_URL/.test(error.message),
+      `${name} is not refused naming SOCRATA_MCP_URL: ${error instanceof Error ? `${error.name}: ${error.message}` : String(error)}`,
+    );
+    assert.equal(registry.unconfiguredTools[name], 'SOCRATA_MCP_URL');
   }
 });

@@ -518,7 +518,8 @@ function expectedRow(surface: Surface, outcome: 'complete' | 'error') {
     signedIn: true,
     model: 'vendor/model-fixture-1',
     outcome,
-    sourcesOffered: 'data-commons,socrata',
+    // S2-B: router 0.8.0 offers NYC City Record (a pack over Socrata) wherever Socrata is.
+    sourcesOffered: 'data-commons,nyc-record,socrata',
     sourcesUsed: 'socrata',
     count: 1,
   };
@@ -563,6 +564,10 @@ const SURFACES: Surface[] = ['compare-stream', 'query-notebook', 'compare'];
 const OK: Record<Surface, Drive> = {} as Record<Surface, Drive>;
 const FAILED: Record<Surface, Drive> = {} as Record<Surface, Drive>;
 const THROWN: Record<Surface, Drive> = {} as Record<Surface, Drive>;
+// S2-B P3R (the seat's ruling 6): a record states what a server reported only when the run itself read it, and a
+// server that keeps no session is read only by its handshake, which the process's first run makes. One run first,
+// read by nothing below, so every run compared byte for byte here reads the same servers.
+await drive('compare-stream');
 for (const surface of SURFACES) {
   OK[surface] = await drive(surface);
   FAILED[surface] = await drive(surface, { fail: true, bothPanels: true });

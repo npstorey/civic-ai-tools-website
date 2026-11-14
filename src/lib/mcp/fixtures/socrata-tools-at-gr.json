@@ -1,0 +1,121 @@
+{
+  "_meta": {
+    "copiedFrom": "the GR read of the deployed Socrata server's initialize and tools/list (npstorey/civic-ai-tools issue 317, section 5)",
+    "sha256": "3e9f5ae14e984385c07cfc1b7aaa72b7ab39e7164c9f2b6e1f1e5f3c603dc52e",
+    "readAt": "2026-11-12T19:39:19Z",
+    "protocolSent": "2025-11-25"
+  },
+  "serverInfo": {
+    "name": "socrata-mcp-server",
+    "version": "0.9.2"
+  },
+  "tools": [
+    {
+      "description": "A unified tool to interact with Socrata open-data portals.",
+      "inputSchema": {
+        "properties": {
+          "dataset_id": {
+            "description": "Dataset ID (for metadata, column-info, data-access)",
+            "type": "string"
+          },
+          "domain": {
+            "description": "The Socrata domain to query; defaults to the portal this server is configured for (data.cityofnewyork.us)",
+            "type": "string"
+          },
+          "group": {
+            "description": "SoQL GROUP BY clause",
+            "type": "string"
+          },
+          "having": {
+            "description": "SoQL HAVING clause",
+            "type": "string"
+          },
+          "limit": {
+            "description": "Number of results to return (e.g., \"10\", \"100\"), or \"all\". For type \"query\", at most 10,000 rows per call: a larger number is reduced to 10,000, and \"all\" returns up to 10,000 rows, with next_offset when more remain.",
+            "type": "string"
+          },
+          "offset": {
+            "description": "Offset for pagination",
+            "type": "integer"
+          },
+          "order": {
+            "description": "SoQL ORDER BY clause",
+            "type": "string"
+          },
+          "portal": {
+            "description": "Alias for domain — the Socrata portal domain",
+            "type": "string"
+          },
+          "q": {
+            "description": "Full-text search query within the dataset (used in data access)",
+            "type": "string"
+          },
+          "query": {
+            "description": "General search phrase OR a full SoQL query string. If this is a full SoQL query (e.g., starts with SELECT), other SoQL parameters like select, where, q might be overridden or ignored by the handler in favor of the full SoQL query. If it's a search phrase, it will likely be used for a full-text search ($q parameter to Socrata).",
+            "type": "string"
+          },
+          "select": {
+            "description": "SoQL SELECT clause",
+            "type": "string"
+          },
+          "type": {
+            "description": "Operation to perform",
+            "enum": [
+              "catalog",
+              "metadata",
+              "query",
+              "metrics"
+            ],
+            "type": "string"
+          },
+          "where": {
+            "description": "SoQL WHERE clause",
+            "type": "string"
+          }
+        },
+        "required": [
+          "type"
+        ],
+        "type": "object"
+      },
+      "name": "get_data",
+      "title": "Unified Socrata Access"
+    },
+    {
+      "description": "Search the open data portal this server is configured for (data.cityofnewyork.us) and return matching dataset IDs",
+      "inputSchema": {
+        "additionalProperties": false,
+        "properties": {
+          "query": {
+            "description": "Search query for full-text search",
+            "type": "string"
+          }
+        },
+        "required": [
+          "query"
+        ],
+        "type": "object"
+      },
+      "name": "search",
+      "title": "Search data.cityofnewyork.us"
+    },
+    {
+      "description": "Retrieve full dataset metadata or record content from the open data portal this server is configured for (data.cityofnewyork.us)",
+      "inputSchema": {
+        "additionalProperties": false,
+        "properties": {
+          "id": {
+            "description": "Identifier returned by the search tool",
+            "type": "string"
+          }
+        },
+        "required": [
+          "id"
+        ],
+        "type": "object"
+      },
+      "name": "fetch",
+      "title": "Fetch Document from data.cityofnewyork.us"
+    }
+  ]
+}

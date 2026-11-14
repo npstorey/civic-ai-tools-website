@@ -66,7 +66,9 @@ const { runToolLoop } = await import('../model-loop/run-tool-loop.ts');
 const { createModelClient } = await import('../model-client.ts');
 const { buildEvidencePackage } = await import('./packager.ts');
 
-const NOTEBOOK_REASON = 'This question did not use this data source, so nothing was sent to it.';
+// S2-B P3R (the owner's D5, OA-790): bundle revision 4's words in the site's form. The property kept: the reason
+// says nothing was sent, in the active voice, and names no source.
+const NOTEBOOK_REASON = 'This question was not using this data source at the time, so nothing was sent to it.';
 const STREAM_COPY = 'This question did not use that data source, so nothing was sent to it.';
 const FOR_MODEL =
   'That data source was not used for this question, so this request was not sent to it. Do not call its tools again,' +

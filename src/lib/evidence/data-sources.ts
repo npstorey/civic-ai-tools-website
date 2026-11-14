@@ -33,6 +33,7 @@
 import { CIVIC_MANIFEST } from '@typedstandards/civic-typed-router';
 import { sourceIdForToolName } from '../mcp/operation-types.ts';
 import { hostedServerPurl, npmPackageVariants } from '../mcp/registry.ts';
+import { RETIRED_HOSTED_SERVERS } from '../mcp/retired-sources.ts';
 import {
   buildDataSources as harnessBuildDataSources,
   resolveToolSource as harnessResolveToolSource,
@@ -72,6 +73,12 @@ export { CIVIC_SOURCE_REGISTRY, type CivicSourceRegistry, type DataSourceEntry, 
  *   - no `serverUrl`.
  * With no hosted source in the walk the extra entries mint nothing, so a run
  * that touched none keeps the bytes it had.
+ *
+ * A source whose hosted server was retired (`RETIRED_HOSTED_SERVERS`; NYC City
+ * Record, by router 0.8.0) keeps an entry of the same shape from its frozen
+ * last pin, after the manifest's, so a record sealed while it was hosted still
+ * names it and states what it ran. A run since the retirement attributes no
+ * call to it (a pack's calls are the base's), so the entry mints nothing new.
  */
 export function dataSourceRegistry(runMcpServers?: readonly DatHereMcpServer[]): CivicSourceRegistry {
   const registry: CivicSourceRegistry = { ...CIVIC_SOURCE_REGISTRY };
@@ -87,6 +94,16 @@ export function dataSourceRegistry(runMcpServers?: readonly DatHereMcpServer[]):
       agentTitle: `${sourceId} MCP Server`,
       catalogType: hosting.kind,
       aggregatePortalUrl: recorded ? recorded : hostedServerPurl(hosting),
+    };
+  }
+  for (const [sourceId, retired] of Object.entries(RETIRED_HOSTED_SERVERS)) {
+    if (Object.hasOwn(registry, sourceId)) continue;
+    const recorded = runMcpServers?.find((server) => server.name === sourceId)?.url;
+    registry[sourceId] = {
+      displayName: retired.displayName.replace(/ MCP Server$/, ''),
+      agentTitle: `${sourceId} MCP Server`,
+      catalogType: 'npm-package',
+      aggregatePortalUrl: recorded ? recorded : hostedServerPurl(retired),
     };
   }
   return registry;
