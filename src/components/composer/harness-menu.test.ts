@@ -45,7 +45,7 @@ import {
   type HostElement,
   type Surface,
 } from '../sources/surface-test-harness.ts';
-import { hasClass, within } from '../ui/ui-test-helpers.ts';
+import { cssRules, hasClass, within } from '../ui/ui-test-helpers.ts';
 
 registerSurfaceHooks({
   ...CONSENT_SURFACE_STUBS,
@@ -347,6 +347,46 @@ test('P3b-2 criterion 1 (2B; fixes 1, 3, 4, 6): /ask signed in: one harness menu
   );
   const all = rowIn(panel, W.all);
   assert.deepEqual([all.type, all.props.href], ['a', SETTINGS_HREF], 'All settings is not a link to SETTINGS_HREF (fix 6)');
+});
+
+// --- Fix round 1 (#729 6882289225): the two defects the preview pre-read found -------------------------------------
+//
+// (1) Below 640 px the send arrow left the box: it was placed against the box's field, which, below 640, also holds the
+// trigger's line. The arrow is placed against a wrapper that holds the textarea and the arrow only, so the trigger's
+// line is outside it (P3b-1's arrow, "8 px in" at the box's right and bottom; O8 = A moves only the trigger).
+// (2) At 900 px and up the visible separator lost its leading space ("Default harness· <model>"): it opened an
+// inline-block, whose leading white space collapses. The separator stays in an inline span; only the model's name is
+// the cut inline-block. The layout halves (the arrow's box in the textarea's; the gaps around the dot) are the
+// instrument's AR and SP reads; these read the structure that makes them hold.
+
+test('P3b-2 fix round 1 (O8 = A): the send arrow sits in a wrapper with the textarea only, so the trigger\'s line below 640 px cannot move it out of the box', async () => {
+  SIGNED_IN();
+  answers();
+  await consentWith();
+  const page = await mountPage(ASK());
+  const els = page.elements();
+  const arrow = within(composerOf(page)).find((el) => el.type === 'button' && el.props.type === 'submit');
+  assert.ok(arrow, 'premise: the arrow');
+  const parent = els.find((el) => within(el).includes(arrow!) && (el.props.children === arrow || (Array.isArray(el.props.children) && (el.props.children as unknown[]).includes(arrow))));
+  assert.ok(parent, 'premise: the arrow\'s parent element');
+  assert.ok(within(parent!).some((el) => el.type === 'textarea'), 'the arrow\'s parent does not hold the textarea');
+  assert.ok(!within(parent!).some((el) => part(el) === 'harness-menu'), 'the arrow is placed in the element that also holds the harness menu (below 640 px its line pushes the arrow out of the box)');
+});
+
+test('P3b-2 fix round 1 (D3 = A): the visible separator sits outside the cut inline-block, which holds the model\'s name alone; the trigger reads "Default harness · <model>"', async () => {
+  SIGNED_IN();
+  answers();
+  await consentWith();
+  const page = await mountPage(ASK());
+  const trigger = triggerOf(page);
+  const cut = within(trigger).filter((el) => hasClass(el, 'composer-harness-model-name'));
+  assert.deepEqual(cut.map((el) => textOf(el)), [CAT[0].name], 'the cut element does not hold the model\'s name alone');
+  assert.ok(textOf(trigger).startsWith(`${W.trigger} · ${CAT[0].name}`), `the trigger reads ${JSON.stringify(textOf(trigger))}`);
+  const outer = cssRules('.composer-harness-model').join(';');
+  const name = cssRules('.composer-harness-model-name').join(';');
+  assert.doesNotMatch(outer, /inline-block/, 'the element holding the separator is an inline-block (its leading space collapses)');
+  assert.match(name, /display\s*:\s*inline-block/, 'the model\'s name is not the cut inline-block');
+  assert.match(name, /text-overflow\s*:\s*ellipsis/, 'the model\'s name is not cut with an ellipsis');
 });
 
 test('P3b-2 criterion 1 (2B item 2): Model lists the catalog as radios, the model in use checked, each with its tag; choosing the second changes the model the next question sends', async () => {
