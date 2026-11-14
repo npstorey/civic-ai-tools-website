@@ -167,10 +167,12 @@ export default function HarnessMenu({ variant, models, model, onModel, session, 
         trigger={
           <>
             {HARNESS_TRIGGER}
+            {/* The separator stays in an inline span, so its leading space is kept; only the model's name is the cut
+                inline-block (fix round 1, #729 6882289225: an inline-block that opened with the separator dropped it). */}
             {modelName ? (
               <span className="composer-harness-model">
                 {HARNESS_TRIGGER_SEPARATOR}
-                {modelName}
+                <span className="composer-harness-model-name">{modelName}</span>
               </span>
             ) : null}
           </>

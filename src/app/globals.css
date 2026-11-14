@@ -1592,6 +1592,10 @@ footer a:visited {
   }
 
   .composer-harness-model {
+    display: inline;
+  }
+
+  .composer-harness-model-name {
     display: inline-block;
     max-width: 130px;
     overflow: hidden;
