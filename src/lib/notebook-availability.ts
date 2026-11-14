@@ -53,7 +53,7 @@ export const NOTEBOOKS_NOT_OFFERED_MESSAGE =
 
 /** What the query form says about notebook mode where it is off. */
 export const NOTEBOOK_MODE_UNAVAILABLE_REASON =
-  'Not offered on this site: it does not run notebooks, so questions are answered in standard mode.';
+  'Not offered on this site: it does not run notebooks, so questions are answered in a Standard session.';
 
 /**
  * How the form offers notebook mode to one visitor:

@@ -105,7 +105,8 @@ test('#547 C3: the reason the form shows is in the reader\'s words', () => {
   for (const word of ['EXECUTOR_DRIVER', 'none', 'driver', 'executor', 'sandbox']) {
     assert.ok(!NOTEBOOK_MODE_UNAVAILABLE_REASON.includes(word), `the reason names "${word}"`);
   }
-  assert.match(NOTEBOOK_MODE_UNAVAILABLE_REASON, /standard mode/);
+  // UX-2 P3b-2 (D5 = B, #729 6877110969): the session type's name, as the harness menu says it.
+  assert.match(NOTEBOOK_MODE_UNAVAILABLE_REASON, /a Standard session/);
 });
 
 test('#547 C2: the route refuses under none with a stated reason, status and code', () => {

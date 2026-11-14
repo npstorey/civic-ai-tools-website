@@ -662,7 +662,7 @@ in an error after the model has already answered: the unset driver is
 and the home page, the harness menu's Session type item (in the question
 box) shows the Sandbox option disabled, with the reason under it: "Not
 offered on this site: it does not run notebooks, so questions are
-answered in standard mode." This holds signed in or not; a signed-out
+answered in a Standard session." This holds signed in or not; a signed-out
 reader is not asked to sign in for a mode that signing in would not turn
 on. `/ask` starts in standard mode, including for a reader whose
 session had stored a notebook choice; the stored choice is kept, not

@@ -131,15 +131,15 @@ const W = {
   session: 'Session type',
   sandbox: 'Sandbox',
   standard: 'Standard',
-  notebookDesc: 'Generates and executes a Jupyter notebook against live data. Typically 30 to 90 seconds. The notebook and a cryptographic execution record are signed by the platform.',
+  notebookDesc: 'Generates and executes a Jupyter notebook against live data. Typically 30 to 90 seconds. The notebook and a cryptographic execution record are signed by this site.',
   compare: 'Compare with a second harness',
   compareDesc: 'Adds a second answer from training data alone, side by side. Runs one extra model call per question.',
   compareReason: 'Not offered in a Sandbox session. Switch Session type to Standard to compare.',
   all: 'All settings',
   signOutModel: 'Sign in to choose a model.',
   signInMore: 'Sign in for more options',
-  /** Where no sign-in is offered, the Sandbox option's reason: `QueryForm.tsx:612` at b4766f1, verbatim (fix 10). */
-  noSignInSandbox: 'Executed-sandbox mode generates and runs a Jupyter notebook against live data, then signs the execution record. Sign in to enable.',
+  /** Where no sign-in is offered, the Sandbox option's reason (fix 10), as the owner ruled it (D1 = B, #729 6877110969). */
+  noSignInSandbox: 'Not offered on this site: a Sandbox session needs you to sign in, and this site has no sign-in.',
 };
 /** Compare's values: pending the words check (criterion 13; v2 ruling 3), in one place. */
 const PENDING_COMPARE = { on: 'On', off: 'Off' };

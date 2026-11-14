@@ -151,11 +151,10 @@ const ALLOWLIST: readonly Allowed[] = [
   { file: 'src/lib/streaming.ts', rows: ':2118', reason: 'sense 2', text: 'records analyzed', count: 1 },
 
   // composer/copy.ts: "execution record" (C12), moved from QueryForm.tsx with the words by UX-2 P3b-2 (fix 5, #729
-  // 6865424128): the Sandbox option's description (`notebookDesc`, moved verbatim) and, where no sign-in is offered,
-  // its reason (`QueryForm.tsx:612` at b4766f1, verbatim; fix 10). The provider-named form of the reason
-  // (`QueryForm.tsx:611`) is not carried: the state it was shown in no longer renders a Session type item.
-  { file: 'src/components/composer/copy.ts', rows: 'C12 (notebookDesc, moved)', reason: 'keep', text: 'Generates and executes a Jupyter notebook against live data. Typically 30 to 90 seconds. The notebook and a cryptographic execution record are signed by the platform.', count: 1 },
-  { file: 'src/components/composer/copy.ts', rows: 'C12 (the no-sign-in Sandbox reason, moved)', reason: 'keep', phrase: 'Executed-sandbox mode generates and runs a Jupyter notebook against live data, then signs the execution record.', count: 1 },
+  // 6865424128): the Sandbox option's description (`notebookDesc`; its last sentence as ruled, D4 = B, #729 6877110969).
+  // The no-sign-in Sandbox reason that also carried "execution record" (`QueryForm.tsx:611-612` at b4766f1) was replaced
+  // by the owner's D1 = B sentence, which holds no record word, so its row is gone (re-measured: one text part here).
+  { file: 'src/components/composer/copy.ts', rows: 'C12 (notebookDesc, moved; D4 = B)', reason: 'keep', text: 'Generates and executes a Jupyter notebook against live data. Typically 30 to 90 seconds. The notebook and a cryptographic execution record are signed by this site.', count: 1 },
 
   // Download file names (D6).
   { file: 'src/components/evidence/NotebookSection.tsx', rows: ':96 (D6, file name)', reason: 'keep', text: 'record-', count: 1 },

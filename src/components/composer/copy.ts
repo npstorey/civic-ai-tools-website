@@ -16,10 +16,10 @@
  *
  * UX-2 P3b-2 adds the harness menu's words (the contract's Words table: R1 = A,
  * D3 = A, Q11 = A, ASK3 = A, C1 = A, C2 = A, C3 = A, C6 = A), CA-1a's
- * where-line (C1 = A; v2 ruling 2), and the words the gear's region carried,
- * moved verbatim (`notebookDesc`, `compareDesc`, the no-sign-in Sandbox
- * sentence, "Why these models?"). Each is one constant here, so a words ruling
- * is a one-line edit. Compare's "On" / "Off" await criterion 13's words check
+ * where-line (C1 = A; v2 ruling 2), and the words the gear's region carried
+ * (`notebookDesc`, `compareDesc`, "Why these models?"), moved verbatim but for
+ * the owner's rulings on P3b-2's words memo (D1 = B, D4 = B; #729 6877110969).
+ * Each is one constant here, so a words ruling is a one-line edit. Compare's "On" / "Off" await criterion 13's words check
  * (v2 ruling 3) and ship as that pair, one constant each.
  */
 
@@ -112,13 +112,16 @@ export const DATA_SOURCES_ITEM = {
 
 /** Rows 4-5, 15: the Session type item and its two values. */
 export const SESSION_TYPE_ITEM = { label: 'Session type', sandbox: 'Sandbox', standard: 'Standard' } as const;
-/** Moved verbatim from the form's response-mode block (`notebookDesc`, `QueryForm.tsx:533-535` at b4766f1). */
-export const SANDBOX_DESCRIPTION = 'Generates and executes a Jupyter notebook against live data. Typically 30 to 90 seconds. The notebook and a cryptographic execution record are signed by the platform.';
 /**
- * Where sign-in is not offered, the Sandbox option's reason: the form's sign-in branch's sentence, moved verbatim
- * (`QueryForm.tsx:612` at b4766f1; fix 10). An item for criterion 13's words check (v3 conflict ruling 3).
+ * The form's response-mode block's `notebookDesc` (`QueryForm.tsx:533-535` at b4766f1), with its last sentence as the owner
+ * ruled it (D4 = B, #729 6877110969): "this site" for "the platform".
  */
-export const SANDBOX_SIGN_IN_REASON = 'Executed-sandbox mode generates and runs a Jupyter notebook against live data, then signs the execution record. Sign in to enable.';
+export const SANDBOX_DESCRIPTION = 'Generates and executes a Jupyter notebook against live data. Typically 30 to 90 seconds. The notebook and a cryptographic execution record are signed by this site.';
+/**
+ * Where sign-in is not offered, the Sandbox option's reason (fix 10), as the owner ruled it (D1 = B, #729 6877110969),
+ * in place of the form's sign-in branch's sentence (`QueryForm.tsx:612` at b4766f1).
+ */
+export const SANDBOX_SIGN_IN_REASON = 'Not offered on this site: a Sandbox session needs you to sign in, and this site has no sign-in.';
 
 /** Row 30 (D4 = A): the Compare item; `compareDesc` moved verbatim (`QueryForm.tsx:691-692` at b4766f1); row 16. */
 export const COMPARE_ITEM = {
