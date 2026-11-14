@@ -19,8 +19,8 @@
  * where-line (C1 = A; v2 ruling 2), and the words the gear's region carried
  * (`notebookDesc`, `compareDesc`, "Why these models?"), moved verbatim but for
  * the owner's rulings on P3b-2's words memo (D1 = B, D4 = B; #729 6877110969).
- * Each is one constant here, so a words ruling is a one-line edit. Compare's "On" / "Off" await criterion 13's words check
- * (v2 ruling 3) and ship as that pair, one constant each.
+ * Each is one constant here, so a words ruling is a one-line edit. Compare's "On" / "Off" were kept by criterion 13's
+ * words check (W2 KEEP, #729 6866525511) and the owner's rulings (6877110969), one constant each.
  */
 
 /** X23: the docked box's placeholder. */
