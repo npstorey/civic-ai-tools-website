@@ -129,9 +129,9 @@ export const COMPARE_ITEM = {
   description: 'Adds a second answer from training data alone, side by side. Runs one extra model call per question.',
   sandboxReason: 'Not offered in a Sandbox session. Switch Session type to Standard to compare.',
 } as const;
-/** Compare's value On: awaiting criterion 13's words check (v2 ruling 3). */
+/** Compare's value On: kept by the words check (W2 KEEP, #729 6866525511) and the owner's rulings (6877110969). */
 export const COMPARE_VALUE_ON = 'On';
-/** Compare's value Off: awaiting criterion 13's words check (v2 ruling 3). */
+/** Compare's value Off: kept by the words check (W2 KEEP, #729 6866525511) and the owner's rulings (6877110969). */
 export const COMPARE_VALUE_OFF = 'Off';
 
 /** Row 6: the last item, a link to the Settings overlay. */
