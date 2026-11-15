@@ -56,7 +56,7 @@ import { CIVIC_MANIFEST, isOfferedReason, type OfferedReason, type SourceSelecti
 import type { ModelRequestSettings } from '../model-catalog.ts';
 import { mcpTools, offeredMcpTools } from '../mcp/tools.ts';
 import { callMcpTool } from '../mcp/client.ts';
-import { buildMcpRegistry, readMcpEnvFromProcess, type McpRegistryEnv } from '../mcp/registry.ts';
+import { buildMcpRegistry, dispatchTargetOf, readMcpEnvFromProcess, type McpRegistryEnv } from '../mcp/registry.ts';
 import type { ReplayOfferedSet } from '../evidence/consistency-metrics.ts';
 import { buildSystemPrompt } from '../mcp/socrata-skill.ts';
 import { sourceIdForToolName } from '../mcp/operation-types.ts';
@@ -317,6 +317,11 @@ export function replayLoopOptions(inputs: ReplayLoopInputs): ToolLoopOptions {
   const callTool = inputs.callTool
     ?? inLoop?.executeToolCall
     ?? (selection === undefined ? callMcpTool : (name: string, args: Record<string, unknown>) => callMcpTool(name, args, { selection }));
+  // The target the dispatch sends each call to, from the same set the client
+  // is told (or the loaded set, in loop): the loop core decides a pack's call
+  // from it (S2-B F1).
+  const dispatchTarget = inLoop?.dispatchTarget
+    ?? ((name: string) => dispatchTargetOf(name, inputs.configured ?? readMcpEnvFromProcess(), selection));
   const tools = inLoop
     ? inLoop.firstTools
     : selection === undefined
@@ -346,6 +351,7 @@ export function replayLoopOptions(inputs: ReplayLoopInputs): ToolLoopOptions {
     // call rather than holding the replay open.
     toolTimeoutMs,
     executeToolCall: callTool,
+    dispatchTarget,
     // In loop (#644 W1): the load step. A replay holds no stream.
     ...(inLoop ? { loadStep: inLoop.loadStep } : {}),
   };

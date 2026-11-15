@@ -731,6 +731,29 @@ export function routedSourceId(
   return resolveServerForTool(buildMcpRegistry(configured, selection), toolName)?.sourceId;
 }
 
+/**
+ * The target the dispatch sends `toolName` to, in either spelling: the exposed
+ * name the dispatch rule resolves it to over the run's offered set, or
+ * `undefined` when the rule refuses it (two offered sources share a bare name,
+ * the source is not offered, or no source has the name). It is the rule
+ * `routeToolCall` applies first (`resolveToolCall`), over the same
+ * configuration and selection, so the loop core decides a pack's call once,
+ * from the target the dispatch sends to (S2-B F1, npstorey/civic-ai-tools#309):
+ * a bare `get_data` the selection resolves to a pack is that pack's call.
+ * Whether a server is configured is not read: a pack whose base is absent is
+ * still the call's target, and the send refuses it, not configured.
+ * `dispatch-target-agrees-with-the-send.test.ts` drives every name under every
+ * selection down both.
+ */
+export function dispatchTargetOf(
+  toolName: string,
+  configured: McpRegistryEnv = readMcpEnvFromProcess(),
+  selection?: SourceSelection,
+): string | undefined {
+  const resolution = resolveCalledName(civicRouter.dispatchMap, buildMcpRegistry(configured, selection).offeredSources, toolName);
+  return resolution.ok ? resolution.exposedName : undefined;
+}
+
 /** THE presence test — non-empty after trim, matching the preflight. */
 function presentOrUndefined(raw: string | undefined): string | undefined {
   return typeof raw === 'string' && raw.trim().length > 0 ? raw : undefined;

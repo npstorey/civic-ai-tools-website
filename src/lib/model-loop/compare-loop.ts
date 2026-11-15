@@ -39,7 +39,7 @@
 import type OpenAI from 'openai';
 import type { ModelRequestSettings } from '../model-catalog.ts';
 import type { SourceSelection } from '@typedstandards/civic-typed-router';
-import type { McpRegistryEnv } from '../mcp/registry.ts';
+import { dispatchTargetOf, readMcpEnvFromProcess, type McpRegistryEnv } from '../mcp/registry.ts';
 import { mcpToolsFor, offeredMcpTools } from '../mcp/tools.ts';
 import { callMcpTool } from '../mcp/client.ts';
 import type { InLoopRouting } from '../mcp/routing-mode.ts';
@@ -148,6 +148,11 @@ export function compareLoopOptions(inputs: CompareLoopInputs): ToolLoopOptions {
   const callTool = inputs.callTool
     ?? inLoop?.executeToolCall
     ?? (selection === undefined ? callMcpTool : (name: string, args: Record<string, unknown>) => callMcpTool(name, args, { selection }));
+  // The target the dispatch sends each call to, from the same selection the
+  // client is told (or the loaded set, in loop): the loop core decides a pack's
+  // call from it (S2-B F1).
+  const dispatchTarget = inLoop?.dispatchTarget
+    ?? ((name: string) => dispatchTargetOf(name, configured ?? readMcpEnvFromProcess(), selection));
 
   return {
     client,
@@ -175,6 +180,7 @@ export function compareLoopOptions(inputs: CompareLoopInputs): ToolLoopOptions {
     lockedPortal,
     toolTimeoutMs: COMPARE_MCP_TOOL_TIMEOUT_MS,
     executeToolCall: callTool,
+    dispatchTarget,
     // In loop (#644 W1): the load step; this route holds no stream, so an
     // Ask-first source is declined with no hold.
     ...(inLoop ? { loadStep: inLoop.loadStep } : {}),

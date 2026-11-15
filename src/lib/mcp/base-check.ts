@@ -7,8 +7,9 @@
  * (its `serverInfo` name and version, and `mcpToolSchemaSha256` of each base tool
  * the pin names). Bundle revision 4's refusal rule says a producer sends a pack's
  * calls only after the live base matched a pin. This module is that check, run by
- * the loop core (`../model-loop/run-tool-loop.ts`) before every pack call, at the
- * one site that sends one:
+ * the loop core (`../model-loop/run-tool-loop.ts`) before every pack call: every
+ * call whose target the dispatch resolves to a pack, by its aliased name or a
+ * bare one, decided once per call from that target (S2-B F1):
  *
  *   - THE READ. The base's `tools/list`, every page, and the `serverInfo` of the
  *     handshake it was answered on (`readServerTools`, `./client.ts`).
@@ -31,8 +32,9 @@
  * types, which the browser bundle carries, so it imports nothing that reaches
  * the client or the registry.
  *
- * The base's own tools are not checked: only a call `packFilterOf` names a pack
- * call reaches here.
+ * The base's own tools are not checked: only a call whose target `packFilterOf`
+ * names a pack's reaches here (the target the dispatch sends to, or the called
+ * name when the dispatch refuses it).
  */
 import { CIVIC_MANIFEST, checkBasePins, type BasePin, type McpListedTool } from '@typedstandards/civic-typed-router';
 import type { PackFilter } from './pack-filter.ts';

@@ -69,7 +69,13 @@ const FILTERS: ReadonlyMap<string, PackFilter> = new Map(
   }),
 );
 
-/** The filter of the pack whose exposed tool `toolName` is, or `undefined` for any other name (a bare name included). */
+/**
+ * The filter of the pack whose exposed tool `toolName` is, or `undefined` for
+ * any other name. A bare name is not one, so the loop core asks this of the
+ * target the dispatch sends the call to (`dispatchTargetOf`, `./registry.ts`;
+ * S2-B F1), not of the called name: a bare `get_data` the run's selection
+ * resolves to a pack is that pack's call.
+ */
 export function packFilterOf(toolName: string): PackFilter | undefined {
   const target = civicRouter.dispatchMap.get(toolName);
   return target?.base !== undefined ? FILTERS.get(target.sourceId) : undefined;

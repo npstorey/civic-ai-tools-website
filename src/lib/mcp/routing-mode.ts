@@ -47,7 +47,7 @@
 import type { ChatCompletionTool } from 'openai/resources/chat/completions';
 import { CIVIC_INVENTORY, civicRouter, LOAD_SOURCE_TOOL_NAME, type SourceOffered, type SourceSelection } from '@typedstandards/civic-typed-router';
 import type { McpRegistryEnv } from './registry.ts';
-import { routedSourceId } from './registry.ts';
+import { dispatchTargetOf, routedSourceId } from './registry.ts';
 import { composeDirectoryPrompt, composeInLoopSystemPrompt, routerComponent, withPortalLockGuidance, type CompositionComponent } from './socrata-skill.ts';
 import { loadSourceTool, mcpToolsFor, offeredMcpTools } from './tools.ts';
 import { sourceIdForToolName } from './operation-types.ts';
@@ -238,6 +238,10 @@ export interface InLoopRouting {
   executeToolCall(name: string, args: Record<string, unknown>): Promise<string>;
   /** The source a span names for a call, by the loaded set as it stands. */
   resolveToolSource(name: string): string | undefined;
+  /** The target the transport's dispatch sends a call to, by the loaded set as
+   *  it stands (`dispatchTargetOf`; S2-B F1): the loop core decides a pack's
+   *  call from it (`ToolLoopOptions.dispatchTarget`). */
+  dispatchTarget(name: string): string | undefined;
   /** The source ids loaded so far, in manifest order. */
   loaded(): string[];
   /** The system prompt the next request carries. */
@@ -427,6 +431,8 @@ export async function createInLoopRouting(input: InLoopRoutingInput): Promise<In
       }
     },
     resolveToolSource: (name) => routedSourceId(name, configured, loadedNow()),
+    // The decision beside the send, from the same loaded set (S2-B F1).
+    dispatchTarget: (name) => dispatchTargetOf(name, configured, loadedNow()),
     loaded: loadedNow,
     systemPrompt: () => current.systemPrompt,
     tools: () => current.tools,

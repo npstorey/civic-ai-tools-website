@@ -590,8 +590,8 @@ export function recordedLoadStep(routing, askedSources, loads) {
 
 /**
  * What a row hands the shared loop, as `queryWithMcpStreaming` hands it under
- * in-loop routing: the routing's first prompt and tools, its load step and
- * transport, the query's portal, and the app's limits.
+ * in-loop routing: the routing's first prompt and tools, its load step,
+ * transport and dispatch target, the query's portal, and the app's limits.
  */
 export function loopOptions({ model, query, routing, loadStep, executeToolCall }) {
   return {
@@ -604,6 +604,9 @@ export function loopOptions({ model, query, routing, loadStep, executeToolCall }
     systemPrompt: routing.firstSystemPrompt,
     tools: routing.firstTools,
     executeToolCall,
+    // The target the routing's dispatch sends each call to, by its loaded set:
+    // the loop core decides a pack's call from it (S2-B F1).
+    dispatchTarget: routing.dispatchTarget,
     loadStep,
     // Default portal for a `get_data` call whose arguments omit one; the loop
     // injects it into Socrata's `get_data` alone, above the record.

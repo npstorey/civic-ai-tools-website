@@ -24,7 +24,7 @@ import { authOptions } from '@/lib/auth';
 import { checkRateLimit, getMissingRateLimitSecretError, incrementRateLimit, isRateLimited } from '@/lib/rate-limit';
 import { mcpToolsFor, offeredMcpTools } from '@/lib/mcp/tools';
 import { callMcpTool, startRunServerReads, withReportedKeys } from '@/lib/mcp/client';
-import { configuredMcpServers, getMissingMcpRoutingError, readMcpEnvFromProcess, routedSourceId } from '@/lib/mcp/registry';
+import { configuredMcpServers, dispatchTargetOf, getMissingMcpRoutingError, readMcpEnvFromProcess, routedSourceId } from '@/lib/mcp/registry';
 import { getDefaultModel, resolveModel, ModelNotOfferedError } from '@/lib/model-resolver';
 import { ModelConfigurationError, getGenAiSystem, getMissingModelCredentialError, getModelApiKind } from '@/lib/model-client';
 import { whereItWentFromCalls, type WhereItWentModel } from '@/lib/flows/where-it-went';
@@ -677,7 +677,7 @@ async function runPhaseA(args: {
   /** Which source a call went to, for each call's span (R6 W4: the same resolver the route reads the calls through). */
   resolveToolSource: (name: string) => string | undefined;
 }): Promise<CompletionResult> {
-  const { query, portal, lockedPortal, model, emit: emitToStream, trace, systemPrompt, systemPromptHash, tools, usageCalls, inLoop, selection, resolveToolSource } = args;
+  const { query, portal, lockedPortal, model, emit: emitToStream, trace, systemPrompt, systemPromptHash, tools, usageCalls, inLoop, configured, selection, resolveToolSource } = args;
   // The callbacks below do not await their writes, so a write that fails
   // after the reader has cancelled the stream must not reject unhandled (R6 W5).
   const emit = (event: NotebookEvent): Promise<void> =>
@@ -762,14 +762,19 @@ async function runPhaseA(args: {
       model,
       // The tools the record states it offered, as offered.
       tools,
-      // Just the transport. Portal injection and the timeout race are the loop
+      // The transport. Portal injection and the timeout race are the loop
       // core's now (#359, #352): performed here they ran after the core had
       // recorded the call and stringified its arguments onto the span, and the
       // timer this file armed per tool call was never cleared. Told the run's
       // selection (R6 W1), so a call to a source it leaves out is refused
-      // before any request.
-      // In loop (#644 W1), the session: its transport and its load step.
-      inLoop ?? ((name, args) => callMcpTool(name, args, { selection })),
+      // before any request. Beside it, the target its dispatch sends each call
+      // to, from the same selection: the loop core decides a pack's call from
+      // it (S2-B F1).
+      // In loop (#644 W1), the session: its transport, its target and its load step.
+      inLoop ?? {
+        executeToolCall: (name, args) => callMcpTool(name, args, { selection }),
+        dispatchTarget: (name) => dispatchTargetOf(name, configured, selection),
+      },
       systemPrompt,
       callbacks,
       // Non-throwing: a call to a tool no configured server hosts is refused by
