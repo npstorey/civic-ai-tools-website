@@ -385,7 +385,7 @@ The sample: 51 rows (Claude Haiku 5.5 10, Claude Sonnet 5.5 11, GLM-5.3-Flash 10
 <!-- table:agreement -->
 | Dimension | Pairs (both readers scored) | Exact | Within one | Mean absolute difference | Quadratic-weighted kappa | Unscored by both / by one |
 |---|---|---|---|---|---|---|
-| Dataset Selection | 47 | 45 (93.6%) | 45 (95.7%) | 0.11 | 0.754 | 4 / 0 |
+| Dataset Selection | 47 | 44 (93.6%) | 45 (95.7%) | 0.11 | 0.754 | 4 / 0 |
 | SoQL Correctness | 47 | 33 (70.2%) | 46 (97.9%) | 0.32 | 0.893 | 4 / 0 |
 | Guidance Adherence | 51 | 41 (80.4%) | 51 (100.0%) | 0.20 | 0.884 | 0 / 0 |
 | Interpretation Quality | 51 | 38 (74.5%) | 48 (94.1%) | 0.31 | 0.825 | 0 / 0 |
