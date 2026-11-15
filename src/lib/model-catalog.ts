@@ -91,6 +91,21 @@ export type TokenLimitParameter = (typeof TOKEN_LIMIT_PARAMETERS)[number];
 export interface ModelRequestSettings {
   reasoningEffort?: ReasoningEffort;
   tokenLimitParameter?: TokenLimitParameter;
+  providerRouting?: ProviderRouting;
+}
+
+/**
+ * How OpenRouter may route a request among the providers that serve its model,
+ * sent as the request's `provider` object (#740 P3, ruling R3). The fields are
+ * the three the November 2026 evaluation sent its open-weight models
+ * (`OPEN_WEIGHT_PROVIDER`, scripts/eval-models.mjs): a price ceiling per
+ * million tokens, `require_parameters`, and `data_collection`. The type has no
+ * `order`, `only` or `ignore`, so an entry cannot pin a provider through it.
+ */
+export interface ProviderRouting {
+  max_price: { prompt: number; completion: number };
+  require_parameters: boolean;
+  data_collection: 'allow' | 'deny';
 }
 
 /** The request-body fields `modelRequestParameters` produces. */
@@ -98,6 +113,7 @@ export interface ModelRequestParameters {
   max_tokens?: number;
   max_completion_tokens?: number;
   reasoning_effort?: ReasoningEffort;
+  provider?: ProviderRouting;
 }
 
 /**
@@ -151,6 +167,12 @@ export interface CatalogEntry extends ModelDefinition {
    * `modelRequestParameters`.
    */
   tokenLimitParameter?: TokenLimitParameter;
+  /**
+   * Sent as `provider` on every request to this model (#740 P3). Absent:
+   * nothing is sent. Built-in entries only: `validateCatalog` does not accept
+   * the field, so an operator catalog that carries it is refused.
+   */
+  providerRouting?: ProviderRouting;
 }
 
 /**

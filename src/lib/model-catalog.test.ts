@@ -48,16 +48,19 @@ import {
 } from './model-client.ts';
 
 /**
- * The exact `/api/models` body the reference instance serves: the October 2026
- * roster (civic-ai-tools-website#573), three selectable models in selector
- * order. Not a snapshot to be regenerated — a frozen literal. Until that
- * ruling it was the body this repo served at `b95c768`, which the catalog
- * migration (website#30) had to reproduce exactly; the roster change is the
- * deliberate act that moved it. If a change makes this fail, the change altered
- * what the selector offers, which is a roster decision and not a refactor.
+ * The exact `/api/models` body the reference instance serves: the roster ruled
+ * on 2026-11-15 (civic-ai-tools-website#740, rulings R1-R5), four selectable
+ * models in selector order. The October 2026 roster's three
+ * (civic-ai-tools-website#573) come first, Haiku 5.5's description no longer
+ * claiming the lowest cost (R2), and MiMo-V2.6-Flash follows them. Not a
+ * snapshot to be regenerated — a frozen literal. Until the October ruling it
+ * was the body this repo served at `b95c768`, which the catalog migration
+ * (website#30) had to reproduce exactly; each roster change is the deliberate
+ * act that moved it. If a change makes this fail, the change altered what the
+ * selector offers, which is a roster decision and not a refactor.
  */
 const FROZEN_MODELS_BODY =
-  '{"models":[{"id":"anthropic/claude-haiku-5.5","name":"Claude Haiku 5.5","tag":"recommended","provider":"Anthropic","supports_tools":true,"description":"Accurate and fast, at the lowest cost"},{"id":"anthropic/claude-sonnet-5.5","name":"Claude Sonnet 5.5","tag":"balanced","provider":"Anthropic","supports_tools":true,"description":"Stronger analysis at moderate cost"},{"id":"anthropic/claude-opus-5.5","name":"Claude Opus 5.5","tag":"premium","provider":"Anthropic","supports_tools":true,"description":"Highest quality analysis"}]}';
+  '{"models":[{"id":"anthropic/claude-haiku-5.5","name":"Claude Haiku 5.5","tag":"recommended","provider":"Anthropic","supports_tools":true,"description":"Accurate and fast, at low cost"},{"id":"anthropic/claude-sonnet-5.5","name":"Claude Sonnet 5.5","tag":"balanced","provider":"Anthropic","supports_tools":true,"description":"Stronger analysis at moderate cost"},{"id":"anthropic/claude-opus-5.5","name":"Claude Opus 5.5","tag":"premium","provider":"Anthropic","supports_tools":true,"description":"Highest quality analysis"},{"id":"xiaomi/mimo-v2.6-flash","name":"MiMo-V2.6-Flash","tag":"open-weight","provider":"Xiaomi","supports_tools":true,"description":"Open model weights, at the lowest cost"}]}';
 
 /** Every variable these tests touch, cleared before and after each one. */
 const ENV_KEYS = [
@@ -137,7 +140,7 @@ function refusalFrom(fn: () => unknown): ModelConfigurationError {
 
 // --- Criterion 1: the reference instance sees zero change -------------------
 
-test('INSTANCE: with no catalog and the default endpoint, /api/models is the October 2026 roster, byte for byte', () => {
+test('INSTANCE: with no catalog and the default endpoint, /api/models is the roster ruled 2026-11-15, byte for byte', () => {
   assert.equal(JSON.stringify({ models: getOfferedModels() }), FROZEN_MODELS_BODY);
 });
 
@@ -162,6 +165,7 @@ test('CATALOG: `endpointModel` and `model` are never served — a deployment ali
     assert.ok(!('evaluator' in served), 'evaluator leaked into /api/models');
     assert.ok(!('default' in served), 'default leaked into /api/models');
     assert.ok(!('selectable' in served), 'selectable leaked into /api/models');
+    assert.ok(!('providerRouting' in served), 'providerRouting leaked into /api/models');
   }
 });
 
@@ -174,6 +178,44 @@ test('CATALOG: the built-in default is the first model the selector offers, and 
   assert.equal(defaultId, 'anthropic/claude-haiku-5.5');
   assert.equal(served[0], defaultId, 'the default is first in the selector');
   assert.deepEqual(served, BUILT_IN_CATALOG.map((e) => e.id), 'nothing in the built-in catalog is held back');
+});
+
+test('CATALOG: MiMo-V2.6-Flash is the entry the 2026-11-15 rulings describe (#740 R1-R5)', () => {
+  const entry = BUILT_IN_CATALOG.find((e) => e.id === 'xiaomi/mimo-v2.6-flash');
+  assert.ok(entry, 'the built-in catalog carries xiaomi/mimo-v2.6-flash');
+  // R2: the tag and the description. `provider` names the model's maker, as
+  // every entry has (Anthropic; OpenAI and Google before #573).
+  assert.equal(entry.name, 'MiMo-V2.6-Flash');
+  assert.equal(entry.tag, 'open-weight');
+  assert.equal(entry.description, 'Open model weights, at the lowest cost');
+  assert.equal(entry.provider, 'Xiaomi');
+  assert.equal(entry.supports_tools, true);
+  assert.equal(entry.endpointModel, 'xiaomi/mimo-v2.6-flash');
+  assert.equal('model' in entry, false, 'the slug called is the slug recorded');
+  // What the November 2026 run sent it (scripts/eval-models.mjs, its MiMo
+  // row): the limit under max_tokens, and no reasoning setting.
+  assert.equal(entry.tokenLimitParameter, 'max_tokens');
+  assert.equal('reasoningEffort' in entry, false, 'MiMo-V2.6-Flash is sent no reasoning setting');
+  // R3, byte for byte.
+  assert.equal(
+    JSON.stringify(entry.providerRouting),
+    '{"max_price":{"prompt":0.15,"completion":0.6},"require_parameters":true,"data_collection":"deny"}',
+  );
+  // R5: OpenRouter's listed price on P3's day, USD per million tokens.
+  assert.deepEqual(entry.pricing, { input: 0.14, output: 0.28 });
+  // R4: no role, and nothing held back from the selector.
+  for (const field of ['default', 'evaluator', 'summarizer', 'selectable'] as const) {
+    assert.equal(field in entry, false, `MiMo-V2.6-Flash carries "${field}"`);
+  }
+});
+
+test("CATALOG: Haiku 5.5's description no longer claims the lowest cost (#740 R2)", () => {
+  const haiku = BUILT_IN_CATALOG.find((e) => e.id === 'anthropic/claude-haiku-5.5');
+  assert.equal(haiku?.description, 'Accurate and fast, at low cost');
+  assert.deepEqual(
+    BUILT_IN_CATALOG.filter((e) => e.description?.includes('at the lowest cost')).map((e) => e.id),
+    ['xiaomi/mimo-v2.6-flash'],
+  );
 });
 
 test('INSTANCE: the notebook default resolves by id', () => {
