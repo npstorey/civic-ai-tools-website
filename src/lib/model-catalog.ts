@@ -227,8 +227,11 @@ export interface ModelIdentity {
  * roster memo's rulings on it (civic-ai-tools-website#740, R1-R5, ruled
  * 2026-11-15; https://claude.ai/artifact/Bh1N7wVv47o3K9gF6peQLR). It is sent
  * what that run sent it: its limit as `max_tokens`, no reasoning setting, and
- * the run's provider routing (`providerRouting`, R3), which bounds the price
- * and pins no provider, so the providers OpenRouter routes it to can change.
+ * the run's provider routing (`providerRouting`, R3), which bounds the price.
+ * The owner's ruling OA-863 = B (#740 comment 6902575273) adds `only`, so
+ * OpenRouter routes it among the three providers that served the run's
+ * MiMo-V2.6-Flash requests (Cohere, GMICloud, Xiaomi) and to no other; it
+ * picks among the three per request, and none of them is pinned.
  * The order is the selector's, and the first entry is also where the query
  * form starts.
  *
@@ -239,10 +242,12 @@ export interface ModelIdentity {
  * MiMo-V2.6-Flash takes no role (R4).
  *
  * WHAT THE PRICES MEAN FOR A QUERY. MiMo-V2.6-Flash's price is OpenRouter's
- * listed price for its slug on 2026-11-15 (R5), the cheapest of its endpoints;
- * R3 lets OpenRouter route it to any endpoint listing at most $0.15 / $0.60
- * per million tokens, so a request can be billed above the estimate this price
- * gives. The November evaluation recorded about $0.0034 a question on it. The
+ * listed price for its slug on 2026-11-15 (R5). It is not the cheapest
+ * endpoint's: that day's endpoint listing (read 22:42:33Z) gave GMICloud at
+ * $0.112 / $0.224 and Cohere and Xiaomi at the listed $0.14 / $0.28, so the
+ * estimate was at or above what the three allowed providers listed. Their
+ * prices can change; `max_price` still caps them at $0.15 / $0.60 per million
+ * tokens. The November evaluation recorded about $0.0034 a question on it. The
  * October evaluation measured about $0.006 a
  * query on Haiku 5.5, $0.11 on Sonnet 5.5 and $0.21 on Opus 5.5. Those are
  * floors for the models that reached the evaluation's 50,000-token per-query
@@ -312,11 +317,17 @@ export const BUILT_IN_CATALOG: readonly CatalogEntry[] = Object.freeze([
     // row): the limit under max_tokens, the one name the model lists, and no
     // reasoning setting, since it lists none.
     tokenLimitParameter: 'max_tokens',
-    // R3: the run's routing object exactly (`OPEN_WEIGHT_PROVIDER` there).
+    // R3, the run's routing object (`OPEN_WEIGHT_PROVIDER` there), then
+    // OA-863 = B: `only` the three providers that served the run's MiMo
+    // requests, by base slug, which matches each provider's endpoints whatever
+    // their quantization (the endpoint listing read 2026-11-15T22:42:33Z tags
+    // them cohere/fp8, gmicloud/bf16 and xiaomi/fp8). No `allow_fallbacks`:
+    // without `order` it would keep only the top-ranked of the three.
     providerRouting: Object.freeze({
       max_price: Object.freeze({ prompt: 0.15, completion: 0.6 }),
       require_parameters: true,
       data_collection: 'deny',
+      only: Object.freeze(['cohere', 'gmicloud', 'xiaomi']),
     }),
   },
 ]);

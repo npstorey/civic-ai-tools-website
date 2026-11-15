@@ -514,8 +514,10 @@ export default function LearnPage() {
             </p>
             <p style={{ fontSize: '15px', color: 'var(--text-secondary)', margin: '0 0 8px', lineHeight: '1.6' }}>
               The demo reaches it through OpenRouter, which passes each question to one of several
-              companies that run the model. The demo does not pick the company, and the companies that
-              serve its questions can change.
+              companies that run the model. The demo lets only three of those companies answer its
+              questions: Cohere, GMICloud and Xiaomi. OpenRouter picks among the three for each
+              question, and if none of them can take it, the question fails rather than going to
+              another company.
             </p>
             <p style={{ fontSize: '15px', color: 'var(--text-secondary)', margin: '0 0 8px', lineHeight: '1.6' }}>
               In the November 2026 run its questions went to three of those companies: Cohere, GMICloud
