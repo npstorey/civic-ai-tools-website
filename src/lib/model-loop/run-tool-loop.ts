@@ -104,6 +104,25 @@ export interface ToolCallRecord {
    * instance's own step answered it, whatever the outcome.
    */
   loadOutcome?: LoadOutcome;
+  /** S3-B W2 stub: how a `find_source` call ended. */
+  searchOutcome?: 'searched' | 'limit-reached';
+  /** S3-B W2 stub: a search's hits, by source id. */
+  searchHits?: string[];
+}
+
+/** S3-B W2 stub: what a search answers. */
+export interface SearchStepResult {
+  outcome: 'searched' | 'limit-reached';
+  text: string;
+  hits?: string[];
+  systemPrompt?: string;
+  tools?: ChatCompletionTool[];
+}
+
+/** S3-B W2 stub: the search step. */
+export interface SearchStep {
+  toolName: string;
+  search(query: string, context: { iteration: number }): Promise<SearchStepResult>;
 }
 
 /** What a load answers (#644 W1). */
@@ -313,6 +332,8 @@ export interface ToolLoopOptions {
    * `llm_inference` span then states its own request's system prompt hash.
    */
   loadStep?: LoadStep;
+  /** S3-B W2 stub: the search step. */
+  searchStep?: SearchStep;
   /**
    * The base check this run applies before each pack call (S2-B P3R,
    * `../mcp/base-check.ts`). Omitted, the core makes its own for the run, so

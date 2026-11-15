@@ -53,7 +53,7 @@ import { loadSourceTool, mcpToolsFor, offeredMcpTools } from './tools.ts';
 import { sourceIdForToolName } from './operation-types.ts';
 import { classifyStreamError, type ConsentPausePayload } from '../streaming.ts';
 import { callMcpTool, type McpToolCallOptions } from './client.ts';
-import type { LoadStep } from '../model-loop/run-tool-loop.ts';
+import type { LoadStep, SearchStep } from '../model-loop/run-tool-loop.ts';
 import { IN_LOOP_RUN_RECORD_ATTRIBUTE, RUN_RECORD_ATTRIBUTE } from '../evidence/trace.ts';
 import type { SourceRoutingMode } from './source-routing-mode.ts';
 
@@ -201,7 +201,32 @@ export interface ConsentPause {
   ask(sourceId: string, report: (payload: ConsentPausePayload) => void): Promise<PauseResult>;
 }
 
+/** The rule that chose the sources a run lists first, and its version
+ *  (`considered.rule` and the routing configuration's `rule`). */
+export interface RoutingRule {
+  id: string;
+  version: string;
+}
+
+/** The rule every route lists by: the directory set, whole. */
+export const DIRECTORY_SET_RULE: Readonly<RoutingRule> = Object.freeze({ id: 'directory-set', version: '1' });
+
+/** One hit of the router's search: the source, by id and alias. */
+export interface RoutingSearchHit {
+  sourceId: string;
+  alias: string;
+}
+
+/** The router's search as the routing calls it (`civicRouter.searchSources`). */
+export type RoutingSearch = (input: { configured: McpRegistryEnv; query: string; space?: readonly string[]; top?: number }) => RoutingSearchHit[];
+
 export interface InLoopRoutingInput {
+  /** S3-B W2 stub: the searchable set. */
+  searchable?: readonly DirectoryEntry[];
+  /** S3-B W2 stub: the rule that chose `directory`. */
+  rule?: RoutingRule;
+  /** S3-B W2 stub: the search, for tests. */
+  search?: RoutingSearch;
   /** The run's Socrata portal, if any. */
   portal?: string;
   /** The one Socrata portal a locked instance serves, or absent. */
@@ -232,6 +257,8 @@ export interface InLoopRouting {
   readonly firstTools: ChatCompletionTool[];
   /** The loop's load step (`ToolLoopOptions.loadStep`). */
   readonly loadStep: LoadStep;
+  /** S3-B W2 stub: the loop's search step. */
+  readonly searchStep?: SearchStep;
   /** The tool transport: a source's tool is sent only once that source is
    *  loaded; a tool of a listed source that is not loaded is refused
    *  `not_offered` as `SourceNotLoadedError`. */
@@ -273,8 +300,8 @@ export interface InLoopConsidered {
   inventory: { id: string; version: string; hash: string };
   total: number;
   listed: number;
-  rule: 'directory-set';
-  ruleVersion: '1';
+  rule: string;
+  ruleVersion: string;
 }
 
 /** The router's inventory in the record's reference form (`<version>+<hash12>`). */

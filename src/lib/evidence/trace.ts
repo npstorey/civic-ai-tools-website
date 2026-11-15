@@ -97,6 +97,14 @@ export interface RunRecordInput {
     rule: string;
     ruleVersion: string;
   };
+  /** S3-B W2 stub: the routing configuration and its hash. */
+  routingConfiguration?: {
+    rule: { id: string; version: string };
+    cap: string;
+    search: 'none' | { method: string; version: string };
+    inventory: { id: string; version: string; hash: string };
+    hash: string;
+  };
 }
 
 /** The root-span attributes for a run, ready for `startRoot` or `endRoot`:

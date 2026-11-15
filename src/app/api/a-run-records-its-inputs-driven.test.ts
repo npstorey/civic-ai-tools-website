@@ -693,3 +693,59 @@ test('S2-B P3R ruling 5: an all-sources query-notebook run writes its components
   assert.ok(keys.includes('analysis.flows_statement'), 'premise: the run states its flows statement');
   assert.equal(keys.at(-1), 'analysis.components', `the components are not the root's last attribute: ${keys.join(', ')}`);
 });
+
+// S3-B W2 (npstorey/civic-ai-tools#318; W2-3 and W2-6, anchor B1 and B4): an in-loop run through the route states the
+// routing configuration it was routed under, `analysis.routing_configuration`, exactly as ADR-0033 amendment 5
+// defines it: rule `directory-set` version 1 (every route lists the directory set whole, so its listed and searchable
+// sets are equal), cap `none`, search `none`, the inventory `considered` names, and the router's hash of those four.
+// The packaged record carries it in the composition block. An all-sources run states none of it and offers no search.
+// RED at 2d649c4: no route writes the attribute.
+
+const ROUTING_KEYS = ['rule', 'cap', 'search', 'inventory', 'hash'];
+
+test('S3-B W2-6: an in-loop compare-stream run states its routing configuration, directory-set 1, cap none, search none, with the router\'s hash', () => {
+  const root = rootAttributes(traceOf(IN_LOOP));
+  const text = root['analysis.routing_configuration'];
+  assert.ok(text !== undefined, `the root states no routing configuration: ${Object.keys(root).join(', ')}`);
+  const stated = JSON.parse(text) as Json;
+  assert.deepEqual(Object.keys(stated), ROUTING_KEYS);
+  assert.deepEqual(stated.rule, { id: 'directory-set', version: '1' });
+  assert.equal(stated.cap, 'none');
+  assert.equal(stated.search, 'none');
+  assert.deepEqual(stated.inventory, (JSON.parse(root['analysis.considered']) as Json).inventory);
+  const routingConfiguration = (router as unknown as Record<string, unknown>).routingConfiguration as
+    ((input: unknown) => { routingConfigurationHash: string }) | undefined;
+  assert.equal(typeof routingConfiguration, 'function', 'the installed router has no routingConfiguration');
+  assert.equal(stated.hash, routingConfiguration!({ rule: stated.rule, cap: stated.cap, search: stated.search, inventory: stated.inventory }).routingConfigurationHash);
+  // Written after `considered`.
+  const keys = Object.keys(root);
+  assert.equal(keys.indexOf('analysis.routing_configuration'), keys.indexOf('analysis.considered') + 1);
+});
+
+test('S3-B W2-6: the packaged in-loop record carries the routing configuration in its composition block', () => {
+  const trace = traceOf(IN_LOOP);
+  const toolCalls = (events(IN_LOOP).find((e) => e.type === 'complete' && e.panel === 'withMcp')?.data as { tools_called?: unknown[] } | undefined)?.tools_called;
+  const composition = (packageRun(trace, toolCalls).pkg.extensions as Json)['org.civicaitools.composition'] as Json;
+  const stated = JSON.parse(rootAttributes(trace)['analysis.routing_configuration'] ?? 'null') as Json | null;
+  assert.ok(stated, 'premise: the root states a routing configuration');
+  assert.deepEqual(composition.routingConfiguration, stated);
+  assert.deepEqual(Object.keys(composition).slice(Object.keys(composition).indexOf('considered'), Object.keys(composition).indexOf('considered') + 2), ['considered', 'routingConfiguration']);
+});
+
+test('S3-B W2-3 pin: an in-loop route run lists and searches the same set, so its first request carries exactly load_source', () => {
+  const first = mcpRequest(IN_LOOP);
+  assert.deepEqual(((first.body.tools ?? []) as Array<{ function: { name: string } }>).map((t) => t.function.name), ['load_source']);
+});
+
+test('S3-B W2-3 and W2-6 decoy: an all-sources run states no routing configuration and offers no find_source', () => {
+  for (const d of [COMPARE_STREAM, NOTEBOOK]) {
+    const root = rootAttributes(traceOf(d));
+    for (const key of ['analysis.routing_configuration', 'analysis.considered', 'analysis.routing']) {
+      assert.ok(!(key in root), `${d.name}: an all-sources run states ${key}`);
+    }
+    for (const request of d.requests) {
+      const names = ((request.body.tools ?? []) as Array<{ function: { name: string } }>).map((t) => t.function.name);
+      assert.ok(!names.includes('find_source') && !names.includes('load_source'), `${d.name}: an all-sources request offers ${names.join(', ')}`);
+    }
+  }
+});
