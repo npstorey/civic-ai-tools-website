@@ -349,9 +349,11 @@ export interface CompositionComponent {
   guidanceHash?: string;
   /** Present exactly when `guidanceHash` is. */
   guidanceOrigin?: GuidanceOrigin;
-  /** A remote server's `serverInfo.name`, as this run read it (`withReportedKeys`, `./client.ts`). */
+  /** A remote server's `serverInfo.name`, from a report no older than `BASE_READ_KEPT_MS`, which may be
+   *  another run's (`withReportedKeys`, `./client.ts`). */
   reportedName?: string;
-  /** A remote server's `serverInfo.version`, as this run read it (`withReportedKeys`, `./client.ts`). */
+  /** A remote server's `serverInfo.version`, from a report no older than `BASE_READ_KEPT_MS`, which may be
+   *  another run's (`withReportedKeys`, `./client.ts`). */
   reportedVersion?: string;
 }
 
