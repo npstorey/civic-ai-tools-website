@@ -1,4 +1,4 @@
-import { parseModelsResponse } from './model-list.ts';
+import { parseModelsResponse, type Model } from './model-list.ts';
 
 /**
  * Resolves the first model this instance's `/api/models` catalog offers —
@@ -23,19 +23,25 @@ import { parseModelsResponse } from './model-list.ts';
  * network error, malformed body, or an empty catalog — leaves nothing
  * cached, so the next call to `resolve()` retries the network request
  * instead of replaying the old failure.
+ *
+ * UX-2 P3b-2 (fix 8): `/explore`'s harness menu lists the catalog, so the
+ * resolver also returns the parsed list (`list()`), under the same rule: only
+ * a resolved, non-empty list is cached; a failure caches nothing. `resolve()`
+ * is the list's first id. The menu fetches nothing of its own.
  */
 export interface OfferedModelResolver {
   resolve(): Promise<string>;
+  list(): Promise<Model[]>;
 }
 
 export function createOfferedModelResolver(
   fetchImpl: typeof fetch = fetch,
 ): OfferedModelResolver {
-  let cachedId: string | null = null;
-  let inFlight: Promise<string> | null = null;
+  let cached: Model[] | null = null;
+  let inFlight: Promise<Model[]> | null = null;
 
-  function resolve(): Promise<string> {
-    if (cachedId !== null) return Promise.resolve(cachedId);
+  function list(): Promise<Model[]> {
+    if (cached !== null) return Promise.resolve(cached);
     if (inFlight) return inFlight;
 
     inFlight = fetchImpl('/api/models')
@@ -44,15 +50,14 @@ export function createOfferedModelResolver(
         const parsed = parseModelsResponse(data);
         if (parsed === null) {
           console.error('Failed to fetch models: response missing a `models` array');
-          return '';
+          return [];
         }
-        const id = parsed.length > 0 ? parsed[0].id : '';
-        if (id) cachedId = id;
-        return id;
+        if (parsed.length > 0) cached = parsed;
+        return parsed;
       })
       .catch((error) => {
         console.error('Failed to fetch models:', error);
-        return '';
+        return [] as Model[];
       })
       .finally(() => {
         inFlight = null;
@@ -61,5 +66,9 @@ export function createOfferedModelResolver(
     return inFlight;
   }
 
-  return { resolve };
+  function resolve(): Promise<string> {
+    return list().then((models) => (models.length > 0 ? models[0].id : ''));
+  }
+
+  return { resolve, list };
 }

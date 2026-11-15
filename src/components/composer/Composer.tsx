@@ -22,9 +22,16 @@ import { CHIP_ROW_LABEL, DOCKED_PLACEHOLDER, FIRST_TIME_LINE } from './copy';
  * (`data-part="composer"`) holds two blocks: the bar (`data-part="composer-bar"`),
  * which holds the box and its arrow, and the lines block after it. Before the
  * dock, in that block: the chips, the where-line, the guard's slot, the account
- * line, then whatever the mount renders beneath (`children`: the gear and its
- * region). Docked, the guard's slot moves into the bar, above the box (O7 = A),
+ * line, then whatever the mount renders beneath (`children`: the models-error
+ * status). Docked, the guard's slot moves into the bar, above the box (O7 = A),
  * the chips go (O5 = A), and the first-time line follows the where-line.
+ *
+ * THE HARNESS MENU (UX-2 P3b-2; O8 = A; fixes 3 and 4). The mount's menu
+ * (`harness`) renders in the box's field, after the arrow: one element, which
+ * CSS places in the box before the arrow at 640 px and up and on its own line
+ * under the box below, inside the bar, so docked it is stuck with the box. The
+ * box's right padding is a class, so a media query can change it
+ * (`composer-box`, `composer-box--harness`, globals.css).
  *
  * DOCKED (R1 B; the seat's rulings on leg A's stop). The mount decides when:
  * the first time a run on that surface finishes with an answer
@@ -96,7 +103,9 @@ export interface ComposerProps {
   /** The account line, computed by the mount (`data-part="account-line"`): the count, and the sign-in line. */
   accountLine?: ReactNode;
   guard: ComposerGuard;
-  /** What the mount renders beneath the lines (the gear row and its region, until P3b-2). */
+  /** The mount's harness menu (`HarnessMenu`), in the box after the arrow (UX-2 P3b-2). */
+  harness?: ReactNode;
+  /** What the mount renders beneath the lines (the models-error status). */
   children?: ReactNode;
 }
 
@@ -105,6 +114,9 @@ const ROOT_CLASS: Record<'form' | 'wide', { idle: string; docked: string }> = {
   form: { idle: 'composer composer--form', docked: 'composer composer--form composer--docked' },
   wide: { idle: 'composer composer--wide', docked: 'composer composer--wide composer--docked' },
 };
+
+// The box's class, with and without the harness menu in it: full names, never built from a template.
+const BOX_CLASS = { plain: 'composer-box', harness: 'composer-box composer-box--harness' } as const;
 
 const CHIP_STYLE_LOADING: React.CSSProperties = { cursor: 'not-allowed' };
 const SLOT_TEXT: React.CSSProperties = { margin: 0, fontSize: '14px', lineHeight: 1.6, color: 'var(--text-secondary)' };
@@ -123,6 +135,7 @@ export default function Composer({
   firstTimeLine = null,
   accountLine,
   guard,
+  harness,
   children,
 }: ComposerProps) {
   const textareaRef = useRef<HTMLTextAreaElement>(null);
@@ -207,66 +220,75 @@ export default function Composer({
           <form onSubmit={handleSubmit}>
             {/* Chat-style textarea with inline send button */}
             <div className="ui-field" ref={fieldRef} style={{ position: 'relative' }}>
-              <textarea
-                id="query"
-                ref={textareaRef}
-                value={value}
-                onChange={(e) => onChange(e.target.value)}
-                onInput={autoResize}
-                onKeyDown={(e) => {
-                  if (e.key === 'Enter' && !e.shiftKey) {
-                    e.preventDefault();
-                    if (canSubmit) onSubmit();
-                  }
-                }}
-                placeholder={docked ? DOCKED_PLACEHOLDER : placeholder}
-                rows={1}
-                disabled={isLoading}
-                aria-label="Ask a question about open data"
-                style={{
-                  width: '100%',
-                  boxSizing: 'border-box',
-                  resize: 'none',
-                  minHeight: '48px',
-                  maxHeight: '120px',
-                  overflow: 'hidden',
-                  paddingRight: '48px',
-                  borderRadius: '8px',
-                }}
-              />
-              <button
-                type="submit"
-                disabled={!canSubmit}
-                style={{
-                  position: 'absolute',
-                  right: '8px',
-                  bottom: '8px',
-                  width: '32px',
-                  height: '32px',
-                  borderRadius: '6px',
-                  border: 'none',
-                  // Keyed on the condition that disables the button (UX pass row 3),
-                  // so a disabled arrow, as after Not now, never looks live.
-                  backgroundColor: canSubmit ? 'var(--accent)' : 'var(--border-color)',
-                  color: 'white',
-                  cursor: canSubmit ? 'pointer' : 'not-allowed',
-                  display: 'flex',
-                  alignItems: 'center',
-                  justifyContent: 'center',
-                  transition: 'background-color 0.15s ease',
-                }}
-                aria-label="Submit query"
-              >
-                {isLoading ? (
-                  <svg width="16" height="16" viewBox="0 0 16 16" fill="none" style={{ animation: 'spin 1s linear infinite' }}>
-                    <circle cx="8" cy="8" r="6" stroke="white" strokeWidth="2" strokeDasharray="28" strokeDashoffset="8" strokeLinecap="round" />
-                  </svg>
-                ) : (
-                  <svg width="16" height="16" viewBox="0 0 16 16" fill="none">
-                    <path d="M3 8h10M9 4l4 4-4 4" stroke="white" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
-                  </svg>
-                )}
-              </button>
+              {/* The box and its arrow, placed against each other only (fix round 1, #729 6882289225): below 640 px
+                  the harness menu's trigger takes its own line inside this field, and an arrow placed against the
+                  whole field would follow it out of the box (O8 = A moves only the trigger). */}
+              <div style={{ position: 'relative' }}>
+                <textarea
+                  id="query"
+                  ref={textareaRef}
+                  value={value}
+                  onChange={(e) => onChange(e.target.value)}
+                  onInput={autoResize}
+                  onKeyDown={(e) => {
+                    if (e.key === 'Enter' && !e.shiftKey) {
+                      e.preventDefault();
+                      if (canSubmit) onSubmit();
+                    }
+                  }}
+                  placeholder={docked ? DOCKED_PLACEHOLDER : placeholder}
+                  rows={1}
+                  disabled={isLoading}
+                  aria-label="Ask a question about open data"
+                  className={harness ? BOX_CLASS.harness : BOX_CLASS.plain}
+                  style={{
+                    // Block, not the default inline-block: in the wrapper an inline box would leave a descender's gap under
+                    // it, and the arrow, 8 px in from the wrapper's bottom, would sit at the box's very edge.
+                    display: 'block',
+                    width: '100%',
+                    boxSizing: 'border-box',
+                    resize: 'none',
+                    minHeight: '48px',
+                    maxHeight: '120px',
+                    overflow: 'hidden',
+                    borderRadius: '8px',
+                  }}
+                />
+                <button
+                  type="submit"
+                  disabled={!canSubmit}
+                  style={{
+                    position: 'absolute',
+                    right: '8px',
+                    bottom: '8px',
+                    width: '32px',
+                    height: '32px',
+                    borderRadius: '6px',
+                    border: 'none',
+                    // Keyed on the condition that disables the button (UX pass row 3),
+                    // so a disabled arrow, as after Not now, never looks live.
+                    backgroundColor: canSubmit ? 'var(--accent)' : 'var(--border-color)',
+                    color: 'white',
+                    cursor: canSubmit ? 'pointer' : 'not-allowed',
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    transition: 'background-color 0.15s ease',
+                  }}
+                  aria-label="Submit query"
+                >
+                  {isLoading ? (
+                    <svg width="16" height="16" viewBox="0 0 16 16" fill="none" style={{ animation: 'spin 1s linear infinite' }}>
+                      <circle cx="8" cy="8" r="6" stroke="white" strokeWidth="2" strokeDasharray="28" strokeDashoffset="8" strokeLinecap="round" />
+                    </svg>
+                  ) : (
+                    <svg width="16" height="16" viewBox="0 0 16 16" fill="none">
+                      <path d="M3 8h10M9 4l4 4-4 4" stroke="white" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
+                    </svg>
+                  )}
+                </button>
+              </div>
+              {harness}
             </div>
           </form>
         </div>

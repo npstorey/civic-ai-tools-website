@@ -12,6 +12,7 @@ import { useLiveTrace } from '@/hooks/useLiveTrace';
 import type { ReplayState } from '@/lib/bpmn/animation';
 import { traceEventsToProgressData } from '@/lib/bpmn/trace-progress';
 import { createOfferedModelResolver, type OfferedModelResolver } from '@/lib/offered-model';
+import type { Model } from '@/lib/model-list';
 import { useDefaultPortalArg } from '@/components/DefaultPortalProvider';
 
 export default function McpFlowDiagram() {
@@ -113,6 +114,12 @@ export default function McpFlowDiagram() {
     void offeredModel();
   }, [offeredModel]);
 
+  // UX-2 P3b-2 (2E; fix 8): the catalog for the harness menu's Model item, from the same resolver and cache rule.
+  const [offeredModels, setOfferedModels] = useState<Model[]>([]);
+  useEffect(() => {
+    void offeredModelResolver.list().then((models) => setOfferedModels(models));
+  }, [offeredModelResolver]);
+
   // Derive which state drives the viewer
   let activeState: ReplayState;
   if (mode === 'examples') {
@@ -211,7 +218,8 @@ export default function McpFlowDiagram() {
     setMode(newMode);
   }, [reset, liveTrace]);
 
-  const handleLiveStart = useCallback((query: string) => {
+  /** The live run: the model the reader chose in the harness menu (UX-2 P3b-2, 2E), else the first offered (#314). */
+  const handleLiveStart = useCallback((query: string, chosenModel?: string) => {
     setLiveQueryText(query);
     setIsReplayingCapture(false);
     setLiveReplayTrace(null);
@@ -231,7 +239,7 @@ export default function McpFlowDiagram() {
     // narrow race where a click lands before the mount-warmed fetch has
     // settled and that settlement turns out to be a failure. In that case
     // back out of the fullscreen entry rather than opening it onto nothing.
-    void offeredModel().then((model) => {
+    void (chosenModel ? Promise.resolve(chosenModel) : offeredModel()).then((model) => {
       if (!model) {
         if (enteringFullscreen) {
           setIsFullscreen(false);
@@ -377,6 +385,7 @@ export default function McpFlowDiagram() {
           liveElapsedMs={liveTrace.elapsedMs}
           liveSlowMessage={liveTrace.slowMessage}
           modelsUnavailable={modelsError}
+          models={offeredModels}
           onLiveStart={handleLiveStart}
           onLiveCancel={handleLiveCancel}
           onLiveReplay={handleLiveReplay}

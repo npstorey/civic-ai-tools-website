@@ -411,8 +411,12 @@ function before(surface: Surface, a: HostElement, b: HostElement): boolean {
   return all.indexOf(a) !== -1 && all.indexOf(a) < all.indexOf(b);
 }
 
-/** The ruled order of the composer's parts, then the gear (P3b-1 keeps it, beneath). */
-const GOLDEN = ['composer-bar', 'box', 'chip-row', 'where-this-question-goes', 'first-time-line', 'consent-card', 'dont-allow', 'no-source-on', 'account-line', 'sign-in-line', 'gear'];
+/**
+ * The ruled order of the composer's parts. UX-2 P3b-2: the gear and its region are gone, and the harness menu
+ * (`data-part="harness-menu"`) sits in the box, after the arrow (fix 4, #729 6865424128), on every mount and in both
+ * session states.
+ */
+const GOLDEN = ['composer-bar', 'box', 'harness-menu', 'chip-row', 'where-this-question-goes', 'first-time-line', 'consent-card', 'dont-allow', 'no-source-on', 'account-line', 'sign-in-line'];
 
 /** The parts present, in document order, named as `GOLDEN` names them. */
 function partOrder(surface: Surface): string[] {
@@ -421,7 +425,6 @@ function partOrder(surface: Surface): string[] {
     const p = part(el);
     if (el.type === 'textarea' && el.props['aria-label'] === BOX_LABEL) out.push('box');
     else if (typeof p === 'string' && GOLDEN.includes(p)) out.push(p);
-    else if (el.type === 'button' && textOf(el).includes('Advanced options')) out.push('gear');
   }
   return out;
 }
@@ -574,8 +577,9 @@ test('criterion 1, leg H (dock at send; reverses "/ask docks after the run finis
   assert.equal(lines.length, 1, `first-time lines after the first answer: ${lines.length}`);
   assertX24OneParagraph(lines[0], '/ask signed in');
   assert.equal(textOf(lines[0]), X24_SIGNED_IN, 'the signed-in first-time line, byte for byte');
-  assert.ok(page.text().includes('Advanced options'), 'the gear is gone: P3b-1 removes nothing of P3b-2\'s');
-  assertOrder(page, ['composer-bar', 'box', 'where-this-question-goes', 'first-time-line', 'account-line', 'gear'], '/ask, docked');
+  // UX-2 P3b-2: the gear and its region are gone; the harness menu takes the gear's place in the composer, in the box.
+  assert.ok(!page.text().includes('Advanced options'), 'the gear is still on /ask');
+  assertOrder(page, ['composer-bar', 'box', 'harness-menu', 'where-this-question-goes', 'first-time-line', 'account-line'], '/ask, docked');
 });
 
 test('criterion 1, the home page signed in (a single-host instance): the first-time line takes the signed-in form, by sign-in state', async () => {
@@ -679,12 +683,12 @@ test('criterion 1, the golden order on the home page: the consent card, the decl
   composerOf(card);
   await askFromBox(card, 'What was the median household income in the Bronx?');
   assert.equal(card.buttons('Allow').length, 1, 'premise: the card is shown');
-  assertOrder(card, ['box', 'chip-row', 'where-this-question-goes', 'consent-card', 'account-line', 'sign-in-line'], 'the card');
+  assertOrder(card, ['box', 'harness-menu', 'chip-row', 'where-this-question-goes', 'consent-card', 'account-line', 'sign-in-line'], 'the card');
 
   // The decline line: Don't allow.
   await card.click(card.button("Don't allow"));
   await settle(card);
-  assertOrder(card, ['box', 'chip-row', 'where-this-question-goes', 'dont-allow', 'account-line', 'sign-in-line'], 'the decline line');
+  assertOrder(card, ['box', 'harness-menu', 'chip-row', 'where-this-question-goes', 'dont-allow', 'account-line', 'sign-in-line'], 'the decline line');
 
   // The no-source-on line: a consent in force with every source Off.
   answers();
@@ -692,7 +696,7 @@ test('criterion 1, the golden order on the home page: the consent card, the decl
   const none = await mountPage(HOME());
   await askFromBox(none, 'What was the median household income in the Bronx?');
   assert.equal(queries.length, 0, 'premise: with every source Off nothing is sent');
-  assertOrder(none, ['box', 'chip-row', 'where-this-question-goes', 'no-source-on', 'account-line', 'sign-in-line'], 'the no-source-on line');
+  assertOrder(none, ['box', 'harness-menu', 'chip-row', 'where-this-question-goes', 'no-source-on', 'account-line', 'sign-in-line'], 'the no-source-on line');
 });
 
 // --- Criterion 1, changed by leg H: the results block opens with the bubble, then its heading, then the pause prompt

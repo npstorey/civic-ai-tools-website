@@ -7,6 +7,10 @@ import type { LiveTraceStatus, SlowQueryMessage } from '@/hooks/useLiveTrace';
 import { MODELS_LOAD_ERROR } from '@/lib/streaming';
 import Composer from '@/components/composer/Composer';
 import { useSourceConsent } from '@/components/sources/useSourceConsent';
+import HarnessMenu from '@/components/composer/HarnessMenu';
+import { useSignInAction } from '@/components/composer/SignInControl';
+import { useSession } from 'next-auth/react';
+import type { Model } from '@/lib/model-list';
 import { ConsentPausePrompt } from '@/components/answer-view/ConsentStep';
 
 export type DiagramMode = 'examples' | 'live';
@@ -40,7 +44,10 @@ interface TraceControlsProps {
    * invalid.
    */
   modelsUnavailable: boolean;
-  onLiveStart: (query: string) => void;
+  /** The catalog's selectable models, for the harness menu's Model item (UX-2 P3b-2, 2E; fix 8). */
+  models?: Model[];
+  /** Start the live run: the question, and the model chosen in the harness menu (absent: the first offered). */
+  onLiveStart: (query: string, model?: string) => void;
   onLiveCancel: () => void;
   onLiveReplay: () => void;
   onLiveReset: () => void;
@@ -101,6 +108,7 @@ export default function TraceControls({
   liveElapsedMs,
   liveSlowMessage,
   modelsUnavailable,
+  models = [],
   onLiveStart,
   onLiveCancel,
   onLiveReplay,
@@ -149,14 +157,25 @@ export default function TraceControls({
   }
   const declined = declinedQuery !== null && liveQuery.trim() === declinedQuery;
 
+  // UX-2 P3b-2 (2E; Q9 = B; v3 conflict ruling 2): the harness menu, Model and Data sources. Signed in, Model is live and
+  // All settings follows; signed out where sign-in is offered, Model is disabled and the sign-in button follows; with no
+  // sign-in offered, Data sources only. The root layout's providers carry the session and the sign-in decision here.
+  const { status: authStatus } = useSession();
+  const signInAction = useSignInAction();
+  const menuVariant = authStatus === 'authenticated' ? 'full' : signInAction !== null ? 'signed-out' : 'sources-only';
+  const [chosenModel, setChosenModel] = useState('');
+  const modelInUse = chosenModel !== '' && models.some((m) => m.id === chosenModel) ? chosenModel : (models[0]?.id ?? '');
+
   // UX-2 P3b-1: the shared composer's box and arrow; it calls this only when `canSubmitLive` holds.
   const canSubmitLive = liveQuery.trim().length > 0 && !modelsUnavailable && !declined && !consent.writing;
   const submitLive = () => {
     const query = liveQuery.trim();
     if (!query || declined || consent.writing) return;
+    // Only a choice the reader made is sent; with none, the diagram resolves the first offered model, as before.
+    const chosen = menuVariant === 'full' && chosenModel !== '' ? chosenModel : undefined;
     const run = () => {
-      lastSentRef.current = () => onLiveStart(query);
-      onLiveStart(query);
+      lastSentRef.current = () => onLiveStart(query, chosen);
+      onLiveStart(query, chosen);
     };
     setNoneOn(false);
     void consent.guard(run, () => {
@@ -342,6 +361,14 @@ export default function TraceControls({
                 statement: consent.statement,
                 noneOn,
               }}
+              harness={
+                <HarnessMenu
+                  variant={menuVariant}
+                  models={models}
+                  model={modelInUse}
+                  onModel={setChosenModel}
+                />
+              }
             />
           )}
 

@@ -417,11 +417,13 @@ const WHERE = {
 const P3B_SIGN_IN_LINE = 'Sign in for more features and usage.';
 
 const wordsJson = (body: unknown) => new Response(JSON.stringify(body), { status: 200, headers: { 'Content-Type': 'application/json' } });
+/** The decision route's answer; UX-2 P3b-2's rows below set all-sources. */
+let wordsRouting: { routing: string; store: boolean } = { routing: 'in-loop', store: true };
 function wordsAnswers(remaining: number, limit: number): void {
   installFetch(ORIGIN, {
     '/api/models': () => wordsJson({ models: [{ id: 'fixture/model', name: 'Fixture model' }] }),
     '/api/flows': () => flowsRoute.GET(),
-    '/api/sources/consent/decision': () => wordsJson({ routing: 'in-loop', store: true }),
+    '/api/sources/consent/decision': () => wordsJson(wordsRouting),
     '/api/sources/consent': (request: Request) => (consentRoute[request.method] as (r: Request) => Promise<Response>)(request),
     '/api/rate-limit': () => wordsJson({ remaining, limit, resets_at: '2099-01-01T00:00:00.000Z', authenticated: sessions.server !== null }),
     '/api/compare-stream': () => new Response(['withoutMcp', 'withMcp'].map((panel) => `data: ${JSON.stringify({ type: 'complete', panel, data: { content: 'A fixture answer.', duration_ms: 1, tools_called: [] } })}\n\n`).join(''), { status: 200, headers: { 'Content-Type': 'text/event-stream' } }),
@@ -499,4 +501,99 @@ test('P3b-1 criterion 11 (W7; addendum 1, section 4): no word in src/components/
   const copy = fs.readFileSync(path.join(SRC, 'components', 'composer', 'copy.ts'), 'utf8');
   assert.deepEqual(copy.split('\n').filter((line) => /PENDING/.test(line)), [], 'composer/copy.ts still marks a word PENDING');
   assert.ok(copy.includes("'To keep this answer, sign in and publish it.'"), 'the withheld sentence (O4 = A) is not kept as one constant in composer/copy.ts');
+});
+
+// --- UX-2 P3b-2, criterion 9 (Words; C1 = A, C3 = A, C6 = A; R1 = A, ASK3 = A, Q11 = A): the harness menu's words and CA-1a --
+//
+// Each row is read off the real surface that renders it: CA-1a on the home page signed out (Standard) and /ask signed
+// in (Sandbox), with no source On and one Ask first on an all-sources instance; the harness menu's words on /ask
+// signed in, on each routing, with each group expanded in turn, and on the home page signed out. Every word is written
+// out here from the contract's Words table, byte for byte; Compare's "On" / "Off" are pending the words check
+// (criterion 13) and are not read here. At P3b-2's base there is no harness menu and no CA-1a line.
+
+const CA_1A = 'Where your question goes: nowhere; no data source is On · Select sources';
+const MENU_WORDS = {
+  trigger: 'Default harness',
+  heading: 'Harness · Civic AI harness v1',
+  items: ['Model', 'Data sources', 'Session type', 'Compare with a second harness', 'All settings'],
+  values: ['Fixture model', 'Auto', 'Sandbox'],
+  inLoop: ['Auto - find sources for me', 'The model chooses which data sources to use, from those you set On or Ask first.', 'Only the ones I pick', 'Not offered on this site yet. The model chooses from the data sources you set On or Ask first.', 'All data sources and your consent'],
+  allSources: ['Auto - use every source I set On', 'Every data source you set On is given to the model from the start. Sources set to Ask first are not used.', 'Only the ones I pick', 'Not offered on this site yet. Every data source you set On is given to the model.', 'All data sources and your consent'],
+  session: ['Standard', 'Sandbox', 'Generates and executes a Jupyter notebook against live data. Typically 30 to 90 seconds. The notebook and a cryptographic execution record are signed by this site.'],
+  compareReason: 'Not offered in a Sandbox session. Switch Session type to Standard to compare.',
+  signedOut: ['Sign in to choose a model.', 'Sign in for more options'],
+};
+const hasClassName = (el: HostElement, name: string) => String(el.props.className ?? '').split(/\s+/).includes(name);
+/** Every piece of text the harness menu shows, open, with `group` expanded (or none). */
+async function menuWords(page: Surface, group: string | null): Promise<string[]> {
+  const menu = () => page.elements().filter((el) => el.props['data-part'] === 'harness-menu');
+  assert.equal(menu().length, 1, `data-part="harness-menu": ${menu().length}`);
+  const trigger = within(menu()[0]).find((el) => el.props['aria-haspopup'] === 'menu')!;
+  await page.click(trigger);
+  await settled(page);
+  if (group !== null) {
+    const row = within(menu()[0]).find((el) => el.props.role === 'menuitem' && within(el).some((x) => hasClassName(x, 'ui-menu-item-label') && textOf(x) === group));
+    assert.ok(row, `the row "${group}"`);
+    await page.click(row!);
+    await settled(page);
+  }
+  const panel = within(menu()[0]).find((el) => el.props.role === 'menu');
+  assert.ok(panel, 'the menu did not open');
+  const classes = ['ui-menu-heading', 'ui-menu-item-label', 'ui-menu-item-value', 'ui-menu-item-description', 'ui-menu-item-reason'];
+  const words = within(panel!).filter((el) => classes.some((c) => hasClassName(el, c)) || el.type === 'a' || el.type === 'button').map((el) => textOf(el));
+  const text = textOf(within(menu()[0]).find((el) => el.props['aria-haspopup'] === 'menu')!);
+  await page.click(within(menu()[0]).find((el) => el.props['aria-haspopup'] === 'menu')!);
+  await settled(page);
+  return [text, ...words];
+}
+const missing = (read: string[], want: string[]) => want.filter((w) => !read.includes(w));
+
+test('P3b-2 criterion 9 (CA-1a; C1 = A, v2 ruling 2): no source On and one Ask first on an all-sources instance, the where-line reads CA-1a byte for byte, Standard and Sandbox', async () => {
+  const read: Record<string, string[]> = {};
+  for (const [name, who, element] of [
+    ['Standard', signedOut, () => h(Home)],
+    ['Sandbox', signedIn, () => h(QuerySurface, { presentation: 'answer-first', defaultMode: 'notebook' })],
+  ] as const) {
+    who();
+    wordsRouting = { routing: 'all-sources', store: true };
+    wordsAnswers(7, 10);
+    await wordsConsent((_id, i) => (i === 0 ? 'ask-first' : 'off'));
+    const page = await mount(element());
+    await settled(page);
+    read[name] = partText(page, 'where-this-question-goes');
+    page.unmount();
+  }
+  wordsRouting = { routing: 'in-loop', store: true };
+  assert.deepEqual(read, { Standard: [CA_1A], Sandbox: [CA_1A] });
+});
+
+test('P3b-2 criterion 9 (Words): the harness menu\'s words on /ask signed in, each routing\'s pair on its routing, and the signed-out menu\'s on the home page, byte for byte', async () => {
+  const gaps: Record<string, string[]> = {};
+  for (const routing of ['in-loop', 'all-sources'] as const) {
+    signedIn();
+    wordsRouting = { routing, store: true };
+    wordsAnswers(7, 10);
+    await wordsConsent(() => 'on');
+    const page = await mount(h(QuerySurface, { presentation: 'answer-first', defaultMode: 'notebook' }));
+    await settled(page);
+    const closed = await menuWords(page, null);
+    gaps[`${routing}, closed`] = missing(closed, [MENU_WORDS.heading, ...MENU_WORDS.items, ...MENU_WORDS.values, MENU_WORDS.compareReason]);
+    if (!closed[0]?.startsWith(MENU_WORDS.trigger)) gaps[`${routing}, closed`].push(`trigger: ${closed[0]}`);
+    gaps[`${routing}, Data sources`] = missing(await menuWords(page, 'Data sources'), routing === 'in-loop' ? MENU_WORDS.inLoop : MENU_WORDS.allSources);
+    gaps[`${routing}, Session type`] = missing(await menuWords(page, 'Session type'), MENU_WORDS.session);
+    page.unmount();
+  }
+  wordsRouting = { routing: 'in-loop', store: true };
+  signedOut();
+  wordsAnswers(7, 10);
+  await wordsConsent(() => 'on');
+  const home = await mount(h(Home));
+  await settled(home);
+  gaps['home, signed out'] = missing(await menuWords(home, null), MENU_WORDS.signedOut);
+  home.unmount();
+  assert.deepEqual(gaps, {
+    'in-loop, closed': [], 'in-loop, Data sources': [], 'in-loop, Session type': [],
+    'all-sources, closed': [], 'all-sources, Data sources': [], 'all-sources, Session type': [],
+    'home, signed out': [],
+  });
 });

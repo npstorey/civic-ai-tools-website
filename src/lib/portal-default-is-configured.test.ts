@@ -174,12 +174,8 @@ const EXCEPTIONS: readonly Exception[] = [
     hits: 6,
     why: 'Teaching copy on /learn quoting real skill text and a real tool call so a reader can see what one looks like, and a local set-up example naming a portal for the reader to replace; the page starts no run.',
   },
-  {
-    path: 'src/components/QueryForm.tsx',
-    classification: 'reference-table',
-    hits: 5,
-    why: 'The `PORTALS` menu — the portals a reader may pick, beside an "All portals" entry; a selection made here is the reader\'s choice, and the form\'s own default now comes from `SITE_DEFAULT_PORTAL` through `DefaultPortalProvider`.',
-  },
+  // UX-2 P3b-2 (Q7 = A) removed the form's `PORTALS` menu, and with it this list's `src/components/QueryForm.tsx` row
+  // (`reference-table`, 5 hits): the form now names no portal hostname.
   {
     path: 'src/lib/streaming.ts',
     classification: 'reference-table',

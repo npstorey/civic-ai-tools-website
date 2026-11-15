@@ -16,6 +16,20 @@
 // WHAT MAKES IT ABLE TO FAIL. At the base every mount renders the toggle for
 // every reader, and no mount renders the line.
 //
+// UX-2 P3b-2 (#729) replaced the gear and its region with the harness menu.
+// The property this file holds is unchanged: signed out on the home page,
+// where sign-in is offered, no signed-in control (the menu's Model is disabled
+// and it holds no Session type item); signed in, and on /ask, the signed-in
+// items (Session type among them). Only how it is found changed: the menu,
+// opened by its trigger's onClick, instead of the "Advanced options" toggle.
+// At P3b-2's base there is no menu, so the re-pointed reads fail.
+//
+// BLIND SPOT, stated (F6, #729 6865424128). The /ask tests below mount
+// `/ask`'s surface signed out. The app never renders that state:
+// `src/app/(app)/ask/page.tsx` renders the sign-in panel to a signed-out
+// reader instead of `QuerySurface`. The read is kept for the property (no
+// mount but the home page hides the signed-in items), not for a reader's path.
+//
 // Run with: npm test
 
 import { test } from 'node:test';
@@ -101,39 +115,63 @@ const SIGNED_IN = () => {
 
 const toggles = (page: Surface) => page.elements().filter((el) => el.type === 'button' && textOf(el).includes('Advanced options'));
 
-test('row 7, re-cut (Q6 = B): the home page, signed out, split topology: no Advanced options, and the ruled sign-in line in its place', async () => {
+/** The harness menu (UX-2 P3b-2), opened: each row's label, and whether it is disabled, in order. */
+async function menuRows(page: Surface): Promise<Array<[string, boolean]>> {
+  const menus = page.elements().filter((el) => el.props['data-part'] === 'harness-menu');
+  assert.equal(menus.length, 1, `data-part="harness-menu": ${menus.length}; the page reads: ${page.text().slice(0, 300)}`);
+  const trigger = within(menus[0]).find((el) => el.props['aria-haspopup'] === 'menu');
+  assert.ok(trigger, 'the harness menu has no trigger');
+  await page.click(trigger!);
+  await page.settle();
+  const panel = page.elements().filter((el) => el.props['data-part'] === 'harness-menu').flatMap((m) => within(m)).find((el) => el.props.role === 'menu');
+  assert.ok(panel, 'the harness menu did not open');
+  return within(panel!).filter((el) => el.props.role === 'menuitem').map((el) => {
+    const label = within(el).find((x) => String(x.props.className ?? '').split(/\s+/).includes('ui-menu-item-label'));
+    return [textOf(label ?? el), el.props['aria-disabled'] === true || el.props['aria-disabled'] === 'true'];
+  });
+}
+const has = (rows: Array<[string, boolean]>, label: string, disabled: boolean) => rows.some(([l, d]) => l === label && d === disabled);
+
+test('row 7, re-cut (Q6 = B), P3b-2: the home page, signed out, split topology: no Advanced options, the menu holds no signed-in control, and the ruled sign-in line under the box', async () => {
   ANON();
   const page = await mount(splitTopology(h(Home)));
   assert.equal(toggles(page).length, 0, 'the signed-out home page still offers Advanced options');
   assert.deepEqual(signInLine(page), { text: SIGN_IN_LINE, control: { type: 'a', href: 'https://app.fixture.example/ask' } }, 'the split topology\'s sign-in line');
   assert.deepEqual(RETIRED.filter((w) => page.text().includes(w)), [], 'the retired long sentence is on the page');
   assert.doesNotMatch(page.text(), /more models/i, 'the line promises more models');
+  const rows = await menuRows(page);
+  assert.ok(has(rows, 'Model', true), `signed out, Model is not disabled: ${JSON.stringify(rows)}`);
+  assert.ok(!rows.some(([l]) => l === 'Session type'), `signed out, the menu offers Session type: ${JSON.stringify(rows)}`);
   page.unmount();
 });
 
-test('row 7, re-cut (Q6 = B): the home page, signed out, in-place sign-in: the ruled line, its "Sign in" a button', async () => {
+test('row 7, re-cut (Q6 = B), P3b-2: the home page, signed out, in-place sign-in: the ruled line, its "Sign in" a button, and the menu holds no signed-in control', async () => {
   ANON();
   const page = await mount(h(Home));
   assert.equal(toggles(page).length, 0);
   assert.deepEqual(signInLine(page), { text: SIGN_IN_LINE, control: { type: 'button', href: undefined } }, 'the in-place sign-in line');
   assert.deepEqual(RETIRED.filter((w) => page.text().includes(w)), [], 'the retired long sentence is on the page');
+  const rows = await menuRows(page);
+  assert.ok(has(rows, 'Model', true) && !rows.some(([l]) => l === 'Session type'), `signed out, the menu: ${JSON.stringify(rows)}`);
   page.unmount();
 });
 
-test('row 7: the home page, signed in: the toggle as before, and no line', async () => {
+test('row 7, P3b-2: the home page, signed in: the menu with its signed-in items, and no line', async () => {
   SIGNED_IN();
   const page = await mount(splitTopology(h(Home)));
-  assert.equal(toggles(page).length, 1, 'the signed-in home page lost Advanced options');
   assert.ok(!page.text().includes('Signed in, you can ask') && !page.text().includes(SIGN_IN_LINE), 'the signed-in home page shows a sign-in line');
+  const rows = await menuRows(page);
+  assert.ok(has(rows, 'Model', false) && has(rows, 'Session type', false), `signed in, the home page's menu lost its signed-in items: ${JSON.stringify(rows)}`);
   page.unmount();
 });
 
 for (const [who, session] of [['signed out', ANON], ['signed in', SIGNED_IN]] as const) {
-  test(`row 7: /ask's mount, ${who}: the toggle as before, and no line`, async () => {
+  test(`row 7, P3b-2: /ask's mount, ${who}: the menu with the signed-in items, and no line`, async () => {
     session();
     const page = await mount(splitTopology(askMount()));
-    assert.equal(toggles(page).length, 1, `/ask (${who}) lost Advanced options`);
     assert.ok(!page.text().includes('Signed in, you can ask') && !page.text().includes(SIGN_IN_LINE), `/ask (${who}) shows a sign-in line`);
+    const rows = await menuRows(page);
+    assert.ok(has(rows, 'Model', false) && rows.some(([l]) => l === 'Session type'), `/ask (${who}) lost the signed-in items: ${JSON.stringify(rows)}`);
     page.unmount();
   });
 }

@@ -445,6 +445,20 @@ export function dismissNotices(): Promise<boolean> {
 export type GuardResult = 'ran' | 'asked' | 'none-on' | 'held';
 
 /**
+ * Whether a question can stop to ask the reader about an Ask-first source (UX-2 P3b-2, v2 ruling 1): routing in-loop
+ * with the decision store set, both read. An unread or failed pair (`null`) is false. One predicate for every surface
+ * that words Ask first by it (the Settings row, `SourceRow.tsx`, and the harness menu's Data sources item), so they
+ * cannot disagree. The server keeps its own copy, `canAsk` (`src/lib/sources/consent-gate.ts`), whose module reads the
+ * store and the database; `pause-predicate.test.ts` holds the two equal on every pair.
+ *
+ * Not `noSourceOnReason` below: that one treats an unread pair as able to ask, so the guard runs the question (v3
+ * conflict ruling 1).
+ */
+export function canPauseToAsk(ask: Pick<ConsentSnapshot, 'routing' | 'store'>): boolean {
+  return ask.routing === 'in-loop' && ask.store === true;
+}
+
+/**
  * Why no question can go with no source On (UX-2 P3b-1; addenda 1-3), one predicate for the guard below and the
  * where-line under the box, so the two cannot part: 'every-off' when every source the statement lists is Off;
  * 'cannot-ask' when none is On, one is not Off, and this site cannot ask (routing all-sources, or no store);

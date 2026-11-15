@@ -4,8 +4,9 @@
 // reader's pending states (what Allow writes), after one the stored states, read with the guard's own lookup. N counts
 // the sources On. Its five forms (addendum 1, section 1) end " · Select sources", a next/link to /settings. One
 // predicate, `noSourceOnReason` beside `guardQuestion`, decides for the line and the guard: every source Off reads
-// W5/W6's words; no source On with one Ask first where the site cannot ask (routing all-sources, or no store) shows
-// no line (addendum 2); anything else, a routing or store still unread included, the usual form. Nothing renders until
+// W5/W6's words; no source On with one Ask first where the site cannot ask (routing all-sources, or no store) showed
+// no line (addendum 2) until UX-2 P3b-2, which reads CA-1a there (C1 = A; v2 ruling 2, below); anything else, a
+// routing or store still unread included, the usual form. Nothing renders until
 // the statement and the status are both read (`status !== null && statement !== null`, not `loaded`), nor for a
 // statement that lists no source. `JUST_IN_TIME_LINE` is retired.
 //
@@ -346,6 +347,8 @@ const FORM = {
   standardAsk: `${LEAD}the model service; data sources ask first${LINK}`,
   sandboxAsk: `${LEAD}the model service and the notebook runner; data sources ask first${LINK}`,
   everyOff: `${LEAD}nowhere; every data source is Off${LINK}`,
+  /** UX-2 P3b-2, CA-1a (C1 = A; v2 ruling 2): no source On where this site cannot ask, in both session types. */
+  cannotAsk: `${LEAD}nowhere; no data source is On${LINK}`,
 };
 
 const lineOf = (page: Surface): string[] => parts(page, 'where-this-question-goes').map((el) => textOf(el));
@@ -492,7 +495,7 @@ test('P3b-1 criterion 3 (a), (d): one predicate, read by both — the guard call
 
 for (const session of ['Standard', 'Sandbox'] as const) {
   for (const when of ['before', 'after'] as const) {
-    test(`P3b-1 criterion 3 (d) (addendum 2), ${session}, ${when} a first consent: one Ask first and the rest Off: no line where the site cannot ask (all sources; no store), the Ask-first form where it can`, async () => {
+    test(`P3b-2 criterion 4 (P3b-1's (d) flipped for CA-1a; v2 ruling 2), ${session}, ${when} a first consent: one Ask first and the rest Off: CA-1a's line where the site cannot ask (all sources; no store), the Ask-first form where it can`, async () => {
       const ask = session === 'Standard' ? FORM.standardAsk : FORM.sandboxAsk;
       const read: Record<string, string[]> = {};
       for (const [name, routing] of [['all-sources', { routing: 'all-sources', store: true }], ['in-loop, store', ASK_LOOP], ['in-loop, no store', { routing: 'in-loop', store: false }]] as const) {
@@ -505,7 +508,7 @@ for (const session of ['Standard', 'Sandbox'] as const) {
         read[name] = lineOf(page);
         for (const p of mounted.splice(0)) p.unmount();
       }
-      assert.deepEqual(read, { 'all-sources': [], 'in-loop, store': [ask], 'in-loop, no store': [] });
+      assert.deepEqual(read, { 'all-sources': [FORM.cannotAsk], 'in-loop, store': [ask], 'in-loop, no store': [FORM.cannotAsk] });
     });
   }
 }
