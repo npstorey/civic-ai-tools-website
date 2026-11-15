@@ -630,7 +630,9 @@ const P3_LEARN_LINES = [
   'Stronger analysis at moderate cost: in the October 2026 run, the main answer right on 9 of 11 questions, with careful caveats, at about 11 cents a question and a median of 21 seconds.',
   'It was the slowest of the three in that run (a median of 27 seconds) and costs about 21 cents a question: worth it for complex or multi-step questions.',
   'An open-weight model: its maker, Xiaomi, publishes the trained model itself, not only access to it. In the November 2026 run it came closest of the three open-weight models to the Claude models on answer quality, at about a third of a cent a question, the lowest cost in that run. It was also the slowest model in that run, with a median of about 25 seconds.',
-  'The demo reaches it through OpenRouter, which passes each question to one of several companies that run the model. The demo does not pick the company, and the companies that serve its questions can change.',
+  // OA-863 = B (#740 comment 6902575273): the routing allows only the three
+  // providers that served the run's MiMo-V2.6-Flash requests.
+  'The demo reaches it through OpenRouter, which passes each question to one of several companies that run the model. The demo lets only three of those companies answer its questions: Cohere, GMICloud and Xiaomi. OpenRouter picks among the three for each question, and if none of them can take it, the question fails rather than going to another company.',
   'In the November 2026 run its questions went to three of those companies: Cohere, GMICloud and Xiaomi. OpenRouter lists all three as keeping the prompts they receive: Cohere and Xiaomi for 30 days, and GMICloud for a period it does not state.',
   // The seat's wording ruling (#740 comment 6899621098): "The evaluation
   // recorded two conflicts." (Cohere's provider-level 30 days agrees with its
@@ -647,6 +649,7 @@ const P3_LEARN_GONE = [
   'It is the slowest of the three',
   'Two of those listings conflict with what the companies themselves publish.',
   'after sorting them',
+  'The demo does not pick the company, and the companies that serve its questions can change.',
 ];
 
 test('EVAL-OW P3: /learn carries a MiMo-V2.6-Flash card beside the Claude cards, in the ruled terms', () => {

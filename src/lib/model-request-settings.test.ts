@@ -212,7 +212,8 @@ test('CATALOG: the built-in catalog sends each model the settings it was evaluat
       'xiaomi/mimo-v2.6-flash': [undefined, 'max_tokens'],
     },
   );
-  // The request fields, as the November run's models table writes them.
+  // The request fields, as the November run's models table writes them, with
+  // MiMo-V2.6-Flash's provider object restricted to three providers (OA-863 = B).
   assert.deepEqual(
     Object.fromEntries(BUILT_IN_CATALOG.map((e) => [e.id, JSON.stringify(modelRequestParameters(modelRequestSettings(e), 4000))])),
     {
@@ -220,34 +221,39 @@ test('CATALOG: the built-in catalog sends each model the settings it was evaluat
       'anthropic/claude-sonnet-5.5': '{"max_completion_tokens":4000,"reasoning_effort":"medium"}',
       'anthropic/claude-opus-5.5': '{"max_completion_tokens":4000,"reasoning_effort":"medium"}',
       'xiaomi/mimo-v2.6-flash':
-        '{"max_tokens":4000,"provider":{"max_price":{"prompt":0.15,"completion":0.6},"require_parameters":true,"data_collection":"deny"}}',
+        '{"max_tokens":4000,"provider":{"max_price":{"prompt":0.15,"completion":0.6},"require_parameters":true,"data_collection":"deny","only":["cohere","gmicloud","xiaomi"]}}',
     },
   );
 });
 
-// --- The provider routing (#740 P3, ruling R3) ---------------------------------
+// --- The provider routing (#740 P3, ruling R3 and OA-863 = B) -------------------
 
-/** R3, verbatim: the November 2026 run's provider object. */
-const R3 = '{"max_price":{"prompt":0.15,"completion":0.6},"require_parameters":true,"data_collection":"deny"}';
+/**
+ * MiMo-V2.6-Flash's routing: R3, the November 2026 run's provider object,
+ * then OA-863's restriction to the three providers that served the run's
+ * MiMo-V2.6-Flash requests, by OpenRouter's base slugs (`only`).
+ */
+const MIMO_ROUTING =
+  '{"max_price":{"prompt":0.15,"completion":0.6},"require_parameters":true,"data_collection":"deny","only":["cohere","gmicloud","xiaomi"]}';
 
 test('CATALOG: the routing is sent as `provider`, after the limit and the reasoning setting, and only when set', () => {
-  const routing = JSON.parse(R3) as ModelRequestSettings['providerRouting'];
+  const routing = JSON.parse(MIMO_ROUTING) as ModelRequestSettings['providerRouting'];
   assert.equal(
     JSON.stringify(modelRequestParameters({ tokenLimitParameter: 'max_tokens', providerRouting: routing }, 300)),
-    `{"max_tokens":300,"provider":${R3}}`,
+    `{"max_tokens":300,"provider":${MIMO_ROUTING}}`,
   );
   assert.equal(
     JSON.stringify(modelRequestParameters({ reasoningEffort: 'low', providerRouting: routing }, 300)),
-    `{"max_completion_tokens":300,"reasoning_effort":"low","provider":${R3}}`,
+    `{"max_completion_tokens":300,"reasoning_effort":"low","provider":${MIMO_ROUTING}}`,
   );
   // Routing alone does not move the limit's name: it is not a reasoning setting.
-  assert.equal(JSON.stringify(modelRequestParameters({ providerRouting: routing }, 300)), `{"max_tokens":300,"provider":${R3}}`);
+  assert.equal(JSON.stringify(modelRequestParameters({ providerRouting: routing }, 300)), `{"max_tokens":300,"provider":${MIMO_ROUTING}}`);
   for (const settings of [undefined, {}, { reasoningEffort: 'none' as const }, { tokenLimitParameter: 'max_completion_tokens' as const }]) {
     assert.equal('provider' in modelRequestParameters(settings, 300), false, JSON.stringify(settings));
   }
 });
 
-test('CATALOG: the MiMo-V2.6-Flash entry carries R3 to its requests, and no Claude entry carries any routing', () => {
+test('CATALOG: the MiMo-V2.6-Flash entry carries its routing, restriction included, to its requests, and no Claude entry carries any routing', () => {
   const sent = Object.fromEntries(
     BUILT_IN_CATALOG.map((e) => {
       const fields = modelRequestParameters(modelRequestSettings(e), 4000);
@@ -258,12 +264,12 @@ test('CATALOG: the MiMo-V2.6-Flash entry carries R3 to its requests, and no Clau
     'anthropic/claude-haiku-5.5': null,
     'anthropic/claude-sonnet-5.5': null,
     'anthropic/claude-opus-5.5': null,
-    'xiaomi/mimo-v2.6-flash': R3,
+    'xiaomi/mimo-v2.6-flash': MIMO_ROUTING,
   });
   // On the identity every call site carries.
   const mimo = BUILT_IN_CATALOG.find((e) => e.id === 'xiaomi/mimo-v2.6-flash');
   assert.ok(mimo, 'the built-in catalog carries xiaomi/mimo-v2.6-flash');
-  assert.equal(JSON.stringify(modelIdentity(mimo).requestSettings), `{"tokenLimitParameter":"max_tokens","providerRouting":${R3}}`);
+  assert.equal(JSON.stringify(modelIdentity(mimo).requestSettings), `{"tokenLimitParameter":"max_tokens","providerRouting":${MIMO_ROUTING}}`);
 });
 
 test('CATALOG: an entry setting either field carries exactly what it set', () => {
@@ -286,7 +292,7 @@ test('CATALOG: the settings are not served — /api/models keeps its seven field
     ...(entry() as unknown as CatalogEntry),
     reasoningEffort: 'none',
     tokenLimitParameter: 'max_completion_tokens',
-    providerRouting: JSON.parse(R3),
+    providerRouting: JSON.parse(MIMO_ROUTING),
   });
   assert.deepEqual(Object.keys(served), ['id', 'name', 'provider', 'supports_tools']);
 });

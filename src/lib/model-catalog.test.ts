@@ -196,10 +196,12 @@ test('CATALOG: MiMo-V2.6-Flash is the entry the 2026-11-15 rulings describe (#74
   // row): the limit under max_tokens, and no reasoning setting.
   assert.equal(entry.tokenLimitParameter, 'max_tokens');
   assert.equal('reasoningEffort' in entry, false, 'MiMo-V2.6-Flash is sent no reasoning setting');
-  // R3, byte for byte.
+  // R3 with OA-863 = B, byte for byte: the run's object, then the restriction
+  // to the three providers that served the run's MiMo-V2.6-Flash requests,
+  // by base slug.
   assert.equal(
     JSON.stringify(entry.providerRouting),
-    '{"max_price":{"prompt":0.15,"completion":0.6},"require_parameters":true,"data_collection":"deny"}',
+    '{"max_price":{"prompt":0.15,"completion":0.6},"require_parameters":true,"data_collection":"deny","only":["cohere","gmicloud","xiaomi"]}',
   );
   // R5: OpenRouter's listed price on P3's day, USD per million tokens.
   assert.deepEqual(entry.pricing, { input: 0.14, output: 0.28 });

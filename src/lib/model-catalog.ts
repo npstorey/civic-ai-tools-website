@@ -96,16 +96,26 @@ export interface ModelRequestSettings {
 
 /**
  * How OpenRouter may route a request among the providers that serve its model,
- * sent as the request's `provider` object (#740 P3, ruling R3). The fields are
- * the three the November 2026 evaluation sent its open-weight models
- * (`OPEN_WEIGHT_PROVIDER`, scripts/eval-models.mjs): a price ceiling per
- * million tokens, `require_parameters`, and `data_collection`. The type has no
- * `order`, `only` or `ignore`, so an entry cannot pin a provider through it.
+ * sent as the request's `provider` object (#740 P3, ruling R3, and the owner's
+ * ruling OA-863 = B). The first three fields are the ones the November 2026
+ * evaluation sent its open-weight models (`OPEN_WEIGHT_PROVIDER`,
+ * scripts/eval-models.mjs): a price ceiling per million tokens,
+ * `require_parameters`, and `data_collection`.
+ *
+ * `only` is OpenRouter's allow-list: "List of provider slugs to allow for this
+ * request", and "If two or more of the allowed providers can serve the model,
+ * default routing picks among them" (its provider-routing guide, read
+ * 2026-11-15T22:42Z). So it restricts the set without choosing one provider. A
+ * base slug (`cohere`) matches every endpoint of that provider, whatever its
+ * quantization. The type carries no `order` and no `allow_fallbacks`: without
+ * `order`, `allow_fallbacks: false` "keeps only the top-ranked endpoint", which
+ * would pin one provider and stop failover among the allowed ones.
  */
 export interface ProviderRouting {
   max_price: { prompt: number; completion: number };
   require_parameters: boolean;
   data_collection: 'allow' | 'deny';
+  only?: readonly string[];
 }
 
 /** The request-body fields `modelRequestParameters` produces. */

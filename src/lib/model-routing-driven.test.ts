@@ -1,11 +1,13 @@
-// #740 P3, ruling R3 — the provider routing on the wire, for the built-in
-// catalog the reference instance runs on.
+// #740 P3, ruling R3 and OA-863 = B — the provider routing on the wire, for
+// the built-in catalog the reference instance runs on.
 //
 // MiMo-V2.6-Flash is served by several providers behind one OpenRouter slug,
 // and the November 2026 evaluation sent each of its requests one routing
 // object (`OPEN_WEIGHT_PROVIDER`, scripts/eval-models.mjs). Its catalog entry
-// carries that object as `providerRouting`, and `modelRequestParameters` sends
-// it as `provider` (`model-request-settings.test.ts` holds the builder). This
+// carries that object, restricted by `only` to the three providers that served
+// the run's MiMo-V2.6-Flash requests, as `providerRouting`, and
+// `modelRequestParameters` sends it as `provider`
+// (`model-request-settings.test.ts` holds the builder). This
 // file holds the property where it matters: in the request bodies that leave
 // the real route handlers, at every call site a request for a built-in model
 // can reach.
@@ -243,8 +245,13 @@ const HAIKU = 'anthropic/claude-haiku-5.5';
 const MODELS = [MIMO, HAIKU] as const;
 type Model = (typeof MODELS)[number];
 
-/** R3, verbatim (#740, the roster memo's ruling): the November 2026 run's provider object. */
-const R3 = '{"max_price":{"prompt":0.15,"completion":0.6},"require_parameters":true,"data_collection":"deny"}';
+/**
+ * MiMo-V2.6-Flash's routing: R3 (#740, the roster memo's ruling), the November
+ * 2026 run's provider object, then the owner's ruling OA-863 = B, `only` the
+ * three providers that served the run's MiMo-V2.6-Flash requests, by base slug.
+ */
+const MIMO_ROUTING =
+  '{"max_price":{"prompt":0.15,"completion":0.6},"require_parameters":true,"data_collection":"deny","only":["cohere","gmicloud","xiaomi"]}';
 
 const { _resetModelCatalogForTests } = await import('./model-resolver.ts');
 const { _resetDefaultModelClientForTests } = await import('./model-client.ts');
@@ -391,17 +398,17 @@ test('premise: every drive reached the built-in endpoint at every site it is lis
 
 // --- The criterion (#740 P3, criterion 2) -----------------------------------------
 
-test('every request for MiMo-V2.6-Flash carries R3 exactly, at every site a MiMo request reaches', () => {
+test('every request for MiMo-V2.6-Flash carries its routing exactly, the three-provider restriction included, at every site a MiMo request reaches', () => {
   const mimo = received.filter((r) => r.body.model === MIMO);
   const differences: string[] = [];
   for (const request of mimo) {
     const site = `${request.drive} / ${siteOf(request)}`;
-    if (JSON.stringify(request.body.provider) !== R3) {
+    if (JSON.stringify(request.body.provider) !== MIMO_ROUTING) {
       differences.push(`${site}: provider ${JSON.stringify(request.body.provider)}`);
     }
     // In the bytes, too: the body is the plain serialization of its fields.
-    if (!request.raw.includes(`"provider":${R3}`) || request.raw !== JSON.stringify(request.body)) {
-      differences.push(`${site}: the bytes do not carry "provider":${R3}`);
+    if (!request.raw.includes(`"provider":${MIMO_ROUTING}`) || request.raw !== JSON.stringify(request.body)) {
+      differences.push(`${site}: the bytes do not carry "provider":${MIMO_ROUTING}`);
     }
     // What the November run sent it beside the routing: max_tokens, no reasoning setting.
     if (typeof request.body.max_tokens !== 'number' || 'max_completion_tokens' in request.body || 'reasoning_effort' in request.body) {
@@ -425,4 +432,9 @@ test('no request for a Claude model carries a provider object, at any of the eig
   );
   const carrying = claude.filter((r) => 'provider' in r.body);
   assert.deepEqual(carrying.map((r) => `${r.drive} / ${siteOf(r)}`), []);
+  // The decoy: MiMo-V2.6-Flash's object, and its restriction, appear in no
+  // Claude request's bytes, at any site — so a routing that reached a Claude
+  // request under another key would still be seen.
+  const decoyed = claude.filter((r) => r.raw.includes(MIMO_ROUTING) || r.raw.includes('"only":['));
+  assert.deepEqual(decoyed.map((r) => `${r.drive} / ${siteOf(r)}`), []);
 });
