@@ -15,7 +15,7 @@ import { getGenAiSystem, getMissingModelCredentialError, ModelConfigurationError
 import { whereItWentFromCalls } from '@/lib/flows/where-it-went';
 import { resolveModelIdentity, ModelNotOfferedError } from '@/lib/model-resolver';
 import type { ModelIdentity } from '@/lib/model-catalog';
-import { configuredMcpServers, getMissingMcpRoutingError, readMcpEnvFromProcess, routedSourceId, skillRoutingTraceAttributes } from '@/lib/mcp/registry';
+import { configuredMcpServers, dispatchTargetOf, getMissingMcpRoutingError, readMcpEnvFromProcess, routedSourceId, skillRoutingTraceAttributes } from '@/lib/mcp/registry';
 import { resolveRunPortal } from '@/lib/site-config';
 import { PORTAL_LOCK_NOT_CONFIGURED_MESSAGE } from '@/lib/portal-lock';
 import { TraceBuilder, hash, CIVICAITOOLS_TRACE_CONFIG, runRecordAttributes } from '@/lib/evidence/trace';
@@ -451,15 +451,20 @@ Be honest if you don't have access to current or real-time data.`;
           model,
           // The tools the record states it offered, as offered.
           offeredTools,
-          // Just the transport. Portal injection moved into the core (#359):
+          // The transport. Portal injection moved into the core (#359):
           // done here, it ran after the core had recorded the call and
           // stringified its arguments onto the span, so the span reported no
           // portal on exactly the calls that had just been given one. Told the
           // run's selection (R6 W1), so a call to a source it leaves out is
           // refused before any request, as the prompt and the tools left it out.
-          // In loop (#644 W1), the session: its transport, bound to the loaded
-          // set, and its load step.
-          inLoop ?? ((name, args) => callMcpTool(name, args, { selection })),
+          // Beside it, the target its dispatch sends each call to, from the same
+          // selection: the loop core decides a pack's call from it (S2-B F1).
+          // In loop (#644 W1), the session: its transport and its target, bound
+          // to the loaded set, and its load step.
+          inLoop ?? {
+            executeToolCall: (name, args) => callMcpTool(name, args, { selection }),
+            dispatchTarget: (name) => dispatchTargetOf(name, configured, selection),
+          },
           systemPromptWithMcp,
           callbacks,
           // Non-throwing: a call to a tool no configured server hosts is refused

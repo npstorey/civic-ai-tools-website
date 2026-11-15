@@ -333,14 +333,19 @@ export interface ToolCallOptions {
 }
 
 /**
- * How a tool call is answered: the transport, or, for an in-loop run (#644
- * W1), the transport beside the load step that answers `load_source`
- * (`InLoopRouting` from `./mcp/routing-mode.ts` is one). Both are handed to
- * the loop core as they are.
+ * How a tool call is answered: the transport, or the transport beside the
+ * target its dispatch sends each call to (S2-B F1: `dispatchTarget`, from the
+ * selection the transport sends with) and, for an in-loop run (#644 W1), the
+ * load step that answers `load_source` (`InLoopRouting` from
+ * `./mcp/routing-mode.ts` is one). Each is handed to the loop core as it is.
  */
 export type McpToolTransport =
   | ((name: string, args: Record<string, unknown>) => Promise<string>)
-  | { executeToolCall: (name: string, args: Record<string, unknown>) => Promise<string>; loadStep: LoadStep };
+  | {
+      executeToolCall: (name: string, args: Record<string, unknown>) => Promise<string>;
+      dispatchTarget?: (name: string) => string | undefined;
+      loadStep?: LoadStep;
+    };
 
 export async function queryWithMcpStreaming(
   query: string,
@@ -360,8 +365,8 @@ export async function queryWithMcpStreaming(
 ): Promise<void> {
   const startTime = Date.now();
   const panel: PanelType = 'withMcp';
-  const { executeToolCall, loadStep } = typeof transport === 'function'
-    ? { executeToolCall: transport, loadStep: undefined }
+  const { executeToolCall, dispatchTarget, loadStep } = typeof transport === 'function'
+    ? { executeToolCall: transport, dispatchTarget: undefined, loadStep: undefined }
     : transport;
 
   try {
@@ -380,6 +385,9 @@ export async function queryWithMcpStreaming(
       // it recorded. The portal is no longer one of those things — it is the
       // option below, applied before the record and the span exist.
       executeToolCall,
+      // Where the transport's dispatch sends each call (S2-B F1): the core
+      // decides a pack's call from it.
+      dispatchTarget,
       portal: toolCallOptions?.portal,
       lockedPortal,
       toolTimeoutMs: toolCallOptions?.toolTimeoutMs,
