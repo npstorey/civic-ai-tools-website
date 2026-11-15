@@ -167,7 +167,9 @@ test('premise: the three sources are configured and the switch is unset', () => 
     assert.equal(Object.hasOwn(configured, key), false, `premise: ${key} is unset`);
   }
   assert.deepEqual(withPortal.sourcesOffered.slice(0, 3).map((s) => s.reason), ['configured', 'configured', 'configured']);
-  assert.equal(ROUTER_VERSION, '0.9.0', 'premise: the installed router is the pin this criterion is for');
+  // S3-B W2 (npstorey/civic-ai-tools#318): router 0.10.0. Its search, its routing configuration and its lock rule for a
+  // Socrata pack move nothing an unlocked composition with no search states; only the version below moves.
+  assert.equal(ROUTER_VERSION, '0.10.0', 'premise: the installed router is the pin this criterion is for');
 });
 
 test('criterion P: the composed prompt is byte-identical to 3e9717b\'s, with and without a portal', () => {
@@ -202,5 +204,5 @@ test('criterion P: the composition moves exactly the two named facts', () => {
   assert.equal(observed.components.length, base.length + 1);
   assert.equal((observed.components[3] as { id: string }).id, 'nyc-record@https://data.cityofnewyork.us/d/dg92-zbpx');
   assert.deepEqual(base.at(-1), { id: '@typedstandards/civic-typed-router', version: '0.2.0' });
-  assert.deepEqual(observed.components.at(-1), { id: '@typedstandards/civic-typed-router', version: '0.9.0' });
+  assert.deepEqual(observed.components.at(-1), { id: '@typedstandards/civic-typed-router', version: '0.10.0' });
 });

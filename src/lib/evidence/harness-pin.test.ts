@@ -2,7 +2,22 @@
 // that carries the signed-surface fixes named below (Wave N9 #384, family F2,
 // C4; Wave N10 #409, criterion 6; Wave N12 #470, criteria 7-9; sprint R2 #599
 // W4; sprint R6 #632 W2; sprint R8 #644 W1; sprint R10 civic-ai-tools#289 P5;
-// sprint S2-B, npstorey/civic-ai-tools#309; S2-B P3R, the same issue).
+// sprint S2-B, npstorey/civic-ai-tools#309; S2-B P3R, the same issue; S3-B W2, npstorey/civic-ai-tools#318).
+//
+// WHAT THE PIN PROTECTS, PART TEN — 0.14.0, and why the range moved to it (S3-B W2, hub ADR-0033's amendment 5;
+// its CHANGELOG entry of 2026-11-13, read before the move). Two things this instance now relies on:
+//
+//   1. A search span (`tool.operation_type` `find_source`) read as a load span is: no source agent, no
+//      `dataSources` entry, the platform's activity, and `civic:searchOutcome`, `civic:searchQuery` and, on
+//      `searched`, `civic:searchHits`. Below 0.14.0 an untagged search is credited to a source named `unknown`.
+//      Driven through this repository's packager in `src/lib/model-loop/find-source-driven.test.ts` (W2-7).
+//   2. `routingConfiguration` in the composition block, from the input this instance's packager passes (read
+//      from the root span's `analysis.routing_configuration`); the harness recomputes its hash. Driven in
+//      `src/app/api/a-run-records-its-inputs-driven.test.ts` (W2-6).
+//
+// 0.14.0 keeps produce-core `^0.9.0`, so the core floors stay. A record with no search span and no routing
+// configuration is byte-identical across the bump (the CHANGELOG's own statement); an in-loop record of this
+// instance now carries the configuration, which is the point of the move.
 //
 // WHAT THE PIN PROTECTS, PART NINE — 0.13.0, and why the range moved to it
 // (S2-B P3R, hub ADR-0033's amendment 4; its CHANGELOG entry of 2026-11-12,
@@ -322,14 +337,15 @@ const HARNESS_DIR = path.join(REPO_ROOT, 'node_modules', ...HARNESS.split('/'));
  *  0.3.1 graph-builder fixes, the 0.4.0 data-source fix, the 0.5.0
  *  configured-server fixes, 0.7.0's record fields, 0.9.0's two reasons and
  *  flows-statement reference, 0.10.0's routing statement and load span, and
- *  0.11.0's subtype constant, 0.12.0's `civic:packId`, and 0.13.0's reported
- *  keys and evaluator words above. */
-const FLOOR = '0.13.0';
+ *  0.11.0's subtype constant, 0.12.0's `civic:packId`, 0.13.0's reported
+ *  keys and evaluator words, and 0.14.0's search span and routing
+ *  configuration above. */
+const FLOOR = '0.14.0';
 /** Exclusive ceiling: under semver a 0.x MINOR bump is a breaking change, so
- *  the pin admits later 0.13.x PATCHES (a fix that is still this behaviour)
- *  and refuses 0.14.0, which would be a contract this test has not read. The
- *  assertion is therefore a RANGE (`>=0.13.0 <0.14.0`) rather than equality to
- *  `0.13.0`: pinning the exact string would turn red on a patch release that
+ *  the pin admits later 0.14.x PATCHES (a fix that is still this behaviour)
+ *  and refuses 0.15.0, which would be a contract this test has not read. The
+ *  assertion is therefore a RANGE (`>=0.14.0 <0.15.0`) rather than equality to
+ *  `0.14.0`: pinning the exact string would turn red on a patch release that
  *  changed nothing this file cares about, which is a criterion that fails for
  *  the wrong reason.
  *
@@ -346,12 +362,14 @@ const FLOOR = '0.13.0';
  *  S2-B, which read 0.12.0's entry (`civic:packId`; no dependency change, so
  *  the core floors stay), and `>=0.12.0 <0.13.0` until S2-B P3R, which read
  *  0.13.0's entry (the reported keys and the evaluator's words; no dependency
- *  change, so the core floors stay). Each ceiling did its
+ *  change, so the core floors stay), and `>=0.13.0 <0.14.0` until S3-B W2,
+ *  which read 0.14.0's entry (the search span and the routing configuration;
+ *  no dependency change, so the core floors stay). Each ceiling did its
  *  job: it held the next minor out until someone read the new contract and
  *  said what changed. Both numbers move together, in one commit, with the
  *  paragraph above rewritten — a floor raised without its ceiling would
  *  silently readmit the next unread minor. */
-const CEILING = '0.14.0';
+const CEILING = '0.15.0';
 
 type Semver = [number, number, number];
 
@@ -386,7 +404,7 @@ function readJson(file: string): Record<string, unknown> {
   return JSON.parse(fs.readFileSync(file, 'utf8')) as Record<string, unknown>;
 }
 
-test('harness pin: the INSTALLED civic-typed-harness satisfies >=0.13.0 <0.14.0 (it carries all nine sets of signed-surface fixes)', () => {
+test('harness pin: the INSTALLED civic-typed-harness satisfies >=0.14.0 <0.15.0 (it carries all ten sets of signed-surface fixes)', () => {
   const pkgJson = path.join(HARNESS_DIR, 'package.json');
   assert.ok(fs.existsSync(pkgJson), `${HARNESS} is not installed at ${pkgJson} — run npm ci`);
 
@@ -396,7 +414,9 @@ test('harness pin: the INSTALLED civic-typed-harness satisfies >=0.13.0 <0.14.0 
   const installed = parseSemver(version as string, `installed ${HARNESS}`);
   assert.ok(
     compareSemver(installed, parseSemver(FLOOR, 'floor')) >= 0,
-    `installed ${HARNESS} is ${version as string}; ${FLOOR} is the first release that states what a remote server ` +
+    `installed ${HARNESS} is ${version as string}; ${FLOOR} is the first release that ` +
+      'records a search as the instance\'s own step and states the routing configuration (`find_source`, ' +
+      '`routingConfiguration`; hub ADR-0033 amendment 5; npstorey/civic-ai-tools#318, S3-B W2). 0.13.0 is the floor that states what a remote server ' +
       'reported of itself (`reportedName`, `reportedVersion`; hub ADR-0033 amendment 4; npstorey/civic-ai-tools#309, P3R). ' +
       '0.12.0 is the floor that states the pack a call ' +
       'went through (`civic:packId` from `mcp.pack_id`; hub ADR-0033 amendment 3; npstorey/civic-ai-tools#309). ' +
