@@ -1,0 +1,1005 @@
+{
+  "what": "The second reader's blind re-scoring of a stratified sample of the run's rows (D5), on the same four dimensions. Keyed by row key; `card` is the card id the reader saw.",
+  "reader": {
+    "model": "claude-fable-5-1",
+    "name": "Fable 5.1",
+    "modelReadFrom": "the reader's transcript `model` lines (#740 comment 6887849905)",
+    "blind": "to the model and to the first scores"
+  },
+  "sample": {
+    "seed": 202611142,
+    "sizes": {
+      "anthropic/claude-haiku-5.5": 10,
+      "anthropic/claude-sonnet-5.5": 11,
+      "openai/gpt-oss-120b": 10,
+      "xiaomi/mimo-v2.6-flash": 10,
+      "z-ai/glm-5.3-flash": 10
+    },
+    "drawnBy": "sample.py, a fixed seed, stratified by model and spread across the questions"
+  },
+  "sources": [
+    {
+      "path": "planning record temp/eval-ow/p2/cards/cards-key.json",
+      "sha256": "dd5cded3b04400ab9a2c39fa9fbd6600720d42359e1d7308d4cccfa8e14a031a"
+    },
+    {
+      "path": "planning record temp/eval-ow/p2/second/sample.json",
+      "sha256": "9caaee8e1a1ac8640056985c0e5c4ff55a3893d5fd2843fa8c991292df3bebfc"
+    },
+    {
+      "path": "planning record temp/eval-ow/p2/second/scores-second.jsonl",
+      "sha256": "2e2946431b2bee3792ace292bb8610f90076aa7e1f03e88d9528a511704359de"
+    }
+  ],
+  "rows": {
+    "z-ai/glm-5.3-flash Q3 r1 every-source-on": {
+      "card": "cc883e3cb",
+      "dataset_selection": {
+        "score": 5,
+        "reason": "\"dataset_id\": \"wr8u-xric\" on the first data call"
+      },
+      "soql_correctness": {
+        "score": 2,
+        "reason": "two failed calls with \"group\": \"data.sf.gov\" and \"group\": \"5\", then \"order\": \"alarm_dttm DESC\" with no null guard, so one of the five is a 2016 row with no alarm time"
+      },
+      "guidance_adherence": {
+        "score": 4,
+        "reason": "known SF id and a freshness note (\"last update was 2026-09-30\"), but no column discovery and two malformed calls"
+      },
+      "interpretation_quality": {
+        "score": 3,
+        "reason": "row 5 is \"2016-09-25 (alarm time missing)\", explained honestly, so only four recent incidents are delivered"
+      }
+    },
+    "openai/gpt-oss-120b Q3 r1 every-source-on": {
+      "card": "cd83810d5",
+      "dataset_selection": {
+        "score": 5,
+        "reason": "\"dataset_id\": \"wr8u-xric\" on the first data call"
+      },
+      "soql_correctness": {
+        "score": 3,
+        "reason": "uses \"group\": \"incident_number, address, alarm_dttm, ...\" as a distinct, no LIMIT (10 rows for a 5-row ask), and the same call runs twice"
+      },
+      "guidance_adherence": {
+        "score": 3,
+        "reason": "column sample taken, but no freshness or data caveat, and \"Alarm Time (UTC)\" asserts a timezone the card does not show"
+      },
+      "interpretation_quality": {
+        "score": 3,
+        "reason": "the five incidents match the sibling cards, but no limitations; \"(UTC)\" is unsupported and \"255 Woodsides Avenue\" misspells the address"
+      }
+    },
+    "xiaomi/mimo-v2.6-flash Q3 r1 every-source-on": {
+      "card": "c3c83ca78",
+      "dataset_selection": {
+        "score": 5,
+        "reason": "\"dataset_id\": \"wr8u-xric\" on the first data call, no search"
+      },
+      "soql_correctness": {
+        "score": 5,
+        "reason": "\"WHERE alarm_dttm IS NOT NULL ORDER BY alarm_dttm DESC LIMIT 5\" after a one-row column sample; the null guard the other Q3 cards lacked"
+      },
+      "guidance_adherence": {
+        "score": 5,
+        "reason": "known SF id, column discovery, freshness limit: \"The dataset's last load was 2026-09-30 (data_loaded_at)\""
+      },
+      "interpretation_quality": {
+        "score": 5,
+        "reason": "five rows tabled; \"None of the five were actual working fires\"; the freshness caveat explains why 'most recent' is September"
+      }
+    },
+    "openai/gpt-oss-120b Q4 r1 every-source-on": {
+      "card": "c6ea7e222",
+      "dataset_selection": {
+        "score": 5,
+        "reason": "\"dataset_id\": \"erm2-nwe9\" on the first data call"
+      },
+      "soql_correctness": {
+        "score": 4,
+        "reason": "first aggregate with \"created_date <= '2026-11-13T23:59:59'\" failed; the retry \"created_date >= '2026-01-01' AND created_date <= '2026-11-13'\" returned the ranking"
+      },
+      "guidance_adherence": {
+        "score": 5,
+        "reason": "column sample first; \"Date range: 2026-01-01 through 2026-11-13 (interpreted as 'this year')\"; limitations listed"
+      },
+      "interpretation_quality": {
+        "score": 5,
+        "reason": "ranked table of 10 with counts; \"Illegal Parking | 549,918\" matches the other full-range card; methodology stated"
+      }
+    },
+    "openai/gpt-oss-120b Q5 r1 every-source-on": {
+      "card": "c2783e5bb",
+      "dataset_selection": {
+        "score": 4,
+        "reason": "catalog search \"Crimes\" first, then \"ijzp-q8t2\""
+      },
+      "soql_correctness": {
+        "score": 2,
+        "reason": "three calls failed with reasoning leaked into the argument: \"group\": \"ward, ward, crime_count? Actually group by ward only? ...\" before a clean call"
+      },
+      "guidance_adherence": {
+        "score": 3,
+        "reason": "date filter \"date >= '2026-02-01T00:00:00' AND date < '2026-03-01T00:00:00'\" correct, but no limitations in the answer and three malformed calls"
+      },
+      "interpretation_quality": {
+        "score": 3,
+        "reason": "\"Ward 27 recorded the highest number of crimes, with 732 incidents\" is right; no table, no runner-up, no caveats"
+      }
+    },
+    "xiaomi/mimo-v2.6-flash Q5 r1 every-source-on": {
+      "card": "ce7c2de8f",
+      "dataset_selection": {
+        "score": 5,
+        "reason": "\"dataset_id\": \"ijzp-q8t2\" on the first data call"
+      },
+      "soql_correctness": {
+        "score": 5,
+        "reason": "\"SELECT * LIMIT 1\" then \"ward IS NOT NULL GROUP BY ward ORDER BY crime_count DESC LIMIT 10\" over the Feb range"
+      },
+      "guidance_adherence": {
+        "score": 5,
+        "reason": "column discovery; \"Only crimes with a non-null ward value were counted\"; revision note"
+      },
+      "interpretation_quality": {
+        "score": 4,
+        "reason": "table and ranking correct; \"(Near West Side / Ukrainian Village area)\" is outside knowledge no call supports, and a sibling card places Ward 27 elsewhere"
+      }
+    },
+    "anthropic/claude-sonnet-5.5 Q6 r1 every-source-on": {
+      "card": "c801714fc",
+      "dataset_selection": {
+        "score": 5,
+        "reason": "\"dataset_id\": \"76t5-zqzr\" on the first data call"
+      },
+      "soql_correctness": {
+        "score": 4,
+        "reason": "one-row sample, then AVG with \"where\": \"estprojectcost > 0\" grouped by permitclass - valid, no date filter"
+      },
+      "guidance_adherence": {
+        "score": 4,
+        "reason": "\"The data covers all years in the dataset, with no date filter\" disclosed; estimate-vs-final and inflation caveats"
+      },
+      "interpretation_quality": {
+        "score": 4,
+        "reason": "the 33x ratio checks; \"about 156,000 of the 194,000 records\" - the 194,000 total is in no call shown"
+      }
+    },
+    "openai/gpt-oss-120b Q6 r1 every-source-on": {
+      "card": "c88fd4c6b",
+      "dataset_selection": {
+        "score": 5,
+        "reason": "\"dataset_id\": \"76t5-zqzr\" on the first data call"
+      },
+      "soql_correctness": {
+        "score": 3,
+        "reason": "\"AVG(CAST(estprojectcost AS number))\" failed, the retry worked; no date filter, no COUNT, no ORDER"
+      },
+      "guidance_adherence": {
+        "score": 3,
+        "reason": "no date filter and no disclosure of it; the one caveat is \"include only records where an estimated project cost is reported\"; no counts or skew note"
+      },
+      "interpretation_quality": {
+        "score": 3,
+        "reason": "averages alone in alphabetical order; \"include only records where an estimated project cost is reported\" is the only caveat"
+      }
+    },
+    "anthropic/claude-haiku-5.5 Q7 r1 every-source-on": {
+      "card": "c93e78b72",
+      "dataset_selection": {
+        "score": 5,
+        "reason": "\"dataset_id\": \"43nn-pn8j\" on the first data call"
+      },
+      "soql_correctness": {
+        "score": 5,
+        "reason": "\"grade IN ('A','B','C') AND grade_date >= '2025-11-13T00:00:00' AND grade_date < '2026-11-13T00:00:00'\" grouped by boro, grade"
+      },
+      "guidance_adherence": {
+        "score": 5,
+        "reason": "sample first; window and exclusions stated (\"pending (P), not-yet-graded (Z) ... excluded\"); row-vs-inspection caveat"
+      },
+      "interpretation_quality": {
+        "score": 5,
+        "reason": "\"86.6%\" = 12,153/14,041 and every share checks; the 0.4-point gap flagged as fragile"
+      }
+    },
+    "openai/gpt-oss-120b Q7 r1 every-source-on": {
+      "card": "c4ccd01df",
+      "dataset_selection": {
+        "score": 5,
+        "reason": "\"dataset_id\": \"43nn-pn8j\" on the first data call"
+      },
+      "soql_correctness": {
+        "score": 3,
+        "reason": "\"where\": \"grade IS NOT NULL\" with no date filter and no letter-grade restriction, so N/Z/P statuses sit in the \"% A\" denominator"
+      },
+      "guidance_adherence": {
+        "score": 3,
+        "reason": "no date filter on a large dataset; metric not narrated; the \"0\" borough is explained"
+      },
+      "interpretation_quality": {
+        "score": 3,
+        "reason": "arithmetic checks (37,821/54,335 = 69.6%), but Manhattan and Staten Island tie at \"69.6 %\" and Manhattan is declared the winner without a word; \"Total graded inspections\" includes pending codes"
+      }
+    },
+    "xiaomi/mimo-v2.6-flash Q7 r1 every-source-on": {
+      "card": "c08cf6901",
+      "dataset_selection": {
+        "score": 5,
+        "reason": "\"dataset_id\": \"43nn-pn8j\" on the first data call"
+      },
+      "soql_correctness": {
+        "score": 5,
+        "reason": "two discovery calls then \"COUNT(*) ... WHERE inspection_date >= '2024-11-13' AND inspection_date < '2026-11-14' GROUP BY boro, grade\""
+      },
+      "guidance_adherence": {
+        "score": 5,
+        "reason": "discovery, date filter noted (\"24 months) for performance\"), percentages not raw counts, record-vs-restaurant caveat"
+      },
+      "interpretation_quality": {
+        "score": 5,
+        "reason": "\"79.1%\" = 1,742/2,201 and the other four shares check; metric sensitivity named (\"the Bronx leads (~66% A)\")"
+      }
+    },
+    "anthropic/claude-haiku-5.5 Q8 r1 every-source-on": {
+      "card": "c40c62c0f",
+      "dataset_selection": {
+        "score": 5,
+        "reason": "first data call \"dataset_id\": \"xzkq-xp2w\" (a Data Commons source is loaded beside it)"
+      },
+      "soql_correctness": {
+        "score": 5,
+        "reason": "\"salary_or_hourly = 'SALARY'\" ordered \"annual_salary::number DESC\", then MEDIAN with CASE buckets in one call"
+      },
+      "guidance_adherence": {
+        "score": 5,
+        "reason": "discovery; the hourly exclusion the rubric asks for: \"Hourly workers are excluded from the median\"; Census mismatch disclosed"
+      },
+      "interpretation_quality": {
+        "score": 5,
+        "reason": "buckets sum to 24,912; \"about 3.1x the median\" = 360,504/115,158; the 2016 Census figure labeled not comparable"
+      }
+    },
+    "anthropic/claude-sonnet-5.5 Q11 r1 every-source-on": {
+      "card": "c50ced83b",
+      "dataset_selection": {
+        "score": 3,
+        "reason": "\"dataset_id\": \"ydr8-5enu\" taken directly for \"permit data\" with no clarification"
+      },
+      "soql_correctness": {
+        "score": 4,
+        "reason": "sample, then COUNT/SUM with \"where\": \"issue_date >= '2026-10-14'\" grouped by permit_type, plus recent rows"
+      },
+      "guidance_adherence": {
+        "score": 3,
+        "reason": "no clarifying question; date scope stated and alternatives offered: \"If you meant another city ... tell me\""
+      },
+      "interpretation_quality": {
+        "score": 4,
+        "reason": "\"1,761 of 2,765\" = 64% checks; \"about 853k rows in total\" is in no call shown"
+      }
+    },
+    "xiaomi/mimo-v2.6-flash Q12 r1 every-source-on": {
+      "card": "cf615a339",
+      "dataset_selection": {
+        "score": 4,
+        "reason": "catalog \"building permits\" first, then \"ipu4-2q9a\""
+      },
+      "soql_correctness": {
+        "score": 4,
+        "reason": "\"SELECT MIN(issuance_date) as earliest, MAX(issuance_date) as latest, COUNT(*) as total\" - valid, but the Bronx/1950 count itself was never attempted"
+      },
+      "guidance_adherence": {
+        "score": 4,
+        "reason": "range verified (\"earliest ... 2007-01-01\"), catalog searched for \"historical permits 1950\"; the asked count not attempted"
+      },
+      "interpretation_quality": {
+        "score": 4,
+        "reason": "clear \"this figure isn't available\"; the archive pointers (\"LPC's 'Building Identification'\") are outside knowledge presented as fact"
+      }
+    },
+    "anthropic/claude-sonnet-5.5 Q13 r1 every-source-on": {
+      "card": "ca10f5d28",
+      "dataset_selection": {
+        "score": 5,
+        "reason": "\"dataset_id\": \"erm2-nwe9\" on the first data call"
+      },
+      "soql_correctness": {
+        "score": 5,
+        "reason": "\"upper(borough)='MANHATTAN' AND upper(complaint_type) LIKE '%NOISE%' AND created_date >= '2026-10-14' GROUP BY ... ORDER BY count DESC LIMIT 20\""
+      },
+      "guidance_adherence": {
+        "score": 5,
+        "reason": "upper() for case; \"I limited this to 2026-10-14 through 2026-11-13 because 311 is a very large dataset\"; discovery first"
+      },
+      "interpretation_quality": {
+        "score": 5,
+        "reason": "top-20 table consistent (\"about 16,700\"); \"I didn't run a separate total\" disclosed; partial last day noted"
+      }
+    },
+    "z-ai/glm-5.3-flash Q15 r1 every-source-on": {
+      "card": "cf2e6d54b",
+      "dataset_selection": {
+        "score": null,
+        "reason": "no data call: only load_source, then \"this public demo deployment has a resource limit\""
+      },
+      "soql_correctness": {
+        "score": null,
+        "reason": "no query ran after load_source; \"I can pull NYC 311 volumes for the past week right now\" is offered, not run"
+      },
+      "guidance_adherence": {
+        "score": 5,
+        "reason": "declines the cross-portal comparison, offers \"One city at a time in this chat\" and the \"Local CLI\""
+      },
+      "interpretation_quality": {
+        "score": 5,
+        "reason": "states the limit and asks \"Which city would you like me to start with?\"; nothing invented"
+      }
+    },
+    "xiaomi/mimo-v2.6-flash Q15 r1 every-source-on": {
+      "card": "ce2be0e1d",
+      "dataset_selection": {
+        "score": 5,
+        "reason": "\"dataset_id\": \"erm2-nwe9\" on the first data call, no search"
+      },
+      "soql_correctness": {
+        "score": 4,
+        "reason": "total and top types over \"created_date >= '2026-11-06T00:00:00' AND created_date < '2026-11-14T00:00:00'\"; the daily breakdown failed"
+      },
+      "guidance_adherence": {
+        "score": 5,
+        "reason": "\"This demo deployment is limited to one city per response\"; CLI pointed to; date filter and partial-day caveat"
+      },
+      "interpretation_quality": {
+        "score": 4,
+        "reason": "shares check (11,567/54,135 = 21.4%); \"~7,700/day\" divides an eight-day window by seven"
+      }
+    },
+    "xiaomi/mimo-v2.6-flash Q2 r1 socrata-ask-first-off": {
+      "card": "cb230d6db",
+      "dataset_selection": {
+        "score": null,
+        "reason": "no data call: load_source \"loadOutcome\": \"declined\""
+      },
+      "soql_correctness": {
+        "score": null,
+        "reason": "no query ran after the decline; the only call is load_source with \"loadOutcome\": \"declined\""
+      },
+      "guidance_adherence": {
+        "score": 5,
+        "reason": "D10: no Socrata call after the decline; the answer names what could not be checked - \"The denominator\", \"The numerator\", \"The resulting percentage\""
+      },
+      "interpretation_quality": {
+        "score": 5,
+        "reason": "\"nothing was loaded\"; no figure invented; says what would be queried if the source returned"
+      }
+    },
+    "anthropic/claude-haiku-5.5 Q2 r1 socrata-ask-first-allow": {
+      "card": "c45684e9f",
+      "dataset_selection": {
+        "score": 5,
+        "reason": "first data call \"dataset_id\": \"4ijn-s7e5\" with limit 1 for column discovery"
+      },
+      "soql_correctness": {
+        "score": 5,
+        "reason": "\"WHERE facility_type = 'Restaurant' AND inspection_date >= '2025-01-01' AND inspection_date < '2026-01-01' GROUP BY results\" - the only Q2 card that filtered to restaurants"
+      },
+      "guidance_adherence": {
+        "score": 5,
+        "reason": "column discovery first; \"I used calendar 2025 as 'last year'\"; re-inspection and pass-with-conditions limits stated"
+      },
+      "interpretation_quality": {
+        "score": 5,
+        "reason": "\"2,423 of 13,865\" = 17.5% and \"2,423 of 11,426\" = 21.2% both check; the table sums to 13,865"
+      }
+    },
+    "anthropic/claude-sonnet-5.5 Q2 r1 socrata-ask-first-allow": {
+      "card": "c38672934",
+      "dataset_selection": {
+        "score": 5,
+        "reason": "\"dataset_id\": \"4ijn-s7e5\" on the first data call"
+      },
+      "soql_correctness": {
+        "score": 4,
+        "reason": "valid GROUP BY results, but \"inspection_date >= '2025-11-13'\" reads 'last year' as a rolling 12 months rather than calendar 2025; no facility filter"
+      },
+      "guidance_adherence": {
+        "score": 5,
+        "reason": "\"If you meant calendar year 2025, I can rerun it\"; distinguishes \"Pass w/ Conditions\"; notes \"all food establishments, not only restaurants\""
+      },
+      "interpretation_quality": {
+        "score": 5,
+        "reason": "\"2,864 of 16,269\" = 17.6% and \"2,864 of 13,645\" = 21.0% both check; the table sums to 16,269"
+      }
+    },
+    "z-ai/glm-5.3-flash Q2 r1 socrata-ask-first-allow": {
+      "card": "c3d26bec0",
+      "dataset_selection": {
+        "score": 5,
+        "reason": "\"dataset_id\": \"4ijn-s7e5\" on the first data call"
+      },
+      "soql_correctness": {
+        "score": 5,
+        "reason": "where \"inspection_date >= '2025-01-01' AND inspection_date < '2026-01-01'\", group \"results\", order \"count DESC\""
+      },
+      "guidance_adherence": {
+        "score": 4,
+        "reason": "defines \"Fail\" and the conditional-pass variant; no note that the dataset covers all food establishments, not only restaurants"
+      },
+      "interpretation_quality": {
+        "score": 3,
+        "reason": "\"~17.7%\" (3,391/19,205) checks, but the completed-only rate \"~20.7%\" is wrong: 3,391/16,060 = 21.1%"
+      }
+    },
+    "xiaomi/mimo-v2.6-flash Q1 r2 every-source-on": {
+      "card": "c3606a45c",
+      "dataset_selection": {
+        "score": 5,
+        "reason": "\"dataset_id\": \"erm2-nwe9\" on the first data call, no search"
+      },
+      "soql_correctness": {
+        "score": 5,
+        "reason": "\"SELECT COUNT(*) as count WHERE created_date >= '2026-10-01T00:00:00' AND created_date < '2026-11-01T00:00:00'\" is the full calendar month before 2026-11-13"
+      },
+      "guidance_adherence": {
+        "score": 5,
+        "reason": "states \"Filter: created_date between 2026-10-01 and 2026-11-01\" and a backfill caveat; curated id used directly"
+      },
+      "interpretation_quality": {
+        "score": 5,
+        "reason": "\"347,650\" from a one-row count; \"(October 1-31, 2026)\" stated; completeness caveat present"
+      }
+    },
+    "openai/gpt-oss-120b Q2 r2 every-source-on": {
+      "card": "ce1afdbc4",
+      "dataset_selection": {
+        "score": 4,
+        "reason": "found \"4ijn-s7e5\" via catalog \"restaurant inspections\" on the first try"
+      },
+      "soql_correctness": {
+        "score": 2,
+        "reason": "the only call that returned (\"group\": \"results\" with no select) has no date filter; four dated retries with group and no select all failed"
+      },
+      "guidance_adherence": {
+        "score": 2,
+        "reason": "no date filter on the query that succeeded; failures narrated as \"The query returns no data\" though the card shows failed calls and one unfiltered 7-row result"
+      },
+      "interpretation_quality": {
+        "score": 2,
+        "reason": "\"I'm unable to retrieve Chicago restaurant-inspection records for the 2025 calendar year\" - no figures, the all-time result it did get is not reported, and failures are mislabeled as empty results"
+      }
+    },
+    "z-ai/glm-5.3-flash Q4 r2 every-source-on": {
+      "card": "c70584c29",
+      "dataset_selection": {
+        "score": 5,
+        "reason": "\"dataset_id\": \"erm2-nwe9\" on the first data call"
+      },
+      "soql_correctness": {
+        "score": 5,
+        "reason": "\"where\": \"created_date >= '2026-01-01'\", group complaint_type, order count DESC, limit 10 - one call, no retry"
+      },
+      "guidance_adherence": {
+        "score": 5,
+        "reason": "title states \"2026 (Jan 1 - Nov 13)\"; limitations: \"all boroughs and all status values (open and closed)\""
+      },
+      "interpretation_quality": {
+        "score": 5,
+        "reason": "ranked table with counts; \"filtered to requests created Jan 1 - Nov 13, 2026\"; borough and status splits offered"
+      }
+    },
+    "anthropic/claude-haiku-5.5 Q5 r2 every-source-on": {
+      "card": "c1fe61995",
+      "dataset_selection": {
+        "score": 5,
+        "reason": "\"dataset_id\": \"ijzp-q8t2\" on the first data call"
+      },
+      "soql_correctness": {
+        "score": 5,
+        "reason": "\"date >= '2026-02-01T00:00:00' AND date < '2026-03-01T00:00:00' AND ward IS NOT NULL\", group ward, order crimes DESC, after a one-row sample"
+      },
+      "guidance_adherence": {
+        "score": 5,
+        "reason": "explicit user month used; column discovery; \"not adjusted for population or area\"; revision note; close margin noted"
+      },
+      "interpretation_quality": {
+        "score": 5,
+        "reason": "\"Ward 27 ... 732\"; table of 5; the 26-incident margin to Ward 28 called out"
+      }
+    },
+    "anthropic/claude-sonnet-5.5 Q5 r2 every-source-on": {
+      "card": "cb830b3db",
+      "dataset_selection": {
+        "score": 5,
+        "reason": "\"dataset_id\": \"ijzp-q8t2\" on the first data call"
+      },
+      "soql_correctness": {
+        "score": 5,
+        "reason": "single call \"SELECT ward, COUNT(*) as count WHERE date >= '2026-02-01T00:00:00' AND date < '2026-03-01T00:00:00' GROUP BY ward ORDER BY count DESC LIMIT 5\""
+      },
+      "guidance_adherence": {
+        "score": 5,
+        "reason": "\"up to but not including 2026-03-01\" stated; population and the unchecked null ward disclosed"
+      },
+      "interpretation_quality": {
+        "score": 5,
+        "reason": "table of 5; \"I didn't check for records with a missing ward\" disclosed with its effect reasoned"
+      }
+    },
+    "xiaomi/mimo-v2.6-flash Q6 r2 every-source-on": {
+      "card": "c2b386eac",
+      "dataset_selection": {
+        "score": 5,
+        "reason": "\"dataset_id\": \"76t5-zqzr\" on the first data call"
+      },
+      "soql_correctness": {
+        "score": 4,
+        "reason": "column sample then \"AVG(estprojectcost) ... WHERE estprojectcost IS NOT NULL GROUP BY permitclass ORDER BY avg_cost DESC\" - valid, no date filter on a large dataset"
+      },
+      "guidance_adherence": {
+        "score": 4,
+        "reason": "no date filter, but disclosed: \"No date filter was applied since this is an all-time aggregate\"; outlier and field-meaning caveats"
+      },
+      "interpretation_quality": {
+        "score": 3,
+        "reason": "\"97,349 permits (58% of all records with a cost)\" is wrong: 97,349/159,013 = 61%; the table and the 32x ratio check"
+      }
+    },
+    "anthropic/claude-sonnet-5.5 Q8 r2 every-source-on": {
+      "card": "c464e017f",
+      "dataset_selection": {
+        "score": 5,
+        "reason": "\"dataset_id\": \"xzkq-xp2w\" on the first data call"
+      },
+      "soql_correctness": {
+        "score": 5,
+        "reason": "sample, then \"salary_or_hourly='SALARY'\" ordered \"annual_salary::number DESC\", then \"median(annual_salary::number)\" and avg"
+      },
+      "guidance_adherence": {
+        "score": 5,
+        "reason": "\"Hourly workers, who have no annual figure in this dataset, are left out\"; base-salary-only, snapshot and by-individual limits stated"
+      },
+      "interpretation_quality": {
+        "score": 5,
+        "reason": "\"3.1 times the median\" and \"about $103,000 more than the second-highest\" both check; ties ranked as ties"
+      }
+    },
+    "openai/gpt-oss-120b Q8 r2 every-source-on": {
+      "card": "c40f974ef",
+      "dataset_selection": {
+        "score": 2,
+        "reason": "catalog \"payroll\" led to \"dawh-m56b\" (payroll costing) instead of the salaries dataset; related, wrong granularity"
+      },
+      "soql_correctness": {
+        "score": 1,
+        "reason": "\"SUM(amount) as total_salary\" by title answers total payroll dollars, not pay per job; the unordered 10-row result is treated as a top list; the same call repeats"
+      },
+      "guidance_adherence": {
+        "score": 2,
+        "reason": "\"the API returns only a sample when grouping by employee ID\" - a fabricated explanation for an unordered default-limited result; median from 10 rows"
+      },
+      "interpretation_quality": {
+        "score": 1,
+        "reason": "\"ACCOUNTANT\" named the highest-paying job from a payroll sum; \"median ... approximately 173,000 USD\" from a 10-record sample"
+      }
+    },
+    "anthropic/claude-haiku-5.5 Q9 r2 every-source-on": {
+      "card": "ca02da003",
+      "dataset_selection": {
+        "score": 5,
+        "reason": "first data call \"dataset_id\": \"h73f-gn57\", the known LA id"
+      },
+      "soql_correctness": {
+        "score": 4,
+        "reason": "first call ordered by \"created_date\" (the field is createddate) failed; then \"date_trunc_ym(createddate) as month\" grouped - the rubric pattern"
+      },
+      "guidance_adherence": {
+        "score": 5,
+        "reason": "zero result verified (\"returned zero rows\"), then the available months pulled; catalog checked for a 2026 dataset; no fabrication"
+      },
+      "interpretation_quality": {
+        "score": 5,
+        "reason": "the feed collapse (\"near zero after August 2025\") is read as a data gap, not a trend; the May-Nov 2026 window is reported absent"
+      }
+    },
+    "anthropic/claude-sonnet-5.5 Q9 r2 every-source-on": {
+      "card": "cc0aae3eb",
+      "dataset_selection": {
+        "score": 4,
+        "reason": "catalog \"MyLA311 service requests 2026\" first, then \"h73f-gn57\""
+      },
+      "soql_correctness": {
+        "score": 5,
+        "reason": "\"date_trunc_ym(createddate) as month, count(*)\" grouped and ordered; zero rows for \"createddate >= '2026-05-01'\", then the 2025 series"
+      },
+      "guidance_adherence": {
+        "score": 5,
+        "reason": "zero result verified against the available range; \"Don't read April 2025 onward as a true trend\"; options offered"
+      },
+      "interpretation_quality": {
+        "score": 5,
+        "reason": "monthly table; the 90% drop flagged as a feed problem; \"I found no 2026 dataset in the catalog\""
+      }
+    },
+    "z-ai/glm-5.3-flash Q10 r2 every-source-on": {
+      "card": "c4c15a2bc",
+      "dataset_selection": {
+        "score": null,
+        "reason": "no data call; the answer opens \"I need a bit more context first\""
+      },
+      "soql_correctness": {
+        "score": null,
+        "reason": "no query ran; the card has no calls, only \"Once you tell me, I can pull the relevant data\""
+      },
+      "guidance_adherence": {
+        "score": 5,
+        "reason": "two clarifying questions (\"Which location?\", \"What kind of crime rate?\") and the count-vs-rate distinction: \"raw counts rather than per-capita rates\""
+      },
+      "interpretation_quality": {
+        "score": 5,
+        "reason": "short; \"I'd use Data Commons\" for rates and Socrata for \"raw local crime records\"; nothing invented"
+      }
+    },
+    "anthropic/claude-haiku-5.5 Q11 r2 every-source-on": {
+      "card": "c79f790fe",
+      "dataset_selection": {
+        "score": 3,
+        "reason": "\"dataset_id\": \"ydr8-5enu\" taken directly; the ambiguity acknowledged only after the fact"
+      },
+      "soql_correctness": {
+        "score": 4,
+        "reason": "\"issue_date >= '2026-09-14T00:00:00' AND issue_date < '2026-11-13T00:00:00' GROUP BY permit_type\""
+      },
+      "guidance_adherence": {
+        "score": 3,
+        "reason": "no clarification; \"I chose the 60-day window because you didn't specify a period\""
+      },
+      "interpretation_quality": {
+        "score": 4,
+        "reason": "\"Total: 5,879 permits\" equals the table sum; self-reported cost caveat; scope stated"
+      }
+    },
+    "xiaomi/mimo-v2.6-flash Q11 r2 every-source-on": {
+      "card": "c22cb4d75",
+      "dataset_selection": {
+        "score": 3,
+        "reason": "catalog \"building permits\" then \"ydr8-5enu\" - a plausible reading of an ambiguous ask, taken without asking"
+      },
+      "soql_correctness": {
+        "score": 4,
+        "reason": "\"WHERE issue_date >= '2026-10-14' AND issue_date < '2026-11-13' ... GROUP BY permit_type\" - valid and scoped"
+      },
+      "guidance_adherence": {
+        "score": 3,
+        "reason": "no clarification on an ambiguous query; date filter applied and scope stated (\"I scoped to permits issued 2026-10-14 -> 2026-11-12\")"
+      },
+      "interpretation_quality": {
+        "score": 4,
+        "reason": "totals check (2,765; \"~$1.01B\"; 64%); answers a question the user did not confirm"
+      }
+    },
+    "anthropic/claude-haiku-5.5 Q13 r2 every-source-on": {
+      "card": "ca9b574ff",
+      "dataset_selection": {
+        "score": 5,
+        "reason": "\"dataset_id\": \"erm2-nwe9\" on the first data call"
+      },
+      "soql_correctness": {
+        "score": 5,
+        "reason": "one call: \"upper(borough) = 'MANHATTAN' AND upper(complaint_type) LIKE '%NOISE%' AND created_date >= '2026-10-14T00:00:00' AND created_date < '2026-11-13T00:00:00'\", ORDER BY count DESC LIMIT 15"
+      },
+      "guidance_adherence": {
+        "score": 5,
+        "reason": "upper() used, 30-day window stated (\"as the web default for 311 data\"), the LIKE scope explained"
+      },
+      "interpretation_quality": {
+        "score": 3,
+        "reason": "\"16,984 noise complaints\" is a total no call produced - the one call returned 15 grouped rows the card says \"sum to about 15,900\""
+      }
+    },
+    "z-ai/glm-5.3-flash Q13 r2 every-source-on": {
+      "card": "ca22ec026",
+      "dataset_selection": {
+        "score": 5,
+        "reason": "\"dataset_id\": \"erm2-nwe9\" on the first data call"
+      },
+      "soql_correctness": {
+        "score": 1,
+        "reason": "nine failed calls after the sample: \"group\": \"complaint_type\" with no select, \"order\": \"created_date DESC\" on a grouped query, most with no date filter; no data returned"
+      },
+      "guidance_adherence": {
+        "score": 3,
+        "reason": "\"I'm not going to guess or fabricate the counts\" honored; but most retries carried no date filter on 23M rows and \"borough = 'MANHATTAN'\" skipped upper()"
+      },
+      "interpretation_quality": {
+        "score": 2,
+        "reason": "no counts; one sample row (\"385 South End Avenue\") is the only content; failure attributed to the data source"
+      }
+    },
+    "openai/gpt-oss-120b Q13 r2 every-source-on": {
+      "card": "c6b84e7da",
+      "dataset_selection": {
+        "score": 5,
+        "reason": "\"dataset_id\": \"erm2-nwe9\" on the first data call"
+      },
+      "soql_correctness": {
+        "score": 3,
+        "reason": "\"upper(borough) = 'MANHATTAN' AND upper(complaint_type) LIKE '%NOISE%'\" is right, but two calls failed with reasoning in the argument (\"group\": \"descriptor, complaint_type? actually ...\") and the final group has no ORDER BY"
+      },
+      "guidance_adherence": {
+        "score": 4,
+        "reason": "\"upper(borough) = 'MANHATTAN'\" used; \"last 30 days, chosen to meet performance guidelines\"; sample first; thinking leaked into tool arguments"
+      },
+      "interpretation_quality": {
+        "score": 2,
+        "reason": "\"Top 10 descriptors (by count)\" is an unordered default-limited group: Dog 215 follows Air Conditioner 204, Boat 8 and Animal 3 are in it, and Loud Music/Party (3,000+ on sibling cards) is absent"
+      }
+    },
+    "anthropic/claude-sonnet-5.5 Q1 r3 every-source-on": {
+      "card": "cf6e518fe",
+      "dataset_selection": {
+        "score": 5,
+        "reason": "\"dataset_id\": \"erm2-nwe9\" on the first data call"
+      },
+      "soql_correctness": {
+        "score": 5,
+        "reason": "select \"COUNT(*) as total\", where \"created_date >= '2026-10-01T00:00:00' AND created_date < '2026-11-01T00:00:00'\""
+      },
+      "guidance_adherence": {
+        "score": 5,
+        "reason": "\"I took 'last month' to mean the full calendar month before today (2026-11-13)\" and offers the 30-day reading"
+      },
+      "interpretation_quality": {
+        "score": 5,
+        "reason": "discloses the tool flag \"is_sample: true\" and reasons it through; the count is a one-row aggregate"
+      }
+    },
+    "anthropic/claude-haiku-5.5 Q4 r3 every-source-on": {
+      "card": "c82031562",
+      "dataset_selection": {
+        "score": 5,
+        "reason": "\"dataset_id\": \"erm2-nwe9\" on the first data call"
+      },
+      "soql_correctness": {
+        "score": 4,
+        "reason": "first structured call failed; retry \"SELECT complaint_type, COUNT(*) AS complaints WHERE created_date >= '2026-01-01' GROUP BY complaint_type ORDER BY complaints DESC LIMIT 10\" returned 10 rows"
+      },
+      "guidance_adherence": {
+        "score": 5,
+        "reason": "states \"with no end date applied\"; discloses \"My first request returned no data. The retry used a differently written query\""
+      },
+      "interpretation_quality": {
+        "score": 5,
+        "reason": "ranked table; \"I did not calculate shares of total volume because I did not pull the overall total\""
+      }
+    },
+    "anthropic/claude-sonnet-5.5 Q4 r3 every-source-on": {
+      "card": "c9d2482a1",
+      "dataset_selection": {
+        "score": 5,
+        "reason": "\"dataset_id\": \"erm2-nwe9\" on the first data call"
+      },
+      "soql_correctness": {
+        "score": 3,
+        "reason": "two year-to-date aggregates failed; the one that returned used \"created_date >= '2026-10-14'\" - a 30-day window, not the year asked"
+      },
+      "guidance_adherence": {
+        "score": 4,
+        "reason": "honest about the failures (\"Two attempts ... were refused\"), labels the table \"last 30 days\", offers month-by-month; the heating remark is flagged \"my guess\""
+      },
+      "interpretation_quality": {
+        "score": 3,
+        "reason": "\"it isn't a year-to-date ranking\" - correctly caveated but the question asked is not answered"
+      }
+    },
+    "z-ai/glm-5.3-flash Q5 r3 every-source-on": {
+      "card": "ce6903d4a",
+      "dataset_selection": {
+        "score": 5,
+        "reason": "\"dataset_id\": \"ijzp-q8t2\" on the first data call"
+      },
+      "soql_correctness": {
+        "score": 5,
+        "reason": "one call, Feb range, \"group\": \"ward\", \"order\": \"count DESC\", limit 10"
+      },
+      "guidance_adherence": {
+        "score": 3,
+        "reason": "no limitations or caveats; adds \"(West Side - East Garfield Park/Humboldt Park area)\" from outside the data"
+      },
+      "interpretation_quality": {
+        "score": 2,
+        "reason": "\"16,548 total crime records citywide\" cannot come from a 10-row top-10 query; the headline 732 is right"
+      }
+    },
+    "anthropic/claude-haiku-5.5 Q6 r3 every-source-on": {
+      "card": "cc2d5080e",
+      "dataset_selection": {
+        "score": 5,
+        "reason": "\"dataset_id\": \"76t5-zqzr\" on the first data call"
+      },
+      "soql_correctness": {
+        "score": 5,
+        "reason": "\"issueddate >= '2025-11-13T00:00:00' AND issueddate < '2026-11-13T00:00:00' AND estprojectcost IS NOT NULL AND estprojectcost > 0\" with AVG and MEDIAN"
+      },
+      "guidance_adherence": {
+        "score": 5,
+        "reason": "column discovery; date filter applied and stated: \"I used the past 12 months by issue date\""
+      },
+      "interpretation_quality": {
+        "score": 5,
+        "reason": "\"6,349 permits in total\" equals the table sum; medians beside means with the skew explained"
+      }
+    },
+    "z-ai/glm-5.3-flash Q6 r3 every-source-on": {
+      "card": "c4597cee0",
+      "dataset_selection": {
+        "score": 5,
+        "reason": "\"dataset_id\": \"76t5-zqzr\" on the first data call"
+      },
+      "soql_correctness": {
+        "score": 4,
+        "reason": "sample of 3, then AVG and MEDIAN with \"where\": \"estprojectcost IS NOT NULL\" - valid, no date filter"
+      },
+      "guidance_adherence": {
+        "score": 4,
+        "reason": "\"I used the full historical dataset\" disclosed and a recent window offered; no date filter applied"
+      },
+      "interpretation_quality": {
+        "score": 4,
+        "reason": "\"~61%\" checks (97,349/159,013); 7 rows returned but the \"N/A\" class is dropped from the table without a note"
+      }
+    },
+    "anthropic/claude-sonnet-5.5 Q7 r3 every-source-on": {
+      "card": "c5f83c9c4",
+      "dataset_selection": {
+        "score": 5,
+        "reason": "\"dataset_id\": \"43nn-pn8j\" on the first data call"
+      },
+      "soql_correctness": {
+        "score": 5,
+        "reason": "\"count(distinct camis) as restaurants, count(*) as rows\" where \"inspection_date >= '2025-11-13' AND grade IN ('A','B','C')\""
+      },
+      "guidance_adherence": {
+        "score": 5,
+        "reason": "discovery; \"I applied a 12-month window because the dataset is large\"; two counting methods, excluded grades and invalid borough disclosed"
+      },
+      "interpretation_quality": {
+        "score": 5,
+        "reason": "\"93.3%\" = 5,421/5,809; the row-based column matches the sibling card; cross-grade double counting disclosed"
+      }
+    },
+    "xiaomi/mimo-v2.6-flash Q8 r3 every-source-on": {
+      "card": "cb0933ed2",
+      "dataset_selection": {
+        "score": 5,
+        "reason": "\"dataset_id\": \"xzkq-xp2w\" on the first data call"
+      },
+      "soql_correctness": {
+        "score": 5,
+        "reason": "GROUP BY job_titles, department with AVG and MAX \"ORDER BY avg_salary DESC LIMIT 15\", then MEDIAN over \"annual_salary IS NOT NULL\""
+      },
+      "guidance_adherence": {
+        "score": 5,
+        "reason": "discovery; \"base annual salary only\" and overtime limit; the stale Data Commons variable replaced and said so"
+      },
+      "interpretation_quality": {
+        "score": 4,
+        "reason": "ratios check (4.6x, 8.2x); but \"reflecting in part that many top-tier roles ... carry overtime\" explains a base-salary median by pay it excludes"
+      }
+    },
+    "z-ai/glm-5.3-flash Q9 r3 every-source-on": {
+      "card": "ca734741c",
+      "dataset_selection": {
+        "score": 5,
+        "reason": "first data call on \"h73f-gn57\""
+      },
+      "soql_correctness": {
+        "score": 1,
+        "reason": "every data call failed: \"created_date\" (nonexistent), a metadata call carrying \"group\": \"created_date\", \"group\": \"month\" with no select, \"date_trunc_y\" for months"
+      },
+      "guidance_adherence": {
+        "score": 3,
+        "reason": "\"I won't estimate or fabricate them\" honored; but no working column discovery and the failures are blamed on the portal (\"refused by the portal\")"
+      },
+      "interpretation_quality": {
+        "score": 3,
+        "reason": "no figures; useful structure given (\"hard-filtered to requests created between 2025-01-01 and 2026-01-01\"), but the cause of failure is misread"
+      }
+    },
+    "anthropic/claude-sonnet-5.5 Q10 r3 every-source-on": {
+      "card": "c14733822",
+      "dataset_selection": {
+        "score": null,
+        "reason": "no data call; the answer opens \"Your question is missing a few details\""
+      },
+      "soql_correctness": {
+        "score": null,
+        "reason": "no query ran; the card has no calls, only \"Once I know the location, I can check city open data portals\""
+      },
+      "guidance_adherence": {
+        "score": 4,
+        "reason": "asks for clarification, but four questions (\"Where?\", \"When?\", \"What kind of crime?\", \"What format?\") rather than one; notes rates need population"
+      },
+      "interpretation_quality": {
+        "score": 4,
+        "reason": "appropriate stop; \"incidents per 100,000 residents\" explained; longer than needed"
+      }
+    },
+    "anthropic/claude-haiku-5.5 Q12 r3 every-source-on": {
+      "card": "c62ee6661",
+      "dataset_selection": {
+        "score": 5,
+        "reason": "\"dataset_id\": \"ipu4-2q9a\" on the first data call, one of the rubric's two"
+      },
+      "soql_correctness": {
+        "score": 3,
+        "reason": "\"issuance_date LIKE '%/1950'\" failed; \"MIN(issuance_date) ... WHERE upper(borough) = 'BRONX'\" worked"
+      },
+      "guidance_adherence": {
+        "score": 5,
+        "reason": "attempted the count, verified the range, searched the catalog for historical sets; \"this answer rests on dataset descriptions and a sample query rather than a completed count\""
+      },
+      "interpretation_quality": {
+        "score": 4,
+        "reason": "\"only holds records from 2020 onward for the Bronx\" sits oddly beside a sibling card's 2007 earliest date; the 1989-2013 set correctly cited as ruling out 1950"
+      }
+    },
+    "z-ai/glm-5.3-flash Q12 r3 every-source-on": {
+      "card": "c2599ed9e",
+      "dataset_selection": {
+        "score": 5,
+        "reason": "\"dataset_id\": \"ic3t-wcy2\" on the first data call"
+      },
+      "soql_correctness": {
+        "score": 3,
+        "reason": "four failed calls (\"order\": \"job__doc__ #_s\", string date compares on fully_permitted) before \"min(fully_permitted) ... group by borough\" worked"
+      },
+      "guidance_adherence": {
+        "score": 4,
+        "reason": "range verified and no count invented: \"There are no Bronx records from 1950\"; several malformed retries unnarrated"
+      },
+      "interpretation_quality": {
+        "score": 4,
+        "reason": "\"earliest ... 01/02/1990 (262,155 Bronx records total)\" - a MIN over a MM/DD/YYYY text value may be lexicographic, and the card does not flag it"
+      }
+    },
+    "openai/gpt-oss-120b Q14 r3 every-source-on": {
+      "card": "cd4ffe08e",
+      "dataset_selection": {
+        "score": 4,
+        "reason": "catalog \"business licenses active\" then \"wnbq-64tb\""
+      },
+      "soql_correctness": {
+        "score": 3,
+        "reason": "\"limit\": 5 - a sample, not the LIMIT 500 page the rubric expects for 'list all'"
+      },
+      "guidance_adherence": {
+        "score": 3,
+        "reason": "notes \"The list shows only a 5-row sample\"; no pagination offer, no next page, no filter suggestion"
+      },
+      "interpretation_quality": {
+        "score": 3,
+        "reason": "five rows with phone numbers of sole proprietors; \"approximately 85 592 active licenses\" cited; no way forward offered"
+      }
+    },
+    "openai/gpt-oss-120b Q15 r3 every-source-on": {
+      "card": "c5ea7736d",
+      "dataset_selection": {
+        "score": 4,
+        "reason": "catalog then \"erm2-nwe9\" and \"v6vf-nfxy\" - the right 311 datasets for both cities"
+      },
+      "soql_correctness": {
+        "score": 4,
+        "reason": "\"created_date >= '2026-11-06' AND created_date < '2026-11-14'\" counts in both; eight days called a \"seven-day period\""
+      },
+      "guidance_adherence": {
+        "score": 2,
+        "reason": "runs the cross-portal comparison the web overlay rules out (\"New York City | 64,388\" beside \"Chicago | 36,117\"); no demo-limit explanation, no partial-day caveat"
+      },
+      "interpretation_quality": {
+        "score": 3,
+        "reason": "\"78 % more\" = 64,388/36,117 checks; no caveats on the partial day or the two systems' differing scope"
+      }
+    }
+  }
+}
