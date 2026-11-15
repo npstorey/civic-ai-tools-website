@@ -632,7 +632,11 @@ const P3_LEARN_LINES = [
   'An open-weight model: its maker, Xiaomi, publishes the trained model itself, not only access to it. In the November 2026 run it came closest of the three open-weight models to the Claude models on answer quality, at about a third of a cent a question, the lowest cost in that run. It was also the slowest model in that run, with a median of about 25 seconds.',
   'The demo reaches it through OpenRouter, which passes each question to one of several companies that run the model. The demo does not pick the company, and the companies that serve its questions can change.',
   'In the November 2026 run its questions went to three of those companies: Cohere, GMICloud and Xiaomi. OpenRouter lists all three as keeping the prompts they receive: Cohere and Xiaomi for 30 days, and GMICloud for a period it does not state.',
-  "Two of those listings conflict with what the companies themselves publish. For this model, OpenRouter also lists Cohere as keeping nothing, while Cohere's own page says prompts are kept for 30 days and then deleted, unless zero retention has been approved. GMICloud's console terms say it does not keep a customer's inputs after sorting them unless the customer opts in to prompt logging, and which GMICloud agreement covers OpenRouter's traffic is not stated.",
+  // The seat's wording ruling (#740 comment 6899621098): "The evaluation
+  // recorded two conflicts." (Cohere's provider-level 30 days agrees with its
+  // own page; its conflict is with the endpoint listing, doc :290), and
+  // GMICloud's own word, "categorizing" (doc :293).
+  "The evaluation recorded two conflicts. For this model, OpenRouter also lists Cohere as keeping nothing, while Cohere's own page says prompts are kept for 30 days and then deleted, unless zero retention has been approved. GMICloud's console terms say it does not keep a customer's inputs after categorizing them unless the customer opts in to prompt logging, and which GMICloud agreement covers OpenRouter's traffic is not stated.",
   "Each listing and each company's own words are recorded in the November 2026 evaluation.",
 ];
 
@@ -641,6 +645,8 @@ const P3_LEARN_GONE = [
   'under a tenth of what the other two cost',
   'It was also the fastest of the three, with',
   'It is the slowest of the three',
+  'Two of those listings conflict with what the companies themselves publish.',
+  'after sorting them',
 ];
 
 test('EVAL-OW P3: /learn carries a MiMo-V2.6-Flash card beside the Claude cards, in the ruled terms', () => {
