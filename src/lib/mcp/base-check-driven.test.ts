@@ -18,7 +18,7 @@
 //
 // Run with: npm test
 
-import { test } from 'node:test';
+import { mock, test } from 'node:test';
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import http from 'node:http';
@@ -46,7 +46,6 @@ interface BaseMode {
   serverInfo: { name: string; version: string };
   /** The `tools/list` result, or how the read fails. */
   list: { tools?: unknown[] } | { status: number } | { rpcError: true } | { repeat: true };
-  delayMs?: number;
 }
 const MATCH: BaseMode = { serverInfo: GR.serverInfo, list: { tools: GR.tools } };
 const base = { mode: MATCH, generation: 0, seen: [] as Array<{ method: string; tool?: string }> };
@@ -77,7 +76,6 @@ const baseServer = http.createServer(async (req, res) => {
     return;
   }
   if (body.method === 'tools/list') {
-    if (base.mode.delayMs) await new Promise((r) => setTimeout(r, base.mode.delayMs));
     const list = base.mode.list;
     if ('status' in list) { answer(list.status, { error: { code: -32603, message: 'fixture failure' } }); return; }
     if ('rpcError' in list) { answer(200, { error: { code: -32603, message: 'fixture: the list could not be built' } }); return; }
@@ -230,7 +228,7 @@ test('a match: a third pack call more than five minutes after the read (injected
 
 const withTools = (edit: (tools: Array<Record<string, unknown>>) => Array<Record<string, unknown>>): BaseMode => ({ serverInfo: GR.serverInfo, list: { tools: edit(clone(GR.tools)) } });
 const MISMATCHES: Array<[string, BaseMode]> = [
-  ['serverName', { serverInfo: { ...GR.serverInfo, name: 'socrata-mcp-server-fork' }, list: { tools: GR.tools }, delayMs: 40 }],
+  ['serverName', { serverInfo: { ...GR.serverInfo, name: 'socrata-mcp-server-fork' }, list: { tools: GR.tools } }],
   ['serverVersion', { serverInfo: { ...GR.serverInfo, version: '0.9.3' }, list: { tools: GR.tools } }],
   ['tools.get_data changed', withTools((tools) => tools.map((t) => (t.name === 'get_data' ? { ...t, inputSchema: { ...(t.inputSchema as object), required: ['dataset_id', 'type', 'query'] } } : t)))],
   ['tools.fetch absent', withTools((tools) => tools.filter((t) => t.name !== 'fetch'))],
@@ -250,14 +248,43 @@ for (const [label, mode] of MISMATCHES) {
   test(`a mismatch on ${label}: the model is told R2's line, verbatim`, () => {
     assert.deepEqual(refused.toolMessages, [R2_LINE]);
   });
-  if (label === 'serverName') {
-    test('3.iv: an unsent call\'s span is timed to its refusal, which is thrown inside the timed region', () => {
-      const ms = Number(attr(refused.spans[0], 'tool.duration_ms'));
-      assert.ok(ms >= 30, `the refused call's span took ${ms} ms, less than the base's 40 ms list: the refusal was not timed`);
-      assert.equal(refused.calls[0].duration_ms, ms, 'the record and the span state different durations');
-    });
-  }
 }
+
+// --- 3.iv: an unsent call's span is timed to its refusal ---------------------------------------------------------
+//
+// The order is asserted, not a wall-clock threshold. The check's read is injected: it records itself in the same
+// sequence as the loop's events and moves a mocked clock 40 ms before it answers with a mismatch. A tree that sent
+// the call without the check would never call the read: no `list-read`, and a duration of 0.
+
+const sequence: string[] = [];
+mock.timers.enable({ apis: ['Date'], now: Date.parse('2026-11-15T12:00:00Z') });
+let TIMED: Run;
+try {
+  TIMED = await run(MATCH, [[PACK_CALL('d1')]], {
+    checkBase: createBaseCheck({
+      read: async () => {
+        sequence.push('list-read');
+        mock.timers.tick(40);
+        return { serverInfo: { ...GR.serverInfo, version: '0.9.3' }, tools: GR.tools };
+      },
+    }),
+    onEvent: (event) => {
+      if (event.type === 'tool_start' || event.type === 'tool_complete' || event.type === 'tool_failed') sequence.push(event.type);
+    },
+  });
+} finally {
+  mock.timers.reset();
+}
+
+test('3.iv: a pack call refused by the check is read, then refused, and nothing is sent', () => {
+  assert.deepEqual(sequence, ['tool_start', 'list-read', 'tool_failed']);
+  assert.equal(packSent(TIMED), 0, 'the base received the pack\'s call');
+});
+
+test('3.iv: the refused call\'s span and record state the time until its refusal, the read included', () => {
+  assert.equal(Number(attr(TIMED.spans[0], 'tool.duration_ms')), 40);
+  assert.equal(TIMED.calls[0].duration_ms, 40);
+});
 
 // --- A failed read (ruling 1) -----------------------------------------------------------------------------------
 
