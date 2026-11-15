@@ -520,11 +520,11 @@ export default function LearnPage() {
             <p style={{ fontSize: '15px', color: 'var(--text-secondary)', margin: '0 0 8px', lineHeight: '1.6' }}>
               In the November 2026 run its questions went to three of those companies: Cohere, GMICloud
               and Xiaomi. OpenRouter lists all three as keeping the prompts they receive: Cohere and
-              Xiaomi for 30 days, and GMICloud for a period it does not state. Two of those listings
-              conflict with what the companies themselves publish. For this model, OpenRouter also
+              Xiaomi for 30 days, and GMICloud for a period it does not state. The evaluation
+              recorded two conflicts. For this model, OpenRouter also
               lists Cohere as keeping nothing, while Cohere&rsquo;s own page says prompts are kept for
               30 days and then deleted, unless zero retention has been approved. GMICloud&rsquo;s
-              console terms say it does not keep a customer&rsquo;s inputs after sorting them unless
+              console terms say it does not keep a customer&rsquo;s inputs after categorizing them unless
               the customer opts in to prompt logging, and which GMICloud agreement covers
               OpenRouter&rsquo;s traffic is not stated.
             </p>
