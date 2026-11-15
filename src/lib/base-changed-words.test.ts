@@ -5,7 +5,8 @@
 //     names no source.
 //   - D1: `FAILURE_REASON.base_changed`, a sixth kind; on the step list it shows alone, with no "This request did
 //     not complete." in front (as `not_offered` does); in the executed cell it takes the "was not sent" closing line.
-//   - `where-it-went.ts`'s `NOT_RECEIVED` holds `base_changed`: nothing was sent, so its source is not reached.
+//   - `NOT_RECEIVED` (`flows/source-chooser.ts`, the one set `where-it-went.ts` reads) holds `base_changed`: nothing
+//     was sent, so its source is not reached.
 //
 // (D2, the skeleton note, is pinned in `skeleton-not-offered-sentence.test.ts`; D3, the model's line, in
 // `mcp/refused-call-copy.test.ts`.)

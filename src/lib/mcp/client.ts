@@ -14,6 +14,7 @@ import {
 import { civicRouter, type SourceSelection } from '@typedstandards/civic-typed-router';
 import { AsyncLocalStorage } from 'node:async_hooks';
 import { McpErrorEnvelope, throwIfErrorResult } from './tool-call-failure.ts';
+import { BASE_READ_KEPT_MS } from './base-check.ts';
 import { errorLogFacts } from '../streaming.ts';
 
 const MCP_TIMEOUT_MS = 45_000; // 45-second timeout for MCP server requests
@@ -82,10 +83,19 @@ const MCP_TIMEOUT_MS = 45_000; // 45-second timeout for MCP server requests
 // `DiscoverResult`'s `_meta['io.modelcontextprotocol/serverInfo']` in the
 // newer. `readServerTools` sends `tools/list`, following `nextCursor` to the
 // last page, for the base check (`./base-check.ts`). A run's reads of
-// `serverInfo` are kept for that run alone (`startRunServerReads`), so a
-// record states a server's report only when the run itself read it: a
-// handshake made in the run, or, on a session-keeping server, an answer in the
-// run on the session that handshake opened. No request is added for it.
+// `serverInfo` are kept for that run alone (`startRunServerReads`).
+//
+// S2-B phase 2: an addressed server's report is kept no longer than the base
+// check's bound (`BASE_READ_KEPT_MS`, five minutes). Past it, the next request
+// first reads the report again: a new handshake, the session it replaces
+// closed with `DELETE` once no call holds it (older era), or a new
+// `DiscoverResult` (newer era). Within it, no request is added. A record
+// states a server's report only from a handshake no older than the bound,
+// which may be another run's: a handshake the run made or joined, or, on a
+// session-keeping server, an answer in the run on the session such a handshake
+// opened. One handshake is in flight per server at a time, so concurrent
+// calls share one session and none is left open that the client does not
+// hold.
 
 // The process-wide registry, built once from the configuration as read at
 // module load. A run's selection (R6 W1) narrows its offered set per call
@@ -155,12 +165,15 @@ interface ServerState {
    *  `initialize`'s `serverInfo` (legacy) or the `DiscoverResult`'s (modern).
    *  Null until read, or when the server stated none. */
   serverInfo: ReportedServerInfo | null;
+  /** When that report was read (`Date.now()`), by the handshake or the
+   *  `DiscoverResult`; null until read. */
+  readAt: number | null;
 }
 
 const serverState: Record<string, ServerState> = {};
 
 function freshServerState(): ServerState {
-  return { initialized: false, sessionId: null, instructions: null, protocolVersion: null, discovered: false, serverInfo: null };
+  return { initialized: false, sessionId: null, instructions: null, protocolVersion: null, discovered: false, serverInfo: null, readAt: null };
 }
 
 function getServerState(server: McpServerConfig): ServerState {
@@ -194,10 +207,73 @@ export function startRunServerReads(): RunServerReads {
   return reads;
 }
 
-/** Note `state`'s report as read by the current run, if a run is open and the server stated one. */
+/** Note `state`'s report as read by the current run, if a run is open, the
+ *  server stated one, and, for an addressed server, it was read within the
+ *  bound. */
 function noteServerRead(server: McpServerConfig, state: ServerState): void {
   const reads = runServerReads.getStore();
+  if (isBounded(server) && !withinBound(state)) return;
   if (reads && state.serverInfo) reads.set(server.sourceId, { ...state.serverInfo });
+}
+
+// --- How long a server's report is kept (S2-B phase 2) ---------------------------
+
+/**
+ * An addressed server of this registry, whose report a record states and the
+ * base check reads: kept no longer than `BASE_READ_KEPT_MS`. A hosted source's
+ * per-call copy (`callHostedSource`) is not one, and is never replaced here.
+ */
+function isBounded(server: McpServerConfig): boolean {
+  return Object.hasOwn(registry.servers, server.sourceId) && registry.servers[server.sourceId] === server;
+}
+
+/** Whether `state`'s report was read no more than the bound ago. */
+function withinBound(state: ServerState): boolean {
+  return state.readAt !== null && Date.now() - state.readAt <= BASE_READ_KEPT_MS;
+}
+
+/** The calls in flight on each state, and the replaced states to close when their last call ends. */
+const callsHolding = new WeakMap<ServerState, number>();
+const closeWhenFree = new WeakSet<ServerState>();
+
+function hold(state: ServerState): void {
+  callsHolding.set(state, (callsHolding.get(state) ?? 0) + 1);
+}
+
+function release(server: McpServerConfig, state: ServerState): void {
+  const left = (callsHolding.get(state) ?? 1) - 1;
+  if (left > 0) {
+    callsHolding.set(state, left);
+    return;
+  }
+  callsHolding.delete(state);
+  if (closeWhenFree.delete(state)) void closeSession(server, state);
+}
+
+/** Replace a server's state with a fresh one; the session it held is closed once no call holds it. */
+function replaceState(server: McpServerConfig, replaced: ServerState): void {
+  serverState[server.sourceId] = freshServerState();
+  if (replaced.sessionId === null) return;
+  if ((callsHolding.get(replaced) ?? 0) > 0) closeWhenFree.add(replaced);
+  else void closeSession(server, replaced);
+}
+
+/**
+ * Close a replaced session (2025-11-25 `basic/transports`, Session Management:
+ * a client that no longer needs a session sends `DELETE` with its id). Not
+ * awaited by any call; a failure is logged and fails nothing.
+ */
+async function closeSession(server: McpServerConfig, state: ServerState): Promise<void> {
+  const { signal, clear } = createTimeoutSignal(MCP_TIMEOUT_MS);
+  try {
+    const response = await fetch(server.endpointUrl, { method: 'DELETE', headers: legacyHeaders(server, state), signal });
+    await response.body?.cancel().catch(() => {});
+    if (!response.ok) console.warn(`[MCP:${server.sourceId}] A replaced session was not closed:`, response.status);
+  } catch (error) {
+    console.warn(`[MCP:${server.sourceId}] Could not close a replaced session:`, errorLogFacts(error));
+  } finally {
+    clear();
+  }
 }
 
 /** `serverInfo` as a result states it: each member only when it is a string. */
@@ -227,8 +303,9 @@ function discoveredServerInfoOf(result: { _meta?: unknown }): ReportedServerInfo
  * server's release (router 0.9.0's definition reads `id`, `version` and
  * `guidanceHash` only). Only on the component of an addressed (remote)
  * server, a pack's base stated as its bare `{ id }` included; never on a
- * hosted entry, a pack's own component or the router's. Only from a read made
- * in this run (`reads`); a member the server stated as the
+ * hosted entry, a pack's own component or the router's. Only from this run's
+ * `reads`: a handshake no older than `BASE_READ_KEPT_MS`, which may be another
+ * run's (`noteServerRead`); a member the server stated as the
  * empty string is omitted, since the harness refuses one.
  */
 export function withReportedKeys<C extends { id: string }>(
@@ -586,6 +663,7 @@ async function eraFor(server: McpServerConfig): Promise<Era> {
         const state = getServerState(server);
         state.instructions = instructions;
         state.serverInfo = serverInfo;
+        state.readAt = Date.now();
         state.discovered = true;
         noteServerRead(server, state);
       }
@@ -612,8 +690,28 @@ async function ensureDiscovered(server: McpServerConfig, version: string): Promi
   }
   state.instructions = instructionsOf(result);
   state.serverInfo = discoveredServerInfoOf(result);
+  state.readAt = Date.now();
   state.discovered = true;
   noteServerRead(server, state);
+}
+
+/**
+ * Modern: read an addressed server's `DiscoverResult` again when the one its
+ * state holds is past the bound (S2-B phase 2). One read in flight per server.
+ * A read that fails leaves the old one past the bound, so the next request
+ * tries again and nothing is sent on the old report.
+ */
+async function rediscoverPastBound(server: McpServerConfig, version: string): Promise<void> {
+  const state = getServerState(server);
+  if (!isBounded(server) || state.readAt === null || withinBound(state)) return;
+  let pending = handshakesInFlight.get(server.sourceId);
+  if (!pending) {
+    state.discovered = false;
+    pending = ensureDiscovered(server, version).finally(() => handshakesInFlight.delete(server.sourceId));
+    handshakesInFlight.set(server.sourceId, pending);
+  }
+  await pending;
+  noteServerRead(server, getServerState(server));
 }
 
 // --- The legacy handshake ------------------------------------------------------
@@ -749,25 +847,50 @@ async function sendInitializedNotification(
   }
 }
 
+/** The handshake (or, modern, the `DiscoverResult` read) in flight for each server, by source id. */
+const handshakesInFlight = new Map<string, Promise<void>>();
+
 /**
- * Ensure a server has been initialized. Returns the session id issued during
- * initialization, which may be `null` for stateless servers. Only triggers a
- * real `initialize` call the first time (or after `resetServerState` on a
- * session-expired retry). Also caches any `instructions` text the server
+ * Ensure a server has been initialized, and return the state its requests are
+ * sent on. Only triggers a real `initialize` call the first time (or after
+ * `resetServerState` on a session-expired retry), or, for an addressed server,
+ * once the handshake is older than `BASE_READ_KEPT_MS`: its state is then
+ * replaced and the session it held closed once no call holds it. One
+ * handshake is in flight per server; a concurrent caller waits for it and
+ * notes its report too. Also caches any `instructions` text the server
  * advertised so the skill-composition layer can read it without a second call.
  */
-async function ensureInitialized(server: McpServerConfig): Promise<string | null> {
-  const state = getServerState(server);
-  if (!state.initialized) {
-    const { sessionId, instructions, protocolVersion, serverInfo } = await initializeSession(server);
-    state.sessionId = sessionId;
-    state.instructions = instructions;
-    state.protocolVersion = protocolVersion;
-    state.serverInfo = serverInfo;
-    state.initialized = true;
-    noteServerRead(server, state);
+async function ensureInitialized(server: McpServerConfig): Promise<ServerState> {
+  for (;;) {
+    const state = getServerState(server);
+    if (state.initialized) {
+      if (!isBounded(server) || withinBound(state)) return state;
+      replaceState(server, state);
+      continue;
+    }
+    let pending = handshakesInFlight.get(server.sourceId);
+    if (!pending) {
+      pending = (async () => {
+        const { sessionId, instructions, protocolVersion, serverInfo } = await initializeSession(server);
+        state.sessionId = sessionId;
+        state.instructions = instructions;
+        state.protocolVersion = protocolVersion;
+        state.serverInfo = serverInfo;
+        state.readAt = Date.now();
+        state.initialized = true;
+        // A state replaced while its handshake was in flight is not the one
+        // later requests are sent on: its session is closed, not left open.
+        if (getServerState(server) !== state && sessionId !== null) void closeSession(server, state);
+      })().finally(() => handshakesInFlight.delete(server.sourceId));
+      handshakesInFlight.set(server.sourceId, pending);
+    }
+    await pending;
+    const current = getServerState(server);
+    if (current === state && state.initialized) {
+      noteServerRead(server, state);
+      return state;
+    }
   }
-  return state.sessionId;
 }
 
 /**
@@ -828,18 +951,31 @@ export function routeTool(toolName: string): McpServerConfig | HostedMcpServer {
  *   answered 400 with a code only a modern server emits — the origin is probed
  *   again, once, and the request sent in whatever era that finds.
  */
-async function inEra<T>(server: McpServerConfig, send: (era: Era) => Promise<T>): Promise<T> {
+async function inEra<T>(server: McpServerConfig, send: (era: Era, state: ServerState) => Promise<T>): Promise<T> {
   let sessionRestarted = false;
   let reprobed = false;
   for (;;) {
     const era = await eraFor(server);
+    let state: ServerState | undefined;
     try {
-      if (era.kind === 'legacy') await ensureInitialized(server);
-      const answer = await send(era);
+      if (era.kind === 'legacy') {
+        state = await ensureInitialized(server);
+      } else {
+        await rediscoverPastBound(server, era.version);
+        state = getServerState(server);
+      }
+      // The state is held while its request is in flight, so a replaced
+      // session is closed only after the calls sent on it are answered.
+      hold(state);
+      let answer: T;
+      try {
+        answer = await send(era, state);
+      } finally {
+        release(server, state);
+      }
       // An answer on a session is an answer from the server that opened it,
       // so its report is read again in this run (a session-keeping server);
       // a server that keeps no session is read only by its handshake.
-      const state = getServerState(server);
       if (era.kind === 'legacy' && state.sessionId !== null) noteServerRead(server, state);
       return answer;
     } catch (error) {
@@ -854,7 +990,9 @@ async function inEra<T>(server: McpServerConfig, send: (era: Era) => Promise<T>)
       ) {
         sessionRestarted = true;
         console.log(`[MCP:${server.sourceId}] Session rejected, reinitializing...`);
-        resetServerState(server);
+        // Only the state the refused request was sent on: one another call
+        // has since replaced is not discarded with it.
+        if (state === undefined || getServerState(server) === state) resetServerState(server);
         continue;
       }
       const assumptionFailed = era.kind === 'modern'
@@ -909,9 +1047,9 @@ export async function callMcpTool(
   // once (`callHostedSource`).
   if (isHostedServer(routed)) {
     const { callHostedSource } = await import('./hosting/address.ts');
-    return callHostedSource(routed, (server) => inEra(server, (era) => makeToolCall(server, upstreamName, args, era)));
+    return callHostedSource(routed, (server) => inEra(server, (era, state) => makeToolCall(server, upstreamName, args, era, state)));
   }
-  return inEra(routed, (era) => makeToolCall(routed, upstreamName, args, era));
+  return inEra(routed, (era, state) => makeToolCall(routed, upstreamName, args, era, state));
 }
 
 async function makeToolCall(
@@ -919,6 +1057,7 @@ async function makeToolCall(
   name: string,
   args: Record<string, unknown>,
   era: Era,
+  state: ServerState,
 ): Promise<string> {
   // #503: the source and the tool name are operator facts; the ARGUMENTS are
   // the reader's question in other words — for a search tool they ARE the
@@ -930,7 +1069,6 @@ async function makeToolCall(
   console.log(`[MCP:${server.sourceId}] Calling tool: ${name}`);
   const startedAt = Date.now();
 
-  const state = getServerState(server);
   const request = era.kind === 'modern'
     ? modernRequest(server, era.version, 'tools/call', { name, arguments: args }, name)
     : {
@@ -1073,7 +1211,10 @@ const MAX_TOOL_LIST_PAGES = 20;
 
 /** What one read of a server's list holds: its report, and every page's tools in order. */
 export interface ServerToolsRead {
-  /** `serverInfo` as the handshake this read was answered on stated it; null when it stated none. */
+  /** `serverInfo` as the handshake that opened the session this read was
+   *  answered on stated it (the newer era: the `DiscoverResult` it was read
+   *  after), no older than `BASE_READ_KEPT_MS` when the read was sent; null
+   *  when it stated none. */
   serverInfo: ReportedServerInfo | null;
   /** Every listed tool, as listed; null when a page carried no `tools` array. */
   tools: unknown[] | null;
@@ -1094,11 +1235,15 @@ export async function readServerTools(sourceId: string): Promise<ServerToolsRead
   if (!server) {
     throw new McpConfigurationError(`The MCP server "${sourceId}" is not configured, so its tools cannot be listed.`);
   }
-  const tools = await inEra(server, (era) => listAllPages(server, era));
-  return { serverInfo: getServerState(server).serverInfo, tools };
+  let answeredOn: ServerState | undefined;
+  const tools = await inEra(server, (era, state) => {
+    answeredOn = state;
+    return listAllPages(server, era, state);
+  });
+  return { serverInfo: answeredOn?.serverInfo ?? null, tools };
 }
 
-async function listAllPages(server: McpServerConfig, era: Era): Promise<unknown[] | null> {
+async function listAllPages(server: McpServerConfig, era: Era, state: ServerState): Promise<unknown[] | null> {
   const tools: unknown[] = [];
   const cursors = new Set<string>();
   let cursor: string | undefined;
@@ -1106,7 +1251,7 @@ async function listAllPages(server: McpServerConfig, era: Era): Promise<unknown[
     if (page >= MAX_TOOL_LIST_PAGES) {
       throw new Error(`The tool list of "${server.sourceId}" ran past ${MAX_TOOL_LIST_PAGES} pages.`);
     }
-    const result = await listPage(server, era, cursor === undefined ? {} : { cursor });
+    const result = await listPage(server, era, cursor === undefined ? {} : { cursor }, state);
     if (!Array.isArray(result.tools)) return null;
     tools.push(...result.tools);
     const next = result.nextCursor;
@@ -1124,8 +1269,8 @@ async function listPage(
   server: McpServerConfig,
   era: Era,
   params: Record<string, unknown>,
+  state: ServerState,
 ): Promise<{ tools?: unknown; nextCursor?: unknown }> {
-  const state = getServerState(server);
   const request = era.kind === 'modern'
     ? modernRequest(server, era.version, 'tools/list', params)
     : {
@@ -1186,7 +1331,7 @@ export async function callMcpPrompt(name: string, args: Record<string, string>):
       'The Socrata MCP server is not configured: SOCRATA_MCP_URL is missing or empty in the server environment; cannot fetch skill prompt.',
     );
   }
-  return inEra(server, (era) => makePromptCall(server, name, args, era));
+  return inEra(server, (era, state) => makePromptCall(server, name, args, era, state));
 }
 
 async function makePromptCall(
@@ -1194,13 +1339,13 @@ async function makePromptCall(
   name: string,
   args: Record<string, string>,
   era: Era,
+  state: ServerState,
 ): Promise<string> {
   // #503, as for a tool call above: the prompt name is an operator fact, its
   // arguments are not logged.
   console.log(`[MCP:${server.sourceId}] Getting prompt: ${name}`);
   const startedAt = Date.now();
 
-  const state = getServerState(server);
   const request = era.kind === 'modern'
     ? modernRequest(server, era.version, 'prompts/get', { name, arguments: args }, name)
     : {

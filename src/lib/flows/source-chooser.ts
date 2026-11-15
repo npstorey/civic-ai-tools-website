@@ -47,7 +47,11 @@
  * A LOADED PACK (S2-B D3 = A and R5, npstorey/civic-ai-tools#309). A loaded
  * source is a pack when the record says so: a call span whose `tool.name`
  * begins with that source's offered alias and `__`, and which states
- * `mcp.pack_id` (written on every pack call, a refused one too). It reads
+ * `mcp.pack_id` (written on every pack call, a refused one too), counting only
+ * calls that were sent: a span whose `error.kind` is one `NOT_RECEIVED` holds
+ * (below; "Where this question went" reads the same set) was refused before
+ * any request and credits nothing,
+ * while a sent call that then failed still counts (S2-B phase 2). It reads
  * "{name} (a pack recorded as {packId}, using {base})", bundle revision 3's
  * fallback (`:331`), the id whole as the span states it, carried as one code
  * part of the line; the base is this site's name for that span's
@@ -200,6 +204,15 @@ export function attributesOf(span: unknown): Map<string, unknown> {
   return out;
 }
 
+/**
+ * A call that failed with one of these was never received (`base_changed`: a
+ * pack's call the base check did not send, S2-B P3R). The one set: "Where this
+ * question went" (`./where-it-went.ts`) reads it for the sources a run
+ * reached, and the pack credit below for the calls that were sent. It lives
+ * here because this module reaches the browser and that one does not.
+ */
+export const NOT_RECEIVED: ReadonlySet<string> = new Set(['not_configured', 'not_offered', 'base_changed']);
+
 /** The alias a load's `tool.arguments` JSON names, or nothing. */
 export function aliasOf(argumentsJson: string | undefined): string | undefined {
   if (argumentsJson === undefined) return undefined;
@@ -222,7 +235,7 @@ function loadsOfSpans(spans: readonly unknown[]): ChooserLoad[] {
   return loads;
 }
 
-/** The call spans that state a pack id (`mcp.pack_id`), in order. */
+/** The call spans that state a pack id (`mcp.pack_id`) and were sent, in order. */
 function packCallsOfSpans(spans: readonly unknown[]): ChooserPackCall[] {
   const calls: ChooserPackCall[] = [];
   for (const span of spans) {
@@ -231,6 +244,9 @@ function packCallsOfSpans(spans: readonly unknown[]): ChooserPackCall[] {
     const toolName = text(attrs.get('tool.name'));
     const packId = text(attrs.get('mcp.pack_id'));
     if (toolName === undefined || packId === undefined || attrs.get('tool.operation_type') === 'load_source') continue;
+    // A call refused before any request was not sent, so it credits no pack.
+    const failureKind = text(attrs.get('error.kind'));
+    if (failureKind !== undefined && NOT_RECEIVED.has(failureKind)) continue;
     calls.push({ toolName, packId, source: text(attrs.get('mcp.source')), alias: text(attrs.get('mcp.alias')) });
   }
   return calls;

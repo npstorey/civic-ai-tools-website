@@ -24,8 +24,9 @@
  *     statement this site serves (passed in; the page builds it).
  *
  * REACHED means a call named the source (not `unknown`) and did not fail, or
- * failed with any kind but `not_configured` or `not_offered`: a `timeout`, an
- * `unavailable` or an `unknown` call may have arrived. A load reaches nothing:
+ * failed with any kind but the three `NOT_RECEIVED` holds (`not_configured`,
+ * `not_offered`, `base_changed`): a `timeout`, an `unavailable` or an
+ * `unknown` call may have arrived. A load reaches nothing:
  * this site answers it. Rows are in order of first contact: the model
  * endpoint, each reached source, then the notebook runner of an executed run.
  *
@@ -46,7 +47,7 @@ import { statementHash, type FlowsKeptBy, type FlowsRecipient, type FlowsStateme
 import { recipientWhere, roleLabel } from '../sources/source-name.ts';
 import { WHERE_IT_WENT_REASONS } from '../sources/copy.ts';
 import { NOTEBOOK_EXTENSION_KEY, readNotebookProvenanceOfNotebook } from '../notebook-author/notebook-provenance-reading.ts';
-import { aliasOf, attributesOf, chooserFromPackage, sourceReaderName, spansOfTrace, type SourceChooser } from './source-chooser.ts';
+import { aliasOf, attributesOf, chooserFromPackage, NOT_RECEIVED, sourceReaderName, spansOfTrace, type SourceChooser } from './source-chooser.ts';
 
 // --- The model ------------------------------------------------------------------------
 
@@ -103,8 +104,6 @@ export interface OfferedSource {
 export const NOT_RECORDED = 'not recorded';
 
 const LOAD_OPERATION = 'load_source';
-/** A call that failed with one of these was never received (`base_changed`: a pack's call the base check did not send, S2-B P3R). */
-const NOT_RECEIVED = new Set(['not_configured', 'not_offered', 'base_changed']);
 
 type Contact =
   | { kind: 'call'; source: string | undefined; failureKind: string | undefined }
