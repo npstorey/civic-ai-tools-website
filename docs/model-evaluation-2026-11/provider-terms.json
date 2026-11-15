@@ -1,0 +1,1835 @@
+{
+  "what": "Each provider OpenRouter routed an open-weight request to, in the probe or the run: OpenRouter's stated data policy (its all-providers JSON, read at the time given), and the provider's own published terms as read on the date given, with the retention, training and logging passages verbatim. A conflict between the two is recorded as a conflict, not resolved; a page that could not be read is recorded as a gap.",
+  "method": "Each reading fetched the public pages with no key and sent no model request; every quote was checked against the saved bytes (the readings' \"Method\" sections). The Claude rows were served by Anthropic through the account's own Anthropic key (BYOK); Anthropic's terms are not part of either reading.",
+  "readings": [
+    {
+      "reading": "terms-2026-11-09.md",
+      "date": "2026-11-09",
+      "scope": "the probe's providers",
+      "source": {
+        "path": "planning record temp/eval-ow/provider-terms/terms-2026-11-09.md",
+        "sha256": "fb8e34a54454560c29ad874c88b04d6099c1b287e868745295736ce1a2eb6a73"
+      },
+      "openRouterAllProviders": {
+        "path": "planning record temp/eval-ow/provider-terms/raw/openrouter-frontend-all-providers.json",
+        "sha256": "84bfd73040cbe7e496af9002f3f25596b931ead4c79295bfaee8e5995e8bffe5",
+        "readAt": "2026-11-09T18:11:00Z"
+      }
+    },
+    {
+      "reading": "terms-2026-11-14.md",
+      "date": "2026-11-14",
+      "scope": "the run's providers not served in the probe",
+      "source": {
+        "path": "planning record temp/eval-ow/provider-terms/terms-2026-11-14.md",
+        "sha256": "82687d11f53896bce2239a492a764598ff3d51e314bff342ec20aad64a70d7c7"
+      },
+      "openRouterAllProviders": {
+        "path": "planning record temp/eval-ow/provider-terms/raw/run/openrouter-frontend-all-providers.json",
+        "sha256": "808bd729a19d280cc464fae84977d58794259415ec0f6fed0cf901b017321e41",
+        "readAt": "2026-11-14T20:10:16Z"
+      }
+    }
+  ],
+  "providers": {
+    "AkashML": {
+      "openRouter": {
+        "displayName": "AkashML",
+        "slug": "akashml",
+        "readAt": "2026-11-09T18:11:00Z",
+        "dataPolicy": {
+          "training": false,
+          "trainingOpenRouter": false,
+          "retainsPrompts": false,
+          "safetyRetention": false,
+          "termsOfServiceURL": "https://akashml.com/terms",
+          "privacyPolicyURL": "https://akashml.com/privacy"
+        },
+        "statement": "Provider: training false, retainsPrompts false. Endpoint `akashml/fp4`: same. Source: all-providers JSON; `openrouter.ai/provider/akashml`"
+      },
+      "terms": {
+        "readDate": "2026-11-09",
+        "reading": "terms-2026-11-09.md",
+        "pages": "Privacy `https://akashml.com/privacy`, “Last updated: June 3, 2026”. Terms `https://akashml.com/terms`, “Last Updated: June 3, 2026”",
+        "urls": [
+          "https://akashml.com/privacy",
+          "https://akashml.com/terms"
+        ],
+        "retention": {
+          "text": "“Prompts and transient API inputs (text, image, audio): not retained beyond the request lifecycle, except for transient error logs deleted within thirty (30) days.” Terms: “The Service utilizes Akash Network's decentralized compute infrastructure, meaning your requests may be processed across multiple independent providers in the network.”",
+          "quotes": [
+            "Prompts and transient API inputs (text, image, audio): not retained beyond the request lifecycle, except for transient error logs deleted within thirty (30) days.",
+            "The Service utilizes Akash Network's decentralized compute infrastructure, meaning your requests may be processed across multiple independent providers in the network."
+          ]
+        },
+        "training": {
+          "text": "“We do not use Voice Samples, Voiceprints, user-uploaded images, prompts, generated Outputs, or other User Content to train, fine-tune, or improve any AI model, whether our own or any third party's.”",
+          "quotes": [
+            "We do not use Voice Samples, Voiceprints, user-uploaded images, prompts, generated Outputs, or other User Content to train, fine-tune, or improve any AI model, whether our own or any third party's."
+          ]
+        },
+        "logging": {
+          "text": "“If a request fails, inputs may be logged briefly by a third-party logging system we use to troubleshoot errors and are deleted in accordance with our retention schedule.” “we may use automated systems and limited human review (under confidentiality and access controls) to detect Outputs and inputs that may violate our Terms of Service or applicable law”",
+          "quotes": [
+            "If a request fails, inputs may be logged briefly by a third-party logging system we use to troubleshoot errors and are deleted in accordance with our retention schedule.",
+            "we may use automated systems and limited human review (under confidentiality and access controls) to detect Outputs and inputs that may violate our Terms of Service or applicable law"
+          ]
+        },
+        "readTimes": "privacy 18:11:53Z; terms 18:11:54Z; OR page 18:11:08Z",
+        "rawSha256": "privacy `15b21efe855d41a5bae464db7ab9dc6e94cf874dfae7ba36ddc2558cb694bf34`; terms `2d0f0d55da16802a4af2ab8b823779a2dd5820819def013becf51b1a40a72947`; OR page `cf0ddd9d7d16588ae273b603b26385490d9e92d523950dfadbe3f522e4b6a40b`"
+      },
+      "conflicts": [],
+      "differences": [],
+      "notes": [],
+      "gaps": [
+        {
+          "reading": "terms-2026-11-09.md",
+          "section": "What could not be read",
+          "text": "**Which tier or agreement governs OpenRouter traffic** is not stated by Morph, Makora, Cohere, Friendli, OpenInference, Wafer, AkashML, Sail Research or PrimeIntellect in the pages read. Only Crusoe's page names OpenRouter. Friendli's zero-retention clause sits in Exhibit 1, which states it applies to \"Customers that receive access to Friendli Endpoints Services\"; whether OpenRouter traffic falls under it is not stated."
+        }
+      ]
+    },
+    "Cohere": {
+      "openRouter": {
+        "displayName": "Cohere",
+        "slug": "cohere",
+        "readAt": "2026-11-09T18:11:00Z",
+        "dataPolicy": {
+          "training": false,
+          "trainingOpenRouter": false,
+          "retainsPrompts": true,
+          "retentionDays": 30,
+          "safetyRetention": false,
+          "termsOfServiceURL": "https://cohere.com/terms-of-use",
+          "privacyPolicyURL": "https://cohere.com/privacy"
+        },
+        "statement": "Provider: training false, **retainsPrompts true, retentionDays 30** (docs table: Retained for 30 days). Endpoint `cohere/fp8` for MiMo: **retainsPrompts false**, training false. The two levels differ. Source: all-providers JSON; `openrouter.ai/provider/cohere`"
+      },
+      "terms": {
+        "readDate": "2026-11-09",
+        "reading": "terms-2026-11-09.md",
+        "pages": "Privacy `https://cohere.com/privacy`, “Last Updated: May 1, 2026”. Terms `https://cohere.com/terms-of-use`, “Last updated: September 7, 2022”. Enterprise Data Commitments `https://cohere.com/enterprise-data-commitments` (linked from the privacy policy), “Last Update: December 5, 2025”",
+        "urls": [
+          "https://cohere.com/privacy",
+          "https://cohere.com/terms-of-use",
+          "https://cohere.com/enterprise-data-commitments"
+        ],
+        "retention": {
+          "text": "“We automatically delete logged prompts and generations after 30 days, unless we need it to comply with a legal requirement or customer contract, or unless your usage is flagged as potentially violating our terms, including our Usage Policy (e.g. abuse or misuse of our services).” “If you have been approved for zero data retention, Cohere does not log any customer prompts or generations.” Privacy: “Retention of inputs and outputs on the Platform is generally 30 days for Enterprise Users.”",
+          "quotes": [
+            "We automatically delete logged prompts and generations after 30 days, unless we need it to comply with a legal requirement or customer contract, or unless your usage is flagged as potentially violating our terms, including our Usage Policy (e.g. abuse or misuse of our services).",
+            "If you have been approved for zero data retention, Cohere does not log any customer prompts or generations.",
+            "Retention of inputs and outputs on the Platform is generally 30 days for Enterprise Users."
+          ]
+        },
+        "training": {
+          "text": "“You can opt out from your prompts and generations being used to train Cohere models in your dashboard settings at any time.” Terms of use (2022) grant includes: “IMPROVE AND ENHANCE THE COHERE SOLUTION AND OUR OTHER OFFERINfGS AND BENCHMARK THE FOREGOING” (spelling as published)",
+          "quotes": [
+            "You can opt out from your prompts and generations being used to train Cohere models in your dashboard settings at any time.",
+            "IMPROVE AND ENHANCE THE COHERE SOLUTION AND OUR OTHER OFFERINfGS AND BENCHMARK THE FOREGOING"
+          ]
+        },
+        "logging": {
+          "text": "“If we detect possible misuse of our SaaS Platform, our safety and security teams may review user prompts, generations, and logs to enforce our customer agreements, including our Usage Policy, and secure our services from misuse.”",
+          "quotes": [
+            "If we detect possible misuse of our SaaS Platform, our safety and security teams may review user prompts, generations, and logs to enforce our customer agreements, including our Usage Policy, and secure our services from misuse."
+          ]
+        },
+        "readTimes": "privacy 18:11:54Z; terms 18:11:55Z; commitments 18:15:41Z; OR page 18:11:09Z",
+        "rawSha256": "privacy `a95805cee35dc735da279b619edf6507b6dfe3f12cb9725377cda752d8b47157`; terms `d6ca89486497f1fd7a053e465399abb052712234711c03b47cdb82d563a49175`; commitments `e7eba7eb972151428552e2cfd10323c8aa37e9af560c152205a9bca963475d1c`; OR page `bb74e6f3a1471d8dfc413ba43d73b3298fe37aa4d6ebbb0a11189a58be828fa5`"
+      },
+      "conflicts": [
+        {
+          "reading": "terms-2026-11-09.md",
+          "section": "Where OpenRouter's statement and the provider's own terms differ (as read, not resolved)",
+          "text": "**Cohere**: OpenRouter's provider level says 30-day retention; its endpoint level for the MiMo endpoint says no retention. Cohere's commitments page says SaaS prompts and generations are logged and deleted after 30 days unless ZDR is approved. None of Cohere's pages read names OpenRouter."
+        }
+      ],
+      "differences": [],
+      "notes": [],
+      "gaps": [
+        {
+          "reading": "terms-2026-11-09.md",
+          "section": "What could not be read",
+          "text": "**Which tier or agreement governs OpenRouter traffic** is not stated by Morph, Makora, Cohere, Friendli, OpenInference, Wafer, AkashML, Sail Research or PrimeIntellect in the pages read. Only Crusoe's page names OpenRouter. Friendli's zero-retention clause sits in Exhibit 1, which states it applies to \"Customers that receive access to Friendli Endpoints Services\"; whether OpenRouter traffic falls under it is not stated."
+        }
+      ]
+    },
+    "CoreWeave": {
+      "openRouter": {
+        "displayName": "CoreWeave",
+        "slug": "coreweave",
+        "readAt": "2026-11-14T20:10:16Z",
+        "dataPolicy": {
+          "training": false,
+          "trainingOpenRouter": false,
+          "retainsPrompts": false,
+          "safetyRetention": false,
+          "termsOfServiceURL": "https://docs.coreweave.com/policies/terms-of-service",
+          "privacyPolicyURL": "https://docs.coreweave.com/policies/terms-of-service/privacy-policy"
+        },
+        "statement": "Provider: training false, retainsPrompts false. Endpoint `coreweave/nvfp4`: same. Source: all-providers JSON; `openrouter.ai/provider/coreweave`"
+      },
+      "terms": {
+        "readDate": "2026-11-14",
+        "reading": "terms-2026-11-14.md",
+        "pages": "Terms `https://docs.coreweave.com/policies/terms-of-service`, “Last modified : June 30, 2022”. Privacy `https://docs.coreweave.com/policies/terms-of-service/privacy-policy`, “Last updated on February 24, 2026”. Also searched: the docs index (`llms.txt`), the Forge index, and the Serverless Inference page; none carries a data statement for inference",
+        "urls": [
+          "https://docs.coreweave.com/policies/terms-of-service",
+          "https://docs.coreweave.com/policies/terms-of-service/privacy-policy"
+        ],
+        "retention": {
+          "text": "No statement on inference inputs or outputs found. Terms, on Customer Data the customer deletes: “CoreWeave will comply with this instruction as soon as reasonably practicable and within a maximum period of one hundred eighty (180) days.” Privacy scope: “It does not apply to the extent CoreWeave processes personal data solely as a processor or service provider on behalf of its customers.”",
+          "quotes": [
+            "CoreWeave will comply with this instruction as soon as reasonably practicable and within a maximum period of one hundred eighty (180) days.",
+            "It does not apply to the extent CoreWeave processes personal data solely as a processor or service provider on behalf of its customers."
+          ]
+        },
+        "training": {
+          "text": "No training sentence on Customer Data. Terms license: “distribute Customer Data solely and exclusively for the purpose of providing the CoreWeave services to Customer.” Privacy (its own controller data): “CoreWeave may use technologies such as artificial intelligence (AI) and machine learning (ML) when processing your data to operate, maintain, improve, and develop our Services.”",
+          "quotes": [
+            "distribute Customer Data solely and exclusively for the purpose of providing the CoreWeave services to Customer.",
+            "CoreWeave may use technologies such as artificial intelligence (AI) and machine learning (ML) when processing your data to operate, maintain, improve, and develop our Services."
+          ]
+        },
+        "logging": {
+          "text": "None found",
+          "quotes": []
+        },
+        "readTimes": "terms, privacy 20:11:21Z; docs index 20:12:20Z; Forge index 20:12:26Z; inference page 20:12:32Z; OR page 20:10:21Z",
+        "rawSha256": "terms `269298cd95ce55a986c6a29b1b912707ae5d97e6f5dc51bcdf2e29cf2f183a3d`; privacy `b3d26f4a9c4eedefa0fdd33742e9f2c6a736b7fc51be07b61f57f0ad1194f5b6`; docs index `bcf8a7710587e6ab16f8ffb2c031fa2a33098997dce0e8ae666681f880b2538f`; Forge index `3067df69272b569d50340ef120ee1872a1d6d8fe4911f5a48f302cb49a7fb82c`; inference page `ef681196c6b626baadeb6be4321161bef59b4f206827c91d5d346ae3169c8fe5`; OR page `62e9d0b6ef63321a7a9bb58e0620ed3c203bf59a227a056e810403dbe03d1f49`"
+      },
+      "conflicts": [],
+      "differences": [],
+      "notes": [],
+      "gaps": [
+        {
+          "reading": "terms-2026-11-14.md",
+          "section": "What could not be read",
+          "text": "**CoreWeave.** No data statement for inference inputs or outputs was found in the linked pages, the docs index or the Serverless Inference page. Its Data Processing Agreement was not read."
+        }
+      ]
+    },
+    "Crusoe": {
+      "openRouter": {
+        "displayName": "Crusoe",
+        "slug": "crusoe",
+        "readAt": "2026-11-09T18:11:00Z",
+        "dataPolicy": {
+          "training": false,
+          "trainingOpenRouter": false,
+          "retainsPrompts": false,
+          "safetyRetention": false,
+          "termsOfServiceURL": "https://legal.crusoe.ai/open-router#managed-inference-tos-open-router",
+          "privacyPolicyURL": "https://legal.crusoe.ai/open-router#cloud-privacy-policy"
+        },
+        "statement": "Provider: training false, retainsPrompts false. Endpoint `crusoe/bf16` (gpt-oss-120b): same. Source: all-providers JSON; `openrouter.ai/provider/crusoe`"
+      },
+      "terms": {
+        "readDate": "2026-11-09",
+        "reading": "terms-2026-11-09.md",
+        "pages": "`https://legal.crusoe.ai/open-router` (one page; OpenRouter links its anchors `#managed-inference-tos-open-router` and `#cloud-privacy-policy`). \"TOS for OpenRouter Customers\" “Version 4.6 (Current)”, “Effective July 23rd 2026”. Data Processing and Security Terms v1.4, “Effective November 9th 2026”. Privacy Notice v1.3, “Effective March 12th 2026”",
+        "urls": [
+          "https://legal.crusoe.ai/open-router"
+        ],
+        "retention": {
+          "text": "TOS for OpenRouter Customers: “Crusoe does not store Inputs and Outputs to disk, and only processes them as long as necessary to provide Customer with the Services or as otherwise provided in the Data Processing and Security Terms.” Privacy Notice: “This Privacy Notice applies solely to Service Data and does not apply to Customer Data.”",
+          "quotes": [
+            "Crusoe does not store Inputs and Outputs to disk, and only processes them as long as necessary to provide Customer with the Services or as otherwise provided in the Data Processing and Security Terms.",
+            "This Privacy Notice applies solely to Service Data and does not apply to Customer Data."
+          ]
+        },
+        "training": {
+          "text": "“We do not use Inputs or Outputs to train Models or improve our Services without Customer’s explicit opt-in consent.”",
+          "quotes": [
+            "We do not use Inputs or Outputs to train Models or improve our Services without Customer’s explicit opt-in consent."
+          ]
+        },
+        "logging": {
+          "text": "“Crusoe reserves the right to investigate any potential violation of the AUP by Customer, which may include reviewing Customer Applications or Customer Data.”",
+          "quotes": [
+            "Crusoe reserves the right to investigate any potential violation of the AUP by Customer, which may include reviewing Customer Applications or Customer Data."
+          ]
+        },
+        "readTimes": "18:14:35Z (refetch; the 18:11:53Z save was gzip bytes and was replaced); OR page 18:11:08Z",
+        "rawSha256": "page `13b2abe0ea78c68815a93a5aee8bc05935e46123412aa973ad69f408e7a23222`; OR page `79d9985ca21e215582067ab03ac36fc5fcbb9502b4ee27127eb2e46ff356348b`"
+      },
+      "conflicts": [],
+      "differences": [],
+      "notes": [
+        {
+          "reading": "terms-2026-11-09.md",
+          "section": "Where OpenRouter's statement and the provider's own terms differ (as read, not resolved)",
+          "text": "Only Crusoe publishes terms written for OpenRouter customers."
+        },
+        {
+          "reading": "terms-2026-11-09.md",
+          "section": "Where OpenRouter's statement and the provider's own terms differ (as read, not resolved)",
+          "text": "Two pages changed on the reading day: Morph's privacy policy (“Last Updated: November 9, 2026”) and Crusoe's Data Processing and Security Terms (“Effective November 9th 2026”)."
+        }
+      ],
+      "gaps": [
+        {
+          "reading": "terms-2026-11-09.md",
+          "section": "What could not be read",
+          "text": "**Which tier or agreement governs OpenRouter traffic** is not stated by Morph, Makora, Cohere, Friendli, OpenInference, Wafer, AkashML, Sail Research or PrimeIntellect in the pages read. Only Crusoe's page names OpenRouter. Friendli's zero-retention clause sits in Exhibit 1, which states it applies to \"Customers that receive access to Friendli Endpoints Services\"; whether OpenRouter traffic falls under it is not stated."
+        },
+        {
+          "reading": "terms-2026-11-09.md",
+          "section": "What could not be read",
+          "text": "**Fetch notes.** The first Crusoe save (18:11:53Z) was gzip bytes; refetched decompressed at 18:14:35Z (the file in `raw/`). The first fetch of one Tinfoil chunk used a wrong file name and returned 404 (18:18:08Z); refetched at 18:20:50Z under the name the pricing page references. JavaScript bundles fetched only to locate data sources (Wafer's compliance-portal bundle; the other Tinfoil chunks) were kept in the session scratchpad, not here, and nothing is quoted from them."
+        }
+      ]
+    },
+    "DeepInfra": {
+      "openRouter": {
+        "displayName": "DeepInfra",
+        "slug": "deepinfra",
+        "readAt": "2026-11-14T20:10:16Z",
+        "dataPolicy": {
+          "training": false,
+          "trainingOpenRouter": false,
+          "retainsPrompts": false,
+          "safetyRetention": false,
+          "termsOfServiceURL": "https://deepinfra.com/terms",
+          "privacyPolicyURL": "https://deepinfra.com/privacy"
+        },
+        "statement": "Provider: training false, retainsPrompts false. Endpoints `deepinfra/fp4` (GLM) and `deepinfra/bf16` (gpt-oss): same. Source: all-providers JSON; `openrouter.ai/provider/deepinfra`"
+      },
+      "terms": {
+        "readDate": "2026-11-14",
+        "reading": "terms-2026-11-14.md",
+        "pages": "Privacy `https://deepinfra.com/privacy`, “Last modified: August 15th 2026”. Terms `https://deepinfra.com/terms`, “Last modified: October 15th, 2026”. Docs `https://docs.deepinfra.com/account/data-privacy` (linked from the privacy policy), no date found",
+        "urls": [
+          "https://deepinfra.com/privacy",
+          "https://deepinfra.com/terms",
+          "https://docs.deepinfra.com/account/data-privacy"
+        ],
+        "retention": {
+          "text": "Terms: “Provider will not retain, store, or log any Customer Data submitted to or generated by the Services beyond the period strictly necessary to process and return the applicable request, after which such Customer Data is deleted from Provider's systems in the ordinary course of operations” Exceptions include “records Provider is required to retain to comply with applicable laws or to detect, investigate, or respond to fraud, security incidents, or abuse of the Services”. Docs: “When using DeepInfra inference APIs, we do not store the data you submit to our APIs on disk. We only hold it in memory during the inference process. Once inference is complete, the data is deleted from memory.”",
+          "quotes": [
+            "Provider will not retain, store, or log any Customer Data submitted to or generated by the Services beyond the period strictly necessary to process and return the applicable request, after which such Customer Data is deleted from Provider's systems in the ordinary course of operations",
+            "records Provider is required to retain to comply with applicable laws or to detect, investigate, or respond to fraud, security incidents, or abuse of the Services",
+            "When using DeepInfra inference APIs, we do not store the data you submit to our APIs on disk. We only hold it in memory during the inference process. Once inference is complete, the data is deleted from memory."
+          ]
+        },
+        "training": {
+          "text": "Terms: “Provider will not sell Customer Data, and will not use Customer Data to train, fine-tune, or otherwise improve any model, except as necessary to provide the Services (e.g., fine-tuning a model for Customer's use).” Privacy: “We will not store, sell, or train using this data unless we have your explicit consent.”",
+          "quotes": [
+            "Provider will not sell Customer Data, and will not use Customer Data to train, fine-tune, or otherwise improve any model, except as necessary to provide the Services (e.g., fine-tuning a model for Customer's use).",
+            "We will not store, sell, or train using this data unless we have your explicit consent."
+          ]
+        },
+        "logging": {
+          "text": "“We do not log the content of your requests. We log only metadata useful for debugging: request ID, cost, sampling parameters.”",
+          "quotes": [
+            "We do not log the content of your requests. We log only metadata useful for debugging: request ID, cost, sampling parameters."
+          ]
+        },
+        "readTimes": "privacy, terms 20:11:21Z; docs 20:12:53Z; OR page 20:10:21Z",
+        "rawSha256": "privacy `f4937e1b03cb24b332425df8f04b8305dbc2e699284b7cf2a912a5b258d9e02d`; terms `14cdefcf2fe59e40743a7ca23a7c0e429b1df210ac3c2e9fdd21e7138db01f85`; docs `6f6b3e302b9e4811c7fa15ecf05ea1145adcfdce75876dfd694c5c1c9e8dde43`; OR page `7e3a5619c11984ecd33c373da025f33e79b6dcb83b5789f56ed2f2fe065f9640`"
+      },
+      "conflicts": [],
+      "differences": [],
+      "notes": [],
+      "gaps": []
+    },
+    "DekaLLM": {
+      "openRouter": {
+        "displayName": "DekaLLM",
+        "slug": "dekallm",
+        "readAt": "2026-11-14T20:10:16Z",
+        "dataPolicy": {
+          "training": false,
+          "trainingOpenRouter": false,
+          "retainsPrompts": false,
+          "safetyRetention": false,
+          "termsOfServiceURL": "https://docs.cloudeka.ai/service-portal-ai/end-user-license-agreement",
+          "privacyPolicyURL": "https://www.cloudeka.id/id/privacy-policy/"
+        },
+        "statement": "Provider: training false, retainsPrompts false. Endpoint `dekallm/bf16`: same. Source: all-providers JSON; `openrouter.ai/provider/dekallm`"
+      },
+      "terms": {
+        "readDate": "2026-11-14",
+        "reading": "terms-2026-11-14.md",
+        "pages": "OpenRouter's privacy URL `https://www.cloudeka.id/id/privacy-policy/` returned 404. OpenRouter's EULA URL redirected to `https://docs.cloudeka.ai/guideline-for-enterprise/cloudeka-service-portal/end-user-license-agreement`, a page that summarizes the agreements; its \"Last updated\" element carries “2026-11-04T10:59:12.180Z”. Privacy notice `https://www.cloudeka.id/en/privacy-policy-2/` (linked from that page), no date found; it covers personal data and does not mention model inputs",
+        "urls": [
+          "https://www.cloudeka.id/id/privacy-policy/",
+          "https://docs.cloudeka.ai/guideline-for-enterprise/cloudeka-service-portal/end-user-license-agreement",
+          "https://www.cloudeka.id/en/privacy-policy-2/"
+        ],
+        "retention": {
+          "text": "EULA page, summary of the Deka LLM scope of work: “is temporarily stored for operational purposes only, and is permanently deleted according to a defined schedule.” “Our data retention policy is governed by our ISO/IEC 42001:2023 - certified Artificial Intelligence Management System (AIMS) and complies with its applicable requirements and controls.” No period stated",
+          "quotes": [
+            "is temporarily stored for operational purposes only, and is permanently deleted according to a defined schedule.",
+            "Our data retention policy is governed by our ISO/IEC 42001:2023 - certified Artificial Intelligence Management System (AIMS) and complies with its applicable requirements and controls."
+          ]
+        },
+        "training": {
+          "text": "“Customer data is never used to train models”",
+          "quotes": [
+            "Customer data is never used to train models"
+          ]
+        },
+        "logging": {
+          "text": "None found",
+          "quotes": []
+        },
+        "readTimes": "EULA 20:11:24Z; privacy (404) 20:11:21Z; privacy (en) 20:13:30Z; OR page 20:10:21Z",
+        "rawSha256": "EULA `d079612a32ce40762e0252fbe1682ccf162d25680f8c1b08fc1f1204fe9d992e`; privacy 404 `81175ab6d2f0c842e901c2c323459fc3dbf5fedf39c2f511a757ec782626c9cc`; privacy (en) `a22a4fd4fa17fe5fddfadb2cee247fc6e295fd81a8889f307c5723433d48d3eb`; OR page `b12dea7a273bae26798c7df8eb7cbf3250fc68aac05f025e7a8211557b1b7939`"
+      },
+      "conflicts": [
+        {
+          "reading": "terms-2026-11-14.md",
+          "section": "Conflicts between OpenRouter's statement and the provider's own terms (as read, not resolved)",
+          "text": "**DekaLLM, retention.** OpenRouter: `retainsPrompts` false. DekaLLM's EULA summary page: customer data “is temporarily stored for operational purposes only, and is permanently deleted according to a defined schedule.” No period is stated."
+        }
+      ],
+      "differences": [],
+      "notes": [],
+      "gaps": [
+        {
+          "reading": "terms-2026-11-14.md",
+          "section": "What could not be read",
+          "text": "**DekaLLM.** OpenRouter's privacy URL returned 404 (saved). The EULA page OpenRouter links summarizes the agreements and says they are opened from the account menu of the Cloudeka Service Portal, behind sign-in; the agreements themselves were not read. The English privacy notice has no date."
+        }
+      ]
+    },
+    "Friendli": {
+      "openRouter": {
+        "displayName": "Friendli",
+        "slug": "friendli",
+        "readAt": "2026-11-09T18:11:00Z",
+        "dataPolicy": {
+          "training": false,
+          "trainingOpenRouter": false,
+          "retainsPrompts": true,
+          "safetyRetention": false,
+          "termsOfServiceURL": "https://friendli.ai/terms-of-service",
+          "privacyPolicyURL": "https://friendli.ai/privacypolicy"
+        },
+        "statement": "Provider: training false, **retainsPrompts true**, no retentionDays (docs table: Prompts are retained for unknown period). Endpoint `friendli` for GLM: same. Source: all-providers JSON; `openrouter.ai/provider/friendli`"
+      },
+      "terms": {
+        "readDate": "2026-11-09",
+        "reading": "terms-2026-11-09.md",
+        "pages": "Terms `https://friendli.ai/terms-of-service`, “Last Updated: September 21, 2026”. Privacy `https://friendli.ai/privacypolicy`, “Effective Date: Sep 11, 2025”",
+        "urls": [
+          "https://friendli.ai/terms-of-service",
+          "https://friendli.ai/privacypolicy"
+        ],
+        "retention": {
+          "text": "Terms (Exhibit 1, Friendli Endpoints Services): “FriendliAI will not store, log, or otherwise persist any Customer Inputs or Customer Outputs beyond the duration strictly necessary to process the applicable API request and return a response, unless Customer opts-in to broader retention and use of its Customer Inputs and Customer Outputs through the Product Management Console.” Privacy: “AI inference information: retained for up to one (1) day after the organizations and projects had been deleted.”",
+          "quotes": [
+            "FriendliAI will not store, log, or otherwise persist any Customer Inputs or Customer Outputs beyond the duration strictly necessary to process the applicable API request and return a response, unless Customer opts-in to broader retention and use of its Customer Inputs and Customer Outputs through the Product Management Console.",
+            "AI inference information: retained for up to one (1) day after the organizations and projects had been deleted."
+          ]
+        },
+        "training": {
+          "text": "No explicit training sentence. Terms: “FriendliAI will not use the Customer Data, Customer Model Checkpoints, Customer Outputs, Model Improvements, or any other Customer Materials for any purpose other than to provide the Friendli Services on behalf of the Team Owner and Team for which such materials are made available.” Exception in the license grant: “any Customer Materials submitted to or for Friendli Services that are provided free of charge for the purpose of improving, developing, enhancing, and providing FriendliAI’s and its Affiliates’ products and services”",
+          "quotes": [
+            "FriendliAI will not use the Customer Data, Customer Model Checkpoints, Customer Outputs, Model Improvements, or any other Customer Materials for any purpose other than to provide the Friendli Services on behalf of the Team Owner and Team for which such materials are made available.",
+            "any Customer Materials submitted to or for Friendli Services that are provided free of charge for the purpose of improving, developing, enhancing, and providing FriendliAI’s and its Affiliates’ products and services"
+          ]
+        },
+        "logging": {
+          "text": "The retention sentence covers logging (“store, log, or otherwise persist”). No human-review sentence found",
+          "quotes": [
+            "store, log, or otherwise persist"
+          ]
+        },
+        "readTimes": "terms, privacy 18:11:52Z; OR page 18:11:07Z",
+        "rawSha256": "terms `3026cf3305b105f0ca9e1b2690dacd65097a0fdca95c4e28e3807107037f4cf3`; privacy `5060bfba21a4d46cfda45de82728a4da85a14bbe0476a637cedfdbeeb81da151`; OR page `e22b8d2fdad9de9a0c425f5ea420cc14311febbdb1a445df52f1a6c568bd5372`"
+      },
+      "conflicts": [
+        {
+          "reading": "terms-2026-11-09.md",
+          "section": "Where OpenRouter's statement and the provider's own terms differ (as read, not resolved)",
+          "text": "**Friendli**: OpenRouter says it retains prompts (period unknown); Friendli's terms state it will not store or log inputs or outputs beyond the request unless the customer opts in."
+        }
+      ],
+      "differences": [],
+      "notes": [],
+      "gaps": [
+        {
+          "reading": "terms-2026-11-09.md",
+          "section": "What could not be read",
+          "text": "**Which tier or agreement governs OpenRouter traffic** is not stated by Morph, Makora, Cohere, Friendli, OpenInference, Wafer, AkashML, Sail Research or PrimeIntellect in the pages read. Only Crusoe's page names OpenRouter. Friendli's zero-retention clause sits in Exhibit 1, which states it applies to \"Customers that receive access to Friendli Endpoints Services\"; whether OpenRouter traffic falls under it is not stated."
+        }
+      ]
+    },
+    "GMICloud": {
+      "openRouter": {
+        "displayName": "GMICloud",
+        "slug": "gmicloud",
+        "readAt": "2026-11-14T20:10:16Z",
+        "dataPolicy": {
+          "training": false,
+          "trainingOpenRouter": false,
+          "retainsPrompts": true,
+          "safetyRetention": false,
+          "termsOfServiceURL": "https://www.gmicloud.ai/terms-and-conditions",
+          "privacyPolicyURL": "https://docs.gmicloud.ai/privacy"
+        },
+        "statement": "Provider: training false, **retainsPrompts true**, no retentionDays (docs table: retained for unknown period). Endpoint `gmicloud/bf16`: same. Source: all-providers JSON; `openrouter.ai/provider/gmicloud`"
+      },
+      "terms": {
+        "readDate": "2026-11-14",
+        "reading": "terms-2026-11-14.md",
+        "pages": "OpenRouter's privacy URL `https://docs.gmicloud.ai/privacy` returned 404. OpenRouter's terms URL (served at `https://www.gmicloud.ai/en/terms-and-conditions`) is website terms (“By accessing and using this website”), no date found; the site privacy notice `/en/privacy-policy` covers site visits (“When you visit the Site, we may collect personal information”), no date found. From the site's Legal page: Privacy `https://www.gmicloud.ai/en/legal/privacy`, “Effective Date: February 26, 2025 (Last Updated)”; MaaS Console Terms of Service `/en/legal/console-terms-of-service`, effective “7th July, 2026”; Prime Inference Services Agreement `/en/legal/prime-inference-services-agreement`, “effective as of the Order Date” (no published date). These pages render client-side; quotes are from the text in their server payload",
+        "urls": [
+          "https://docs.gmicloud.ai/privacy",
+          "https://www.gmicloud.ai/en/terms-and-conditions",
+          "https://www.gmicloud.ai/en/legal/privacy"
+        ],
+        "retention": {
+          "text": "Console ToS: “Unless explicitly opted in to prompt logging, Company does not store Client’s Inputs after categorizing them and does not associate the categorized Inputs with any specific user or organizational accounts.” Privacy: “We retain personal data for as long as necessary to fulfill the purposes outlined in this Privacy Policy, or as required by law.” Prime agreement: no retention period found",
+          "quotes": [
+            "Unless explicitly opted in to prompt logging, Company does not store Client’s Inputs after categorizing them and does not associate the categorized Inputs with any specific user or organizational accounts.",
+            "We retain personal data for as long as necessary to fulfill the purposes outlined in this Privacy Policy, or as required by law."
+          ]
+        },
+        "training": {
+          "text": "Prime agreement: “Unless otherwise agreed in writing, Company will not use Client Materials, Inputs or Outputs to train Company’s general-purpose models.” Console ToS: “Some AI Models may store or train on Client’s Inputs for improving their own large language models and may allow Client to opt-out of model training, as described in their AI Model Terms.” and a license “to use and host Client’s Inputs in anonymized form, solely for tracking and sharing user metrics on the Site, providing and or improving the Service on an ongoing basis.”",
+          "quotes": [
+            "Unless otherwise agreed in writing, Company will not use Client Materials, Inputs or Outputs to train Company’s general-purpose models.",
+            "Some AI Models may store or train on Client’s Inputs for improving their own large language models and may allow Client to opt-out of model training, as described in their AI Model Terms.",
+            "to use and host Client’s Inputs in anonymized form, solely for tracking and sharing user metrics on the Site, providing and or improving the Service on an ongoing basis."
+          ]
+        },
+        "logging": {
+          "text": "Console ToS: “Company uses a hosted model for categorizing Inputs, which does not store or log any Inputs provided to it.” Prime agreement: “Company may process Client Materials, Inputs, Outputs, usage logs and related metadata to provide, secure, monitor, troubleshoot, improve and bill the Services, to detect abuse or security incidents, and to comply with applicable law, this Agreement and the applicable Order.” Privacy: “We automatically log certain usage information when you interact with our LLM endpoints or website.”",
+          "quotes": [
+            "Company uses a hosted model for categorizing Inputs, which does not store or log any Inputs provided to it.",
+            "Company may process Client Materials, Inputs, Outputs, usage logs and related metadata to provide, secure, monitor, troubleshoot, improve and bill the Services, to detect abuse or security incidents, and to comply with applicable law, this Agreement and the applicable Order.",
+            "We automatically log certain usage information when you interact with our LLM endpoints or website."
+          ]
+        },
+        "readTimes": "privacy (404) 20:11:25Z; terms 20:11:26Z; site privacy, legal index 20:13:56Z; legal pages 20:14:02Z to 20:14:03Z; OR page 20:10:21Z",
+        "rawSha256": "legal privacy `ba52b1fdc0406506a770febd2f7912dad0c8f57cf999efde24c7c640741325de`; console ToS `9e129ac2500b81f444df58e689baa3a45605b8a27879c88c85acf30df150db87`; Prime `ba258f0cb12bd382a5e4cef14a260ac737f8b43ba08f31d7a434225f978638e1`; terms `cf3f2979dcab3936825b3b970abdb2d23d19f2c2be13abda5b4aa52c7359105f`; privacy 404 `9a2d974764b5a0c59882a9e145d88a8314401d40db7943b95e7e2fb8e1c57e63`; site privacy `871c172e30b159ed63b3c7a45533a7ecc0b06c986ca4e89cd4c8732380302efe`; OR page `5117fb70fd2414d51bbe554fbab147bd0611c496e68ed90b3aede496a28aef71`"
+      },
+      "conflicts": [
+        {
+          "reading": "terms-2026-11-14.md",
+          "section": "Conflicts between OpenRouter's statement and the provider's own terms (as read, not resolved)",
+          "text": "**GMICloud, retention (the opposite direction).** OpenRouter: `retainsPrompts` true, period not stated. GMICloud's MaaS Console Terms of Service: “Unless explicitly opted in to prompt logging, Company does not store Client’s Inputs after categorizing them”. Which GMICloud agreement covers OpenRouter's traffic (the Console terms for its aggregator site, or the Prime Inference Services Agreement) is not stated; the Prime agreement states no retention period."
+        }
+      ],
+      "differences": [
+        {
+          "reading": "terms-2026-11-14.md",
+          "section": "Differences that are not conflicts",
+          "text": "**Where OpenRouter's single value depends on a setting, tier, product or route** that the provider's pages do not tie to OpenRouter: InferenceNet (ZDR is a team setting), Together (ZDR is a customer setting), Mistral (zero data retention \"activated\"; some products train unless opted out), Reka (free or paid; individual or business terms), Modal (product), Near AI (route), River (Commercial default or Testing), Particle AI (\"standard synchronous inference\"), GMICloud (Console terms or Prime agreement), KT (opt-in logging)."
+        }
+      ],
+      "notes": [],
+      "gaps": [
+        {
+          "reading": "terms-2026-11-14.md",
+          "section": "What could not be read",
+          "text": "**GMICloud.** OpenRouter's privacy URL returned 404 (saved). OpenRouter's terms URL is the website's terms, with no date and no inference clause. The Legal pages render client-side; their text was read from the server payload saved in the raw bytes."
+        }
+      ]
+    },
+    "InferenceNet": {
+      "openRouter": {
+        "displayName": "inference.net",
+        "slug": "inference-net",
+        "readAt": "2026-11-14T20:10:16Z",
+        "dataPolicy": {
+          "training": false,
+          "trainingOpenRouter": false,
+          "retainsPrompts": false,
+          "safetyRetention": false,
+          "termsOfServiceURL": "https://inference.net/terms-of-service",
+          "privacyPolicyURL": "https://inference.net/privacy-policy"
+        },
+        "statement": "Provider: training false, retainsPrompts false. Endpoint `inference-net/us`: same. Source: all-providers JSON; `openrouter.ai/provider/inference-net` (display name \"inference.net\")"
+      },
+      "terms": {
+        "readDate": "2026-11-14",
+        "reading": "terms-2026-11-14.md",
+        "pages": "Privacy `https://inference.net/privacy-policy`, “Last updated 01/21/2026”. Terms `https://inference.net/terms-of-service`, “Last updated 01/21/2026”. Zero Data Retention Policy `https://inference.net/zero-data-retention/` (footer link), “Last updated 10/16/2026”",
+        "urls": [
+          "https://inference.net/privacy-policy",
+          "https://inference.net/terms-of-service",
+          "https://inference.net/zero-data-retention/"
+        ],
+        "retention": {
+          "text": "ZDR is a team setting: “Any team account on the Inference.net platform can enable ZDR by turning on the Zero Data Retention (ZDR) setting in its team settings.” “For requests from a team with ZDR enabled:” “Customer Content is processed transiently and is not retained after processing of the request is complete.” Exclusion: “ZDR does not apply to: requests not authenticated with an API key belonging to a team that has ZDR enabled”. No retention period found for requests without ZDR",
+          "quotes": [
+            "Any team account on the Inference.net platform can enable ZDR by turning on the Zero Data Retention (ZDR) setting in its team settings.",
+            "For requests from a team with ZDR enabled:",
+            "Customer Content is processed transiently and is not retained after processing of the request is complete.",
+            "ZDR does not apply to: requests not authenticated with an API key belonging to a team that has ZDR enabled"
+          ]
+        },
+        "training": {
+          "text": "Privacy: “We do not use your data to train AI models.” ZDR policy (ZDR teams): “Customer Content is not used to train, fine-tune, evaluate or benchmark any model.” Terms license to User Content and Output: “a fully paid, royalty-free, transferable, perpetual, irrevocable, non-exclusive, and worldwide license” including to “make derivative works of all such User Content and Output”",
+          "quotes": [
+            "We do not use your data to train AI models.",
+            "Customer Content is not used to train, fine-tune, evaluate or benchmark any model.",
+            "a fully paid, royalty-free, transferable, perpetual, irrevocable, non-exclusive, and worldwide license",
+            "make derivative works of all such User Content and Output"
+          ]
+        },
+        "logging": {
+          "text": "ZDR teams: “Customer Content is not logged.” “we retain operational metadata about each request that is not intended to include Customer Content.” No human-review sentence found",
+          "quotes": [
+            "Customer Content is not logged.",
+            "we retain operational metadata about each request that is not intended to include Customer Content."
+          ]
+        },
+        "readTimes": "privacy, terms 20:11:26Z; ZDR 20:15:08Z; partner terms 20:15:14Z (a referral program; no data terms); OR page 20:10:22Z",
+        "rawSha256": "privacy `9c57d12060e5892a13cc3660c5b597989cf7f1872a5ca074c2d4973b0fa639c0`; terms `92f98271d065da28f6f207945d96133f5fac95b4e199e0219e1bf3b4732d9363`; ZDR `a4b4148fbf0e418d27bc8a84ef8fb77d585fa9db8ae5acbb2b3efc1a926ffa00`; OR page `225f0853f31b8041f16fcd646c621d371981f6c70e052b96fa924f7d2a7c428d`"
+      },
+      "conflicts": [],
+      "differences": [
+        {
+          "reading": "terms-2026-11-14.md",
+          "section": "Differences that are not conflicts",
+          "text": "**Where OpenRouter's single value depends on a setting, tier, product or route** that the provider's pages do not tie to OpenRouter: InferenceNet (ZDR is a team setting), Together (ZDR is a customer setting), Mistral (zero data retention \"activated\"; some products train unless opted out), Reka (free or paid; individual or business terms), Modal (product), Near AI (route), River (Commercial default or Testing), Particle AI (\"standard synchronous inference\"), GMICloud (Console terms or Prime agreement), KT (opt-in logging)."
+        }
+      ],
+      "notes": [],
+      "gaps": [
+        {
+          "reading": "terms-2026-11-14.md",
+          "section": "What could not be read",
+          "text": "**Fetch notes.** All fetches used `--compressed`; the byte count in `fetchlog-2026-11-14.txt` is bytes transferred, not file size. InferenceNet's partner terms were read and found to be a referral program; they carry no data terms and nothing is quoted from them."
+        }
+      ]
+    },
+    "KT": {
+      "openRouter": {
+        "displayName": "KT",
+        "slug": "kt",
+        "readAt": "2026-11-14T20:10:16Z",
+        "dataPolicy": {
+          "training": false,
+          "trainingOpenRouter": false,
+          "retainsPrompts": true,
+          "safetyRetention": false,
+          "termsOfServiceURL": "https://tokenfactory.kt.com/terms/service",
+          "privacyPolicyURL": "https://tokenfactory.kt.com/terms/privacy"
+        },
+        "statement": "Provider: training false, **retainsPrompts true**, no retentionDays (docs table: retained for unknown period). Endpoint `kt`: same. Source: all-providers JSON; `openrouter.ai/provider/kt`"
+      },
+      "terms": {
+        "readDate": "2026-11-14",
+        "reading": "terms-2026-11-14.md",
+        "pages": "Terms `https://tokenfactory.kt.com/terms/service`, “서비스 이용약관 v1.0 · 시행일 2026-10-29” [version 1.0, effective 2026-10-29]. Privacy `https://tokenfactory.kt.com/terms/privacy`, “KT 토큰팩토리 개인정보처리방침 v1.0 · 시행일 2026-10-29” [same date]. Both in Korean",
+        "urls": [
+          "https://tokenfactory.kt.com/terms/service",
+          "https://tokenfactory.kt.com/terms/privacy"
+        ],
+        "retention": {
+          "text": "Privacy, retention table: “4) 입력한 프롬프트 및 생성결과물 등 목적 항목 보유기간 생성형 AI 응답 생성 및 서비스 제공 입력한 프롬프트·대화 내용, 인공지능 응답 본문·도구 호출 기록 및 출처, 대화 메모리, 첨부 이미지·문서, 이미지·영상 생성 프롬프트 및 생성 결과물 30 일” [prompts and generated results: entered prompts and conversation content, AI response text, tool-call records, conversation memory, attachments; purpose: generating AI responses and providing the service; retention: 30 days]. “외부 AI 모델 연계 프롬프트, 첨부 데이터, 모델 추론에 필요한 기술 정보 추론 처리 완료시까지” [external AI model linkage: prompts, attached data, technical information for inference; until inference processing completes]. Terms Art. 15: “회사가 보관 하는 데이터는 관계 법령상 보관 의무가 있거나 본 약관에서 달리 정한 경우를 제외하고 생성일로부터 1년이 경과하 면 완전히 삭제됩니다.” [data the company retains is completely deleted one year after creation, unless law or these terms provide otherwise]",
+          "quotes": [
+            "4) 입력한 프롬프트 및 생성결과물 등 목적 항목 보유기간 생성형 AI 응답 생성 및 서비스 제공 입력한 프롬프트·대화 내용, 인공지능 응답 본문·도구 호출 기록 및 출처, 대화 메모리, 첨부 이미지·문서, 이미지·영상 생성 프롬프트 및 생성 결과물 30 일",
+            "외부 AI 모델 연계 프롬프트, 첨부 데이터, 모델 추론에 필요한 기술 정보 추론 처리 완료시까지",
+            "회사가 보관 하는 데이터는 관계 법령상 보관 의무가 있거나 본 약관에서 달리 정한 경우를 제외하고 생성일로부터 1년이 경과하 면 완전히 삭제됩니다."
+          ]
+        },
+        "training": {
+          "text": "No sentence on KT training its own models found in either page. Privacy, on external AI providers: “케이티는 서비스 제공을 위하여 외부 인공지능 사업자에게 전송되는 프롬프트·대화 등 입력 데이터 및 그 결과물이 해당 사업자의 인공지능 모델 학습에 이용되지 않는 조건(기업용 유료 API 이용약관 및 기업용 개인정보 보호정책) 으로 처리되도록 하고 있습니다.” [KT has prompts and other inputs sent to external AI providers, and their results, processed on terms under which they are not used to train those providers' models (enterprise paid API terms and enterprise privacy policies)]",
+          "quotes": [
+            "케이티는 서비스 제공을 위하여 외부 인공지능 사업자에게 전송되는 프롬프트·대화 등 입력 데이터 및 그 결과물이 해당 사업자의 인공지능 모델 학습에 이용되지 않는 조건(기업용 유료 API 이용약관 및 기업용 개인정보 보호정책) 으로 처리되도록 하고 있습니다."
+          ]
+        },
+        "logging": {
+          "text": "Terms Art. 15: “고객 또는 이용자 가 데이터 로깅 기능을 명시적으로 활성화(opt-in) 한 경우에 한하여, 회사는 해당 프롬프트 · 응답 데이터를 서비스 품질 개선 및 오류 분석 목적으로 활용할 수 있습니다.” [only where the customer or user explicitly opts in to data logging may the company use that prompt and response data for service-quality improvement and error analysis]. Art. 14: “회사는 고객 또는 이용자가 제13조 제8항 각 호 또는 외부 정책을 위반한 것으로 합리적으로 의심되는 경우, 관련 법령이 허용하는 범위 내에서 문제가 된 애플리케이션의 구성, 프롬프트 · 응답 로그 등 관련 자료를 조사할 수 있습니다.” [where a violation is reasonably suspected, the company may examine related material, including prompt and response logs, within what law permits]",
+          "quotes": [
+            "고객 또는 이용자 가 데이터 로깅 기능을 명시적으로 활성화(opt-in) 한 경우에 한하여, 회사는 해당 프롬프트 · 응답 데이터를 서비스 품질 개선 및 오류 분석 목적으로 활용할 수 있습니다.",
+            "회사는 고객 또는 이용자가 제13조 제8항 각 호 또는 외부 정책을 위반한 것으로 합리적으로 의심되는 경우, 관련 법령이 허용하는 범위 내에서 문제가 된 애플리케이션의 구성, 프롬프트 · 응답 로그 등 관련 자료를 조사할 수 있습니다."
+          ]
+        },
+        "readTimes": "privacy 20:11:27Z; terms 20:11:30Z; OR page 20:10:22Z",
+        "rawSha256": "privacy `e9df7b2ab153b8de05782fb30125792f457a0076ef6d63864858f4d76386b058`; terms `b8c143d8807dec16e2fdbfb2f931b8adbbe0e137ac17b866600f3e3ccc1de7f6`; OR page `539fbf6514cf31b440874caa75cca687315937df81d173884f427351c4645916`"
+      },
+      "conflicts": [],
+      "differences": [
+        {
+          "reading": "terms-2026-11-14.md",
+          "section": "Differences that are not conflicts",
+          "text": "**KT.** OpenRouter states retention with no period. KT's privacy policy gives 30 days for entered prompts and generated results; its terms say data the company retains is deleted one year after creation. The two KT documents give different periods; the terms clause is not limited to prompts."
+        },
+        {
+          "reading": "terms-2026-11-14.md",
+          "section": "Differences that are not conflicts",
+          "text": "**Where OpenRouter's single value depends on a setting, tier, product or route** that the provider's pages do not tie to OpenRouter: InferenceNet (ZDR is a team setting), Together (ZDR is a customer setting), Mistral (zero data retention \"activated\"; some products train unless opted out), Reka (free or paid; individual or business terms), Modal (product), Near AI (route), River (Commercial default or Testing), Particle AI (\"standard synchronous inference\"), GMICloud (Console terms or Prime agreement), KT (opt-in logging)."
+        }
+      ],
+      "notes": [
+        {
+          "reading": "terms-2026-11-14.md",
+          "section": "Notes on the table",
+          "text": "**KT routes onward.** KT's privacy policy names OpenRouter among the processors KT entrusts with inference traffic: “OpenRouter , Inc. ( OpenRouter ) AI 모델 연계 · 라우팅 및 AI 추론을 위한 프롬프트 · 응답 처리 · 전송” [OpenRouter, Inc.: AI model linkage, routing, and processing and transfer of prompts and responses for AI inference]. Its list of sub-entrusted model providers includes “Z.ai (GLM) 라우팅 데이터 처리 • 생성형 AI 응답 생성(LLM API 호출)” [Z.ai (GLM): routing data processing, generative AI response generation (LLM API calls)]. For overseas transfers to these processors it says data “사업자의 정책에 따라 일정 기간 국외 서버에 저장될 수 있음” [may be stored on overseas servers for a period, according to that operator's policy]. Which path KT used for the one GLM-5.3-Flash request is not stated anywhere read."
+        },
+        {
+          "reading": "terms-2026-11-14.md",
+          "section": "Notes on the table",
+          "text": "**Only KT's privacy policy, Near AI's model catalog and Relace's home page name OpenRouter** among the providers' own pages read. None of the 16 publishes terms written for OpenRouter-routed traffic."
+        }
+      ],
+      "gaps": []
+    },
+    "Makora": {
+      "openRouter": {
+        "displayName": "Makora",
+        "slug": "makora",
+        "readAt": "2026-11-09T18:11:00Z",
+        "dataPolicy": {
+          "training": false,
+          "trainingOpenRouter": false,
+          "retainsPrompts": false,
+          "safetyRetention": false,
+          "termsOfServiceURL": null,
+          "privacyPolicyURL": null
+        },
+        "statement": "Provider: training false, retainsPrompts false. Endpoints `makora/fp4` (GLM) and `makora/fp8` (MiMo): same. OpenRouter lists **no** privacy or terms URL. Source: all-providers JSON; `openrouter.ai/provider/makora`"
+      },
+      "terms": {
+        "readDate": "2026-11-09",
+        "reading": "terms-2026-11-09.md",
+        "pages": "Not linked from OpenRouter; read from Makora's home page links. Privacy `https://www.makora.com/privacy-policy`, “Effective date: June 11, 2026 Last updated: June 11, 2026”. Terms `https://www.makora.com/terms-of-service`, “Last updated: 25 June 2026”",
+        "urls": [
+          "https://www.makora.com/privacy-policy",
+          "https://www.makora.com/terms-of-service"
+        ],
+        "retention": {
+          "text": "Tiered: Starter and Developer retained 30 days; “For Developer Pro and Pay-as-you-go, the Service operates in Zero Data Retention mode.” “We do not currently guarantee deletion of cached content within a fixed time window; cached content may remain on the inference host until it is evicted to make room for new data.” “Operational metadata is retained for 12 months and then deleted or aggregated.” Which tier covers OpenRouter traffic is not stated",
+          "quotes": [
+            "For Developer Pro and Pay-as-you-go, the Service operates in Zero Data Retention mode.",
+            "We do not currently guarantee deletion of cached content within a fixed time window; cached content may remain on the inference host until it is evicted to make room for new data.",
+            "Operational metadata is retained for 12 months and then deleted or aggregated."
+          ]
+        },
+        "training": {
+          "text": "Privacy: “Inputs and Outputs are never used to train, fine-tune, evaluate, or otherwise improve any model, ours or a third party’s.” Terms: “We do not use your Inputs, or the Outputs generated for you, to train, fine-tune, evaluate, or otherwise improve any model, whether ours or a third party’s.”",
+          "quotes": [
+            "Inputs and Outputs are never used to train, fine-tune, evaluate, or otherwise improve any model, ours or a third party’s.",
+            "We do not use your Inputs, or the Outputs generated for you, to train, fine-tune, evaluate, or otherwise improve any model, whether ours or a third party’s."
+          ]
+        },
+        "logging": {
+          "text": "“Even on ZDR tiers, automated safety and abuse classifiers may inspect Inputs and Outputs in memory at request time.”",
+          "quotes": [
+            "Even on ZDR tiers, automated safety and abuse classifiers may inspect Inputs and Outputs in memory at request time."
+          ]
+        },
+        "readTimes": "privacy, terms 18:15:40Z; home 18:11:55Z; OR page 18:11:07Z",
+        "rawSha256": "privacy `92f33ac0b374c041cc3eff3cb6e34ddcadae5ec66fe35fe95806fd6b14d1395e`; terms `802cae3ed05a039074616d2f6619b269e9fb4bb46f77cda3d06ffdc4c62c047d`; home `e4a6a2263b73add599143d7027dcb842a326731c665e0c5a621de18fabb1db0e`; OR page `ebcb6d5790b28983e92b8eebad0099ae8ff6d5a805e311b01f5a0b5f23d1be29`"
+      },
+      "conflicts": [],
+      "differences": [
+        {
+          "reading": "terms-2026-11-09.md",
+          "section": "Where OpenRouter's statement and the provider's own terms differ (as read, not resolved)",
+          "text": "**Morph, Makora**: retention is set by account tier, and neither names OpenRouter, so the tier for OpenRouter-routed traffic is not stated where read."
+        }
+      ],
+      "notes": [
+        {
+          "reading": "terms-2026-11-09.md",
+          "section": "Where OpenRouter's statement and the provider's own terms differ (as read, not resolved)",
+          "text": "Makora's published privacy policy carries a drafting note: “If you want the specific Azure service names itemized publicly (e.g., Azure Front Door, Azure Monitor, Azure Communication Services), confirm and I will expand those rows.”"
+        }
+      ],
+      "gaps": [
+        {
+          "reading": "terms-2026-11-09.md",
+          "section": "What could not be read",
+          "text": "**Makora and PrimeIntellect have no terms or privacy URL on OpenRouter** (null in `/api/v1/providers` and in their `dataPolicy`). Their own pages were read from links on their home pages; nothing read ties those pages to OpenRouter-routed traffic."
+        },
+        {
+          "reading": "terms-2026-11-09.md",
+          "section": "What could not be read",
+          "text": "**Which tier or agreement governs OpenRouter traffic** is not stated by Morph, Makora, Cohere, Friendli, OpenInference, Wafer, AkashML, Sail Research or PrimeIntellect in the pages read. Only Crusoe's page names OpenRouter. Friendli's zero-retention clause sits in Exhibit 1, which states it applies to \"Customers that receive access to Friendli Endpoints Services\"; whether OpenRouter traffic falls under it is not stated."
+        }
+      ]
+    },
+    "Mistral": {
+      "openRouter": {
+        "displayName": "Mistral",
+        "slug": "mistral",
+        "readAt": "2026-11-14T20:10:16Z",
+        "dataPolicy": {
+          "training": false,
+          "trainingOpenRouter": false,
+          "retainsPrompts": false,
+          "safetyRetention": false,
+          "termsOfServiceURL": "https://mistral.ai/terms/#terms-of-use",
+          "privacyPolicyURL": "https://mistral.ai/terms/#privacy-policy"
+        },
+        "statement": "Provider: training false, retainsPrompts false. Endpoint for GLM-5.3-Flash: slug `mistral` (on the same page most Mistral endpoints, and the GLM 5.3 endpoint, are `mistral/zdr`); values same. Source: all-providers JSON; `openrouter.ai/provider/mistral`"
+      },
+      "terms": {
+        "readDate": "2026-11-14",
+        "reading": "terms-2026-11-14.md",
+        "pages": "OpenRouter's URLs (`https://mistral.ai/terms/#privacy-policy`, `#terms-of-use`) redirect to the index `https://legal.mistral.ai/terms/get-started/`. Read from it: Commercial Terms of Service `https://legal.mistral.ai/terms/commercial-terms-of-service`, “Effective: September 25, 2026”; Additional Product Terms `.../terms/additional-terms`, “Effective: September 25, 2026”; Privacy Policy `.../terms/privacy-policy`, “Effective: September 3, 2026”. Partner-served deployment terms also read; they cover Mistral products served through “Our cloud provider partners” and resellers",
+        "urls": [
+          "https://mistral.ai/terms/#privacy-policy",
+          "https://legal.mistral.ai/terms/get-started/",
+          "https://legal.mistral.ai/terms/commercial-terms-of-service"
+        ],
+        "retention": {
+          "text": "Privacy: “Except for specific APIs, we keep your Input and Output for the period necessary to generate the Output and then for thirty (30) rolling days to monitor abuse (unless zero data retention is activated).”",
+          "quotes": [
+            "Except for specific APIs, we keep your Input and Output for the period necessary to generate the Output and then for thirty (30) rolling days to monitor abuse (unless zero data retention is activated)."
+          ]
+        },
+        "training": {
+          "text": "Commercial terms 4.2: “Mistral AI will not use Customer Data or Outputs to train its artificial intelligence models except (a) when you (i) opted-in to training on a Mistral AI Product set to opt-out by default or (ii) have not opted-out of training on a Mistral AI Product set to opt-in by default” 4.1 license purposes: “providing, maintaining, and optimizing the Mistral AI Products, which includes debugging, assessing, reviewing, and correcting the performance of the Mistral AI Products but excludes model training”. Additional terms: “Mistral AI Products may grant Customer access to technologies developed by third-parties, such as third-party models”",
+          "quotes": [
+            "Mistral AI will not use Customer Data or Outputs to train its artificial intelligence models except (a) when you (i) opted-in to training on a Mistral AI Product set to opt-out by default or (ii) have not opted-out of training on a Mistral AI Product set to opt-in by default",
+            "providing, maintaining, and optimizing the Mistral AI Products, which includes debugging, assessing, reviewing, and correcting the performance of the Mistral AI Products but excludes model training",
+            "Mistral AI Products may grant Customer access to technologies developed by third-parties, such as third-party models"
+          ]
+        },
+        "logging": {
+          "text": "“Mistral AI may monitor use of the Mistral AI Products through automated means in accordance with the Usage Policy” Privacy purpose: “To manage and enforce our Terms of Service and licenses, including moderation and abuse monitoring”",
+          "quotes": [
+            "Mistral AI may monitor use of the Mistral AI Products through automated means in accordance with the Usage Policy",
+            "To manage and enforce our Terms of Service and licenses, including moderation and abuse monitoring"
+          ]
+        },
+        "readTimes": "index 20:11:32Z; commercial 20:16:23Z; privacy, additional, partner-served 20:16:24Z; OR page 20:10:22Z",
+        "rawSha256": "commercial `d4cf7cd0bd3b81cbfa43a2b0e41d3c774f46b17ea1593d1f27934aaa2e8506dc`; privacy `39c366d457a7f1292f1e49c080977127205be6fe6b6b2c022c9d414fe23fd7b9`; additional `b3fb8a26ebc11e544d6ace074cdc0ad5b1b9588cf18cb9e1d847a0f08944af52`; partner-served `e344d34dafc908e41cad70be332155ed4123a22cc7dc734dc81f3946ea35adf2`; index `5bf6fdc208d2d780ee5102aea8c7b85dda6200042b5287c9ea43ee78c909ffb9`; OR page `9eb92109b9107476a74f06b31f250490643ca119aab32188bb57f3f07bcb951f`"
+      },
+      "conflicts": [
+        {
+          "reading": "terms-2026-11-14.md",
+          "section": "Conflicts between OpenRouter's statement and the provider's own terms (as read, not resolved)",
+          "text": "**Mistral, retention.** OpenRouter: `retainsPrompts` false at provider level and for the endpoint `mistral` serving GLM-5.3-Flash. Mistral's privacy policy: “Except for specific APIs, we keep your Input and Output for the period necessary to generate the Output and then for thirty (30) rolling days to monitor abuse (unless zero data retention is activated).” Whether zero data retention is active for OpenRouter's traffic is not stated in what was read."
+        }
+      ],
+      "differences": [
+        {
+          "reading": "terms-2026-11-14.md",
+          "section": "Differences that are not conflicts",
+          "text": "**Where OpenRouter's single value depends on a setting, tier, product or route** that the provider's pages do not tie to OpenRouter: InferenceNet (ZDR is a team setting), Together (ZDR is a customer setting), Mistral (zero data retention \"activated\"; some products train unless opted out), Reka (free or paid; individual or business terms), Modal (product), Near AI (route), River (Commercial default or Testing), Particle AI (\"standard synchronous inference\"), GMICloud (Console terms or Prime agreement), KT (opt-in logging)."
+        }
+      ],
+      "notes": [],
+      "gaps": [
+        {
+          "reading": "terms-2026-11-14.md",
+          "section": "What could not be read",
+          "text": "**Mistral.** OpenRouter's two URLs carry anchors that the redirected index page does not have; the documents were read from the index's links. Mistral's Data Processing Addendum was not read."
+        }
+      ]
+    },
+    "Modal": {
+      "openRouter": {
+        "displayName": "Modal",
+        "slug": "modal",
+        "readAt": "2026-11-14T20:10:16Z",
+        "dataPolicy": {
+          "training": false,
+          "trainingOpenRouter": false,
+          "retainsPrompts": false,
+          "safetyRetention": false,
+          "termsOfServiceURL": "https://modal.com/legal/terms",
+          "privacyPolicyURL": "https://modal.com/legal/privacy-policy"
+        },
+        "statement": "Provider: training false, retainsPrompts false. Endpoint `modal/fp4`: same. Source: all-providers JSON; `openrouter.ai/provider/modal`"
+      },
+      "terms": {
+        "readDate": "2026-11-14",
+        "reading": "terms-2026-11-14.md",
+        "pages": "Privacy `https://modal.com/legal/privacy-policy`, “Last updated May 17th, 2023”; it states “This page is used to inform website visitors regarding our policies”. Terms (Software as a Service Agreement) `https://modal.com/legal/terms`, “Effective May 2026.” Docs `https://modal.com/docs/guide/security` (linked from the terms), no date found",
+        "urls": [
+          "https://modal.com/legal/privacy-policy",
+          "https://modal.com/legal/terms",
+          "https://modal.com/docs/guide/security"
+        ],
+        "retention": {
+          "text": "By product (docs table). Servers, Dedicated Endpoints and Shared Endpoints: “Not stored — proxied directly to the serving container” and “Request and response payloads are never written to disk and pass through Modal only as in-flight network traffic.” Functions inputs and outputs: “Up to 7 days, then deleted”. Terms: “Modal retains data as long as the Modal has a need for its use, or to meet regulatory or contractual requirements.” Which Modal product serves OpenRouter traffic is not stated",
+          "quotes": [
+            "Not stored — proxied directly to the serving container",
+            "Request and response payloads are never written to disk and pass through Modal only as in-flight network traffic.",
+            "Up to 7 days, then deleted",
+            "Modal retains data as long as the Modal has a need for its use, or to meet regulatory or contractual requirements."
+          ]
+        },
+        "training": {
+          "text": "No training statement found. Terms: “Customer hereby grants to Modal a limited license to use Customer Data as necessary to provide the Service to Customer.”",
+          "quotes": [
+            "Customer hereby grants to Modal a limited license to use Customer Data as necessary to provide the Service to Customer."
+          ]
+        },
+        "logging": {
+          "text": "“While we store app logs and metadata as part of operating the platform, we access them only with your permission, to help troubleshoot an issue.”",
+          "quotes": [
+            "While we store app logs and metadata as part of operating the platform, we access them only with your permission, to help troubleshoot an issue."
+          ]
+        },
+        "readTimes": "privacy, terms 20:11:32Z; docs 20:17:10Z; OR page 20:10:22Z",
+        "rawSha256": "privacy `bab08b48bb14100f3f14744bd3e25d1847107ca75ae1453d6df92b7611e16882`; terms `345be2e8e207ce27858bf4d7038aafb5177614c0372311ad4aa27da2f5f7e71c`; docs `179842c556889bc0b8d7eb60fa51b4924155ea1ef11e0965d8406acdeb7aa9cf`; OR page `99717b0f68b3070f1ba458fd79d0ccd8a6027537e0d389272b07b53c91d08591`"
+      },
+      "conflicts": [],
+      "differences": [
+        {
+          "reading": "terms-2026-11-14.md",
+          "section": "Differences that are not conflicts",
+          "text": "**Where OpenRouter's single value depends on a setting, tier, product or route** that the provider's pages do not tie to OpenRouter: InferenceNet (ZDR is a team setting), Together (ZDR is a customer setting), Mistral (zero data retention \"activated\"; some products train unless opted out), Reka (free or paid; individual or business terms), Modal (product), Near AI (route), River (Commercial default or Testing), Particle AI (\"standard synchronous inference\"), GMICloud (Console terms or Prime agreement), KT (opt-in logging)."
+        }
+      ],
+      "notes": [],
+      "gaps": [
+        {
+          "reading": "terms-2026-11-14.md",
+          "section": "What could not be read",
+          "text": "**Modal.** Which product (Functions, Servers, Dedicated or Shared Endpoints) serves OpenRouter's traffic is not stated."
+        }
+      ]
+    },
+    "Morph": {
+      "openRouter": {
+        "displayName": "Morph",
+        "slug": "morph",
+        "readAt": "2026-11-09T18:11:00Z",
+        "dataPolicy": {
+          "training": false,
+          "trainingOpenRouter": false,
+          "retainsPrompts": false,
+          "safetyRetention": false,
+          "termsOfServiceURL": "https://www.morphllm.com/privacy/tos",
+          "privacyPolicyURL": "https://morphllm.com/privacy"
+        },
+        "statement": "Provider: training false, retainsPrompts false. Endpoint `morph/fp8`: same. Source: all-providers JSON; `openrouter.ai/provider/morph`"
+      },
+      "terms": {
+        "readDate": "2026-11-09",
+        "reading": "terms-2026-11-09.md",
+        "pages": "Privacy `https://morphllm.com/privacy` (served at `www.morphllm.com/privacy`), “Last Updated: November 9, 2026”, “Version 4.1 (Data Retention Amendment, effective October 23, 2026)”. Terms `https://www.morphllm.com/privacy/tos`, “Last Updated: October 23, 2026”",
+        "urls": [
+          "https://morphllm.com/privacy",
+          "https://www.morphllm.com/privacy/tos"
+        ],
+        "retention": {
+          "text": "By tier: “We keep Inputs and Outputs only to operate the Services and your own request history, delete them within 30 days, and do not review them in the ordinary course.” (free and paid) and “Full Zero Data Retention is available on enterprise tiers only.” Neither page names OpenRouter, so which tier covers OpenRouter traffic is not stated",
+          "quotes": [
+            "We keep Inputs and Outputs only to operate the Services and your own request history, delete them within 30 days, and do not review them in the ordinary course.",
+            "Full Zero Data Retention is available on enterprise tiers only."
+          ]
+        },
+        "training": {
+          "text": "“We do not use your Inputs or Outputs to train, fine-tune, or evaluate our models for any reason, including customer support and debugging.”",
+          "quotes": [
+            "We do not use your Inputs or Outputs to train, fine-tune, or evaluate our models for any reason, including customer support and debugging."
+          ]
+        },
+        "logging": {
+          "text": "“Our team does not read your Inputs or Outputs in the ordinary course.” “Prompts our safety classifiers flag as an attempt to compromise systems you do not own are retained past the window above for safety review, abuse investigation, and legal process.”",
+          "quotes": [
+            "Our team does not read your Inputs or Outputs in the ordinary course.",
+            "Prompts our safety classifiers flag as an attempt to compromise systems you do not own are retained past the window above for safety review, abuse investigation, and legal process."
+          ]
+        },
+        "readTimes": "privacy, terms 18:11:52Z; OR page 18:11:07Z",
+        "rawSha256": "privacy `1c2609c6e49a0e50a923afc6fe0eff6f5a36ef08697516ce0221ff88c554b1be`; terms `6e5997e005e3f638e2ed3c9be141176861f9ee4a1b0406d0b41b42998ceb4cab`; OR page `cd36f717af8ac830c1afe862c26d49ae8cfcf29f8a8a372576c512cac951fed1`"
+      },
+      "conflicts": [],
+      "differences": [
+        {
+          "reading": "terms-2026-11-09.md",
+          "section": "Where OpenRouter's statement and the provider's own terms differ (as read, not resolved)",
+          "text": "**Morph, Makora**: retention is set by account tier, and neither names OpenRouter, so the tier for OpenRouter-routed traffic is not stated where read."
+        }
+      ],
+      "notes": [
+        {
+          "reading": "terms-2026-11-09.md",
+          "section": "Where OpenRouter's statement and the provider's own terms differ (as read, not resolved)",
+          "text": "Two pages changed on the reading day: Morph's privacy policy (“Last Updated: November 9, 2026”) and Crusoe's Data Processing and Security Terms (“Effective November 9th 2026”)."
+        }
+      ],
+      "gaps": [
+        {
+          "reading": "terms-2026-11-09.md",
+          "section": "What could not be read",
+          "text": "**Which tier or agreement governs OpenRouter traffic** is not stated by Morph, Makora, Cohere, Friendli, OpenInference, Wafer, AkashML, Sail Research or PrimeIntellect in the pages read. Only Crusoe's page names OpenRouter. Friendli's zero-retention clause sits in Exhibit 1, which states it applies to \"Customers that receive access to Friendli Endpoints Services\"; whether OpenRouter traffic falls under it is not stated."
+        }
+      ]
+    },
+    "Near AI": {
+      "openRouter": {
+        "displayName": "NEAR AI",
+        "slug": "near-ai",
+        "readAt": "2026-11-14T20:10:16Z",
+        "dataPolicy": {
+          "training": false,
+          "trainingOpenRouter": false,
+          "retainsPrompts": false,
+          "safetyRetention": false,
+          "termsOfServiceURL": "https://near.ai/terms-of-service",
+          "privacyPolicyURL": "https://near.ai/privacy-policy"
+        },
+        "statement": "Provider: training false, retainsPrompts false. Endpoint `near-ai/fp4`: same. Source: all-providers JSON; `openrouter.ai/provider/near-ai` (display name \"NEAR AI\")"
+      },
+      "terms": {
+        "readDate": "2026-11-14",
+        "reading": "terms-2026-11-14.md",
+        "pages": "Privacy `https://near.ai/privacy-policy`, “Last updated October 12, 2026”. Terms (NEAR AI Cloud Terms of Service) `https://near.ai/terms-of-service`, “Last updated October 29, 2026”. Models page `https://near.ai/models`, no date",
+        "urls": [
+          "https://near.ai/privacy-policy",
+          "https://near.ai/terms-of-service",
+          "https://near.ai/models"
+        ],
+        "retention": {
+          "text": "No retention period for inference content found; terms make it route-dependent: “Hosting, processing location, privacy, security, data-use, retention, availability, attestation, signature, and verification properties may differ among Private TEE Routes, Attested Third-Party Routes, and Incognito Routes.” and “the model or provider name alone does not establish the route used to process a request or the properties applicable to that request.” Incognito Routes: “The Input is transmitted to the third-party provider for processing, and identifiers contained in the Input and technical or safety metadata may also be transmitted.” Models page: “Every open model on NEAR AI Cloud runs inside a hardware-secured TEE.” Privacy (personal data): “We retain Personal Data only for as long as needed to provide and secure the Services, or as required to comply with law.”",
+          "quotes": [
+            "Hosting, processing location, privacy, security, data-use, retention, availability, attestation, signature, and verification properties may differ among Private TEE Routes, Attested Third-Party Routes, and Incognito Routes.",
+            "the model or provider name alone does not establish the route used to process a request or the properties applicable to that request.",
+            "The Input is transmitted to the third-party provider for processing, and identifiers contained in the Input and technical or safety metadata may also be transmitted.",
+            "Every open model on NEAR AI Cloud runs inside a hardware-secured TEE.",
+            "We retain Personal Data only for as long as needed to provide and secure the Services, or as required to comply with law."
+          ]
+        },
+        "training": {
+          "text": "“NEAR AI will not use Customer Data to train any generative AI models.”",
+          "quotes": [
+            "NEAR AI will not use Customer Data to train any generative AI models."
+          ]
+        },
+        "logging": {
+          "text": "None found",
+          "quotes": []
+        },
+        "readTimes": "privacy 20:11:32Z; terms 20:11:38Z; models 20:17:48Z; OR page 20:10:23Z",
+        "rawSha256": "privacy `812e7522e431cbf7c4921e26960ffc477892cc71f823ba644bfe8457b6472c12`; terms `1ce8e8a9c54fe363e4914e081288ed47f3e6a9509c339571f2a117053bf47246`; models `cebcbb74451ff19a078c29a12fa0052e192c29d01ac19b646ecb37fba43f3563`; OR page `232ac676b5d40023e6b176f09104740286e239b179e99dc2a116c63e8bbfd834`"
+      },
+      "conflicts": [],
+      "differences": [
+        {
+          "reading": "terms-2026-11-14.md",
+          "section": "Differences that are not conflicts",
+          "text": "**Where OpenRouter's single value depends on a setting, tier, product or route** that the provider's pages do not tie to OpenRouter: InferenceNet (ZDR is a team setting), Together (ZDR is a customer setting), Mistral (zero data retention \"activated\"; some products train unless opted out), Reka (free or paid; individual or business terms), Modal (product), Near AI (route), River (Commercial default or Testing), Particle AI (\"standard synchronous inference\"), GMICloud (Console terms or Prime agreement), KT (opt-in logging)."
+        }
+      ],
+      "notes": [
+        {
+          "reading": "terms-2026-11-14.md",
+          "section": "Notes on the table",
+          "text": "**Near AI's published catalog.** The model list embedded in `near.ai/models` (64 model ids) contains `z-ai/glm-5.3-flash` but not gpt-oss-120b, the model OpenRouter routed to Near AI. The same payload describes at least one model as “Served through OpenRouter using ZDR inference endpoints.”"
+        },
+        {
+          "reading": "terms-2026-11-14.md",
+          "section": "Notes on the table",
+          "text": "**Only KT's privacy policy, Near AI's model catalog and Relace's home page name OpenRouter** among the providers' own pages read. None of the 16 publishes terms written for OpenRouter-routed traffic."
+        }
+      ],
+      "gaps": [
+        {
+          "reading": "terms-2026-11-14.md",
+          "section": "What could not be read",
+          "text": "**Near AI.** The route that served gpt-oss-120b (Private TEE, Attested Third-Party or Incognito) is not stated. The Data Processing Agreement was not read."
+        }
+      ]
+    },
+    "OpenInference": {
+      "openRouter": {
+        "displayName": "Open Inference",
+        "slug": "open-inference",
+        "readAt": "2026-11-09T18:11:00Z",
+        "dataPolicy": {
+          "training": false,
+          "trainingOpenRouter": false,
+          "retainsPrompts": false,
+          "safetyRetention": false,
+          "termsOfServiceURL": "https://www.openinference.ai/terms",
+          "privacyPolicyURL": "https://www.openinference.ai/privacy"
+        },
+        "statement": "Provider: training false, retainsPrompts false. Endpoint `open-inference/fp4`: same. Source: all-providers JSON; `openrouter.ai/provider/open-inference`"
+      },
+      "terms": {
+        "readDate": "2026-11-09",
+        "reading": "terms-2026-11-09.md",
+        "pages": "Privacy `https://www.openinference.ai/privacy`, “Updated: June 8, 2026”. Terms `https://www.openinference.ai/terms`, “Last updated: June 8, 2026”",
+        "urls": [
+          "https://www.openinference.ai/privacy",
+          "https://www.openinference.ai/terms"
+        ],
+        "retention": {
+          "text": "Privacy: “We operate the Services on a zero-data-retention basis with respect to the contents of your prompts and the responses generated from them” … “we do not store Customer Content after the response is delivered, do not use it to train or improve any model, and do not sell it or share it with third parties for their own purposes.” Terms: “We process and store Customer Content in accordance with our Privacy Policy.”",
+          "quotes": [
+            "We operate the Services on a zero-data-retention basis with respect to the contents of your prompts and the responses generated from them",
+            "we do not store Customer Content after the response is delivered, do not use it to train or improve any model, and do not sell it or share it with third parties for their own purposes.",
+            "We process and store Customer Content in accordance with our Privacy Policy."
+          ]
+        },
+        "training": {
+          "text": "Privacy: as in the retention cell. Terms: “We may also use Customer Content to provide, maintain, develop, and improve the Services, comply with law, enforce our terms, and keep the Services safe.” and “If you do not want us to use your Customer Content to train our models, or to share it with third parties for their business purposes, you may opt out by following the instructions on the Platform.”",
+          "quotes": [
+            "We may also use Customer Content to provide, maintain, develop, and improve the Services, comply with law, enforce our terms, and keep the Services safe.",
+            "If you do not want us to use your Customer Content to train our models, or to share it with third parties for their business purposes, you may opt out by following the instructions on the Platform."
+          ]
+        },
+        "logging": {
+          "text": "“We do not collect, log, or retain the contents of your Inputs or Outputs.”",
+          "quotes": [
+            "We do not collect, log, or retain the contents of your Inputs or Outputs."
+          ]
+        },
+        "readTimes": "privacy, terms 18:11:51Z; OR page 18:11:07Z",
+        "rawSha256": "privacy `5836de924071659085512a8d8167c5984aeef7fd07c60ac472bfb391abe526bb`; terms `13c4c09fb783cbee14e06c4d08766cd470410e97b6ea4d9445a990c59af349be`; OR page `cc27d5fa73d848df9e0b1fed4bc5308cebab7943525e9702664347796b4505f8`"
+      },
+      "conflicts": [
+        {
+          "reading": "terms-2026-11-09.md",
+          "section": "Where OpenRouter's statement and the provider's own terms differ (as read, not resolved)",
+          "text": "**OpenInference**: OpenRouter says no training; OpenInference's privacy policy says no training, but its terms reserve use “to provide, maintain, develop, and improve the Services” with a training opt-out."
+        }
+      ],
+      "differences": [],
+      "notes": [],
+      "gaps": [
+        {
+          "reading": "terms-2026-11-09.md",
+          "section": "What could not be read",
+          "text": "**Which tier or agreement governs OpenRouter traffic** is not stated by Morph, Makora, Cohere, Friendli, OpenInference, Wafer, AkashML, Sail Research or PrimeIntellect in the pages read. Only Crusoe's page names OpenRouter. Friendli's zero-retention clause sits in Exhibit 1, which states it applies to \"Customers that receive access to Friendli Endpoints Services\"; whether OpenRouter traffic falls under it is not stated."
+        }
+      ]
+    },
+    "Particle AI": {
+      "openRouter": {
+        "displayName": "Particle AI",
+        "slug": "particle-ai",
+        "readAt": "2026-11-14T20:10:16Z",
+        "dataPolicy": {
+          "training": false,
+          "trainingOpenRouter": false,
+          "retainsPrompts": false,
+          "safetyRetention": false,
+          "termsOfServiceURL": "https://particle.ai/terms/",
+          "privacyPolicyURL": "https://particle.ai/privacy/"
+        },
+        "statement": "Provider: training false, retainsPrompts false. Endpoint `particle-ai/nvfp4`: same. Source: all-providers JSON; `openrouter.ai/provider/particle-ai`"
+      },
+      "terms": {
+        "readDate": "2026-11-14",
+        "reading": "terms-2026-11-14.md",
+        "pages": "Privacy `https://particle.ai/privacy/` (served at `/privacy`), “Effective August 25, 2026”. Terms `https://particle.ai/terms/`, “Effective August 25, 2026”. Zero Data Retention policy `https://particle.ai/legal/zero-data-retention` (linked from both), “Effective August 24, 2026”",
+        "urls": [
+          "https://particle.ai/privacy/",
+          "https://particle.ai/terms/",
+          "https://particle.ai/legal/zero-data-retention"
+        ],
+        "retention": {
+          "text": "Terms: “For standard synchronous inference, Particle operates under Zero Data Retention” … “by default and does not log or write raw Input or Output to persistent storage.” ZDR policy: “For standard inference, Particle does not intentionally store raw prompts, inputs, responses, or outputs in persistent application storage after a request completes.”",
+          "quotes": [
+            "For standard synchronous inference, Particle operates under Zero Data Retention",
+            "by default and does not log or write raw Input or Output to persistent storage.",
+            "For standard inference, Particle does not intentionally store raw prompts, inputs, responses, or outputs in persistent application storage after a request completes."
+          ]
+        },
+        "training": {
+          "text": "“Particle does not use Customer Content to train, fine-tune, or improve AI models unless you separately and affirmatively opt in. Accepting these Terms or using the Services is not an opt-in.”",
+          "quotes": [
+            "Particle does not use Customer Content to train, fine-tune, or improve AI models unless you separately and affirmatively opt in. Accepting these Terms or using the Services is not an opt-in."
+          ]
+        },
+        "logging": {
+          "text": "Logging: as in the retention cell. “Particle may preserve or disclose information when required by law or reasonably necessary to investigate fraud or unauthorized access, enforce these Terms, or protect Particle, customers, or others. This does not require Particle to retain Customer Content it otherwise does not retain.” No human-review sentence found",
+          "quotes": [
+            "Particle may preserve or disclose information when required by law or reasonably necessary to investigate fraud or unauthorized access, enforce these Terms, or protect Particle, customers, or others. This does not require Particle to retain Customer Content it otherwise does not retain."
+          ]
+        },
+        "readTimes": "privacy, terms 20:11:38Z; ZDR 20:18:12Z; OR page 20:10:23Z",
+        "rawSha256": "privacy `1a615cab366893a2658fe7c58c36fb5b6893d8026d325594c97a4a2763088053`; terms `69a80874f055337d7e70475b5cdb40304d93c22cbccee83f4184945307946c75`; ZDR `4c5c66ef2650e28bd2e005aa03193ab915972bc7c21c9d93fdda46aa9b8145ec`; OR page `603ad5e5e30bef0d2183a75887990e9dc68318b69df3e9ca06f22e1313ab8af3`"
+      },
+      "conflicts": [],
+      "differences": [
+        {
+          "reading": "terms-2026-11-14.md",
+          "section": "Differences that are not conflicts",
+          "text": "**Where OpenRouter's single value depends on a setting, tier, product or route** that the provider's pages do not tie to OpenRouter: InferenceNet (ZDR is a team setting), Together (ZDR is a customer setting), Mistral (zero data retention \"activated\"; some products train unless opted out), Reka (free or paid; individual or business terms), Modal (product), Near AI (route), River (Commercial default or Testing), Particle AI (\"standard synchronous inference\"), GMICloud (Console terms or Prime agreement), KT (opt-in logging)."
+        }
+      ],
+      "notes": [],
+      "gaps": []
+    },
+    "PrimeIntellect": {
+      "openRouter": {
+        "displayName": "Prime Intellect",
+        "slug": "primeintellect",
+        "readAt": "2026-11-09T18:11:00Z",
+        "dataPolicy": {
+          "training": false,
+          "trainingOpenRouter": false,
+          "retainsPrompts": false,
+          "safetyRetention": false,
+          "termsOfServiceURL": null,
+          "privacyPolicyURL": null
+        },
+        "statement": "Provider: training false, retainsPrompts false. Endpoint `primeintellect/fp4` (gpt-oss-120b): same. OpenRouter lists **no** privacy or terms URL. Source: all-providers JSON; `openrouter.ai/provider/primeintellect`"
+      },
+      "terms": {
+        "readDate": "2026-11-09",
+        "reading": "terms-2026-11-09.md",
+        "pages": "Not linked from OpenRouter; read from the home page links. Terms `https://www.primeintellect.ai/terms-of-service`, last updated “November 4, 2026”. Privacy `https://www.primeintellect.ai/privacy-policy`, updated “February 23, 2024”; it states “This Policy does not apply to Prime's processing when we are a data processor.”",
+        "urls": [
+          "https://www.primeintellect.ai/terms-of-service",
+          "https://www.primeintellect.ai/privacy-policy"
+        ],
+        "retention": {
+          "text": "No statement on retention of inference inputs or outputs found. License: “solely as necessary to provide, secure and support the Services, to prevent abuse, and to comply with law.” “Serverless inference runs on shared infrastructure, and requests may be processed in any data center we use.”",
+          "quotes": [
+            "solely as necessary to provide, secure and support the Services, to prevent abuse, and to comply with law.",
+            "Serverless inference runs on shared infrastructure, and requests may be processed in any data center we use."
+          ]
+        },
+        "training": {
+          "text": "“We will not use Customer Content or Output to train, fine-tune or evaluate any machine learning model other than for you, and we will not access Customer Content or Output except as necessary under Section 7.2 or as you instruct.”",
+          "quotes": [
+            "We will not use Customer Content or Output to train, fine-tune or evaluate any machine learning model other than for you, and we will not access Customer Content or Output except as necessary under Section 7.2 or as you instruct."
+          ]
+        },
+        "logging": {
+          "text": "None found",
+          "quotes": []
+        },
+        "readTimes": "terms, privacy 18:15:40Z; OR page 18:11:08Z",
+        "rawSha256": "terms `c4e55ce2f263dc9436be483bf84215ccd3e61836f79e5b85816c2da7291e430e`; privacy `6ddefde15afd9ea17c314a3cb7201bedfac2957e18e88bf44b021b756a41ce40`; OR page `bd824a6fad7544ccfbeafda8f7dd98c74fba9b4039b942a4d1b1a98e6452f3e6`"
+      },
+      "conflicts": [],
+      "differences": [],
+      "notes": [],
+      "gaps": [
+        {
+          "reading": "terms-2026-11-09.md",
+          "section": "What could not be read",
+          "text": "**Makora and PrimeIntellect have no terms or privacy URL on OpenRouter** (null in `/api/v1/providers` and in their `dataPolicy`). Their own pages were read from links on their home pages; nothing read ties those pages to OpenRouter-routed traffic."
+        },
+        {
+          "reading": "terms-2026-11-09.md",
+          "section": "What could not be read",
+          "text": "**PrimeIntellect**: no statement on retention, logging or human review of inference inputs and outputs was found in its terms; its privacy policy (2024) excludes processing it does as a data processor."
+        },
+        {
+          "reading": "terms-2026-11-09.md",
+          "section": "What could not be read",
+          "text": "**Which tier or agreement governs OpenRouter traffic** is not stated by Morph, Makora, Cohere, Friendli, OpenInference, Wafer, AkashML, Sail Research or PrimeIntellect in the pages read. Only Crusoe's page names OpenRouter. Friendli's zero-retention clause sits in Exhibit 1, which states it applies to \"Customers that receive access to Friendli Endpoints Services\"; whether OpenRouter traffic falls under it is not stated."
+        }
+      ]
+    },
+    "Reka": {
+      "openRouter": {
+        "displayName": "Reka AI",
+        "slug": "reka",
+        "readAt": "2026-11-14T20:10:16Z",
+        "dataPolicy": {
+          "training": false,
+          "trainingOpenRouter": false,
+          "retainsPrompts": false,
+          "safetyRetention": false,
+          "termsOfServiceURL": "https://reka.ai/legal/terms-of-use",
+          "privacyPolicyURL": "https://reka.ai/legal/privacy-policy"
+        },
+        "statement": "Provider: training false, retainsPrompts false. Endpoint `reka`: same. Source: all-providers JSON; `openrouter.ai/provider/reka` (display name \"Reka AI\")"
+      },
+      "terms": {
+        "readDate": "2026-11-14",
+        "reading": "terms-2026-11-14.md",
+        "pages": "Terms of Use (individual) `https://reka.ai/legal/terms-of-use`, “Last Updated: September 2026”. Privacy `https://reka.ai/legal/privacy-policy`, “Effective as of June 2026.” Business Terms `https://reka.ai/legal/business-terms`, “Effective as of January 2024.”: not linked from the pages read; fetched by URL (saved as `reka-business-terms-guess.html`)",
+        "urls": [
+          "https://reka.ai/legal/terms-of-use",
+          "https://reka.ai/legal/privacy-policy",
+          "https://reka.ai/legal/business-terms"
+        ],
+        "retention": {
+          "text": "No retention period for API content found. Privacy (personal information): “We retain personal information for as long as necessary to fulfil the purposes for which we collected it”",
+          "quotes": [
+            "We retain personal information for as long as necessary to fulfil the purposes for which we collected it"
+          ]
+        },
+        "training": {
+          "text": "Terms: “If you use the Services on a free basis, you acknowledge and agree that Reka may use Your Content to train, develop, and improve its machine learning models and related technologies.” “If you make a paid request (i.e., any request made through the API, or through any paid plan of any Service Line, after you have added billing details and made a payment to purchase Usage Credits or a subscription), Reka will not use Your Content for model training unless you have explicitly opted in.” The individual terms also say “If you use the APIs on behalf of a company or for any business or commercial purpose the Reka Business Terms apply instead.” Business Terms: “Customer grants Reka a non-exclusive, worldwide, royalty-free and fully paid license during the Order Term to use the Customer Content as necessary for purposes of providing and/or improving the Services.” and “Customer acknowledges that Reka may compile Aggregated Data based on Customer Content and may use all Aggregated Data to improve Reka’s machine learning model and artificial intelligence algorithms” On third-party models: “Third-Party Models are not Reka Models, and Reka does not develop, train, or control them.”",
+          "quotes": [
+            "If you use the Services on a free basis, you acknowledge and agree that Reka may use Your Content to train, develop, and improve its machine learning models and related technologies.",
+            "If you make a paid request (i.e., any request made through the API, or through any paid plan of any Service Line, after you have added billing details and made a payment to purchase Usage Credits or a subscription), Reka will not use Your Content for model training unless you have explicitly opted in.",
+            "If you use the APIs on behalf of a company or for any business or commercial purpose the Reka Business Terms apply instead.",
+            "Customer grants Reka a non-exclusive, worldwide, royalty-free and fully paid license during the Order Term to use the Customer Content as necessary for purposes of providing and/or improving the Services.",
+            "Customer acknowledges that Reka may compile Aggregated Data based on Customer Content and may use all Aggregated Data to improve Reka’s machine learning model and artificial intelligence algorithms",
+            "Third-Party Models are not Reka Models, and Reka does not develop, train, or control them."
+          ]
+        },
+        "logging": {
+          "text": "Free basis: “This may include human review and other forms of analysis.” Business Terms: “Reka may monitor Customer’s use of the Services and may prohibit any use of the Services or Software it believes may be in violation of the foregoing warranties or applicable law.”",
+          "quotes": [
+            "This may include human review and other forms of analysis.",
+            "Reka may monitor Customer’s use of the Services and may prohibit any use of the Services or Software it believes may be in violation of the foregoing warranties or applicable law."
+          ]
+        },
+        "readTimes": "privacy 20:11:38Z; terms 20:11:39Z; business terms 20:18:46Z; OR page 20:10:23Z",
+        "rawSha256": "terms `32f9efe44534611ca8d39a730ae9c7cb2cbf57c71644cb09eca6afeb671c2b83`; privacy `091a8948963edbec43133f8a3c4d27f2f15f0b76e23b3967f2da10d9425b30b2`; business terms `b13a9b4ae04caf750b9db907341ab77add8e8d9639a551bf3c1f3144e0b57c03`; OR page `60d41d18e4100947e604c46727463c192bf074aae96e0a45697303b49edabf78`"
+      },
+      "conflicts": [
+        {
+          "reading": "terms-2026-11-14.md",
+          "section": "Conflicts between OpenRouter's statement and the provider's own terms (as read, not resolved)",
+          "text": "**Reka, training.** OpenRouter: `training` false. Reka's Business Terms (effective January 2024): “Reka may compile Aggregated Data based on Customer Content and may use all Aggregated Data to improve Reka’s machine learning model and artificial intelligence algorithms”. Reka's individual terms permit training on free-basis use and exclude it for paid requests unless the customer opts in. Which Reka terms apply to OpenRouter's use, and whether that use is paid, are not stated."
+        }
+      ],
+      "differences": [
+        {
+          "reading": "terms-2026-11-14.md",
+          "section": "Differences that are not conflicts",
+          "text": "**Where OpenRouter's single value depends on a setting, tier, product or route** that the provider's pages do not tie to OpenRouter: InferenceNet (ZDR is a team setting), Together (ZDR is a customer setting), Mistral (zero data retention \"activated\"; some products train unless opted out), Reka (free or paid; individual or business terms), Modal (product), Near AI (route), River (Commercial default or Testing), Particle AI (\"standard synchronous inference\"), GMICloud (Console terms or Prime agreement), KT (opt-in logging)."
+        }
+      ],
+      "notes": [],
+      "gaps": [
+        {
+          "reading": "terms-2026-11-14.md",
+          "section": "What could not be read",
+          "text": "**Reka.** The Business Terms that the individual terms point to are not linked from the pages read; the page was fetched by URL. That it is the document the individual terms mean is assumed from its title only."
+        }
+      ]
+    },
+    "Relace": {
+      "openRouter": {
+        "displayName": "Relace",
+        "slug": "relace",
+        "readAt": "2026-11-14T20:10:16Z",
+        "dataPolicy": {
+          "training": false,
+          "trainingOpenRouter": false,
+          "retainsPrompts": false,
+          "safetyRetention": false,
+          "termsOfServiceURL": "https://www.relace.ai/terms-of-use",
+          "privacyPolicyURL": "https://www.relace.ai/privacy-policy"
+        },
+        "statement": "Provider: training false, retainsPrompts false. Endpoint `relace/fp4`: same. Source: all-providers JSON; `openrouter.ai/provider/relace`"
+      },
+      "terms": {
+        "readDate": "2026-11-14",
+        "reading": "terms-2026-11-14.md",
+        "pages": "OpenRouter's URLs `https://www.relace.ai/privacy-policy` and `https://www.relace.ai/terms-of-use` returned 404. Read from the home page's footer links: ZDR Policy `https://relace.ai/legal/zero-data-retention-policy`, “This Zero Data Retention Policy is effective as of September 21st, 2026.”; Privacy `https://relace.ai/legal/privacy-policy`, “This Privacy Policy is effective as of September 21st, 2026.”; Terms `https://relace.ai/legal/terms-of-use`, “This Terms of Use Policy is effective as of April 7th, 2025.”",
+        "urls": [
+          "https://www.relace.ai/privacy-policy",
+          "https://www.relace.ai/terms-of-use",
+          "https://relace.ai/legal/zero-data-retention-policy",
+          "https://relace.ai/legal/privacy-policy",
+          "https://relace.ai/legal/terms-of-use"
+        ],
+        "retention": {
+          "text": "Scope: “This Policy applies only to the Platform, meaning Relace’s API-accessible models.” “Relace does not log, persist or otherwise store Covered Data. Covered Data is held only transiently, in memory, for the period of time necessary to process the applicable request and return Output, and is discarded immediately thereafter, subject only to the short-lived prompt caching described below.” Subprocessors: “Relace routes Covered Data only to Subprocessors that are contractually and technically configured to provide zero data retention equivalent to the Zero Retention Commitment above.”",
+          "quotes": [
+            "This Policy applies only to the Platform, meaning Relace’s API-accessible models.",
+            "Relace does not log, persist or otherwise store Covered Data. Covered Data is held only transiently, in memory, for the period of time necessary to process the applicable request and return Output, and is discarded immediately thereafter, subject only to the short-lived prompt caching described below.",
+            "Relace routes Covered Data only to Subprocessors that are contractually and technically configured to provide zero data retention equivalent to the Zero Retention Commitment above."
+          ]
+        },
+        "training": {
+          "text": "“Relace does not use Covered Data to train, fine-tune, evaluate or otherwise improve any model, and does not make Covered Data available to any Relace personnel.” Privacy: “excluding content submitted to or generated by our API platform, which is never used for these purposes as described in our Zero Data Retention Policy”",
+          "quotes": [
+            "Relace does not use Covered Data to train, fine-tune, evaluate or otherwise improve any model, and does not make Covered Data available to any Relace personnel.",
+            "excluding content submitted to or generated by our API platform, which is never used for these purposes as described in our Zero Data Retention Policy"
+          ]
+        },
+        "logging": {
+          "text": "As in the retention and training cells (“does not log”; not made available to personnel)",
+          "quotes": [
+            "does not log"
+          ]
+        },
+        "readTimes": "404s 20:11:39Z; home 20:19:06Z; privacy, terms 20:19:10Z; ZDR 20:19:11Z; OR page 20:10:23Z",
+        "rawSha256": "ZDR `6c37cfbe18ad044cc64ee3f596f9ba839c7a5fdeea9f3522c4b209013bbf0eaf`; privacy `7d9b0477b7a75157a48746786ca790d33441ebfdde22bf406c6fbd2293b53a52`; terms `20acc93f9a3cd4eb0a116394979a1f1ec6f7ec65102a69c514024c13d1ce835c`; 404 (both) `ad532e0e7d9d27760bb26d5902270e380ae7700c1d1ef626058b33c02cd9876e`; home `a360bcf7693ad1d99f904a1909b828d07ad5d8e683c732f905417d703f355d6b`; OR page `850bcb3f1c70acd11ee696bf8721b5e294743dbb80c5b3c895f355123d4b7b56`"
+      },
+      "conflicts": [],
+      "differences": [],
+      "notes": [
+        {
+          "reading": "terms-2026-11-14.md",
+          "section": "Notes on the table",
+          "text": "**Venice and Relace use upstream providers.** Venice's privacy policy describes sending prompts to model providers (quoted above); Relace's ZDR policy describes routing to subprocessors (quoted above)."
+        },
+        {
+          "reading": "terms-2026-11-14.md",
+          "section": "Notes on the table",
+          "text": "**Only KT's privacy policy, Near AI's model catalog and Relace's home page name OpenRouter** among the providers' own pages read. None of the 16 publishes terms written for OpenRouter-routed traffic."
+        }
+      ],
+      "gaps": [
+        {
+          "reading": "terms-2026-11-14.md",
+          "section": "What could not be read",
+          "text": "**Relace.** Both OpenRouter URLs returned 404 (saved; identical bytes). The policies were read from `relace.ai/legal/` links on the home page."
+        }
+      ]
+    },
+    "River": {
+      "openRouter": {
+        "displayName": "River",
+        "slug": "river",
+        "readAt": "2026-11-14T20:10:16Z",
+        "dataPolicy": {
+          "training": false,
+          "trainingOpenRouter": false,
+          "retainsPrompts": false,
+          "safetyRetention": false,
+          "termsOfServiceURL": "https://console.river.ai/terms",
+          "privacyPolicyURL": "https://river.ai/privacy-policy"
+        },
+        "statement": "Provider: training false, retainsPrompts false. Endpoint `river`: same. Source: all-providers JSON; `openrouter.ai/provider/river`"
+      },
+      "terms": {
+        "readDate": "2026-11-14",
+        "reading": "terms-2026-11-14.md",
+        "pages": "Privacy `https://river.ai/privacy-policy`, “Effective October 12, 2026”; it states “This policy does not apply when we process data on behalf of a business customer — for example on our API or enterprise plan — in which case a Data Processing Addendum would apply.” Terms `https://console.river.ai/terms`: the page renders client-side (raw bytes hold an app shell); its text, the \"River API Services Agreement\" with a Data Processing Addendum as Schedule B, was read from the JavaScript file the page loads, `https://console.river.ai/assets/terms-page-DWi6aIwD-mwfri0yu.js`. No date found in it",
+        "urls": [
+          "https://river.ai/privacy-policy",
+          "https://console.river.ai/terms",
+          "https://console.river.ai/assets/terms-page-DWi6aIwD-mwfri0yu.js"
+        ],
+        "retention": {
+          "text": "“The Commercial rules of Section 4.1 are the default and apply to you unless you have contracted with us separately for Testing, which is subject to the rules of Section 4.2.” Commercial: “We retain User Content for up to 2 days after the end of the interaction session.” “For User Content, after 2 days, we permanently delete all copies unless: (i) required by law; (ii) flagged for safety, security, or compliance review (only the minimum necessary data kept); or (iii) explicitly agreed in writing.”",
+          "quotes": [
+            "The Commercial rules of Section 4.1 are the default and apply to you unless you have contracted with us separately for Testing, which is subject to the rules of Section 4.2.",
+            "We retain User Content for up to 2 days after the end of the interaction session.",
+            "For User Content, after 2 days, we permanently delete all copies unless: (i) required by law; (ii) flagged for safety, security, or compliance review (only the minimum necessary data kept); or (iii) explicitly agreed in writing."
+          ]
+        },
+        "training": {
+          "text": "Commercial: “We will not use your Inputs, Outputs, or User Content to train, fine-tune, or improve our AI models.” DPA: “River will not use Customer-Personal Data to train, fine-tune, retrain, or otherwise develop or improve any artificial intelligence or machine-learning model, whether of River or any third party.”",
+          "quotes": [
+            "We will not use your Inputs, Outputs, or User Content to train, fine-tune, or improve our AI models.",
+            "River will not use Customer-Personal Data to train, fine-tune, retrain, or otherwise develop or improve any artificial intelligence or machine-learning model, whether of River or any third party."
+          ]
+        },
+        "logging": {
+          "text": "DPA: “including human and automated review of Inputs and Outputs flagged by River's safety systems” Privacy: “Maintain safety, security, and abuse prevention, including automated and human review where appropriate”",
+          "quotes": [
+            "including human and automated review of Inputs and Outputs flagged by River's safety systems",
+            "Maintain safety, security, and abuse prevention, including automated and human review where appropriate"
+          ]
+        },
+        "readTimes": "privacy, terms shell 20:11:39Z; terms chunk 20:19:51Z; OR page 20:10:24Z",
+        "rawSha256": "terms chunk `857d420f8ebb70fa0e38dc313378fbf5edb738a50c86028a5736ec235f26c4ea`; privacy `b571c9166bf4efa16ba02ec4d345f9fa1dccd175774cf10cbcf9df091a0f2ce0`; terms shell `b9819e294ef16281909efd43cfd4a8b7843219b1f7515e9df15ddd7a88d15c76`; OR page `fead0546168274473546d0a4cb8e5e4629e01483998be6b58590ea1bd2beaf43`"
+      },
+      "conflicts": [
+        {
+          "reading": "terms-2026-11-14.md",
+          "section": "Conflicts between OpenRouter's statement and the provider's own terms (as read, not resolved)",
+          "text": "**River, retention.** OpenRouter: `retainsPrompts` false. River's API Services Agreement, Commercial tier (the default): “We retain User Content for up to 2 days after the end of the interaction session.”"
+        }
+      ],
+      "differences": [
+        {
+          "reading": "terms-2026-11-14.md",
+          "section": "Differences that are not conflicts",
+          "text": "**Where OpenRouter's single value depends on a setting, tier, product or route** that the provider's pages do not tie to OpenRouter: InferenceNet (ZDR is a team setting), Together (ZDR is a customer setting), Mistral (zero data retention \"activated\"; some products train unless opted out), Reka (free or paid; individual or business terms), Modal (product), Near AI (route), River (Commercial default or Testing), Particle AI (\"standard synchronous inference\"), GMICloud (Console terms or Prime agreement), KT (opt-in logging)."
+        }
+      ],
+      "notes": [],
+      "gaps": [
+        {
+          "reading": "terms-2026-11-14.md",
+          "section": "What could not be read",
+          "text": "**River.** The terms page renders client-side. Its text was read from the JavaScript file the page loads (saved). The app's main bundle, fetched at 2026-11-14T20:19:40Z only to find that file's name, was kept in the session scratchpad, not here; nothing is quoted from it. The agreement carries no date."
+        }
+      ]
+    },
+    "Sail Research": {
+      "openRouter": {
+        "displayName": "Sail Research",
+        "slug": "sail-research",
+        "readAt": "2026-11-09T18:11:00Z",
+        "dataPolicy": {
+          "training": false,
+          "trainingOpenRouter": false,
+          "retainsPrompts": false,
+          "safetyRetention": false,
+          "termsOfServiceURL": "https://www.sailresearch.com/terms",
+          "privacyPolicyURL": "https://www.sailresearch.com/privacy"
+        },
+        "statement": "Provider: training false, retainsPrompts false. Endpoint `sail-research/fp4` (gpt-oss-120b): same. Source: all-providers JSON; `openrouter.ai/provider/sail-research`"
+      },
+      "terms": {
+        "readDate": "2026-11-09",
+        "reading": "terms-2026-11-09.md",
+        "pages": "Terms `https://www.sailresearch.com/terms`, “Last Updated: October 29, 2026”. Privacy `https://www.sailresearch.com/privacy`, “Last Updated: September 15, 2026” (covers the Website)",
+        "urls": [
+          "https://www.sailresearch.com/terms",
+          "https://www.sailresearch.com/privacy"
+        ],
+        "retention": {
+          "text": "“Customer acknowledges that, as described in the Documentation, Sail may store responses and that the ability to disable such storage is not currently available.” No retention period stated in the pages read",
+          "quotes": [
+            "Customer acknowledges that, as described in the Documentation, Sail may store responses and that the ability to disable such storage is not currently available."
+          ]
+        },
+        "training": {
+          "text": "“Sail will not use Customer Data (including Inputs and Outputs) to train, fine-tune, or improve any artificial intelligence or machine-learning model, except (a) with Customer’s express opt-in consent, or (b) as necessary to provide the Services to Customer at Customer’s direction (such as fine-tuning a model for Customer’s own use).”",
+          "quotes": [
+            "Sail will not use Customer Data (including Inputs and Outputs) to train, fine-tune, or improve any artificial intelligence or machine-learning model, except (a) with Customer’s express opt-in consent, or (b) as necessary to provide the Services to Customer at Customer’s direction (such as fine-tuning a model for Customer’s own use)."
+          ]
+        },
+        "logging": {
+          "text": "None found",
+          "quotes": []
+        },
+        "readTimes": "terms, privacy 18:11:53Z; OR page 18:11:08Z",
+        "rawSha256": "terms `94891bbee1198a15d203ab0babbb8a452c3e6bbf44a9ede3e89812a720cd3210`; privacy `e5049dba696dbab7afca5d8bec21bb3e795600d53a568e6bfdaf54a4f2725c10`; OR page `9f79896fa6ae947a8d7ac1e1b44ce5192f3b84c2bb8d4a36498b5a86f260df21`"
+      },
+      "conflicts": [
+        {
+          "reading": "terms-2026-11-09.md",
+          "section": "Where OpenRouter's statement and the provider's own terms differ (as read, not resolved)",
+          "text": "**Sail Research**: OpenRouter says no prompt retention; Sail's terms say it “may store responses” and that disabling storage is not available. The \"Documentation\" those terms cite was not read."
+        }
+      ],
+      "differences": [],
+      "notes": [],
+      "gaps": [
+        {
+          "reading": "terms-2026-11-09.md",
+          "section": "What could not be read",
+          "text": "**Sail Research's \"Documentation\"**, which its terms cite for response storage, was not identified or read."
+        },
+        {
+          "reading": "terms-2026-11-09.md",
+          "section": "What could not be read",
+          "text": "**Which tier or agreement governs OpenRouter traffic** is not stated by Morph, Makora, Cohere, Friendli, OpenInference, Wafer, AkashML, Sail Research or PrimeIntellect in the pages read. Only Crusoe's page names OpenRouter. Friendli's zero-retention clause sits in Exhibit 1, which states it applies to \"Customers that receive access to Friendli Endpoints Services\"; whether OpenRouter traffic falls under it is not stated."
+        },
+        {
+          "reading": "terms-2026-11-09.md",
+          "section": "What could not be read",
+          "text": "**The endpoint variant that served each request** is not in the results file (provider name only). Each provider page shows one `data_policy` per probe model; OpenRouter's endpoint list has two GLM endpoints each for Wafer (`wafer/us`, `wafer/nvfp4`) and Sail Research (`sail-research/us`, `sail-research/fp4`), and the page showed only the `/us` one for GLM."
+        }
+      ]
+    },
+    "Together": {
+      "openRouter": {
+        "displayName": "Together",
+        "slug": "together",
+        "readAt": "2026-11-14T20:10:16Z",
+        "dataPolicy": {
+          "training": false,
+          "trainingOpenRouter": false,
+          "retainsPrompts": false,
+          "safetyRetention": false,
+          "termsOfServiceURL": "https://www.together.ai/terms-of-service",
+          "privacyPolicyURL": "https://www.together.ai/privacy"
+        },
+        "statement": "Provider: training false, retainsPrompts false. Endpoint `together`: same. Source: all-providers JSON; `openrouter.ai/provider/together`"
+      },
+      "terms": {
+        "readDate": "2026-11-14",
+        "reading": "terms-2026-11-14.md",
+        "pages": "Privacy `https://www.together.ai/privacy`, “Updated December 17, 2025”. Terms `https://www.together.ai/terms-of-service`, “Updated May 19, 2026”",
+        "urls": [
+          "https://www.together.ai/privacy",
+          "https://www.together.ai/terms-of-service"
+        ],
+        "retention": {
+          "text": "ZDR is a setting the customer chooses: per the terms, answering No in the Privacy & Security settings when asked whether to store prompts or allow training enables it. Terms: “Under ZDR, your data and outputs are not stored, retained, or used for model training, product improvements, or any other purpose beyond the time required to process the specific request or transaction.” “ZDR applies only from the moment you enable it and does not affect any data processed prior.” No retention period found for use without ZDR",
+          "quotes": [
+            "Under ZDR, your data and outputs are not stored, retained, or used for model training, product improvements, or any other purpose beyond the time required to process the specific request or transaction.",
+            "ZDR applies only from the moment you enable it and does not affect any data processed prior."
+          ]
+        },
+        "training": {
+          "text": "Privacy: “We do not use any data collected from you to train our models without your explicit opt-in and consent.”",
+          "quotes": [
+            "We do not use any data collected from you to train our models without your explicit opt-in and consent."
+          ]
+        },
+        "logging": {
+          "text": "None found",
+          "quotes": []
+        },
+        "readTimes": "privacy, terms 20:11:40Z; OR page 20:10:24Z",
+        "rawSha256": "privacy `ab2e09f2bda2b1dd391e112ba375a498b7adeed33bc1e7a8b8d50fb317f778b6`; terms `dea418b1958b6d0b110b282b762898621d8c1aeb3466ebce15db5e833ab226cc`; OR page `8b0f50d0498dd9a9012b31e31ed1d340b235ed8677bcb82775cafe46af4c08b7`"
+      },
+      "conflicts": [],
+      "differences": [
+        {
+          "reading": "terms-2026-11-14.md",
+          "section": "Differences that are not conflicts",
+          "text": "**Where OpenRouter's single value depends on a setting, tier, product or route** that the provider's pages do not tie to OpenRouter: InferenceNet (ZDR is a team setting), Together (ZDR is a customer setting), Mistral (zero data retention \"activated\"; some products train unless opted out), Reka (free or paid; individual or business terms), Modal (product), Near AI (route), River (Commercial default or Testing), Particle AI (\"standard synchronous inference\"), GMICloud (Console terms or Prime agreement), KT (opt-in logging)."
+        }
+      ],
+      "notes": [],
+      "gaps": []
+    },
+    "Venice": {
+      "openRouter": {
+        "displayName": "Venice",
+        "slug": "venice",
+        "readAt": "2026-11-14T20:10:16Z",
+        "dataPolicy": {
+          "training": false,
+          "trainingOpenRouter": false,
+          "retainsPrompts": false,
+          "safetyRetention": false,
+          "termsOfServiceURL": "https://venice.ai/legal/tos",
+          "privacyPolicyURL": "https://venice.ai/legal/privacy-policy"
+        },
+        "statement": "Provider: training false, retainsPrompts false. Endpoints `venice` (GLM) and `venice/int4` (gpt-oss): same. Source: all-providers JSON; `openrouter.ai/provider/venice`"
+      },
+      "terms": {
+        "readDate": "2026-11-14",
+        "reading": "terms-2026-11-14.md",
+        "pages": "Privacy `https://venice.ai/legal/privacy-policy`, “Effective: 2 June 2026”. Terms `https://venice.ai/legal/tos`, “Last updated: June 8, 2026”",
+        "urls": [
+          "https://venice.ai/legal/privacy-policy",
+          "https://venice.ai/legal/tos"
+        ],
+        "retention": {
+          "text": "“We may record your actions (e.g., that you created a chat), but we will not have access to or store the content of your Prompts or Outputs.” On the model providers Venice sends prompts to: “We operate a zero data retention policy with our model providers in which our model providers are prohibited from storing, retaining, or using any of your Prompts or Outputs beyond the time strictly necessary to process and return a response.” Terms license: “you grant Venice.ai a worldwide, non-exclusive, irrevocable, perpetual, royalty-free, fully paid right and license (with the right to sublicense through multiple tiers) to host, store, transfer, publicly display”",
+          "quotes": [
+            "We may record your actions (e.g., that you created a chat), but we will not have access to or store the content of your Prompts or Outputs.",
+            "We operate a zero data retention policy with our model providers in which our model providers are prohibited from storing, retaining, or using any of your Prompts or Outputs beyond the time strictly necessary to process and return a response.",
+            "you grant Venice.ai a worldwide, non-exclusive, irrevocable, perpetual, royalty-free, fully paid right and license (with the right to sublicense through multiple tiers) to host, store, transfer, publicly display"
+          ]
+        },
+        "training": {
+          "text": "“Venice.ai agrees that it shall not use, and shall require that third-party large language model providers” … “do not use, any User Content to train any machine learning, deep learning, or statistical learning algorithms, LLMs, neural networks, or models.”",
+          "quotes": [
+            "Venice.ai agrees that it shall not use, and shall require that third-party large language model providers",
+            "do not use, any User Content to train any machine learning, deep learning, or statistical learning algorithms, LLMs, neural networks, or models."
+          ]
+        },
+        "logging": {
+          "text": "None found",
+          "quotes": []
+        },
+        "readTimes": "privacy, terms 20:11:40Z; OR page 20:10:24Z",
+        "rawSha256": "privacy `1c574b383367d6f059cd71010da6aa14c83a0c792c50ae45e0f60de22cdc6115`; terms `20dbc058d19aaa5be1d06589e446abe36d308e6e214b93ecde3ba91804941cdc`; OR page `5f9f91664c2b0f853d00d63d944981b8c9ffb362387e88ce31091dcd44ef0e33`"
+      },
+      "conflicts": [],
+      "differences": [],
+      "notes": [
+        {
+          "reading": "terms-2026-11-14.md",
+          "section": "Notes on the table",
+          "text": "**Venice and Relace use upstream providers.** Venice's privacy policy describes sending prompts to model providers (quoted above); Relace's ZDR policy describes routing to subprocessors (quoted above)."
+        }
+      ],
+      "gaps": []
+    },
+    "Wafer": {
+      "openRouter": {
+        "displayName": "Wafer",
+        "slug": "wafer",
+        "readAt": "2026-11-09T18:11:00Z",
+        "dataPolicy": {
+          "training": false,
+          "trainingOpenRouter": false,
+          "retainsPrompts": false,
+          "safetyRetention": false,
+          "termsOfServiceURL": "https://www.wafer.ai/terms",
+          "privacyPolicyURL": "https://www.wafer.ai/privacy-policy"
+        },
+        "statement": "Provider: training false, retainsPrompts false (docs table: Zero retention, Does not train). Endpoint `wafer/us` for GLM: same. Source: all-providers JSON; `openrouter.ai/provider/wafer`"
+      },
+      "terms": {
+        "readDate": "2026-11-09",
+        "reading": "terms-2026-11-09.md",
+        "pages": "Terms `https://www.wafer.ai/terms`, “Last updated: May 5, 2026”. Security page `https://www.wafer.ai/security`, “Last updated: November 3, 2026”. Privacy: OpenRouter's URL `https://www.wafer.ai/privacy-policy` returned 404; see \"What could not be read\"",
+        "urls": [
+          "https://www.wafer.ai/terms",
+          "https://www.wafer.ai/security",
+          "https://www.wafer.ai/privacy-policy"
+        ],
+        "retention": {
+          "text": "“We don't store the prompts or model responses of your inference requests.” “Our central request logs keep this metadata for 365 days.” “Zero Data Retention (ZDR) on every serverless request.”",
+          "quotes": [
+            "We don't store the prompts or model responses of your inference requests.",
+            "Our central request logs keep this metadata for 365 days.",
+            "Zero Data Retention (ZDR) on every serverless request."
+          ]
+        },
+        "training": {
+          "text": "No training statement in the terms or security page. Terms: “You grant Wafer a limited license to process your prompts and completions solely as needed to operate, secure, and bill the Service, as described in our Privacy Policy.”",
+          "quotes": [
+            "You grant Wafer a limited license to process your prompts and completions solely as needed to operate, secure, and bill the Service, as described in our Privacy Policy."
+          ]
+        },
+        "logging": {
+          "text": "“Our inference edge never writes inference request or response bodies to logs, databases or any other storage, for any customer.”",
+          "quotes": [
+            "Our inference edge never writes inference request or response bodies to logs, databases or any other storage, for any customer."
+          ]
+        },
+        "readTimes": "terms 18:11:51Z; security 18:12:26Z; privacy (404) 18:11:51Z; OR page 18:10:39Z",
+        "rawSha256": "terms `c3220af0f9b1b3dd179bd1f99b5466177d0d244d553b1b3a2c43cbdbaa413432`; security `2ff3588ea88e11a5f4d34e2fc7705c59168375b46fc19bb2710b244199befc58`; privacy 404 `9625807fb4868be55991868fd2259240773ecab738bfaec70c7d92d034c7b287`; OR page `e12d9559037097fbdbfcc7a2b43a8d74b1bc9d9898ba995b73ebbf3aa5b96b31`"
+      },
+      "conflicts": [],
+      "differences": [],
+      "notes": [],
+      "gaps": [
+        {
+          "reading": "terms-2026-11-09.md",
+          "section": "What could not be read",
+          "text": "**Wafer's privacy policy.** OpenRouter's URL `https://www.wafer.ai/privacy-policy` returned 404 (saved, 18:11:51Z). The policy linked from Wafer's own terms page, `https://compliance.wafer.ai/en/documents/privacy-policy`, is client-rendered: the raw bytes (18:12:26Z, `9dabfa72608b710a935b71cb44b55ec00ea337a51b148154154ee473e12a974a`) hold only an app shell. Its content loads through a GraphQL POST to `compliance.wafer.ai/graphql`; one attempt at that POST was denied by this session's permission check and was not retried. WebFetch at 2026-11-09T18:21:31Z (via WebFetch, not raw bytes) saw only the heading \"Compliance at Wafer AI.\" So Wafer's training position is unread: its terms and security page carry no training sentence."
+        },
+        {
+          "reading": "terms-2026-11-09.md",
+          "section": "What could not be read",
+          "text": "**Which tier or agreement governs OpenRouter traffic** is not stated by Morph, Makora, Cohere, Friendli, OpenInference, Wafer, AkashML, Sail Research or PrimeIntellect in the pages read. Only Crusoe's page names OpenRouter. Friendli's zero-retention clause sits in Exhibit 1, which states it applies to \"Customers that receive access to Friendli Endpoints Services\"; whether OpenRouter traffic falls under it is not stated."
+        },
+        {
+          "reading": "terms-2026-11-09.md",
+          "section": "What could not be read",
+          "text": "**The endpoint variant that served each request** is not in the results file (provider name only). Each provider page shows one `data_policy` per probe model; OpenRouter's endpoint list has two GLM endpoints each for Wafer (`wafer/us`, `wafer/nvfp4`) and Sail Research (`sail-research/us`, `sail-research/fp4`), and the page showed only the `/us` one for GLM."
+        },
+        {
+          "reading": "terms-2026-11-09.md",
+          "section": "What could not be read",
+          "text": "**Fetch notes.** The first Crusoe save (18:11:53Z) was gzip bytes; refetched decompressed at 18:14:35Z (the file in `raw/`). The first fetch of one Tinfoil chunk used a wrong file name and returned 404 (18:18:08Z); refetched at 18:20:50Z under the name the pricing page references. JavaScript bundles fetched only to locate data sources (Wafer's compliance-portal bundle; the other Tinfoil chunks) were kept in the session scratchpad, not here, and nothing is quoted from them."
+        }
+      ]
+    },
+    "Xiaomi": {
+      "openRouter": {
+        "displayName": "Xiaomi",
+        "slug": "xiaomi",
+        "readAt": "2026-11-14T20:10:16Z",
+        "dataPolicy": {
+          "training": false,
+          "trainingOpenRouter": false,
+          "retainsPrompts": true,
+          "retentionDays": 30,
+          "safetyRetention": false,
+          "termsOfServiceURL": "https://platform.xiaomimimo.com/#/docs/terms/user-agreement",
+          "privacyPolicyURL": "https://platform.xiaomimimo.com/#/docs/terms/privacy-policy"
+        },
+        "statement": "Provider: training false, **retainsPrompts true, retentionDays 30**, requiresUserIDs true. Endpoint `xiaomi/fp8`: same. Source: all-providers JSON; `openrouter.ai/provider/xiaomi`"
+      },
+      "terms": {
+        "readDate": "2026-11-14",
+        "reading": "terms-2026-11-14.md",
+        "pages": "OpenRouter's URLs are routes inside a client-rendered app (`https://platform.xiaomimimo.com/#/docs/terms/privacy-policy`, `#/docs/terms/user-agreement`); the raw bytes are an app shell. Followed the app's own code: it sends the privacy policy to `https://privacy.mi.com/XiaomiMiMoPlatformos/en_GB/` (international English), “Our Privacy Policy was updated on June 25 , 2026.”; the service agreement is rendered from `https://mimo.mi.com/static/1995.8b548d0e0b571f7c.chunk.js`, “Our Service Agreement was updated on July 7, 2026.” The agreement states that it applies to use of the services outside the People's Republic of China",
+        "urls": [
+          "https://platform.xiaomimimo.com/#/docs/terms/privacy-policy",
+          "https://privacy.mi.com/XiaomiMiMoPlatformos/en_GB/",
+          "https://mimo.mi.com/static/1995.8b548d0e0b571f7c.chunk.js"
+        ],
+        "retention": {
+          "text": "No retention period for API content found. Agreement 4.4: “Upon service expiration, completion of the agreed purpose, or at your request, unless prohibited by laws that Xiaomi must comply with, Xiaomi will cease processing or permanently delete the personal information within a reasonable period.” Privacy: “As a general rule, we retain personal information for the period necessary for the purposes described in this Privacy Policy, or as required by applicable law.” Agreement: “Xiaomi acts as a Processor in data processing activities, and you are the Data Controller.”",
+          "quotes": [
+            "Upon service expiration, completion of the agreed purpose, or at your request, unless prohibited by laws that Xiaomi must comply with, Xiaomi will cease processing or permanently delete the personal information within a reasonable period.",
+            "As a general rule, we retain personal information for the period necessary for the purposes described in this Privacy Policy, or as required by applicable law.",
+            "Xiaomi acts as a Processor in data processing activities, and you are the Data Controller."
+          ]
+        },
+        "training": {
+          "text": "“Xiaomi will not use the content you provide for model training or any other purposes.”",
+          "quotes": [
+            "Xiaomi will not use the content you provide for model training or any other purposes."
+          ]
+        },
+        "logging": {
+          "text": "None found",
+          "quotes": []
+        },
+        "readTimes": "shell 20:11:41Z; privacy 20:22:07Z; agreement chunk 20:22:39Z; OR page 20:10:24Z",
+        "rawSha256": "privacy `25b1f9d503efa44856a688452579b843dd125eb071a318e35805b2c60a663cf3`; agreement chunk `49980912159ad3aa6c561e3b55ffdb53ad39a6d40b81c6c8016b9235801de793`; shell `4d2e1cdc37ffa051c3f46130b5178b473ab6cef7fddbe6f9b63debdb14955fca`; OR page `ae185431701062a6529e5c20ec5c9d88a1e78c5fa11c35aeb7aa93f44e94c586`"
+      },
+      "conflicts": [],
+      "differences": [
+        {
+          "reading": "terms-2026-11-14.md",
+          "section": "Differences that are not conflicts",
+          "text": "**Xiaomi.** OpenRouter states 30-day retention. Xiaomi's pages read state no retention period for API content."
+        }
+      ],
+      "notes": [],
+      "gaps": [
+        {
+          "reading": "terms-2026-11-14.md",
+          "section": "What could not be read",
+          "text": "**Xiaomi.** OpenRouter's two URLs are routes inside a client-rendered app. The two app bundles fetched to follow its routing (`platform.xiaomimimo.com` main chunk at 20:21:01Z, `mimo.mi.com` main chunk at 20:21:56Z) were kept in the session scratchpad, not here; nothing is quoted from them. The app maps the privacy policy to an international and a mainland-China variant; only the international English one was read. Two path URLs tried (`platform.xiaomimimo.com/docs/en-US/terms/privacy-policy`, `mimo.mi.com/docs/terms/privacy-policy`) returned the same app shell (saved). Which variant governs OpenRouter's traffic is not stated."
+        }
+      ]
+    }
+  },
+  "generalNotes": [
+    {
+      "kind": "gaps",
+      "reading": "terms-2026-11-14.md",
+      "section": "What could not be read",
+      "text": "**Which tier, setting or agreement governs OpenRouter-routed traffic** is not stated by any of the 16."
+    },
+    {
+      "kind": "gaps",
+      "reading": "terms-2026-11-14.md",
+      "section": "What could not be read",
+      "text": "**Timing.** The run was 2026-11-13; these reads are 2026-11-14, one day later. Pages and OpenRouter's values may have changed in between. The docs-table wording is the probe's 2026-11-09 reading, not re-read."
+    }
+  ],
+  "enclaveInferenceProvider": {
+    "name": "Tinfoil",
+    "gaps": [
+      {
+        "reading": "terms-2026-11-09.md",
+        "section": "What could not be read",
+        "text": "**Tinfoil**: the pricing and catalog pages render prices client-side; prices come from the keyless JSON the page loads (`api.tinfoil.sh/api/config/models?paid=true`), as described above. That host is Tinfoil's site-config API, not the inference router; flagged here because the brief bars provider API endpoints other than that carve-out. No Tinfoil DPA date was found."
+      }
+    ],
+    "namedAs": "npstorey/openmaxxing's README names it; no request was sent to it",
+    "reading": "terms-2026-11-09.md",
+    "candidates": [
+      {
+        "Candidate": "gpt-oss-120b",
+        "Served?": "Yes",
+        "Tinfoil's published name and ID": "“> GPT-OSS 120B”, ID `gpt-oss-120b`, weights `openai/gpt-oss-120b`"
+      },
+      {
+        "Candidate": "GLM-5.3-Flash",
+        "Served?": "Not under that name",
+        "Tinfoil's published name and ID": "Tinfoil publishes “> GLM-5.3”, ID `glm-5-3`, “**Parameters:** 743B (39B active)”, weights `Inferact/GLM-5.3-NVFP4`. OpenRouter's candidate is named \"Z.ai: GLM 5.3 Flash\" (`z-ai/glm-5.3-flash`). No Tinfoil page or config entry read names a GLM-5.3-Flash. Whether the two are the same model is not stated in what was read"
+      },
+      {
+        "Candidate": "MiMo-V2.6-Flash",
+        "Served?": "No",
+        "Tinfoil's published name and ID": "Not on any of the six docs model pages and not among the 20 entries of the config JSON"
+      }
+    ],
+    "prices": [
+      {
+        "Model (Tinfoil ID)": "gpt-oss-120b",
+        "`inputTokenPricePer1M`": "0.15",
+        "`cachedInputTokenPricePer1M`": "(absent)",
+        "`outputTokenPricePer1M`": "0.6",
+        "`requestPrice`": "0",
+        "As the page renders": "$0.15 input, $0.60 output, per 1M tokens"
+      },
+      {
+        "Model (Tinfoil ID)": "glm-5-3 (GLM-5.3, not the Flash candidate)",
+        "`inputTokenPricePer1M`": "1.8",
+        "`cachedInputTokenPricePer1M`": "0.45",
+        "`outputTokenPricePer1M`": "5.75",
+        "`requestPrice`": "0",
+        "As the page renders": "$1.80 input, $0.45 cached input, $5.75 output, per 1M tokens"
+      }
+    ],
+    "dataTerms": [
+      {
+        "Field": "Pages, dates",
+        "Content": "Privacy `https://tinfoil.sh/privacy`, “Effective date: October 12, 2026” (18:18:09Z, `43e481a1f781458952aa2b5a84f103a7a6427e02848e9c8a0c5a27e55576c602`). Terms `https://tinfoil.sh/terms`, “Last updated: October 12, 2026” (18:18:09Z, `3fbd50c55765db3b4fed9ff4138a417c7cba42bac7b5cc6305d6c1f7451ab0ed`). Security and privacy FAQ `https://tinfoil.sh/security-and-privacy-faq`, “Last updated: October 12, 2026” (18:18:09Z, `0a16d4a1a3686122b0eca3da038d637d3ff09b5cd6007184ddfe64dbbcfd4c68`). DPA `https://tinfoil.sh/terms/dpa`, no date found in its text (18:18:09Z, `c7d1d98ee26b78d8d7b33ec5d284a86e37d059c3cff3f2babc04deaa697c8bf0`). Docs introduction `https://docs.tinfoil.sh/introduction.md`, no date (18:16:30Z, `d142f3d738fde061672e4521dceedca5e0af4fa0cf6cdb39db947774ef92eac9`)"
+      },
+      {
+        "Field": "(a) Retention of API inputs and outputs",
+        "Content": "“We do not retain prompt or response content after the response is returned, and we do not use API content to train models.” Prompt-prefix cache: “Cached entries are automatically evicted over time – typically within minutes and generally within a few hours – and do not survive a restart of the secure enclave.”"
+      },
+      {
+        "Field": "(b) Training",
+        "Content": "Privacy: as in (a). FAQ: “No. Inference enclaves never write prompts or responses to disk, and plaintext content does not leave the enclave at any point, so it cannot be used for training, fine-tuning, evaluation, or service improvement even if we wanted to.” DPA: “Note that the Processor does not use any AI input or output data (including Company Personal Data) to fine tune, train or develop its AI functionality or models for its own purposes nor does the Processor allow any third parties (including its Subprocessors) to do this”"
+      },
+      {
+        "Field": "(c) Logging, human review",
+        "Content": "“operational logs never include prompts or completions.” Terms: “The Services are designed so we do not have access to plaintext prompts, responses, or in-enclave workload contents processed through confidential computing.”"
+      },
+      {
+        "Field": "The enclave, in Tinfoil's words",
+        "Content": "Privacy: “Inference API: prompts and responses are processed inside secure enclaves designed to keep content inaccessible to Tinfoil, our cloud providers, and other third parties during normal operation.” Docs: “User request data is processed inside secure enclaves that even Tinfoil cannot access, giving you hardware-enforced privacy that is verifiable via remote attestation.” Docs note: “V3 attestation and features that depend on it are **beta** while deployment is ongoing.”"
+      }
+    ]
+  }
+}

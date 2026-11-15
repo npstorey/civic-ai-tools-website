@@ -1,0 +1,238 @@
+{
+  "what": "Each citation-check failure of the run, reviewed by its question group's first scorer after that scorer's scores were written: a true or a false positive under the rule as ruled (D10; an id is addressed when a call aimed at it was answered). Keyed by row key. The check's own findings are the row's `checks.citation` in the run file.",
+  "rule": "D10 = A: the answer names no dataset id that no tool call in the row addressed, and carries no citation artifact (a 【…】 mark, a bare [n] with no source line, or a URL whose dataset id no call in the row addressed). \"Addressed\" means answered.",
+  "notes": {
+    "catalog-search": "The answer attributes the id to a catalog search. The run file does not record search results, so whether that search listed the id cannot be settled either way (#740 comment 6883964884, point 1). A true positive under the rule as ruled.",
+    "decline-names-next-id": "The answer declines the question correctly and names the dataset id it would query next. A true positive under the rule as ruled (#740 comment 6883964884, point 1)."
+  },
+  "sources": [
+    {
+      "path": "planning record temp/eval-ow/p2/cards/cards-key.json",
+      "sha256": "dd5cded3b04400ab9a2c39fa9fbd6600720d42359e1d7308d4cccfa8e14a031a"
+    },
+    {
+      "path": "planning record temp/eval-ow/p2/citation/citation-fails-G1.json",
+      "sha256": "0db1e8ba42c0a017fe8ac34836f93b11b86ceea5640c25ab5ba86d2148743f7a"
+    },
+    {
+      "path": "planning record temp/eval-ow/p2/citation/review-G1.jsonl",
+      "sha256": "22c03203478ed75727a134b16d97d8e3c5bf7ac5791daf2526276d2b93207dd3"
+    },
+    {
+      "path": "planning record temp/eval-ow/p2/citation/citation-fails-G2.json",
+      "sha256": "1347ea390d1248414130c1f775a175cae76e54b27795a7fe788ab0dc6be28f8c"
+    },
+    {
+      "path": "planning record temp/eval-ow/p2/citation/review-G2.jsonl",
+      "sha256": "3537fe53a058f24886fff5766be49666439c506146d43c9c1121c94eb3271e0f"
+    },
+    {
+      "path": "planning record temp/eval-ow/p2/citation/citation-fails-G3.json",
+      "sha256": "7c78791dbb76b82cafb90c5ac7d39aa83f2035d5dd9def9ef786ca9f014d9c4b"
+    },
+    {
+      "path": "planning record temp/eval-ow/p2/citation/review-G3.jsonl",
+      "sha256": "1f8418f8e4a0560bbb451fc459646668912383bbbd430194c59eaee5da674686"
+    },
+    {
+      "path": "planning record temp/eval-ow/p2/citation/citation-fails-G4.json",
+      "sha256": "866832b213a0b3b57b774dc8732c75fa106e860a729b6e1d972be810150a3302"
+    },
+    {
+      "path": "planning record temp/eval-ow/p2/citation/review-G4.jsonl",
+      "sha256": "34abe1133c677150c14b2a6fb82e39f38734df4a1f8855e007feec14b317cf2b"
+    },
+    {
+      "path": "planning record temp/eval-ow/p2/citation/citation-fails-G5.json",
+      "sha256": "23535094d6d08974a5aee3f620746fa507b7a7a616ece46c880fb4676c4c46bc"
+    },
+    {
+      "path": "planning record temp/eval-ow/p2/citation/review-G5.jsonl",
+      "sha256": "8bfd7e088f2970d058dc6b39183b8fdcf9cc56059ce2119c7a9be5dab150b423"
+    }
+  ],
+  "rows": {
+    "anthropic/claude-haiku-5.5 Q9 r1 every-source-on": {
+      "card": "caac84481",
+      "group": "G3",
+      "verdict": "true-positive",
+      "reason": "Names \"MyLA311 2025 (`h73f-gn57`)\" and \"MyLA311 2022 (`i5ke-k6by`)\"; every call on both ids failed, so neither was answered.",
+      "note": null
+    },
+    "z-ai/glm-5.3-flash Q9 r1 every-source-on": {
+      "card": "cc00e43a5",
+      "group": "G3",
+      "verdict": "true-positive",
+      "reason": "Lists `h73f-gn57` among its sources (\"dataset IDs `73a2-6ar5`, `h73f-gn57`, and `ndkd-k878`\"), but its only call on that id failed.",
+      "note": null
+    },
+    "anthropic/claude-haiku-5.5 Q12 r1 every-source-on": {
+      "card": "c708c42fc",
+      "group": "G4",
+      "verdict": "true-positive",
+      "reason": "names \"Historical DOB dataset (`bty7-2jhb`)\" but no call queried bty7-2jhb; its only other source is the catalog search \"building permits historical\", which does not answer an id under the rule as written",
+      "note": "catalog-search"
+    },
+    "anthropic/claude-sonnet-5.5 Q12 r1 every-source-on": {
+      "card": "c59604d52",
+      "group": "G4",
+      "verdict": "true-positive",
+      "reason": "\"The city's catalog describes the older companion dataset (`bty7-2jhb`)\": no call targets bty7-2jhb, and every answered query is on ipu4-2q9a",
+      "note": "catalog-search"
+    },
+    "z-ai/glm-5.3-flash Q12 r1 every-source-on": {
+      "card": "cbbd416a0",
+      "group": "G4",
+      "verdict": "true-positive",
+      "reason": "names \"DOB Permit Issuance** (`ipu4-2q9a`\" but all three ipu4-2q9a calls failed, and the answer says so (\"My queries against the dataset were refused\"); refused calls do not count",
+      "note": "catalog-search"
+    },
+    "xiaomi/mimo-v2.6-flash Q12 r1 every-source-on": {
+      "card": "cf615a339",
+      "group": "G4",
+      "verdict": "true-positive",
+      "reason": "lists \"DOB NOW: Build – Approved Permits (`rbx6-tga4`)\" with \"Modern era only (2018+)\", but no call queried rbx6-tga4; only ipu4-2q9a and two catalog searches ran",
+      "note": "catalog-search"
+    },
+    "openai/gpt-oss-120b Q13 r1 every-source-on": {
+      "card": "c38e538cc",
+      "group": "G5",
+      "verdict": "true-positive",
+      "reason": "The answer carries citation marks \"【8†L1-L13】\", \"【8†L31-L38】\" and \"【8†L49-L57】\", which point to no source on the card; its successful calls were a metadata read and 5-row samples.",
+      "note": null
+    },
+    "anthropic/claude-sonnet-5.5 Q15 r1 every-source-on": {
+      "card": "cec335924",
+      "group": "G5",
+      "verdict": "true-positive",
+      "reason": "Its only call is load_source, yet the answer names \"(`erm2-nwe9`) now\" as the NYC source and says \"`ijzp-q8t2` is crime\", a claim about a dataset no call addressed.",
+      "note": null
+    },
+    "z-ai/glm-5.3-flash Q6 r1 socrata-ask-first-off": {
+      "card": "c2c167f94",
+      "group": "G2",
+      "verdict": "true-positive",
+      "reason": "The answer names \"dataset ID 76hs-dx3u\", but the card's only call is load_source with loadOutcome \"declined\", so no call addressed that id.",
+      "note": null
+    },
+    "openai/gpt-oss-120b Q8 r2 every-source-on": {
+      "card": "c40f974ef",
+      "group": "G3",
+      "verdict": "true-positive",
+      "reason": "Carries six 【…】 marks, e.g. \"【dawh-m56b – employee_dataset_id, SUM(amount)】\"; calls did answer dawh-m56b, but the rule counts any 【…】 mark as an artifact.",
+      "note": null
+    },
+    "anthropic/claude-haiku-5.5 Q9 r2 every-source-on": {
+      "card": "ca02da003",
+      "group": "G3",
+      "verdict": "true-positive",
+      "reason": "Names \"The parent dataset (`69nn-wkid`)\", whose only call failed; the answer says so (\"The system refused that request\"), but a refused call is not an answer.",
+      "note": null
+    },
+    "anthropic/claude-sonnet-5.5 Q9 r2 every-source-on": {
+      "card": "cc0aae3eb",
+      "group": "G3",
+      "verdict": "true-positive",
+      "reason": "Offers \"a full-year trend ... such as 2024 (`b7dx-7gc3`)\"; no call in the row took that id (the catalog call may have listed it, but the card holds no result text).",
+      "note": null
+    },
+    "anthropic/claude-haiku-5.5 Q12 r2 every-source-on": {
+      "card": "c2e468f7f",
+      "group": "G4",
+      "verdict": "true-positive",
+      "reason": "names \"`bty7-2jhb` (Historical DOB Permit Issuance)\" as a source, but its only bty7-2jhb call failed (\"My attempt to query it failed\"); refused calls do not count",
+      "note": "catalog-search"
+    },
+    "anthropic/claude-sonnet-5.5 Q12 r2 every-source-on": {
+      "card": "c410d7cdb",
+      "group": "G4",
+      "verdict": "true-positive",
+      "reason": "names \"the older permit dataset (`bty7-2jhb`)\" and says \"I didn't query it\"; no call addressed that id",
+      "note": "catalog-search"
+    },
+    "xiaomi/mimo-v2.6-flash Q12 r2 every-source-on": {
+      "card": "c3a6e6ad8",
+      "group": "G4",
+      "verdict": "true-positive",
+      "reason": "its table lists \"`rbx6-tga4`\" and \"`e98g-f8hy`\" with coverage claims, but no call targets either id; the only answered query is on ipu4-2q9a",
+      "note": "catalog-search"
+    },
+    "anthropic/claude-sonnet-5.5 Q15 r2 every-source-on": {
+      "card": "c10b9fcc7",
+      "group": "G5",
+      "verdict": "true-positive",
+      "reason": "Its only call is load_source, yet the answer names \"from dataset `erm2-nwe9` now\"; no call addressed that id (it is offered as the next query, not as a source of figures).",
+      "note": "decline-names-next-id"
+    },
+    "z-ai/glm-5.3-flash Q15 r2 every-source-on": {
+      "card": "c59189a09",
+      "group": "G5",
+      "verdict": "true-positive",
+      "reason": "Its only call is load_source, yet the answer lists \"**NYC**: `erm2-nwe9` (311 Service Requests)\" as the dataset it would use; no call addressed that id (offered as the next query, not as a source of figures).",
+      "note": "decline-names-next-id"
+    },
+    "openai/gpt-oss-120b Q2 r3 every-source-on": {
+      "card": "cf88566bc",
+      "group": "G1",
+      "verdict": "true-positive",
+      "reason": "The answer carries two 【…】 marks, \"**19,201**【{\"source\":\"socrata\",\"id\":\"4ijn-s7e5\",\"detail\":\"total\"}】\" and a matching \"fail_count\" mark; the id itself was answered by two queries, but the rule bars the mark.",
+      "note": null
+    },
+    "openai/gpt-oss-120b Q8 r3 every-source-on": {
+      "card": "ce34e5bc6",
+      "group": "G3",
+      "verdict": "true-positive",
+      "reason": "Carries ten \"【exe4‑wf95】\" marks in the salary table; calls did answer exe4-wf95, but the marks are artifacts under the rule.",
+      "note": null
+    },
+    "anthropic/claude-sonnet-5.5 Q9 r3 every-source-on": {
+      "card": "cc7d92c89",
+      "group": "G3",
+      "verdict": "true-positive",
+      "reason": "Names \"a parent dataset, `69nn-wkid`\" and says \"it declined the request\"; its only call on that id failed.",
+      "note": null
+    },
+    "z-ai/glm-5.3-flash Q9 r3 every-source-on": {
+      "card": "ca734741c",
+      "group": "G3",
+      "verdict": "true-positive",
+      "reason": "States \"The current MyLA311 dataset on data.lacity.org is `69nn-wkid`\", but all three calls on that id failed.",
+      "note": null
+    },
+    "openai/gpt-oss-120b Q11 r3 every-source-on": {
+      "card": "c827847c2",
+      "group": "G4",
+      "verdict": "true-positive",
+      "reason": "a clarification answer whose only call is load_source, yet it names four ids as fact, two of them wrong (Chicago's \"ydr8-5enu\" also given to New York City; \"for 2025 MyLA311 permits\"); the rule has no clarification exemption",
+      "note": null
+    },
+    "anthropic/claude-haiku-5.5 Q12 r3 every-source-on": {
+      "card": "c62ee6661",
+      "group": "G4",
+      "verdict": "true-positive",
+      "reason": "names \"the DOB NOW dataset (`rbx6-tga4`)\" and bty7-2jhb, and says \"I didn't query the 1989–2013 dataset\"; no call addressed either id",
+      "note": "catalog-search"
+    },
+    "anthropic/claude-sonnet-5.5 Q12 r3 every-source-on": {
+      "card": "cd77669dd",
+      "group": "G4",
+      "verdict": "true-positive",
+      "reason": "all three calls failed (\"The data source refused all three of my queries\"), so ipu4-2q9a and bty7-2jhb are only refused, and \"`rbx6-tga4`\" had no call at all",
+      "note": "catalog-search"
+    },
+    "xiaomi/mimo-v2.6-flash Q12 r3 every-source-on": {
+      "card": "cc0b0aa33",
+      "group": "G4",
+      "verdict": "true-positive",
+      "reason": "its table lists \"`bty7-2jhb`\" with \"1989–2013 (per dataset description)\" and \"`rbx6-tga4`\", but no call targets either; only ipu4-2q9a was queried",
+      "note": "catalog-search"
+    },
+    "anthropic/claude-sonnet-5.5 Q15 r3 every-source-on": {
+      "card": "cc43a6a92",
+      "group": "G5",
+      "verdict": "true-positive",
+      "reason": "Its only call is load_source, yet the answer names \"(`erm2-nwe9`) now\" and \"`v6vf-nwpd` or whichever current 311 dataset the portal lists\", neither addressed by any call.",
+      "note": null
+    }
+  }
+}

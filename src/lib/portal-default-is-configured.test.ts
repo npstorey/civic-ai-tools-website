@@ -289,6 +289,12 @@ const EXCEPTIONS: readonly Exception[] = [
     why: "The October 2026 model evaluation's record of San Francisco's portal move (the old host redirecting to the new one) and the reference answer read from the new host; it reports what the portals did, and nothing runs from it.",
   },
   {
+    path: 'docs/model-evaluation-2026-11.md',
+    classification: 'documentation',
+    hits: 1,
+    why: "The November 2026 model evaluation's appendix of reviewed citation failures, quoting one reviewer's reason, which quotes an answer naming Los Angeles's portal beside the dataset id it cited; it reports what a model wrote, and nothing runs from it.",
+  },
+  {
     path: 'docs/flows-changelog.md',
     classification: 'server-endpoint',
     hits: 5,

@@ -508,7 +508,15 @@ export default function LearnPage() {
         </p>
 
         <p style={{ fontSize: '14px', color: 'var(--text-muted)' }}>
-          Full evaluation methodology and results (October 2026):{' '}
+          Full evaluation methodology and results (November 2026, with three open-weight models):{' '}
+          <a
+            href="https://github.com/npstorey/civic-ai-tools-website/blob/main/docs/model-evaluation-2026-11.md"
+            target="_blank"
+            rel="noopener noreferrer"
+          >
+            model-evaluation-2026-11.md
+          </a>
+          . The October 2026 evaluation:{' '}
           <a
             href="https://github.com/npstorey/civic-ai-tools-website/blob/main/docs/model-evaluation-2026-10.md"
             target="_blank"
