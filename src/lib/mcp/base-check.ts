@@ -12,7 +12,8 @@
  * bare one, decided once per call from that target (S2-B F1):
  *
  *   - THE READ. The base's `tools/list`, every page, and the `serverInfo` of the
- *     handshake it was answered on (`readServerTools`, `./client.ts`).
+ *     handshake it was answered on, which the client keeps no longer than
+ *     `BASE_READ_KEPT_MS` (`readServerTools`, `./client.ts`).
  *   - THE CACHE. Per run (one `createBaseCheck` per loop), keyed by the base's
  *     `sourceId`. A read is kept five minutes, whether it matched or not; a pack
  *     call after that reads again, and that read decides. A read that failed is
@@ -34,7 +35,8 @@
  *
  * The base's own tools are not checked: only a call whose target `packFilterOf`
  * names a pack's reaches here (the target the dispatch sends to, or the called
- * name when the dispatch refuses it).
+ * name when the caller supplies no target). A name the dispatch refuses has no
+ * target and is never checked: the send refuses it, and nothing reaches the base.
  */
 import { CIVIC_MANIFEST, checkBasePins, type BasePin, type McpListedTool } from '@typedstandards/civic-typed-router';
 import type { PackFilter } from './pack-filter.ts';

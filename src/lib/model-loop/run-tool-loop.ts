@@ -241,8 +241,11 @@ export interface ToolLoopOptions {
    * refuses the name. A pack's call is decided once, from that target: the
    * pack's injection, its refusal, `mcp.pack_id` and the base check all read
    * the one answer, so a bare upstream name the dispatch resolves to a pack is
-   * decided as the pack's aliased name is. Each caller supplies it beside its
-   * transport, from the same selection (`dispatchTargetOf`,
+   * decided as the pack's aliased name is. A name it refuses is not a pack
+   * call: neither refused by the pack's filter nor checked, while the record
+   * still names the pack, and carries the arguments, the called name states.
+   * Each caller supplies it beside its transport, from the same selection
+   * (`dispatchTargetOf`,
    * `../mcp/registry.ts`; an in-loop routing's `dispatchTarget`). Omitted, the
    * called name decides, which agrees with the dispatch only for a transport
    * that sends with no selection; `pack-decision-entry-points.test.ts` lists
@@ -1080,18 +1083,25 @@ export async function runToolLoop(options: ToolLoopOptions): Promise<ToolLoopRes
        * a `domain` naming the locked portal agrees with what is injected.
        */
       /**
-       * A pack's call (S2-B W3 and F1, npstorey/civic-ai-tools#309), decided
-       * once, from the target the dispatch sends to (`dispatchTarget`), or from
-       * the called name when the dispatch refuses it or the caller supplied no
-       * target. Everything below that treats a call as a pack's reads this one
-       * value: the injection, the refusal, `mcp.pack_id` and the base check.
-       * The pack's fixed portal and dataset are injected where the call omits
-       * them, BEFORE the run portal on the next line would be, so a pack call
-       * never carries a portal its pack does not read. Like the run portal,
-       * never into a malformed set.
+       * A pack's call (S2-B W3, F1 and phase 2, npstorey/civic-ai-tools#309),
+       * decided once, from the target the dispatch sends to (`dispatchTarget`),
+       * or from the called name when the caller supplied no target. A name the
+       * dispatch refuses has no target, so it is not a pack call: the pack
+       * filter's refusal and the base check read `pack` alone, and nothing is
+       * read from the base for a call the send then refuses.
+       *
+       * `namedPack` is what the record names: the target's pack, or for a
+       * refused name the pack the called name names. It feeds `mcp.pack_id`
+       * and the injection, so a refused call is recorded with the pack and the
+       * arguments its name states. The pack's fixed portal and dataset are
+       * injected where the call omits them, BEFORE the run portal on the next
+       * line would be, so a pack call never carries a portal its pack does not
+       * read. Like the run portal, never into a malformed set.
        */
-      const pack = packFilterOf(dispatchTarget?.(name) ?? name);
-      if (pack && !argumentsMalformed) injectPackFilter(upstreamToolName(name), args, pack);
+      const target = dispatchTarget ? dispatchTarget(name) : name;
+      const pack = target === undefined ? undefined : packFilterOf(target);
+      const namedPack = pack ?? (target === undefined ? packFilterOf(name) : undefined);
+      if (namedPack && !argumentsMalformed) injectPackFilter(upstreamToolName(name), args, namedPack);
       if (portal && !argumentsMalformed && isTool(name, 'get_data') && !args.portal) args.portal = portal;
 
       /**
@@ -1151,8 +1161,9 @@ export async function runToolLoop(options: ToolLoopOptions): Promise<ToolLoopRes
         'mcp.server.id': spanNames.serverId,
         // A pack's call goes to its base's server and is attributed to the
         // base above; the pack is named here (G0-B5 A; harness 0.12.0 reads it
-        // as `civic:packId`). Written on a refused pack call too.
-        ...(pack ? { 'mcp.pack_id': pack.packId } : {}),
+        // as `civic:packId`). Written on a refused pack call too, the dispatch's
+        // refusal included (`namedPack`).
+        ...(namedPack ? { 'mcp.pack_id': namedPack.packId } : {}),
       });
 
       // Started outside the `try`, so the time until a rejection is measured

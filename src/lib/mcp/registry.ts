@@ -654,9 +654,11 @@ function resolveToolCall(registry: McpRegistry, toolName: string, map: DispatchM
   if (resolution.reason === 'not-offered') {
     const variable = resolution.candidates.map((name) => registry.unconfiguredTools[name]).find(Boolean);
     if (variable) return { ok: false, refusal: 'not-configured', variable };
+    // A pack has no server of its own: it is routable when its base is (S2-B
+    // phase 2), as the replay's offered set rules (`replayOfferedSet`).
     const configuredHere = resolution.candidates.some((name) => {
       const target = map.get(name);
-      return target !== undefined && isRoutable(registry, target.sourceId);
+      return target !== undefined && isRoutable(registry, target.base ?? target.sourceId);
     });
     if (configuredHere) return { ok: false, refusal: 'not-offered' };
   }
