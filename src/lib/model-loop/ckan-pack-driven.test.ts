@@ -153,7 +153,14 @@ const { _resetDefaultModelClientForTests, getModelClient } = await import('../mo
 const { buildMcpRegistry, configuredMcpServers, readMcpEnvFromProcess, routeToolCall, routedSourceId } = await import('../mcp/registry.ts');
 const { composeSystemPrompt } = await import('../mcp/socrata-skill.ts');
 const { mcpToolsFor, offeredMcpTools } = await import('../mcp/tools.ts');
-const { classifyStreamError } = await import('../streaming.ts');
+const { classifyStreamError, describeToolFailureForLlm } = await import('../streaming.ts');
+/** The pack's filter and its two refusals. `SqlStatementRefusedError` is the green's name, read through a cast so this file
+ *  type-checks before it exists. */
+const packFilterModule = (await import('../mcp/pack-filter.ts')) as unknown as {
+  packFilterOf: (name: string) => unknown;
+  PackFilterRefusedError: new (filter: never) => Error;
+  SqlStatementRefusedError?: new (filter: never) => Error;
+};
 const { TraceBuilder, CIVICAITOOLS_TRACE_CONFIG } = await import('../evidence/trace.ts');
 const { buildEvidencePackage } = await import('../evidence/packager.ts');
 
@@ -184,7 +191,7 @@ async function decide(states: States): Promise<Mod> {
 
 const call = (id: string, name: string, args: Record<string, unknown>): ScriptedToolCall => ({ id, name, args: structuredClone(args) });
 type Span = { name: string; spanId: string; parentSpanId?: string; attributes?: Array<{ key: string; value?: { stringValue?: string; boolValue?: boolean; intValue?: number | string } }> };
-interface Run { calls: ToolCallRecord[]; seen: Seen[]; spans: Span[]; trace: unknown; sourcesOffered: unknown[] }
+interface Run { calls: ToolCallRecord[]; seen: Seen[]; spans: Span[]; trace: unknown; sourcesOffered: unknown[]; told: Map<string, string> }
 
 /** One run through `/api/compare`'s factory under the gate's selection; each element of `turns` is one model turn. */
 async function run(states: States, turns: ScriptedToolCall[][]): Promise<Run> {
@@ -220,7 +227,14 @@ async function run(states: States, turns: ScriptedToolCall[][]): Promise<Run> {
     builder.endRoot({});
     const trace = builder.finalize() as unknown as { resourceSpans: Array<{ scopeSpans: Array<{ spans: Span[] }> }> };
     const spans = trace.resourceSpans[0].scopeSpans[0].spans.filter((s) => s.name === 'mcp_tool_call');
-    return { calls, seen: seen.slice(from), spans, trace, sourcesOffered };
+    // What the model was told about each call, by its id: the tool messages of every request after the call.
+    const told = new Map<string, string>();
+    for (const request of model.requests) {
+      for (const m of (request.messages ?? []) as Array<{ role?: string; tool_call_id?: string; content?: unknown }>) {
+        if (m.role === 'tool' && m.tool_call_id) told.set(m.tool_call_id, String(m.content));
+      }
+    }
+    return { calls, seen: seen.slice(from), spans, trace, sourcesOffered, told };
   } finally {
     await new Promise((resolve) => model.server.close(resolve));
     _resetDefaultModelClientForTests();
@@ -289,8 +303,16 @@ test('A13 (unset): with CKAN_MCP_URL unset, no CKAN tool, no block and no CKAN r
 
 // --- A-C1: the CKAN rows' holders are the CKAN portal's, never Socrata's platform's ------------------------------
 
-/** DRAFT (contract section 6, form (ii)): the CKAN portal's kept-by line, replaced by the ruled words before merge. */
-const CKAN_PORTAL_OPERATOR_DRAFT = { holder: 'the operator of data.boston.gov', keeps: 'not-stated' };
+/** DRAFT, form (i) (the seat's 6929687010 withdrew form (ii)): the City's line, as Boston OpenContext's manifest states the
+ *  City's statement, read 2026-11-16. The owner rules form (i) or form (iii) (this line, then a second for the portal's
+ *  platform vendor); the lines live in one place in `../flows/statement.ts`, which may return one line or two. */
+const CKAN_PORTAL_OPERATOR_DRAFT = [{
+  holder: 'City of Boston',
+  keeps: 'metadata',
+  retention: "Under the City's records retention schedule; the statement gives no period for server logs.",
+  statementUrl: 'https://www.boston.gov/government/cabinets/innovation-and-technology/terms-use-and-privacy-policy-city-boston-digital',
+  readOn: '2026-11-16',
+}];
 
 test('A-C1: with CKAN_MCP_URL set, neither CKAN row names Tyler Technologies or links its statement, each states the CKAN portal\'s posture, and the Socrata and City Record rows read as with the variable unset', async () => {
   const set = await buildFlowsStatement();
@@ -300,7 +322,7 @@ test('A-C1: with CKAN_MCP_URL set, neither CKAN row names Tyler Technologies or 
   for (const row of rows) {
     const text = JSON.stringify(row);
     assert.ok(!text.includes('Tyler Technologies') && !text.includes('tylertech.com'), `${row.sourceId}'s row names Tyler Technologies or links its statement`);
-    assert.deepEqual(row.recipients.map((r) => r.keptBy), [[{ holder: `the operator of ${CKAN_HOST}`, keeps: 'operator-states' }, CKAN_PORTAL_OPERATOR_DRAFT]], `${row.sourceId}'s holders are not the hosted server's operator and the CKAN portal's`);
+    assert.deepEqual(row.recipients.map((r) => r.keptBy), [[{ holder: `the operator of ${CKAN_HOST}`, keeps: 'operator-states' }, ...CKAN_PORTAL_OPERATOR_DRAFT]], `${row.sourceId}'s holders are not the hosted server's operator and the CKAN portal's`);
   }
   delete process.env.CKAN_MCP_URL;
   let unset: Array<{ sourceId: string }>;
@@ -380,7 +402,13 @@ test('A14: a pack call naming another portal is refused before any request and r
   assert.equal(A14_OTHER.calls.length, 1);
   const refused = failureOf(A14_OTHER.calls[0]);
   assert.equal(refused.failed, true, 'the call naming another portal is not recorded rejected');
-  assert.ok(!['not_configured', 'not_offered'].includes(String(refused.failureKind)), `the call naming another portal was refused for its configuration, not its portal: ${refused.failureKind}`);
+  // The kind City Record's filter records for a call outside its pack's values (`unknown`, `pack-filter.ts`), and the
+  // model told why by the error's type: the pack's portal refusal.
+  assert.equal(refused.failureKind, 'unknown', `the call naming another portal is not recorded as a pack filter's refusal: ${refused.failureKind}`);
+  const name = exposed('ckan_package_search');
+  const filter = packFilterModule.packFilterOf(name);
+  assert.ok(filter, `premise: ${name} has a pack filter`);
+  assert.equal(A14_OTHER.told.get('p1'), describeToolFailureForLlm(name, new packFilterModule.PackFilterRefusedError(filter as never)), 'the model is not told the call names a portal its pack does not read');
   assert.equal(attr(A14_OTHER.spans[0], 'mcp.pack_id'), PACK.id, 'the refused call does not name its pack');
   assert.equal(JSON.parse(String(attr(A14_OTHER.spans[0], 'tool.arguments'))).server_url, OTHER_PORTAL, 'the record does not state the portal the call named');
 });
@@ -398,7 +426,19 @@ test('A15: ckan_datastore_search_sql sends one read-only statement and refuses t
     const record = A15.calls.find((c) => c.args.sql === sql);
     assert.ok(record, `premise: the call with ${sql} is recorded`);
     assert.equal(record!.failed, true, `${sql} is not recorded rejected`);
-    assert.ok(!['not_configured', 'not_offered'].includes(String(record!.failureKind)), `${sql} was refused for its configuration, not its statement`);
+    assert.equal(record!.failureKind, 'unknown', `${sql} is not recorded as the pack's refusal: ${record!.failureKind}`);
+  }
+  // Each refusal has its own type and its own text: the model is told the statement was refused, not the portal.
+  const name = exposed('ckan_datastore_search_sql');
+  const filter = packFilterModule.packFilterOf(name);
+  const Statement = packFilterModule.SqlStatementRefusedError;
+  assert.ok(filter && typeof Statement === 'function', 'premise: the pack has a filter and its statement refusal a type of its own');
+  const statementText = describeToolFailureForLlm(name, new Statement!(filter as never));
+  const portalText = describeToolFailureForLlm(name, new packFilterModule.PackFilterRefusedError(filter as never));
+  assert.notEqual(statementText, portalText, 'the statement refusal tells the model what the portal refusal tells it');
+  for (const sql of SQL_REFUSED) {
+    const id = `s${[...SQL_SENT, ...SQL_REFUSED].indexOf(sql)}`;
+    assert.equal(A15.told.get(id), statementText, `the model is not told why ${sql} was refused`);
   }
   const offered = PACK.tools.find((t) => t.type === 'function' && t.function.name === 'ckan_datastore_search_sql');
   const description = String((offered as unknown as { function: { parameters: { properties: { sql: { description: string } } } } }).function.parameters.properties.sql.description);

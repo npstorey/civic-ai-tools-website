@@ -20,6 +20,9 @@ const DATASTORE: PhaseAToolCall[] = [
   { name: 'boston__ckan_datastore_search', args: { server_url: PORTAL, resource_id: 'a17-resource-0001', limit: 5 } },
   { name: 'boston__ckan_datastore_search_sql', args: { server_url: PORTAL, sql: 'SELECT count(*) FROM "a17-resource-0002"' } },
 ];
+/** A datastore call by its bare upstream name on another CKAN portal: its cell must name that portal, not Boston's. */
+const OTHER_PORTAL = 'https://ckan.portal-a17.example.test';
+const ON_ANOTHER_PORTAL: PhaseAToolCall = { name: 'ckan_datastore_search', args: { server_url: OTHER_PORTAL, resource_id: 'a17-resource-0003', limit: 5 } };
 const DISCOVERY: PhaseAToolCall[] = [
   { name: 'boston__ckan_package_search', args: { server_url: PORTAL, q: 'potholes' } },
   { name: 'boston__ckan_find_relevant_datasets', args: { server_url: PORTAL, query: 'potholes' } },
@@ -39,6 +42,13 @@ test('A17: the two datastore tools render re-runnable cells against the call\'s 
     assert.ok(code.includes(PORTAL), `${call.name}'s cell does not run against the call's server_url:\n${code}`);
     assert.ok(code.includes(own.replaceAll('"', '\\"')) || code.includes(own), `${call.name}'s cell does not state its own call:\n${code}`);
   }
+  // The call's server_url, not a portal the renderer fixes: a bare-named call on another host names that host.
+  assert.equal(isAnalysisStep(ON_ANOTHER_PORTAL), true, 'the bare-named datastore call is not a step');
+  const other = renderFetchToolCell(ON_ANOTHER_PORTAL, { dataFrameIndex: 2, defaultPortal: '' });
+  assert.ok(other, 'the bare-named datastore call renders no cell');
+  const otherCode = other!.cells.map((c) => text(c.source)).join('\n');
+  assert.ok(otherCode.includes(OTHER_PORTAL) && otherCode.includes('a17-resource-0003'), `the cell does not run against the call's own server_url:\n${otherCode}`);
+  assert.ok(!otherCode.includes('data.boston.gov'), `the cell names Boston's portal for a call on another:\n${otherCode}`);
   for (const call of DISCOVERY) {
     assert.equal(isAnalysisStep(call), false, `${call.name} is a step`);
     assert.equal(renderFetchToolCell(call, { dataFrameIndex: 1, defaultPortal: '' }), null, `${call.name} renders a cell of its own`);
