@@ -33,7 +33,7 @@ import { composeSystemPrompt, withPortalLockGuidance } from '@/lib/mcp/socrata-s
 import type { SourceSelection } from '@typedstandards/civic-typed-router';
 import { consentInForce } from '@/lib/sources/consent-gate';
 import { decisionStoreFromEnv, readerGone, streamingRoutePause } from '@/lib/sources/decision';
-import { afterLoopAttributes, createInLoopRouting, directorySet, entersInLoop, sourceRoutingMode, type InLoopRouting } from '@/lib/mcp/routing-mode';
+import { afterLoopAttributes, createInLoopRouting, DIRECTORY_SET_RULE, directorySet, entersInLoop, sourceRoutingMode, type InLoopRouting } from '@/lib/mcp/routing-mode';
 import {
   queryWithMcpStreaming,
   type CompletionResult,
@@ -315,7 +315,7 @@ export async function POST(request: NextRequest) {
   // A hold ends when its reader is gone (R9 P1, #668): the request's signal, or a cancelled stream.
   const presence = readerGone(request);
   const inLoop = entersInLoop(routingMode, directory)
-    ? await createInLoopRouting({ portal, lockedPortal, configured, directory, selection, pause: streamingRoutePause(consent, session, configured, presence.signal) })
+    ? await createInLoopRouting({ portal, lockedPortal, configured, directory, searchable: directory, rule: DIRECTORY_SET_RULE, selection, pause: streamingRoutePause(consent, session, configured, presence.signal) })
     : undefined;
   const composition = inLoop
     ? { prompt: inLoop.firstSystemPrompt, assertedDate: inLoop.assertedDate, sourcesOffered: inLoop.sourcesOffered, components: inLoop.components() }

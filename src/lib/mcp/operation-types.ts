@@ -135,6 +135,13 @@ const TOOL_OPERATION_TYPES: Record<string, string> = {
   // switches on the type has a case for it, so none narrates a load as a
   // data request. The router reserves the name, so no source's tool has it.
   load_source: 'load_source',
+  //
+  // `find_source`, the in-loop search (S3-B W2, harness 0.14.0), is the
+  // instance's own step as `load_source` is: no source answers it and it reads
+  // no data. Its operation type is its own name, the value the harness reads a
+  // search span by, and every renderer that switches on the type has a case
+  // for it. The router reserves the name, so no source's tool has it.
+  find_source: 'find_source',
 };
 
 /**

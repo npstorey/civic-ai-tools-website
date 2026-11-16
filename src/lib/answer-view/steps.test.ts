@@ -497,7 +497,8 @@ test('UX pass row 21: the phase words are mapped by phase name, the route\'s mes
 // reads a label of its own; red at the base on `load_source` only.
 
 /** The derivable set, as LAYOUT-WEB-D and the G0 record state it: the map's values and `get_data`'s `type` enum. */
-const DERIVABLE = ['search', 'metadata', 'query', 'load_source', 'catalog', 'metrics'];
+// S3-B W2: `find_source`, the in-loop search, derives its own type as `load_source` does, and reads its own label.
+const DERIVABLE = ['search', 'metadata', 'query', 'load_source', 'find_source', 'catalog', 'metrics'];
 
 test('R8 W2 (LAYOUT-WEB-D test 1), as R10 P1 moved it: a load_source step reads that the model chose the source, not the open step\'s label', async () => {
   // R10 P1 (G0 D1 = A) replaced R8 W2's "Loading a data source" with a label that names the source chosen.

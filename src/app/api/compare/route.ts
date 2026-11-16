@@ -6,7 +6,7 @@ import { runToolLoop } from '@/lib/model-loop/run-tool-loop';
 import { compareLoopOptions, compareCompletionResult } from '@/lib/model-loop/compare-loop';
 import { composeSystemPrompt, withPortalLockGuidance } from '@/lib/mcp/socrata-skill';
 import { consentInForce } from '@/lib/sources/consent-gate';
-import { createInLoopRouting, directorySet, entersInLoop, sourceRoutingMode } from '@/lib/mcp/routing-mode';
+import { createInLoopRouting, DIRECTORY_SET_RULE, directorySet, entersInLoop, sourceRoutingMode } from '@/lib/mcp/routing-mode';
 import { checkRateLimit, getMissingRateLimitSecretError, incrementRateLimit, isRateLimited } from '@/lib/rate-limit';
 import { getGenAiSystem, getMissingModelCredentialError, getModelClient, classifyModelError, ModelConfigurationError } from '@/lib/model-client';
 import { whereItWentFromCalls } from '@/lib/flows/where-it-went';
@@ -186,7 +186,7 @@ export async function POST(request: NextRequest) {
     const routingMode = sourceRoutingMode();
     const directory = routingMode === 'in-loop' ? directorySet(configured, consent) : [];
     const inLoop = entersInLoop(routingMode, directory)
-      ? await createInLoopRouting({ portal, lockedPortal, configured, directory, selection })
+      ? await createInLoopRouting({ portal, lockedPortal, configured, directory, searchable: directory, rule: DIRECTORY_SET_RULE, selection })
       : undefined;
     // In loop, no source's guidance is composed for the first request; the
     // offered reasons the usage count reads are the session's, as composed (C4).

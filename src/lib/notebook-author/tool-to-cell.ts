@@ -13,6 +13,8 @@ import type { NotebookCell } from './cells.ts';
 import { codeCell, markdownCell } from './cells.ts';
 import { CIVIC_MANIFEST } from '@typedstandards/civic-typed-router';
 import { upstreamToolName } from '../mcp/operation-types.ts';
+import { FIND_SOURCE_WORDS } from '../sources/copy.ts';
+import { SEARCH_OPERATION, searchNotebookLine, searchQueryOf } from '../flows/search-words.ts';
 import { npmPackageVariants } from '../mcp/registry.ts';
 import { RETIRED_HOSTED_SERVERS, type RetiredHostedServer } from '../mcp/retired-sources.ts';
 
@@ -85,6 +87,9 @@ export interface PhaseAToolCall {
    * discovery call (`renderDiscoverySummaryCell`).
    */
   loadOutcome?: string;
+  /** How a `find_source` call ended (S3-B W2), on a search call only, and its hits by source id. */
+  searchOutcome?: string;
+  searchHits?: string[];
 }
 
 /** Python-literal rendering for the JSON-safe values we get from MCP tool args. */
@@ -1148,9 +1153,12 @@ export function renderDiscoverySummaryCell(
   // of its own, and it is not a discovery call either: it asked no source for
   // anything. It is stated in a note of its own below; a run with no load
   // renders exactly the cell it rendered before loads existed.
+  // A search (S3-B W2) is the instance's own step too: not a discovery call, and stated in a note of its own.
   const loads = calls.filter(isLoadCall);
-  const discoveryCalls = calls.filter(c => !isLoadCall(c) && renderFetchToolCell(c, { dataFrameIndex: 0, defaultPortal }) === null);
-  if (discoveryCalls.length === 0) return loads.length === 0 ? null : markdownCell(loadNoteLines(loads).join('\n'));
+  const searches = calls.filter(isSearchCall);
+  const notes = [...(loads.length > 0 ? [loadNoteLines(loads)] : []), ...(searches.length > 0 ? [searchNoteLines(searches)] : [])];
+  const discoveryCalls = calls.filter(c => !isLoadCall(c) && !isSearchCall(c) && renderFetchToolCell(c, { dataFrameIndex: 0, defaultPortal }) === null);
+  if (discoveryCalls.length === 0) return notes.length === 0 ? null : markdownCell(notes.map((lines) => lines.join('\n')).join('\n\n'));
   // The second sentence is a claim about the cells BELOW this one, so it is
   // conditional on there being any. Until #384 P4 it was unconditional, and a
   // notebook whose every fetch was rejected — or one whose only data-reading
@@ -1172,7 +1180,7 @@ export function renderDiscoverySummaryCell(
     const reason = call.reason ? ` — ${call.reason}` : '';
     lines.push(`- \`${call.name}\`${opType}${reason}`);
   }
-  if (loads.length > 0) lines.push('', ...loadNoteLines(loads));
+  for (const note of notes) lines.push('', ...note);
   return markdownCell(lines.join('\n'));
 }
 
@@ -1180,6 +1188,24 @@ export function renderDiscoverySummaryCell(
  *  spelling, or by the operation type the loop recorded for it. */
 function isLoadCall(call: PhaseAToolCall): boolean {
   return call.operationType === 'load_source' || upstreamToolName(call.name) === 'load_source';
+}
+
+/** Whether a call is an in-loop search (S3-B W2): by its name, in either spelling, or by its recorded type. */
+function isSearchCall(call: PhaseAToolCall): boolean {
+  return call.operationType === SEARCH_OPERATION || upstreamToolName(call.name) === SEARCH_OPERATION;
+}
+
+/**
+ * The note an in-loop run's searches are stated in (S3-B W2, r2's S18 to S21): each search in the record's words,
+ * the query as the loop recorded it. A search sends no data request, so nothing is re-run for it.
+ */
+function searchNoteLines(searches: readonly PhaseAToolCall[]): string[] {
+  const lines = [FIND_SOURCE_WORDS.notebookHeading, '', FIND_SOURCE_WORDS.notebookIntro, ''];
+  for (const search of searches) {
+    const outcome = search.searchOutcome === 'limit-reached' ? 'limit-reached' : 'searched';
+    lines.push(searchNotebookLine({ outcome, query: searchQueryOf(search.args), ...(outcome === 'searched' ? { hits: search.searchHits ?? [] } : {}) }));
+  }
+  return lines;
 }
 
 /**

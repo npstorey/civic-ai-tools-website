@@ -70,6 +70,7 @@ import { CIVIC_MANIFEST } from '@typedstandards/civic-typed-router';
 import routerPackage from '@typedstandards/civic-typed-router/package.json' with { type: 'json' };
 import { readerSourceName } from '../sources/source-name.ts';
 import { CHOOSER_REASONS, ECHO_LIMIT, SOURCE_CHOOSER_CARD, SOURCE_CHOOSER_CONSIDERED, SOURCE_CHOOSER_PACK, SOURCE_CHOOSER_TEXT } from '../sources/copy.ts';
+import { searchesOfSpans, searchRecordSentences, type SearchReading } from './search-words.ts';
 
 // --- The model ---------------------------------------------------------------------------
 
@@ -104,7 +105,16 @@ export interface ChooserConsidered {
 }
 
 export type SourceChooser =
-  | { method: 'in-loop'; router: string | null; version: string | null; definitionHash: string | null; groups?: ChooserGroups; considered?: ChooserConsidered }
+  | {
+      method: 'in-loop';
+      router: string | null;
+      version: string | null;
+      definitionHash: string | null;
+      groups?: ChooserGroups;
+      considered?: ChooserConsidered;
+      /** The run's `find_source` calls, in call order, as the trace states them (S3-B W2); absent when it has none. */
+      searches?: SearchReading[];
+    }
   | { method: 'all-sources' }
   | { method: 'not-recorded' }
   | { method: 'unrecognized'; value: string };
@@ -332,7 +342,7 @@ function packOf(calls: readonly ChooserPackCall[]): ChooserPack | undefined {
 export function sourceChooser(
   routing: unknown,
   definitionHash: unknown,
-  contacts: { loads: readonly ChooserLoad[]; offered: readonly ChooserOffered[]; packCalls?: readonly ChooserPackCall[] } | null,
+  contacts: { loads: readonly ChooserLoad[]; offered: readonly ChooserOffered[]; packCalls?: readonly ChooserPackCall[]; searches?: readonly SearchReading[] } | null,
   components?: unknown,
   considered?: unknown,
 ): SourceChooser {
@@ -347,6 +357,7 @@ export function sourceChooser(
       definitionHash: text(definitionHash) ?? null,
       ...(contacts ? { groups: chooserGroups(contacts.loads, contacts.offered, contacts.packCalls) } : {}),
       ...(stated ? { considered: stated } : {}),
+      ...(contacts?.searches && contacts.searches.length > 0 ? { searches: [...contacts.searches] } : {}),
     };
   }
   if (method === 'all-sources') return { method: 'all-sources' };
@@ -374,7 +385,7 @@ export function chooserFromTrace(trace: unknown): SourceChooser | null {
   const offered = offeredList(parseJson(text(attrs.get('analysis.sources_offered'))));
   const components = parseJson(text(attrs.get('analysis.components')));
   const considered = parseJson(text(attrs.get('analysis.considered')));
-  return sourceChooser(routing, attrs.get('analysis.definition_hash'), { loads: loadsOfSpans(spans), offered, packCalls: packCallsOfSpans(spans) }, components, considered);
+  return sourceChooser(routing, attrs.get('analysis.definition_hash'), { loads: loadsOfSpans(spans), offered, packCalls: packCallsOfSpans(spans), searches: searchesOfSpans(spans) }, components, considered);
 }
 
 /**
@@ -390,7 +401,7 @@ export function chooserFromPackage(pkg: unknown): SourceChooser {
   return sourceChooser(
     routing,
     composition?.definitionHash,
-    spans === null ? null : { loads: loadsOfSpans(spans), offered: offeredList(composition?.sourcesOffered), packCalls: packCallsOfSpans(spans) },
+    spans === null ? null : { loads: loadsOfSpans(spans), offered: offeredList(composition?.sourcesOffered), packCalls: packCallsOfSpans(spans), searches: searchesOfSpans(spans) },
     composition?.components,
     composition?.considered,
   );
@@ -418,13 +429,18 @@ export interface ChooserLine {
   kind?: 'definition';
 }
 
-/** The considered sentences: the count and the inventory, then the rule's words, or the rule named as recorded. */
-function consideredSentences(c: ChooserConsidered): string {
+/**
+ * The considered sentences: the count and the inventory, then the rule's words, or the rule named as recorded. "Was
+ * first shown" when a search returned a source (bundle revision 5, `:106`; S3-B W2): such a search may have added
+ * sources after the first list, and `listed` does not count them.
+ */
+function consideredSentences(c: ChooserConsidered, searches: readonly SearchReading[] = []): string {
   const W = SOURCE_CHOOSER_CONSIDERED;
   const rule = Object.hasOwn(W.rules, c.rule) && Object.hasOwn(W.rules[c.rule], c.ruleVersion)
     ? W.rules[c.rule][c.ruleVersion]
     : W.unknownRule(echoCapped(c.rule), echoCapped(c.ruleVersion));
-  return `${W.shown(c.listed, c.total, c.inventory, c.version)} ${rule}`;
+  const returnedASource = searches.some((s) => s.outcome === 'searched' && (s.hits ?? []).length > 0);
+  return `${(returnedASource ? W.firstShown : W.shown)(c.listed, c.total, c.inventory, c.version)} ${rule}`;
 }
 
 /** The Loaded line: each name, a pack's with the clause and its id as a code part. */
@@ -459,14 +475,16 @@ export function chooserLines(chooser: SourceChooser): ChooserLine[] {
     case 'unrecognized':
       return [{ text: T.unrecognized(echoCapped(chooser.value)) }];
     case 'in-loop': {
-      const first: ChooserLine = { text: chooser.considered ? `${T.inLoop} ${consideredSentences(chooser.considered)}` : T.inLoop };
+      const first: ChooserLine = { text: chooser.considered ? `${T.inLoop} ${consideredSentences(chooser.considered, chooser.searches)}` : T.inLoop };
+      // Each `find_source` call's words, after the considered sentences and before the groups (bundle :88; S3-B W2).
+      const searchLines: ChooserLine[] = (chooser.searches ?? []).map((reading) => ({ text: searchRecordSentences(reading) }));
       const g = chooser.groups;
-      if (!g) return [first];
+      if (!g) return [first, ...searchLines];
       // One line per source requested and not loaded, so two reasons never run together.
       const asked: ChooserLine = g.askedNotLoaded.length > 0
         ? { text: T.askedNotLoaded.trimEnd(), items: g.askedNotLoaded.map((a) => `${a.name}${T.reasonSeparator}${a.whyNotSent}`) }
         : { text: `${T.askedNotLoaded}${T.none}.` };
-      const lines: ChooserLine[] = [first, loadedLine(g), asked, { text: `${T.neverAsked}${names(g.neverAsked)}.` }];
+      const lines: ChooserLine[] = [first, ...searchLines, loadedLine(g), asked, { text: `${T.neverAsked}${names(g.neverAsked)}.` }];
       // R5: once, after the groups, only when a pack clause shows.
       return g.packs === undefined ? lines : [...lines, { text: SOURCE_CHOOSER_PACK.definition, kind: 'definition' }];
     }

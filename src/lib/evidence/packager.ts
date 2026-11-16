@@ -712,6 +712,10 @@ export function buildEvidencePackage(input: PackageInput): { pkg: EvidencePackag
       routing: run.routing,
       definitionHash: run.definitionHash,
       considered: run.considered,
+      // The routing configuration the run was routed under (S3-B W2, harness
+      // 0.14.0, ADR-0033 amendment 5), read from the root span's
+      // `analysis.routing_configuration`; absent, the key is absent.
+      routingConfiguration: run.routingConfiguration,
       extensions: input.extensions,
     },
     { host: requirePublicationHost() },

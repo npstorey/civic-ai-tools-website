@@ -61,7 +61,7 @@ import { BaseChangedError, createBaseCheck, type BaseCheck, type BaseReader } fr
 
 /** The base check's read: the client's `tools/list` read, loaded when a pack call first needs it. */
 const readBase: BaseReader = async (baseSourceId) => (await import('../mcp/client.ts')).readServerTools(baseSourceId);
-import type { LoadOutcome } from '@typedstandards/civic-typed-harness';
+import type { LoadOutcome, SearchOutcome } from '@typedstandards/civic-typed-harness';
 
 export interface TraceContext {
   builder: TraceBuilder;
@@ -104,25 +104,56 @@ export interface ToolCallRecord {
    * instance's own step answered it, whatever the outcome.
    */
   loadOutcome?: LoadOutcome;
-  /** S3-B W2 stub: how a `find_source` call ended. */
-  searchOutcome?: 'searched' | 'limit-reached';
-  /** S3-B W2 stub: a search's hits, by source id. */
+  /**
+   * How a `find_source` call ended (S3-B W2; harness 0.14.0's `SEARCH_OUTCOMES`), set by the loop on a search call
+   * only. A search is never `failed`: the instance's own step answered it.
+   */
+  searchOutcome?: SearchOutcome;
+  /** A search's hits, by source id, in rank order: on outcome `searched` only, `[]` included. */
   searchHits?: string[];
 }
 
-/** S3-B W2 stub: what a search answers. */
+/** What a search answers (S3-B W2). */
 export interface SearchStepResult {
-  outcome: 'searched' | 'limit-reached';
+  /** `searched`, or `limit-reached` when the run's searches are spent and none ran. */
+  outcome: SearchOutcome;
+  /** The tool message the model receives: one line of plain text, no JSON (the router's `FIND_SOURCE_RESULT_TEXT`). */
   text: string;
+  /** The hits, by source id, in rank order: on outcome `searched` only. */
   hits?: string[];
+  /** The next request's system prompt, when the hits grew the directory. */
   systemPrompt?: string;
+  /** The next request's tools, when the hits grew the directory. */
   tools?: ChatCompletionTool[];
 }
 
-/** S3-B W2 stub: the search step. */
+/**
+ * The in-loop search step (S3-B W2, anchor B2). A call named `toolName` (`find_source`) is the instance's own step,
+ * as a load is: the loop hands its `query` to `search`, outside the per-call bound and never to `executeToolCall`,
+ * records it as a tool call and a span at the same position, and applies what `search` answers to the next request.
+ * Expected not to throw; a throw is not caught (the router's search is pure, so a throw is a defect).
+ */
 export interface SearchStep {
+  /** The tool name the loop intercepts: `find_source`. */
   toolName: string;
+  /** Answer a search. `query` is the call's `query` argument when it is a string, and `''` otherwise (an argument
+   *  set that did not parse included): the words the span records and the search runs on. */
   search(query: string, context: { iteration: number }): Promise<SearchStepResult>;
+}
+
+/** The operation type a search call is recorded with: the value harness 0.14.0 reads a search span by. */
+export const FIND_SOURCE_OPERATION_TYPE = 'find_source';
+
+/**
+ * The loop's guard (S3-B W2, A1): a tools array that offers `find_source` with no search step to answer it would
+ * send the model's search to `executeToolCall`, and record it as a source's call. Refused before any request, and
+ * again for a replacement tools array.
+ */
+function assertSearchAnswered(tools: readonly ChatCompletionTool[], searchStep: SearchStep | undefined): void {
+  if (searchStep) return;
+  if (tools.some((tool) => tool.type === 'function' && tool.function.name === FIND_SOURCE_OPERATION_TYPE)) {
+    throw new Error('runToolLoop: the tools array offers find_source and no search step answers it; pass the routing\'s searchStep');
+  }
 }
 
 /** What a load answers (#644 W1). */
@@ -332,7 +363,14 @@ export interface ToolLoopOptions {
    * `llm_inference` span then states its own request's system prompt hash.
    */
   loadStep?: LoadStep;
-  /** S3-B W2 stub: the search step. */
+  /**
+   * The in-loop search step (S3-B W2). Omitted, no call is a search, and a tools array that offers `find_source` is
+   * refused before any request. Given, a call named `searchStep.toolName` is answered by `searchStep.search`,
+   * recorded as a tool call with operation type `find_source`, `searchOutcome` and `searchHits`, spanned with
+   * exactly `tool.search_query`, `tool.search_outcome`, `tool.search_hits` (on `searched`) and `tool.duration_ms`
+   * beside the call's name, type and arguments, and never `error` or a source's attribute; what it answers replaces
+   * the system message and the tools array from the next request on.
+   */
   searchStep?: SearchStep;
   /**
    * The base check this run applies before each pack call (S2-B P3R,
@@ -894,6 +932,7 @@ export async function runToolLoop(options: ToolLoopOptions): Promise<ToolLoopRes
     onEvent,
     trace,
     loadStep,
+    searchStep,
     checkBase = createBaseCheck({ read: readBase }),
     logContext = 'model-loop',
   } = options;
@@ -912,6 +951,7 @@ export async function runToolLoop(options: ToolLoopOptions): Promise<ToolLoopRes
   // replaces both (#644 W1); otherwise they are `systemPrompt` and `tools` on
   // every request, as they always were.
   let requestTools = tools;
+  assertSearchAnswered(tools, searchStep);
   const replaceSystemPrompt = (text: string) => {
     if (messages[0]?.role === 'system') messages[0] = { role: 'system', content: text };
     else messages.unshift({ role: 'system', content: text });
@@ -1049,8 +1089,58 @@ export async function runToolLoop(options: ToolLoopOptions): Promise<ToolLoopRes
         messages.push({ role: 'tool', tool_call_id: toolCall.id, content: answer.text });
         if (answer.outcome === 'loaded') {
           if (answer.systemPrompt !== undefined) replaceSystemPrompt(answer.systemPrompt);
-          if (answer.tools !== undefined) requestTools = answer.tools;
+          if (answer.tools !== undefined) {
+            assertSearchAnswered(answer.tools, searchStep);
+            requestTools = answer.tools;
+          }
         }
+        continue;
+      }
+
+      /**
+       * THE SEARCH STEP (S3-B W2; anchor B2, O2, O3). A `find_source` call is the instance's own step, as a load is:
+       * answered here by `searchStep.search`, never by `executeToolCall`, never under the per-call bound, and no
+       * source sees it. It is a tool call at its position in `toolCalls` and a span at the same position, the span
+       * carrying exactly what harness 0.14.0 reads (`tool.search_query`, `tool.search_outcome`, and on `searched`
+       * `tool.search_hits`), and none of `error`, `mcp.source`, `mcp.server.id`, `mcp.alias`, `mcp.pack_id` or
+       * `tool.upstream_name`: it ends here, before the line that tags a source's call. A query that is not a string,
+       * or arguments that did not parse, are searched and recorded as `''`; `tool.arguments` keeps them as sent.
+       */
+      if (searchStep && name === searchStep.toolName) {
+        const query = !argumentsMalformed && typeof args.query === 'string' ? args.query : '';
+        const searchEntry: ToolCallRecord = {
+          name,
+          args,
+          operationType: FIND_SOURCE_OPERATION_TYPE,
+          reason: generateToolReason(args, name),
+        };
+        toolCalls.push(searchEntry);
+        const searchPriorCalls = toolCalls.slice(0, -1);
+        emit({ type: 'tool_start', iteration: currentIteration, call: searchEntry, priorCalls: searchPriorCalls });
+        const searchSpanId = trace?.builder.startSpan('mcp_tool_call', trace.parentSpanId, {
+          'tool.name': name,
+          'tool.operation_type': FIND_SOURCE_OPERATION_TYPE,
+          'tool.arguments': JSON.stringify(args),
+          'tool.search_query': query,
+        });
+        const searchStartTime = Date.now();
+        const found = await searchStep.search(query, { iteration: currentIteration });
+        const searchDuration = Date.now() - searchStartTime;
+        searchEntry.duration_ms = searchDuration;
+        searchEntry.searchOutcome = found.outcome;
+        if (found.outcome === 'searched') searchEntry.searchHits = [...(found.hits ?? [])];
+        if (searchSpanId) {
+          trace!.builder.endSpan(searchSpanId, {
+            'tool.search_outcome': found.outcome,
+            ...(found.outcome === 'searched' ? { 'tool.search_hits': JSON.stringify(found.hits ?? []) } : {}),
+            'tool.duration_ms': searchDuration,
+          });
+        }
+        emit({ type: 'tool_complete', iteration: currentIteration, call: searchEntry, priorCalls: searchPriorCalls, durationMs: searchDuration });
+        emit({ type: 'tool_result', iteration: currentIteration, call: searchEntry });
+        messages.push({ role: 'tool', tool_call_id: toolCall.id, content: found.text });
+        if (found.systemPrompt !== undefined) replaceSystemPrompt(found.systemPrompt);
+        if (found.tools !== undefined) requestTools = found.tools;
         continue;
       }
 

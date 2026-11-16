@@ -101,7 +101,7 @@ const { runToolLoop } = await import('./run-tool-loop.ts');
 const { compareLoopOptions } = await import('./compare-loop.ts');
 const { _resetDefaultModelClientForTests, getModelClient } = await import('../model-client.ts');
 const { buildMcpRegistry, dispatchTargetOf, readMcpEnvFromProcess, routeToolCall, routedSourceId, SourceNotOfferedError } = await import('../mcp/registry.ts');
-const { createInLoopRouting, directorySet, SourceNotLoadedError } = await import('../mcp/routing-mode.ts');
+const { createInLoopRouting, directorySet, SourceNotLoadedError, DIRECTORY_SET_RULE } = await import('../mcp/routing-mode.ts');
 const { injectPackFilter, packFilterOf } = await import('../mcp/pack-filter.ts');
 const { upstreamToolName } = await import('../mcp/operation-types.ts');
 const { createBaseCheck } = await import('../mcp/base-check.ts');
@@ -186,7 +186,7 @@ const attr = (span: Span, key: string): unknown => {
 };
 const methods = (r: Run) => r.seen.map((s) => (s.tool ? `${s.method} ${s.tool}` : s.method));
 const inLoopRouting = (states: Record<string, 'on' | 'ask-first'>) =>
-  createInLoopRouting({ configured, directory: directorySet(configured, { enforced: true, states }), selection: [] });
+  createInLoopRouting({ configured, directory: directorySet(configured, { enforced: true, states }), searchable: directorySet(configured, { enforced: true, states }), rule: DIRECTORY_SET_RULE, selection: [] });
 const notLoadedLine = describeToolFailureForLlm(PACK_NAME, new SourceNotLoadedError(PACK_NAME));
 const notOfferedLine = describeToolFailureForLlm(PACK_NAME, new SourceNotOfferedError(PACK_NAME));
 

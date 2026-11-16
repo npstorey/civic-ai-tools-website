@@ -84,6 +84,15 @@ export function loadSourceTool(configured: McpRegistryEnv, directory: readonly s
   return civicRouter.aliasedLoadSourceTool({ configured, selection: [...directory] }) as unknown as ChatCompletionTool;
 }
 
+/**
+ * The search tool of an in-loop run whose searchable set is larger than its listed set (S3-B W2, B1):
+ * `find_source(query)`, the router's schema and S1's words. The router reserves the name, so no source's tool can
+ * share it. Offered by `createInLoopRouting` only, and answered by the loop's search step, never by a source.
+ */
+export function findSourceTool(): ChatCompletionTool {
+  return civicRouter.aliasedFindSourceTool() as unknown as ChatCompletionTool;
+}
+
 // Model definitions moved to src/lib/model-catalog.ts (civic-ai-tools-website#30
 // P2). `ModelDefinition`, the offered list, its pricing and its display names
 // were four tables in three files describing the same ids; they are now one

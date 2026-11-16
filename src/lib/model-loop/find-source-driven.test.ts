@@ -377,11 +377,25 @@ function packaged(): { pkg: Json; hash: string } {
   return { pkg: built.pkg as unknown as Json, hash: built.hash };
 }
 
-test('W2-7: the packaged record of the driven run names no unknown source', () => {
+// The run's one refused call (step 2, a City Record tool before its load) is recorded as this producer records any
+// call the dispatch refused: tagged `mcp.source` `unknown` (bundle revision 5, `civic.failureKind`'s sentence: "this
+// producer writes the id unknown on a call no source took"). It is not a search, so it is set aside here by its
+// position; every search activity is the platform's and names no source, and no `dataSources` entry is unknown.
+test('W2-7: the packaged record of the driven run names no unknown source for any search, and no unknown data source', () => {
   const { pkg } = packaged();
   const dataSources = (pkg.dataSources ?? []) as Array<{ sourceId?: string }>;
   assert.ok(!dataSources.some((entry) => entry.sourceId === 'unknown'), `a dataSources entry names unknown: ${JSON.stringify(dataSources)}`);
-  assert.ok(!JSON.stringify(pkg.provenance ?? {}).includes('mcp-server:unknown'), 'the graph mints an unknown source agent');
+  const graph = ((pkg.provenance ?? {}) as { '@graph'?: Array<Record<string, unknown>> })['@graph'] ?? [];
+  const searches = graph.filter((node) => node['civic:searchOutcome'] !== undefined);
+  assert.equal(searches.length, 3, `the graph states ${searches.length} search activities`);
+  for (const node of searches) {
+    assert.ok(!('civic:sourceId' in node), `a search activity names a source: ${JSON.stringify(node)}`);
+    assert.ok(!JSON.stringify(node['prov:wasAssociatedWith'] ?? '').includes('mcp-server:'), `a search activity is a server's: ${JSON.stringify(node)}`);
+  }
+  // The only unknown agent is the refused call's, and its activity is that call's.
+  const isActivity = (node: Record<string, unknown>) => ([] as unknown[]).concat(node['@type']).includes('prov:Activity');
+  const unknownActivities = graph.filter((node) => isActivity(node) && node['civic:sourceId'] === 'unknown');
+  assert.deepEqual(unknownActivities.map((node) => node['civic:failed']), [true], 'an unknown source is named for something other than the refused call');
 });
 
 test('W2-7: the packaged record verifies at the pinned verify-core 0.15.4', async () => {
@@ -409,7 +423,7 @@ test('W2-7: the analysis page states the search in revision 5\'s words, names th
   assert.ok(text.includes('The model was first shown 2 of the 7 sources'), text);
   assert.ok(text.includes('They were chosen by a rule recorded as test-listed-subset, version 1, which this site has no words for.'), text);
   assert.ok(!text.includes('Those were the sources set up on the site'), text);
-  assert.ok(text.includes(`The model searched for sources, using the words: “${Q1}”. The search returned 4 sources. They are listed in the search's order, its best match first: NYC City Record; Google Data Commons; Socrata; NYS Open Legislation. The site that ran this question did the search itself. It did not send the search to any source.`), text);
+  assert.ok(text.includes(`The model searched for sources, using the words: “${Q1}”. The search returned 4 sources. They are listed in the search's order, its best match first: NYC City Record; Data Commons; Socrata; NYS Open Legislation. The site that ran this question did the search itself. It did not send the search to any source.`), text);
   assert.ok(text.includes(`The model asked for another search, using the words: “${Q3}”. The site that ran this question did not run this search.`), text);
 });
 

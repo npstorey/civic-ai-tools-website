@@ -7,7 +7,7 @@ import { callMcpTool, startRunServerReads, withReportedKeys } from '@/lib/mcp/cl
 import { composeSystemPrompt, withPortalLockGuidance } from '@/lib/mcp/socrata-skill';
 import { consentInForce } from '@/lib/sources/consent-gate';
 import { decisionStoreFromEnv, readerGone, streamingRoutePause } from '@/lib/sources/decision';
-import { createInLoopRouting, directorySet, entersInLoop, sourceRoutingMode } from '@/lib/mcp/routing-mode';
+import { createInLoopRouting, DIRECTORY_SET_RULE, directorySet, entersInLoop, sourceRoutingMode } from '@/lib/mcp/routing-mode';
 import { checkRateLimit, getMissingRateLimitSecretError, incrementRateLimit, isRateLimited } from '@/lib/rate-limit';
 import { headers } from 'next/headers';
 import { encodeSSE, errorLogFacts, panelsForRun, startSseKeepAlive, streamErrorPayload, type StreamErrorCode, type PanelType, type StreamEvent } from '@/lib/streaming';
@@ -288,7 +288,7 @@ export async function POST(request: NextRequest) {
     // A hold ends when its reader is gone (R9 P1, #668): the request's signal, or a cancelled stream.
     const presence = readerGone(request);
     const inLoop = entersInLoop(routingMode, directory)
-      ? await createInLoopRouting({ portal, lockedPortal, configured, directory, selection, pause: streamingRoutePause(consent, session, configured, presence.signal) })
+      ? await createInLoopRouting({ portal, lockedPortal, configured, directory, searchable: directory, rule: DIRECTORY_SET_RULE, selection, pause: streamingRoutePause(consent, session, configured, presence.signal) })
       : undefined;
     const composition = inLoop
       ? { prompt: inLoop.firstSystemPrompt, assertedDate: inLoop.assertedDate, sourcesOffered: inLoop.sourcesOffered, components: inLoop.components() }

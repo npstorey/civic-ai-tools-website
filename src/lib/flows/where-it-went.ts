@@ -46,6 +46,7 @@
 import { statementHash, type FlowsKeptBy, type FlowsRecipient, type FlowsStatement } from './statement.ts';
 import { recipientWhere, roleLabel } from '../sources/source-name.ts';
 import { WHERE_IT_WENT_REASONS } from '../sources/copy.ts';
+import { SEARCH_OPERATION } from './search-words.ts';
 import { NOTEBOOK_EXTENSION_KEY, readNotebookProvenanceOfNotebook } from '../notebook-author/notebook-provenance-reading.ts';
 import { aliasOf, attributesOf, chooserFromPackage, NOT_RECEIVED, sourceReaderName, spansOfTrace, type SourceChooser } from './source-chooser.ts';
 
@@ -263,6 +264,8 @@ function readSpans(spans: readonly unknown[]): { contacts: Contact[]; model: str
       model = text(attrs.get('gen_ai.request.model')) ?? null;
       service = text(attrs.get('gen_ai.system')) ?? null;
     } else if (span.name === 'mcp_tool_call') {
+      // A search (S3-B W2) is the instance's own step: no source saw it, so it is no contact.
+      if (attrs.get('tool.operation_type') === SEARCH_OPERATION) continue;
       if (attrs.get('tool.operation_type') === LOAD_OPERATION) {
         contacts.push({ kind: 'load', alias: aliasOf(text(attrs.get('tool.arguments'))), outcome: text(attrs.get('tool.load_outcome')) ?? '' });
       } else {
@@ -307,7 +310,8 @@ export function whereItWentFromCalls(input: {
   service: string;
   executed?: boolean;
 }): WhereItWentModel {
-  const contacts: Contact[] = input.toolCalls.map((call): Contact =>
+  // A search (S3-B W2) is no contact with any source, whatever the resolver would make of its name.
+  const contacts: Contact[] = input.toolCalls.filter((call) => call.operationType !== SEARCH_OPERATION).map((call): Contact =>
     call.operationType === LOAD_OPERATION
       ? { kind: 'load', alias: text(call.args?.alias), outcome: call.loadOutcome ?? '' }
       : { kind: 'call', source: input.resolveSource(call.name), failureKind: call.failed ? call.failureKind ?? 'unknown' : undefined },

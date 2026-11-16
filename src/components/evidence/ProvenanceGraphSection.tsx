@@ -2,6 +2,7 @@
 
 import { useState } from 'react';
 import { readerFacingSourceNames } from '@/lib/evidence/data-sources';
+import { searchActivityDescription } from '@/lib/flows/search-words';
 
 interface ProvNode {
   '@id': string;
@@ -38,6 +39,11 @@ function getType(node: ProvNode): string {
  * and must show exactly what was signed (Principle 6). No signed byte moves.
  */
 function getDescription(node: ProvNode): string {
+  // A search's activity (S3-B W2, r2's S17): the harness describes it as an "MCP tool call", though the instance
+  // answered it and no server saw it; this tab gives the bundle's sentence for it instead. The JSON-LD tab is not
+  // mapped.
+  const search = searchActivityDescription(node);
+  if (search !== undefined) return search;
   const stated = (node['dcterms:description'] as string) || (node['dcterms:title'] as string) || '';
   return readerFacingSourceNames(stated);
 }

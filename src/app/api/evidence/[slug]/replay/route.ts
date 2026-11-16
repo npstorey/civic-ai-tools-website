@@ -8,7 +8,7 @@ import {
 } from '@/lib/caller-model-key';
 import { modelIdentityForDeclared } from '@/lib/model-resolver';
 import { runToolLoop } from '@/lib/model-loop/run-tool-loop';
-import { replayLoopOptionsForPackage, replayOfferedSet } from '@/lib/model-loop/replay-loop';
+import { recordRoutingConfiguration, replayLoopOptionsForPackage, replayOfferedSet } from '@/lib/model-loop/replay-loop';
 import { getServerSession } from 'next-auth';
 import { authOptions } from '@/lib/auth';
 import { db } from '@/lib/db';
@@ -175,6 +175,10 @@ export async function POST(
       tokenUsage: result.usage,
       durationMs: result.durationMs,
       offeredSet: replayOfferedSet(pkg, undefined, consent.selection),
+      // The routing configuration the record states (S3-B W2, B6): unsigned
+      // and shown, never applied; the replay lists its whole set and offers
+      // no search. Absent for a record that states none.
+      ...(recordRoutingConfiguration(pkg) ? { routingConfiguration: recordRoutingConfiguration(pkg) } : {}),
     });
   } catch (error) {
     console.error('[replay] Error:', errorLogFacts(error));

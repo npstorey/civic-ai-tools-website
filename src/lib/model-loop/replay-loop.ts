@@ -52,7 +52,7 @@
  */
 
 import type OpenAI from 'openai';
-import { CIVIC_MANIFEST, isOfferedReason, type OfferedReason, type SourceSelection } from '@typedstandards/civic-typed-router';
+import { CIVIC_MANIFEST, civicRouter, isOfferedReason, type OfferedReason, type SourceSelection } from '@typedstandards/civic-typed-router';
 import type { ModelRequestSettings } from '../model-catalog.ts';
 import { mcpTools, offeredMcpTools } from '../mcp/tools.ts';
 import { callMcpTool } from '../mcp/client.ts';
@@ -62,7 +62,7 @@ import { buildSystemPrompt } from '../mcp/socrata-skill.ts';
 import { sourceIdForToolName } from '../mcp/operation-types.ts';
 import { CIVIC_SOURCE_REGISTRY } from '../evidence/data-sources.ts';
 import type { ToolLoopOptions } from './run-tool-loop.ts';
-import { createInLoopRouting, directorySet, type InLoopRouting } from '../mcp/routing-mode.ts';
+import { createInLoopRouting, directorySet, DIRECTORY_SET_RULE, type InLoopRouting } from '../mcp/routing-mode.ts';
 
 /** Tool-calling rounds before the loop stops and asks for an answer. */
 export const REPLAY_MAX_ITERATIONS = 20;
@@ -352,8 +352,10 @@ export function replayLoopOptions(inputs: ReplayLoopInputs): ToolLoopOptions {
     toolTimeoutMs,
     executeToolCall: callTool,
     dispatchTarget,
-    // In loop (#644 W1): the load step. A replay holds no stream.
-    ...(inLoop ? { loadStep: inLoop.loadStep } : {}),
+    // In loop (#644 W1): the load step. A replay holds no stream. Its listed
+    // and searchable sets are equal (B6), so it has no search step; passed as
+    // the routing gives it, so the loop's guard holds for a replay too.
+    ...(inLoop ? { loadStep: inLoop.loadStep, ...(inLoop.searchStep ? { searchStep: inLoop.searchStep } : {}) } : {}),
   };
 }
 
@@ -419,6 +421,29 @@ export function recordRoutingMethod(pkg: ReplayOfferedSetSource): string | undef
   return typeof method === 'string' ? method : undefined;
 }
 
+/**
+ * The routing configuration a record's composition block states
+ * (`routingConfiguration`, harness 0.14.0; ADR-0033 amendment 5), or
+ * `undefined` for a record that states none. Read for showing only (B6, S3-B
+ * W2): a replay lists its whole narrowed set and offers no search, so the
+ * configuration the original run was routed under is shown to the reader of
+ * the replay and never applied again. Unsigned, as the offered set is.
+ */
+export function recordRoutingConfiguration(pkg: ReplayOfferedSetSource): RecordedRoutingConfiguration | undefined {
+  const composition = pkg.extensions?.[COMPOSITION_EXTENSION] as { routingConfiguration?: unknown } | undefined;
+  const value = composition && typeof composition === 'object' ? composition.routingConfiguration : undefined;
+  return value !== null && typeof value === 'object' && !Array.isArray(value) ? (value as RecordedRoutingConfiguration) : undefined;
+}
+
+/** A recorded routing configuration, as the composition block states it. */
+export interface RecordedRoutingConfiguration {
+  rule: { id: string; version: string };
+  cap: string;
+  search: 'none' | { method: string; version: string };
+  inventory: { id: string; version: string; hash: string };
+  hash: string;
+}
+
 /** The set the record states, or `null` when it states none. */
 function statedOfferedSet(pkg: ReplayOfferedSetSource): { from: 'sourcesOffered' | 'mcpServers'; ids: string[] } | null {
   const composition = pkg.extensions?.[COMPOSITION_EXTENSION] as { sourcesOffered?: unknown } | undefined;
@@ -476,7 +501,11 @@ export function replayOfferedSet(
 ): ReplayOfferedSetWithLoads {
   const manifestIds = CIVIC_MANIFEST.map((entry) => entry.sourceId);
   const registry = buildMcpRegistry(configured);
-  const routable = (id: string): boolean => Object.hasOwn(registry.servers, id) || Object.hasOwn(registry.hosted, id) || CIVIC_MANIFEST.some((entry) => entry.sourceId === id && entry.base !== undefined && routable(entry.base));
+  // A pack is routable when its base is and the configuration offers it: on an instance locked to a portal other
+  // than a Socrata pack's own, the router leaves the pack unconfigured (S3-B W2, F1 and A4; G0-6 = A), so a replay
+  // of a record that offered City Record does not offer it there, and names it among the sources this site lacks.
+  const packsOffered = new Set(civicRouter.offeredSkillSources(configured));
+  const routable = (id: string): boolean => Object.hasOwn(registry.servers, id) || Object.hasOwn(registry.hosted, id) || CIVIC_MANIFEST.some((entry) => entry.sourceId === id && entry.base !== undefined && routable(entry.base) && packsOffered.has(id));
   const replayerOn = (id: string) => replayerSelection === undefined || replayerSelection.includes(id);
   const stated = statedOfferedSet(pkg);
   if (stated === null) {
@@ -610,10 +639,16 @@ export async function replayLoopOptionsForPackage(
       .filter((entry) => offered.sources.includes(entry.sourceId));
     if (directory.length > 0) {
       const transport = loopInputs.callTool;
+      // B6 (S3-B W2): the whole narrowed set is listed and is the searchable
+      // set, under `directory-set`, so a replay offers no search even of a
+      // record whose run searched; the record's routing configuration is
+      // shown to the reader (`recordRoutingConfiguration`), never applied.
       const inLoop = await createInLoopRouting({
         portal,
         configured,
         directory,
+        searchable: directory,
+        rule: DIRECTORY_SET_RULE,
         selection: offered.sources,
         ...(transport ? { callTool: (name: string, args: Record<string, unknown>) => transport(name, args) } : {}),
       });

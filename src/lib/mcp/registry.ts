@@ -40,6 +40,7 @@ import {
   type SourceSelection,
 } from '@typedstandards/civic-typed-router';
 import { AmbiguousToolNameError } from './tool-name-refusal.ts';
+import { getDefaultPortal, isPortalLocked } from '../site-config.ts';
 
 export { AmbiguousToolNameError } from './tool-name-refusal.ts';
 
@@ -773,6 +774,18 @@ function presentOrUndefined(raw: string | undefined): string | undefined {
  * default only ever produced failed calls. The Data Commons default is a
  * third-party PUBLIC endpoint (Google's hosted Data Commons), not reference
  * infrastructure, so it keeps its coded default.
+ *
+ * THE ONE-PORTAL LOCK (S3-B W2, F1; npstorey/civic-ai-tools#318, G0-6 = A). The configuration carries router
+ * 0.10.0's `lockedPortal`, set from the same two readers `resolveRunPortal` reads (`isPortalLocked()` and
+ * `getDefaultPortal()`, `../site-config.ts`), so every caller of this function reads one lock: the routes, the
+ * flows statement and so the consent card, the privacy page, the MCP client's registry, replay and the root
+ * layout. Under a lock to a portal other than a Socrata pack's own, the router leaves that pack unconfigured
+ * (`not-configured`): not offered, not listed, not found, not in the lock text. It is set only when the lock
+ * resolves to a portal, so an unlocked configuration keeps its exact shape. The lock on with no portal configured
+ * sets nothing: every query route refuses that instance (`portal_not_configured`), and every other reader sees
+ * it as unlocked. A replay on an instance locked to another portal therefore loses City Record too (A4).
+ * `portal-lock-reaches-router.test.ts` holds the agreement with `resolveRunPortal`, and that no other file
+ * builds a configuration with the router's raw reader.
  */
 export function readMcpEnvFromProcess(): McpRegistryEnv {
   // The package's reader over exactly these seven variables, each read by name
@@ -791,7 +804,9 @@ export function readMcpEnvFromProcess(): McpRegistryEnv {
     NYC_CHECKBOOK_HOSTING: process.env.NYC_CHECKBOOK_HOSTING,
     NYS_LEGISLATION_HOSTING: process.env.NYS_LEGISLATION_HOSTING,
   };
-  const read = readMcpEnv(variables);
+  const lockedPortal = isPortalLocked() ? (getDefaultPortal() ?? undefined) : undefined;
+  const withLock = (configuration: McpRegistryEnv): McpRegistryEnv => (lockedPortal === undefined ? configuration : { ...configuration, lockedPortal });
+  const read = withLock(readMcpEnv(variables));
   // A keyed source whose switch is on and whose key is not set is NOT
   // CONFIGURED (R8 W3): its switch is withheld from the package's reader, so the
   // router, the registry and the flows statement, which all read this
@@ -814,7 +829,7 @@ export function readMcpEnvFromProcess(): McpRegistryEnv {
     }
   }
   if (Object.keys(hostedKeyMissing).length === 0) return read;
-  return { ...readMcpEnv(variables), hostedKeyMissing };
+  return { ...withLock(readMcpEnv(variables)), hostedKeyMissing };
 }
 
 /**

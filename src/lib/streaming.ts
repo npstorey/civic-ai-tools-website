@@ -9,6 +9,8 @@ import { BaseChangedError, BaseReadFailedError } from './mcp/base-check.ts';
 import type { ToolFailureKind } from './notebook-author/tool-to-cell.ts';
 import type { FlowsLinks, FlowsSource } from './flows/statement.ts';
 import { readerSourceName } from './sources/source-name.ts';
+import { FIND_SOURCE_WORDS } from './sources/copy.ts';
+import { searchProgressLine, searchResultLine } from './flows/search-words.ts';
 import type { WhereItWentModel } from './flows/where-it-went.ts';
 export type StreamEventType = 'progress' | 'token' | 'complete' | 'error' | 'trace';
 export type PanelType = 'withMcp' | 'withoutMcp';
@@ -1198,6 +1200,9 @@ export function formatToolProgress(
       const source = loadedSourceName(args);
       return source ? `Loading the ${source} source` : 'Loading a data source';
     }
+    case 'find_source':
+      // The instance's own search (S3-B W2): the words as the span records them.
+      return searchProgressLine(args);
     default:
       // `fetch` derives to no operation type by design (see
       // mcp/operation-types.ts): the identifier's shape decides, server-side,
@@ -1543,6 +1548,8 @@ export function formatToolResult(
   name?: string,
   /** A load's outcome (#644 W1), on a `load_source` call only. */
   loadOutcome?: string,
+  /** A search's outcome and hits (S3-B W2), on a `find_source` call only. */
+  search?: { outcome?: string; hits?: readonly string[] },
 ): string | null {
   const type = resolveOperationType({ name, args }) ?? (args.type as string | undefined);
   const datasetId = args.dataset_id as string | undefined;
@@ -1568,6 +1575,10 @@ export function formatToolResult(
       return `Loaded metadata for ${datasetName}`;
     case 'metrics':
       return `Loaded metrics for ${datasetName}`;
+    case 'find_source':
+      // The search's outcome in the bundle's words (S3-B W2); with none
+      // recorded, nothing is said about how it ended.
+      return searchResultLine(search?.outcome, search?.hits);
     case 'load_source': {
       // A load's outcome, in the reader's words (#644 W1); with none
       // recorded, nothing is said about how it ended.
@@ -1648,6 +1659,8 @@ export function generateToolReason(args: Record<string, unknown>, name?: string)
       const source = loadedSourceName(args);
       return source ? `to load the ${source} source` : 'to load a data source';
     }
+    case 'find_source':
+      return FIND_SOURCE_WORDS.purpose;
     default:
       if (isTool(name, 'fetch')) return id ? `to look up ${id}` : 'to look up one item';
       // A tool whose operation neither its name nor its arguments state: the
@@ -1885,6 +1898,8 @@ export function buildBreadcrumbLabel(
       const source = loadedSourceName(tool.args);
       return source ? `Load ${truncate(source, 22)}` : 'Load a source';
     }
+    case 'find_source':
+      return FIND_SOURCE_WORDS.breadcrumb;
     default: {
       if (isTool(tool.name, 'fetch')) {
         const id = tool.args.id as string | undefined;
@@ -1899,7 +1914,7 @@ export function buildBreadcrumbLabel(
 
 // Describe a tool call in past-tense narrative form
 function describeToolNarrative(
-  tool: { name?: string; args: Record<string, unknown>; operationType?: string; loadOutcome?: string },
+  tool: { name?: string; args: Record<string, unknown>; operationType?: string; loadOutcome?: string; searchOutcome?: string },
   index: number,
   allTools: { name?: string; args: Record<string, unknown>; operationType?: string }[],
 ): string {
@@ -1961,6 +1976,13 @@ function describeToolNarrative(
     }
     case 'metrics':
       return 'checked dataset statistics';
+    case 'find_source':
+      // How the search ended, when the record says (S3-B W2); never a source's call.
+      return tool.searchOutcome === 'searched'
+        ? FIND_SOURCE_WORDS.narrativeSearched
+        : tool.searchOutcome === 'limit-reached'
+          ? FIND_SOURCE_WORDS.narrativeLimited
+          : FIND_SOURCE_WORDS.narrativeRequested;
     case 'load_source': {
       // How the load ended, when the record says (#644 W1); a record that does
       // not is narrated as the request it was.
@@ -2015,7 +2037,7 @@ function describeRejectedAttempt(reason: string | undefined): string {
 
 // Build a narrative summary telling the analytical story of what the AI did
 export function buildNarrativeSummary(
-  toolsCalled: { name?: string; args: Record<string, unknown>; resultSummary?: { rows: number; columns: number }; duration_ms?: number; operationType?: string; reason?: string; failed?: boolean; loadOutcome?: string }[],
+  toolsCalled: { name?: string; args: Record<string, unknown>; resultSummary?: { rows: number; columns: number }; duration_ms?: number; operationType?: string; reason?: string; failed?: boolean; loadOutcome?: string; searchOutcome?: string }[],
 ): string {
   if (toolsCalled.length === 0) return '';
 

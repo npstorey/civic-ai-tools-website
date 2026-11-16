@@ -550,8 +550,9 @@ test('criterion 5: a packaged in-loop record states routing, the definition hash
   const root = rootAttributes(traceOf(IN_LOOP));
   assert.deepEqual(composition.routing, { method: 'in-loop', version: ROUTER_VERSION });
   assert.equal(composition.definitionHash, root['analysis.definition_hash']);
-  // The property kept: routing and definitionHash close the block, in the harness's order; S2-B W4 adds considered after them.
-  assert.deepEqual(Object.keys(composition).slice(-3), ['routing', 'definitionHash', 'considered'], 'routing, definitionHash and considered are not the block\'s last three keys');
+  // The property kept: routing and definitionHash close the block, in the harness's order; S2-B W4 adds considered after them,
+  // and S3-B W2 the routing configuration after considered (ADR-0033 amendment 5).
+  assert.deepEqual(Object.keys(composition).slice(-4), ['routing', 'definitionHash', 'considered', 'routingConfiguration'], 'routing, definitionHash, considered and routingConfiguration are not the block\'s last four keys');
   assert.deepEqual((composition.components as Array<{ id: string }>).map((c) => c.id), ['socrata-mcp-server@https://github.com/npstorey/socrata-mcp-server', '@typedstandards/civic-typed-router']);
   const environment = pkg.extensions?.['org.civicaitools.environment'] as Json;
   const requests = mcpRequests(IN_LOOP);
@@ -858,7 +859,8 @@ test('S2-B W4: the record packaged from the in-loop run states composition.consi
   const composition = pkg.extensions?.['org.civicaitools.composition'] as Json;
   assert.deepEqual(composition.considered, EXPECTED_CONSIDERED);
   assert.equal((composition.considered as { inventory: { version: string } }).inventory.version, `${CIVIC_INVENTORY.version}+${CIVIC_INVENTORY.hash.slice(0, 12)}`);
-  assert.equal(Object.keys(composition).at(-1), 'considered');
+  // Last but for the routing configuration, which S3-B W2 writes after it (ADR-0033 amendment 5).
+  assert.deepEqual(Object.keys(composition).slice(-2), ['considered', 'routingConfiguration']);
   assert.deepEqual(JSON.parse(rootAttributes(traceOf(IN_LOOP))['analysis.considered'] ?? 'null'), composition.considered);
 });
 

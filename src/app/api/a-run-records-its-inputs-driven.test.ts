@@ -574,7 +574,7 @@ async function loopRun(aliases: string[], pause: PauseKind): Promise<LoopRun> {
       ? createConsentPause({ store: null, statement: buildFlowsStatementFor(null), configured })
       : undefined;
   // Cast: at tree 3 `ConsentPause.ask` returns the bare decision (G0-B1 A widens it).
-  const session = await routingMode.createInLoopRouting({ configured, directory, selection: [], now, ...(scripted ? { pause: scripted as never } : {}) });
+  const session = await routingMode.createInLoopRouting({ configured, directory, searchable: directory, rule: routingMode.DIRECTORY_SET_RULE, selection: [], now, ...(scripted ? { pause: scripted as never } : {}) });
   const server = await startScriptedModelServer([
     ...aliases.map((alias, i) => ({ toolCalls: [{ id: `call-load-${i}`, name: 'load_source', args: { alias } }] })),
     { content: LOOP_ANSWER },
