@@ -147,8 +147,16 @@ const MODEL_CALL = 'chat.completions.create';
  */
 const REQUEST_PARAMETERS = 'modelRequestParameters(';
 
-/** Request fields only `modelRequestParameters` writes. */
-const ENTRY_DERIVED_FIELDS = ['max_tokens', 'max_completion_tokens', 'reasoning_effort'];
+/**
+ * Request fields only `modelRequestParameters` writes. `provider` since #740
+ * P3: a catalog entry's provider routing reaches a request only through the
+ * builder, so a call writing `provider` itself would send routing its model's
+ * entry does not declare, or drop the routing it does. (The evaluation harness
+ * adds its own `provider` to a request body in a fetch wrapper,
+ * `recordingFetch` in scripts/eval-models.mjs, which is not a model call and
+ * which this scan does not read.)
+ */
+const ENTRY_DERIVED_FIELDS = ['max_tokens', 'max_completion_tokens', 'reasoning_effort', 'provider'];
 
 interface ModelCall {
   file: string;

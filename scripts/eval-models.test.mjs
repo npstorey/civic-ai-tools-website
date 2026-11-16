@@ -493,13 +493,22 @@ test('#573, EVAL-OW C4: the roster passes the slug check against the recorded li
   assert.match(stale[0], /the catalog no longer has an entry "anthropic\/gone"/);
 });
 
-test('#573, EVAL-OW: the controls are the catalog but Opus 5.5, each with its entry\'s own settings; the open-weight models are at S1\'s rule with the ruled provider', () => {
+test('#573, EVAL-OW: the controls are the catalog but Opus 5.5 and MiMo-V2.6-Flash, each with its entry\'s own settings; the open-weight models are at S1\'s rule with the ruled provider', () => {
   const controls = ALL_MODELS.filter((m) => m.role === 'control');
+  // MiMo-V2.6-Flash entered the catalog after the run (#740 P3); the run takes
+  // it once, as an open-weight model, never as a control.
   assert.deepEqual(
     controls.map((m) => m.catalogId),
-    BUILT_IN_CATALOG.map((e) => e.id).filter((id) => id !== 'anthropic/claude-opus-5.5'),
-    'every catalog entry but Opus 5.5 is a control, in catalog order, and nothing else is',
+    BUILT_IN_CATALOG.map((e) => e.id).filter((id) => id !== 'anthropic/claude-opus-5.5' && id !== 'xiaomi/mimo-v2.6-flash'),
+    'every catalog entry but Opus 5.5 and MiMo-V2.6-Flash is a control, in catalog order, and nothing else is',
   );
+  // The roster is the November run's five models, in its order, each in its
+  // role, read from the run's committed record (#740 P3, the seat's ruling
+  // 6898136128, condition 2).
+  const runFile = fileURLToPath(new URL('../docs/model-evaluation-2026-11/eval-results-run-20261113T134831Z.json', import.meta.url));
+  const recorded = JSON.parse(readFileSync(runFile, 'utf8')).metadata.models.map((m) => [m.id, m.role]);
+  assert.equal(recorded.length, 5, 'premise: the run file records five models');
+  assert.deepEqual(ALL_MODELS.map((m) => [m.id, m.role]), recorded, 'the November run\'s five models, in its order, in its roles');
   for (const control of controls) {
     const entry = BUILT_IN_CATALOG.find((e) => e.id === control.catalogId);
     assert.deepEqual(control.requestSettings, modelRequestSettings(entry), `${control.id} must send what production sends`);

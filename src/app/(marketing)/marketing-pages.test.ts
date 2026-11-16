@@ -613,3 +613,57 @@ test('UX-2 P5 X30: /project no longer describes a verification status, and keeps
     assert.ok(!text.toLowerCase().includes(gone.toLowerCase()), `/project still reads "${gone}"`);
   }
 });
+
+// --- EVAL-OW P3 (#740, criteria 3 and 4): MiMo-V2.6-Flash on /learn -------------------
+// The model section gains a fourth card. Each October 2026 figure stays an
+// October figure, and the sentences that compared Haiku 5.5 with "the other
+// two" and "the three" name what they compared it with. The card's retention
+// sentences are what docs/model-evaluation-2026-11.md records for the three
+// providers that served the run's MiMo-V2.6-Flash requests (its providers
+// table, Cohere, GMICloud and Xiaomi; the Cohere and GMICloud conflicts).
+
+const NOVEMBER_DOC = 'https://github.com/npstorey/civic-ai-tools-website/blob/main/docs/model-evaluation-2026-11.md';
+
+const P3_LEARN_LINES = [
+  'Three of the four models that led that run are the Claude models below. In November 2026 we ran two of them again on 15 questions, beside three open-weight models, and added the open-weight model that came closest to them on answer quality. The demo offers all four:',
+  'at about half a cent a question in that run: under a tenth of what Sonnet 5.5 and Opus 5.5 cost. It was also the fastest of those three, with a median of 15 seconds.',
+  'Stronger analysis at moderate cost: in the October 2026 run, the main answer right on 9 of 11 questions, with careful caveats, at about 11 cents a question and a median of 21 seconds.',
+  'It was the slowest of the three in that run (a median of 27 seconds) and costs about 21 cents a question: worth it for complex or multi-step questions.',
+  'An open-weight model: its maker, Xiaomi, publishes the trained model itself, not only access to it. In the November 2026 run it came closest of the three open-weight models to the Claude models on answer quality, at about a third of a cent a question, the lowest cost in that run. It was also the slowest model in that run, with a median of about 25 seconds.',
+  // OA-863 = B (#740 comment 6902575273): the routing allows only the three
+  // providers that served the run's MiMo-V2.6-Flash requests.
+  'The demo reaches it through OpenRouter, which passes each question to one of several companies that run the model. The demo lets only three of those companies answer its questions: Cohere, GMICloud and Xiaomi. OpenRouter picks among the three for each question, and if none of them can take it, the question fails rather than going to another company.',
+  'In the November 2026 run its questions went to three of those companies: Cohere, GMICloud and Xiaomi. OpenRouter lists all three as keeping the prompts they receive: Cohere and Xiaomi for 30 days, and GMICloud for a period it does not state.',
+  // The seat's wording ruling (#740 comment 6899621098): "The evaluation
+  // recorded two conflicts." (Cohere's provider-level 30 days agrees with its
+  // own page; its conflict is with the endpoint listing, doc :290), and
+  // GMICloud's own word, "categorizing" (doc :293).
+  "The evaluation recorded two conflicts. For this model, OpenRouter also lists Cohere as keeping nothing, while Cohere's own page says prompts are kept for 30 days and then deleted, unless zero retention has been approved. GMICloud's console terms say it does not keep a customer's inputs after categorizing them unless the customer opts in to prompt logging, and which GMICloud agreement covers OpenRouter's traffic is not stated.",
+  "Each listing and each company's own words are recorded in the November 2026 evaluation.",
+];
+
+const P3_LEARN_GONE = [
+  'The demo offers three of the four models that led:',
+  'under a tenth of what the other two cost',
+  'It was also the fastest of the three, with',
+  'It is the slowest of the three',
+  'Two of those listings conflict with what the companies themselves publish.',
+  'after sorting them',
+  'The demo does not pick the company, and the companies that serve its questions can change.',
+];
+
+test('EVAL-OW P3: /learn carries a MiMo-V2.6-Flash card beside the Claude cards, in the ruled terms', () => {
+  const s = PAGES['/learn'];
+  const texts = headingTexts(s);
+  assert.deepEqual(
+    texts.filter((t) => /\((recommended|balanced|premium|open-weight)\)$/.test(t)),
+    ['Claude Haiku 5.5 (recommended)', 'Claude Sonnet 5.5 (balanced)', 'Claude Opus 5.5 (premium)', 'MiMo-V2.6-Flash (open-weight)'],
+  );
+  const text = pageText(s);
+  const missing = P3_LEARN_LINES.filter((line) => !text.includes(line));
+  const stale = P3_LEARN_GONE.filter((line) => text.includes(line));
+  assert.deepEqual({ missing, stale }, { missing: [], stale: [] });
+  // The card links to the November document's providers section.
+  const link = one(linksReading(s, 'the November 2026 evaluation'), 'a link reading "the November 2026 evaluation"');
+  assert.equal(attr(link, 'href'), `${NOVEMBER_DOC}#the-providers-a8`);
+});

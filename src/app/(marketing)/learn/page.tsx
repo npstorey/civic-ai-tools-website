@@ -468,7 +468,10 @@ export default function LearnPage() {
         <p style={prose}>
           In October 2026 we ran nine AI models on 14 of the civic data questions first used in
           March, and scored every answer against a rubric and against figures read directly from
-          the data portals. The demo offers three of the four models that led:
+          the data portals. Three of the four models that led that run are the Claude models
+          below. In November 2026 we ran two of them again on 15 questions, beside three
+          open-weight models, and added the open-weight model that came closest to them on answer
+          quality. The demo offers all four:
         </p>
 
         <div style={{ display: 'flex', flexDirection: 'column', gap: '16px', marginBottom: '24px' }}>
@@ -477,16 +480,17 @@ export default function LearnPage() {
             <p style={{ fontSize: '15px', color: 'var(--text-secondary)', margin: 0, lineHeight: '1.6' }}>
               The model the demo starts on. In the October 2026 run it got the main answer right on 8
               of 11 questions, and partly right on the other three, at about half a cent a question in
-              that run: under a tenth of what the other two cost. It was also the fastest of the three, with a
-              median of 15 seconds.
+              that run: under a tenth of what Sonnet 5.5 and Opus 5.5 cost. It was also the fastest of
+              those three, with a median of 15 seconds.
             </p>
           </div>
 
           <div style={card}>
             <h3 style={{ fontSize: '16px', marginBottom: '6px' }}>Claude Sonnet 5.5 (balanced)</h3>
             <p style={{ fontSize: '15px', color: 'var(--text-secondary)', margin: 0, lineHeight: '1.6' }}>
-              Stronger analysis at moderate cost: the main answer right on 9 of 11 questions, with
-              careful caveats, at about 11 cents a question and a median of 21 seconds.
+              Stronger analysis at moderate cost: in the October 2026 run, the main answer right on 9
+              of 11 questions, with careful caveats, at about 11 cents a question and a median of 21
+              seconds.
             </p>
           </div>
 
@@ -494,8 +498,48 @@ export default function LearnPage() {
             <h3 style={{ fontSize: '16px', marginBottom: '6px' }}>Claude Opus 5.5 (premium)</h3>
             <p style={{ fontSize: '15px', color: 'var(--text-secondary)', margin: 0, lineHeight: '1.6' }}>
               The highest quality score in the October 2026 run, with the main answer right on all 11
-              questions. It is the slowest of the three (a median of 27 seconds) and costs about 21
-              cents a question: worth it for complex or multi-step questions.
+              questions. It was the slowest of the three in that run (a median of 27 seconds) and costs
+              about 21 cents a question: worth it for complex or multi-step questions.
+            </p>
+          </div>
+
+          <div style={card}>
+            <h3 style={{ fontSize: '16px', marginBottom: '6px' }}>MiMo-V2.6-Flash (open-weight)</h3>
+            <p style={{ fontSize: '15px', color: 'var(--text-secondary)', margin: '0 0 8px', lineHeight: '1.6' }}>
+              An open-weight model: its maker, Xiaomi, publishes the trained model itself, not only
+              access to it. In the November 2026 run it came closest of the three open-weight models to
+              the Claude models on answer quality, at about a third of a cent a question, the lowest
+              cost in that run. It was also the slowest model in that run, with a median of about 25
+              seconds.
+            </p>
+            <p style={{ fontSize: '15px', color: 'var(--text-secondary)', margin: '0 0 8px', lineHeight: '1.6' }}>
+              The demo reaches it through OpenRouter, which passes each question to one of several
+              companies that run the model. The demo lets only three of those companies answer its
+              questions: Cohere, GMICloud and Xiaomi. OpenRouter picks among the three for each
+              question, and if none of them can take it, the question fails rather than going to
+              another company.
+            </p>
+            <p style={{ fontSize: '15px', color: 'var(--text-secondary)', margin: '0 0 8px', lineHeight: '1.6' }}>
+              In the November 2026 run its questions went to three of those companies: Cohere, GMICloud
+              and Xiaomi. OpenRouter lists all three as keeping the prompts they receive: Cohere and
+              Xiaomi for 30 days, and GMICloud for a period it does not state. The evaluation
+              recorded two conflicts. For this model, OpenRouter also
+              lists Cohere as keeping nothing, while Cohere&rsquo;s own page says prompts are kept for
+              30 days and then deleted, unless zero retention has been approved. GMICloud&rsquo;s
+              console terms say it does not keep a customer&rsquo;s inputs after categorizing them unless
+              the customer opts in to prompt logging, and which GMICloud agreement covers
+              OpenRouter&rsquo;s traffic is not stated.
+            </p>
+            <p style={{ fontSize: '15px', color: 'var(--text-secondary)', margin: 0, lineHeight: '1.6' }}>
+              Each listing and each company&rsquo;s own words are recorded in{' '}
+              <a
+                href="https://github.com/npstorey/civic-ai-tools-website/blob/main/docs/model-evaluation-2026-11.md#the-providers-a8"
+                target="_blank"
+                rel="noopener noreferrer"
+              >
+                the November 2026 evaluation
+              </a>
+              .
             </p>
           </div>
         </div>

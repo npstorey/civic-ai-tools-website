@@ -238,8 +238,13 @@ function controlFromCatalog(entry) {
   };
 }
 
-/** Catalog entries this run leaves out: Opus 5.5 (#740, "What is not this sprint's"). */
-export const CATALOG_IDS_NOT_RUN = Object.freeze(['anthropic/claude-opus-5.5']);
+/**
+ * Catalog entries this run does not take as controls: Opus 5.5 (#740, "What is
+ * not this sprint's"), and MiMo-V2.6-Flash, which entered the catalog after the
+ * run (#740 P3) and which the run takes once, as an open-weight model below.
+ * Without it here the roster would carry MiMo-V2.6-Flash twice.
+ */
+export const CATALOG_IDS_NOT_RUN = Object.freeze(['anthropic/claude-opus-5.5', 'xiaomi/mimo-v2.6-flash']);
 
 /**
  * The three open-weight candidates (#740 D2 = A), at S1's rule (hub
