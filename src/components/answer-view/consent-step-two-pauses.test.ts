@@ -16,8 +16,9 @@
 //
 // THE SHAPE THAT CAN FAIL. Source A is answered, the run reports A's load
 // and then B's pause: the line that ended A's pause under the one-slot bus.
-// Every card for A is read after B's pause, and B's cards must still offer
-// both buttons, so a fix that kept A's answer by ending nothing would fail.
+// Every card for A is read after B's pause, and the short box must still
+// offer B's buttons (UX-2 HG: while it asks, B's card in the steps has none),
+// so a fix that kept A's answer by ending nothing would fail.
 // (e) is the one decision whose consent could not be moved (item 2): the
 // route answers `moved: false`, and the card must not say "It is On now."
 //
@@ -204,6 +205,21 @@ function buttonOf(surface: Surface, id: string, label: string): HostElement {
   return button!;
 }
 
+/**
+ * The button labelled `label` in the short box (`ConsentPausePrompt`), which must be asking about `name`. While a pause
+ * asks, the box carries the page's only answers, and the card in the steps none (UX-2 HG).
+ */
+function promptButton(surface: Surface, label: string, name: string): HostElement {
+  const prompts = surface.elements().filter((el) => el.props['data-part'] === 'consent-pause-prompt');
+  assert.equal(prompts.length, 1, `expected one short box, found ${prompts.length}: ${summary(surface)}`);
+  assert.ok(textOf(prompts[0]).startsWith(`${name} is set to Ask first.`), `the short box does not ask about ${name}: ${textOf(prompts[0]).slice(0, 120)}`);
+  const button = [...within(prompts[0].props.children)].find((x) => x.type === 'button' && textOf(x) === label);
+  assert.ok(button, `the short box has no ${label}`);
+  return button!;
+}
+const promptButtons = (surface: Surface): string[] =>
+  surface.elements().filter((el) => el.props['data-part'] === 'consent-pause-prompt').flatMap((el) => [...within(el.props.children)].filter((x) => x.type === 'button').map((x) => textOf(x)));
+
 const loadStart = (alias: string, label: string, iteration: number): Json => ({ type: 'progress', panel: 'withMcp', message: `Loading the ${label} source`, phase: 'tool_start', iteration, args: { alias }, toolName: 'load_source', operationType: 'load_source' });
 const pauseLine = (id: string, key: string, label: string): Json => ({ type: 'progress', panel: 'withMcp', message: `Waiting for your answer about ${label}, which is set to Ask first`, phase: 'consent_pause', pause: pauseOf(id, key) });
 const loadDone = (label: string, iteration: number): Json => ({ type: 'progress', panel: 'withMcp', message: `Loaded the ${label} source`, phase: 'tool_complete', iteration, duration_ms: 4000, toolName: 'load_source', operationType: 'load_source' });
@@ -230,7 +246,7 @@ async function twoPauses(choice: 'Allow' | "Don't allow", beside?: (page: Surfac
   stream.push(pauseLine(A, KEY_A, 'Boston OpenContext'));
   await settle(...all);
   assert.ok(cardsFor(page, A).length > 0, `premise: the page shows A's card: ${summary(page)}`);
-  await page.click(buttonOf(page, A, choice));
+  await page.click(promptButton(page, choice, 'Boston OpenContext'));
   await settle(...all);
   assert.deepEqual(decisions, [{ key: KEY_A, decision: choice === 'Allow' ? 'allow' : 'off' }], 'premise: A\'s answer was posted with A\'s key');
   stream.push(loadDone('Boston OpenContext', 1));
@@ -243,7 +259,7 @@ async function twoPauses(choice: 'Allow' | "Don't allow", beside?: (page: Surfac
 // --- (a), (b): each card keeps its own outcome ----------------------------------------------
 
 for (const [choice, sentence] of [['Allow', ALLOWED], ["Don't allow", DECLINED]] as const) {
-  test(`item 1 (${choice === 'Allow' ? 'a' : 'b'}): after ${choice} on source A and a pause from source B in the same run, A's card reads its own outcome and B's card offers both buttons`, async () => {
+  test(`item 1 (${choice === 'Allow' ? 'a' : 'b'}): after ${choice} on source A and a pause from source B in the same run, A's card reads its own outcome and the short box offers B's buttons`, async () => {
     const { page } = await twoPauses(choice);
     const a = cardsFor(page, A);
     const b = cardsFor(page, B);
@@ -254,8 +270,11 @@ for (const [choice, sentence] of [['Allow', ALLOWED], ["Don't allow", DECLINED]]
     }
     for (const card of b) {
       assert.equal(card.outcome, null, `card B shows an outcome before any answer: ${card.outcome}`);
-      assert.deepEqual(card.buttons, ['Allow', "Don't allow", 'Allow all data sources'], `card B's buttons: ${card.buttons.join(', ')}`);
+      // UX-2 HG: while the short box asks about B, it holds B's answers, and B's card in the steps none.
+      assert.deepEqual(card.buttons, [], `card B's buttons while the short box asks: ${card.buttons.join(', ')}`);
     }
+    promptButton(page, 'Allow', 'Data Commons');
+    assert.deepEqual(promptButtons(page), ['Allow', "Don't allow", 'Allow all data sources'], 'the short box does not offer B\'s three buttons');
   });
 }
 
@@ -307,7 +326,7 @@ test('item 2 (e): when the route answers Allow with moved: false, the card says 
   stream.push(loadStart('boston', 'Boston OpenContext', 1));
   stream.push(pauseLine(A, KEY_A, 'Boston OpenContext'));
   await settle(page);
-  await page.click(buttonOf(page, A, 'Allow'));
+  await page.click(promptButton(page, 'Allow', 'Boston OpenContext'));
   await settle(page);
   const a = cardsFor(page, A);
   assert.ok(a.length > 0, `premise: A's card is on the page: ${summary(page)}`);
