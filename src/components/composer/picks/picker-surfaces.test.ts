@@ -363,6 +363,47 @@ test('F-2: in loop with the store and the flows statement unread, the option is 
   assert.equal(parts(page, 'pick-panel').length, 0, 'the panel opened over an empty list');
 });
 
+// S3-B F fix round 1, F-6: the panel is open over a read statement, and a later refresh (after a refused route, or a
+// save) finds `/api/flows` answering non-OK, which sets the store's `statement` to null. RED at c9b3f80: the panel
+// stays open, and the hit for Socrata, a source the statement listed, reads S6a. What makes it able to fail: the hit
+// is shown as a set-up row before the refresh (the premise), so only the lost statement can turn it into S6a.
+const PANEL_SEARCH = '311 service requests';
+async function panelOpenOverAHit(): Promise<Surface> {
+  const page = await askPage();
+  await choose(page, W.pick);
+  await search(page, PANEL_SEARCH);
+  assert.ok(IDS.includes('socrata'), 'premise: the statement lists Socrata');
+  const socrata = rowFor(page, 'socrata');
+  assert.ok(socrata.props['data-row-kind'] !== 'not-set-up' && pickBoxOf(socrata) !== undefined && !textOf(socrata).includes(W.S6a), 'premise: the hit for Socrata is a set-up row, with its pick control');
+  return page;
+}
+const { refreshConsent } = await load('components/sources/useSourceConsent.ts');
+const panelRows = (page: Surface) => rowsOf(page).map((el) => `${el.props['data-source']}:${el.props['data-row-kind'] ?? 'set-up'}`);
+
+test('F-6: an open panel closes when a later refresh\'s /api/flows answers non-OK, and no hit reads S6a', async () => {
+  const page = await panelOpenOverAHit();
+  installFetch(ORIGIN, {
+    '/api/models': () => json({ models: [{ id: 'fixture/model', name: 'Fixture model', tag: 'recommended' }] }),
+    '/api/flows': () => json({ error: 'fixture' }, 503),
+    '/api/sources/consent/decision': () => json({ routing: 'in-loop', store: true }),
+    '/api/sources/consent': (request: Request) => (consentRoute[request.method] as (r: Request) => Promise<Response>)(request),
+    '/api/rate-limit': () => json({ remaining: 7, limit: 10, resets_at: '2099-01-01T00:00:00.000Z', authenticated: true }),
+  });
+  await refreshConsent();
+  for (let i = 0; i < 5; i += 1) await settle(page, 10);
+  const socrataNotSetUp = page.elements().some((el) => el.props['data-source'] === 'socrata' && el.props['data-row-kind'] === 'not-set-up' && textOf(el).includes(W.S6a));
+  assert.deepEqual({ panels: parts(page, 'pick-panel').length, socrataNotSetUp }, { panels: 0, socrataNotSetUp: false });
+});
+
+test('F-6 pin: a refresh that succeeds leaves the panel open, its rows unchanged', async () => {
+  const page = await panelOpenOverAHit();
+  const before = panelRows(page);
+  await refreshConsent();
+  for (let i = 0; i < 5; i += 1) await settle(page, 10);
+  assert.equal(parts(page, 'pick-panel').length, 1, 'the panel closed on a refresh that succeeded');
+  assert.deepEqual(panelRows(page), before);
+});
+
 test('W1-6 (A5 = hide): /explore\'s Data sources lists Auto and the Settings link only; the same menu given a picks prop shows the option (decoy)', async () => {
   SIGNED_IN();
   answers();
