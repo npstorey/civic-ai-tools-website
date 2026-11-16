@@ -339,8 +339,17 @@ export default function QueryForm({
     if (isLoading) closePicker();
   }, [isLoading]);
 
+  // D4 = B's after-send line (S9). With the panel open it goes right above the panel, so it is in view at the press
+  // (fix round 2): below the box and its harness trigger, before the panel's header; still under the box. Closed, it
+  // stays in the where-line's place.
+  const panelOpen = picking && picks.open;
+  const noPickNote = picking && picked.length === 0 && picks.refused ? (
+    <p data-part="pick-note" role="status" className="composer-line">{PICKER_TEXT.noPickAfterSend}</p>
+  ) : null;
+
   const ask = () => {
-    // D4 = B: "Only the ones I pick" with nothing picked sends nothing, and S9 says so under the box.
+    // D4 = B: "Only the ones I pick" with nothing picked sends nothing, and S9 says so under the box. Not a send, so the
+    // panel stays open (R4 is about a send).
     if (picking && picked.length === 0) {
       markRefused(true);
       return;
@@ -420,10 +429,8 @@ export default function QueryForm({
               <button type="button" data-part="picks-change" style={CHANGE_CONTROL} onClick={openPicker} disabled={isLoading}>{PICKER_TEXT.change}</button>
             </p>
           ) : null}
-          {/* D4 = B: after a send with nothing picked, S9 in the where-line's place. */}
-          {picking && picked.length === 0 && picks.refused ? (
-            <p data-part="pick-note" role="status" className="composer-line">{PICKER_TEXT.noPickAfterSend}</p>
-          ) : null}
+          {/* D4 = B: after a send with nothing picked, S9 in the where-line's place, while the panel is closed. */}
+          {panelOpen ? null : noPickNote}
           {whereLine !== null ? (
             <p data-part="where-this-question-goes" className="composer-line">
               {whereLine}{WHERE_LINE.separator}
@@ -433,7 +440,12 @@ export default function QueryForm({
           ) : null}
         </>
       )}
-      pickPanel={picking && picks.open ? <LoadedPickerPanel docked={docked} /> : null}
+      pickPanel={panelOpen ? (
+        <>
+          {noPickNote}
+          <LoadedPickerPanel docked={docked} />
+        </>
+      ) : null}
       firstTimeLine={showFirstTimeLine ? (isAuthenticated ? 'signed-in' : 'signed-out') : null}
       accountLine={accountLine}
       guard={{
