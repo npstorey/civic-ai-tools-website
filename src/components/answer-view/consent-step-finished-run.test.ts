@@ -195,12 +195,16 @@ const settle = async (surface: Surface) => {
   await surface.settle();
 };
 
-/** The button labelled `label` in the run's step card for `id`. */
-function stepButton(surface: Surface, id: string, label: string): HostElement {
-  const card = cardsIn(surface.elements()).find((c) => c.source === id && c.place === 'steps');
-  assert.ok(card, `no step card for ${id}: ${summary(surface)}`);
-  const button = [...within(card!.element.props.children)].find((x) => x.type === 'button' && textOf(x) === label);
-  assert.ok(button, `the step card for ${id} has no ${label}: ${summary(surface)}`);
+/**
+ * The button labelled `label` in the short box (`ConsentPausePrompt`), asking about `name`: while a pause asks, the box
+ * holds the page's only answers, and the step card none (UX-2 HG).
+ */
+function promptButton(surface: Surface, label: string, name: string): HostElement {
+  const prompts = surface.elements().filter((el) => el.props['data-part'] === 'consent-pause-prompt');
+  assert.equal(prompts.length, 1, `expected one short box, found ${prompts.length}: ${summary(surface)}`);
+  assert.ok(textOf(prompts[0]).startsWith(`${name} is set to Ask first.`), `the short box does not ask about ${name}`);
+  const button = [...within(prompts[0].props.children)].find((x) => x.type === 'button' && textOf(x) === label);
+  assert.ok(button, `the short box has no ${label}`);
   return button!;
 }
 
@@ -245,18 +249,19 @@ test('criterion 3 (#667), /ask in notebook mode: after Allow on one pause and Do
   const stream = streams[0];
   assert.ok(stream, 'premise: the page started an executed run');
 
-  // The live view: two loads pause, and the reader answers each in its step card.
+  // The live view: two loads pause, and the reader answers each in the short box (UX-2 HG), its step card showing none.
   stream.push({ type: 'phase', name: 'A', message: 'Discovering datasets…' });
   stream.push(loadLine('tool_start', 'Boston OpenContext', 1));
   stream.push(pauseLine(A, KEY_A, 'Boston OpenContext'));
   await settle(page);
-  await page.click(stepButton(page, A, 'Allow'));
+  assert.equal(cardsIn(page.elements()).find((c) => c.source === A && c.place === 'steps')?.buttons.length, 0, `A's step card offers buttons while the short box asks: ${summary(page)}`);
+  await page.click(promptButton(page, 'Allow', 'Boston OpenContext'));
   await settle(page);
   stream.push(loadLine('tool_complete', 'Boston OpenContext', 1));
   stream.push(loadLine('tool_start', 'Data Commons', 2));
   stream.push(pauseLine(B, KEY_B, 'Data Commons'));
   await settle(page);
-  await page.click(stepButton(page, B, "Don't allow"));
+  await page.click(promptButton(page, "Don't allow", 'Data Commons'));
   await settle(page);
   stream.push(loadLine('tool_complete', 'Data Commons', 2));
   await settle(page);

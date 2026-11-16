@@ -190,6 +190,12 @@ function stepsCard(surface: Surface): CardRead {
   assert.equal(found.length, 1, `expected one card in the run's steps: ${summary(surface)}`);
   return found[0];
 }
+/** The short box's buttons (`ConsentPausePrompt`), on a page that mounts it. */
+function promptLabels(surface: Surface): string[] {
+  const prompts = surface.elements().filter((el) => el.props['data-part'] === 'consent-pause-prompt');
+  assert.equal(prompts.length, 1, `expected one short box, found ${prompts.length}`);
+  return [...within(prompts[0].props.children)].filter((x) => x.type === 'button').map((x) => textOf(x));
+}
 function rowCards(surface: Surface): CardRead[] {
   return cards(surface).filter((c) => c.inRow);
 }
@@ -222,7 +228,10 @@ async function pausedOnClock(): Promise<{ page: Surface; key: string; tick: (ms:
   mounted.push(page);
   await page.settle();
   assert.equal(bostonState(page), 'ask-first', 'premise: Boston is Ask first');
-  assert.deepEqual(labels(stepsCard(page)), PAUSE_BUTTONS, `premise: the card offers both during the hold: ${summary(page)}`);
+  // UX-2 HG: during the hold the short box holds the answers (not mounted here), so the card in the steps offers none;
+  // the Sources row's card keeps them (D4 A).
+  assert.deepEqual(labels(stepsCard(page)), [], `premise: the card in the steps offers none during the hold: ${summary(page)}`);
+  assert.deepEqual(rowCards(page).map(labels), [PAUSE_BUTTONS], `premise: the row's card offers the buttons during the hold: ${summary(page)}`);
   const tick = async (ms: number) => {
     mock.timers.tick(ms);
     await page.settle();
@@ -382,7 +391,9 @@ test('note 4, ProgressLog (the home page): the run moves on and completes with t
   stream.push({ type: 'progress', panel: 'withMcp', message: 'Loading the Boston OpenContext source', phase: 'tool_start', iteration: 1, args: { alias: 'boston' }, toolName: 'load_source', operationType: 'load_source' });
   stream.push({ type: 'progress', panel: 'withMcp', message: 'Waiting for your answer about Boston OpenContext, which is set to Ask first', phase: 'consent_pause', pause });
   await settle(page);
-  assert.deepEqual(labels(stepsCard(page)), PAUSE_BUTTONS, `premise: the card offers both during the hold: ${summary(page)}`);
+  // UX-2 HG: during the hold the short box holds the answers, and the card in the steps none.
+  assert.deepEqual(labels(stepsCard(page)), [], `premise: the card in the steps offers none during the hold: ${summary(page)}`);
+  assert.deepEqual(promptLabels(page), PAUSE_BUTTONS, `premise: the short box offers the buttons during the hold: ${summary(page)}`);
   stream.push({ type: 'progress', panel: 'withMcp', message: 'Loaded the Boston OpenContext source', phase: 'tool_complete', iteration: 1, duration_ms: 60_000, toolName: 'load_source', operationType: 'load_source' });
   stream.push({ type: 'complete', panel: 'withMcp', data: { content: 'An answer.', duration_ms: 1, tools_called: [] } });
   stream.push({ type: 'complete', panel: 'withoutMcp', data: { content: 'An answer.', duration_ms: 1 } });
@@ -410,7 +421,9 @@ test('note 4, AnswerView (/ask, notebook mode): the run moves on with the questi
   stream.push({ type: 'phase_a_progress', message: 'Loading the Boston OpenContext source', phase: 'tool_start', iteration: 1, args: { alias: 'boston' }, toolName: 'load_source', operationType: 'load_source' });
   stream.push({ type: 'phase_a_progress', message: 'Waiting for your answer about Boston OpenContext, which is set to Ask first', phase: 'consent_pause', pause });
   await settle(page);
-  assert.deepEqual(labels(stepsCard(page)), PAUSE_BUTTONS, `premise: the card offers both during the hold: ${summary(page)}`);
+  // UX-2 HG: during the hold the short box holds the answers, and the card in the steps none.
+  assert.deepEqual(labels(stepsCard(page)), [], `premise: the card in the steps offers none during the hold: ${summary(page)}`);
+  assert.deepEqual(promptLabels(page), PAUSE_BUTTONS, `premise: the short box offers the buttons during the hold: ${summary(page)}`);
   // The run goes on (its step view stays: the notebook has not arrived, #667 is not this test's).
   stream.push({ type: 'phase_a_progress', message: 'Loaded the Boston OpenContext source', phase: 'tool_complete', iteration: 1, duration_ms: 60_000, toolName: 'load_source', operationType: 'load_source' });
   stream.push({ type: 'phase_a_progress', message: 'Searching for datasets about service requests', phase: 'tool_start', iteration: 2, args: { query: 'service requests' }, toolName: 'search', operationType: 'search' });

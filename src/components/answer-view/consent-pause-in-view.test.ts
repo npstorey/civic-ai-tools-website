@@ -516,7 +516,9 @@ test('criterion 1, /explore: a holding pause shows the prompt under the running 
   assertPrompt(prompt, '/explore');
   const cancel = p.button('Cancel');
   assert.ok(before(p, cancel, prompt) && before(p, prompt, stepCards(p)[0]), '/explore: the prompt is not between the running question and the run\'s steps');
-  assert.deepEqual(labels(stepCards(p)[0]), ['Allow', "Don't allow", 'Allow all data sources'], 'premise: the step card offers both during the hold');
+  // UX-2 HG (D3 A): during the hold the prompt holds the answers, and the step card none.
+  assert.deepEqual(labels(prompt), ['Allow', "Don't allow", 'Allow all data sources'], 'premise: the prompt offers the buttons during the hold');
+  assert.deepEqual(labels(stepCards(p)[0]), [], 'premise: the step card offers none during the hold');
 
   // Criterion 3: Cancel during the hold.
   await p.click(cancel);
@@ -577,7 +579,9 @@ test('criterion 3, /explore on the browser\'s abort path (Amendment 3, the owner
   stream.push({ type: 'progress', panel: 'withMcp', ...LOAD_START });
   stream.push({ type: 'progress', panel: 'withMcp', message: PAUSE_LINE, phase: 'consent_pause', pause: pauseOf(nextKey()) });
   await settle(p, SCROLL_WAIT);
-  assert.deepEqual(labels(stepCards(p)[0]), ['Allow', "Don't allow", 'Allow all data sources'], `premise: the step card offers both during the hold: ${summary(p)}`);
+  // UX-2 HG (D3 A): during the hold the prompt holds the answers, and the step card none.
+  assert.deepEqual(labels(onePrompt(p, '/explore')), ['Allow', "Don't allow", 'Allow all data sources'], `premise: the prompt offers the buttons during the hold: ${summary(p)}`);
+  assert.deepEqual(labels(stepCards(p)[0]), [], `premise: the step card offers none during the hold: ${summary(p)}`);
   await p.click(p.button('Cancel'));
   await settle(p, 200);
   const text = p.text();
@@ -617,7 +621,9 @@ async function pausedOnExplore(): Promise<{ p: Surface; stream: Held }> {
   stream.push({ type: 'progress', panel: 'withMcp', ...LOAD_START });
   stream.push({ type: 'progress', panel: 'withMcp', message: PAUSE_LINE, phase: 'consent_pause', pause: pauseOf(nextKey()) });
   await settle(p, SCROLL_WAIT);
-  assert.deepEqual(labels(stepCards(p)[0]), ['Allow', "Don't allow", 'Allow all data sources'], `premise: the step card offers both during the hold: ${summary(p)}`);
+  // UX-2 HG (D3 A): during the hold the prompt holds the answers, and the step card none.
+  assert.deepEqual(labels(onePrompt(p, '/explore')), ['Allow', "Don't allow", 'Allow all data sources'], `premise: the prompt offers the buttons during the hold: ${summary(p)}`);
+  assert.deepEqual(labels(stepCards(p)[0]), [], `premise: the step card offers none during the hold: ${summary(p)}`);
   return { p, stream };
 }
 
