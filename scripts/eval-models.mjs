@@ -184,7 +184,7 @@ import { CIVIC_MANIFEST } from '@typedstandards/civic-typed-router';
 
 import { runToolLoop } from '../src/lib/model-loop/run-tool-loop.ts';
 import { HOSTED_SOURCE_KEY_VARIABLE, hostingVariantInForce, readMcpEnvFromProcess } from '../src/lib/mcp/registry.ts';
-import { createInLoopRouting, directorySet, entersInLoop } from '../src/lib/mcp/routing-mode.ts';
+import { createInLoopRouting, DIRECTORY_SET_RULE, directorySet, entersInLoop } from '../src/lib/mcp/routing-mode.ts';
 import { composeInLoopSystemPrompt } from '../src/lib/mcp/socrata-skill.ts';
 import { rejectedRequestCount, summaryDataSources } from '../src/lib/evidence/summary-sources.ts';
 import {
@@ -552,6 +552,9 @@ export async function routingFor(spec, query, configured, now, askedSources, cal
     lockedPortal: LOCKED_PORTAL,
     configured,
     directory,
+    // Listed and searchable are the same set, as every route passes them (S3-B W2), so a row offers no search.
+    searchable: directory,
+    rule: DIRECTORY_SET_RULE,
     // The gate's selection, configured ∩ On (the record's offered reasons only).
     selection: directory.filter((entry) => entry.state === 'on').map((entry) => entry.sourceId),
     now,
@@ -613,6 +616,8 @@ export function loopOptions({ model, query, routing, loadStep, executeToolCall }
     // the loop core decides a pack's call from it (S2-B F1).
     dispatchTarget: routing.dispatchTarget,
     loadStep,
+    // The routing's search step, as a route hands it: undefined here, since a row lists its whole set (S3-B W2).
+    ...(routing.searchStep ? { searchStep: routing.searchStep } : {}),
     // Default portal for a `get_data` call whose arguments omit one; the loop
     // injects it into Socrata's `get_data` alone, above the record.
     portal: query.portal,
@@ -1539,7 +1544,9 @@ async function dryRun(options) {
   const plan = planFor(options.mode, process.env);
   const snapshot = loadJson(OPENROUTER_SNAPSHOT);
   console.log(`=== Dry run (${options.mode}): no network call is made ===\n`);
-  let configured = readMcpEnvFromProcess();
+  // The harness is never portal-locked (`LOCKED_PORTAL`): it states its own lock on the configuration it reads,
+  // so an operator's SITE_PORTAL_LOCKED cannot remove a source its questions use (S3-B W2, F1 and A3).
+  let configured = { ...readMcpEnvFromProcess(), lockedPortal: LOCKED_PORTAL };
   if (!configured.socrataUrl) {
     console.log('SOCRATA_MCP_URL is unset: the first requests below are composed as if it were set. A run refuses to start without it.\n');
     configured = { ...configured, socrataUrl: 'https://socrata-mcp.invalid' };
@@ -1591,7 +1598,8 @@ async function checkKey(apiKey) {
  * Returns what the run needs.
  */
 async function checksBeforeSpending(models, apiKey, now) {
-  const configured = readMcpEnvFromProcess();
+  // Unlocked, as the dry run's read is (`LOCKED_PORTAL`; S3-B W2, A3).
+  const configured = { ...readMcpEnvFromProcess(), lockedPortal: LOCKED_PORTAL };
   printSources(configured);
   const sandbox = sandboxProblem(configured);
   if (sandbox) fail(sandbox);

@@ -33,6 +33,7 @@ import {
 // A source's reader-facing name (the manifest's display name without its
 // "MCP Server" suffix), for the line naming a source the replays ran without.
 import { displayNameForSource } from '@/lib/evidence/data-sources';
+import { replayRoutingLines } from '@/lib/flows/search-words';
 // The replayer's own consent (R6 W3, #632 criterion 7): a replay sends the
 // record's question to the model endpoint and calls live sources, so the
 // replay route is gated (C6), and this dialog answers its refusal with the
@@ -676,6 +677,12 @@ function ConsistencyTab({ apiKey, numRuns, setNumRuns, status, progress, complet
   const loadedUnstated = [...new Set(completedRuns.flatMap((r) => (r.offeredSet as { loadedUnstated?: string[] } | undefined)?.loadedUnstated ?? []))]
     .filter((id) => !completedRuns.some((r) => r.offeredSet?.lacking.includes(id)))
     .map((id) => displayNameForSource(id));
+  // The routing configuration the record states (S3-B W2, B6), shown and not applied again: only for a record whose
+  // run offered the model a search, the one case where a replay, which lists its whole set and offers no search, is
+  // routed differently from the run. Empty for any other record, so the dialog is unchanged for it. Displayed only.
+  const routingLines = replayRoutingLines(
+    completedRuns.map((r) => (r as { routingConfiguration?: unknown }).routingConfiguration).find((value) => value !== undefined),
+  );
   return (
     <>
       <p style={{ fontSize: '13px', color: 'var(--text-secondary)', margin: '0 0 16px', lineHeight: 1.5 }}>
@@ -795,6 +802,16 @@ function ConsistencyTab({ apiKey, numRuns, setNumRuns, status, progress, complet
             <p style={{ fontSize: '12px', color: 'var(--text-secondary)', margin: '0 0 12px', lineHeight: 1.5 }}>
               {`The analysis shows ${loadedUnstated.length === 1 ? loadedUnstated[0] : `${loadedUnstated.slice(0, -1).join(', ')} and ${loadedUnstated[loadedUnstated.length - 1]}`} loaded but does not list ${loadedUnstated.length === 1 ? 'it' : 'them'} among the sources offered, so these replays ran without ${loadedUnstated.length === 1 ? 'it' : 'them'}.`}
             </p>
+          )}
+          {routingLines.length > 0 && (
+            <div style={{ fontSize: '12px', color: 'var(--text-secondary)', margin: '0 0 12px', lineHeight: 1.5 }}>
+              <p style={{ margin: '0 0 4px' }}>{routingLines[0]}</p>
+              <ul style={{ margin: 0, paddingLeft: '18px' }}>
+                {routingLines.slice(1).map((line) => (
+                  <li key={line}>{line}</li>
+                ))}
+              </ul>
+            </div>
           )}
 
           <button

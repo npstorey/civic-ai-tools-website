@@ -12,6 +12,7 @@
  * had inline.
  */
 
+import type { ReactNode } from 'react';
 import { ASK_FIRST_MEANS, ASK_FIRST_MEANS_WITH_PAUSE, PANEL_ROW_MORE } from '@/lib/sources/copy';
 import type { FlowsSource } from '@/lib/flows/statement';
 import { sourceRowLines } from '@/lib/sources/source-name';
@@ -26,9 +27,11 @@ export interface SourceRowProps {
   control: SourceStateControlProps;
   /** What the row reads from the consent bus: the routing mode, the store, and the pauses. */
   consent: { routing: 'in-loop' | 'all-sources' | null; store: boolean | null; pauses: Record<string, PendingPause> };
+  /** S3-B W1 (D2 = A): the picker's pick control, after the row's own control; absent in Settings. */
+  pick?: ReactNode;
 }
 
-export default function SourceRow({ source, control, consent }: SourceRowProps) {
+export default function SourceRow({ source, control, consent, pick }: SourceRowProps) {
   const lines = sourceRowLines(source);
   const { name, state } = control;
   return (
@@ -37,6 +40,7 @@ export default function SourceRow({ source, control, consent }: SourceRowProps) 
       {lines.what !== null && <div>{lines.what.charAt(0).toUpperCase() + lines.what.slice(1)}</div>}
       <SourceStateRadios {...control} />
       <SourceStateConfirmation {...control} />
+      {pick}
       {/* A question stops to ask only in loop and with the decision store (R9 P1, #666): the pause words only then, by the
           one predicate the harness menu reads too (UX-2 P3b-2, v2 ruling 1). */}
       {state === 'ask-first' && <div>{canPauseToAsk(consent) ? ASK_FIRST_MEANS_WITH_PAUSE : ASK_FIRST_MEANS}</div>}

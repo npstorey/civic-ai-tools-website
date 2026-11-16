@@ -100,7 +100,7 @@ const { queryWithMcpStreaming } = await import('../openrouter-streaming.ts');
 const { _resetDefaultModelClientForTests, getModelClient } = await import('../model-client.ts');
 const { carriedModelIdentity } = await import('../model-catalog.ts');
 const { readMcpEnvFromProcess, routedSourceId } = await import('../mcp/registry.ts');
-const { createInLoopRouting, directorySet } = await import('../mcp/routing-mode.ts');
+const { createInLoopRouting, directorySet, DIRECTORY_SET_RULE } = await import('../mcp/routing-mode.ts');
 const { packFilterOf } = await import('../mcp/pack-filter.ts');
 const { packFilterRefusalForLlm } = await import('../streaming.ts');
 const { TraceBuilder, CIVICAITOOLS_TRACE_CONFIG } = await import('../evidence/trace.ts');
@@ -250,12 +250,10 @@ test('the bare call is recorded as the aliased call with the same arguments is',
 
 // --- Criterion 2: in-loop, Socrata Ask first and City Record On, no pause ---------------------------------------
 
-const inLoopRouting = () =>
-  createInLoopRouting({
-    configured,
-    directory: directorySet(configured, { enforced: true, states: { socrata: 'ask-first', 'nyc-record': 'on', 'data-commons': 'off' } }),
-    selection: ['nyc-record'],
-  });
+const inLoopRouting = () => {
+  const directory = directorySet(configured, { enforced: true, states: { socrata: 'ask-first', 'nyc-record': 'on', 'data-commons': 'off' } });
+  return createInLoopRouting({ configured, directory, searchable: directory, rule: DIRECTORY_SET_RULE, selection: ['nyc-record'] });
+};
 
 for (const via of ['stream', 'compare'] as const) {
   const inLoop = await inLoopRouting();

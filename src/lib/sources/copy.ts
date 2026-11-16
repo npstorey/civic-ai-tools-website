@@ -411,6 +411,11 @@ export const NYC_RECORD_EXAMPLES_SENTENCE = {
  * source's last load first (the first four, then "On, not used" for any
  * other `loaded` load), then its stated reason. Read by
  * `src/lib/flows/where-it-went.ts`.
+ *
+ * S3-B W1 (npstorey/civic-ai-tools#318; the owner's W0 rulings, OA-870): `notSetUp` takes D7 = B's words, since the
+ * reason is read on a record, possibly on another site, and now also names a pack a portal lock removes (G0-6 = A);
+ * the picker keeps the earlier words for its own row (`PICKER_TEXT.notSetUp`, S6a). `notPicked` is S11 (D9 = A), the
+ * reason `not-selected` on a run whose sources the reader picked: an allowed source the reader did not pick.
  */
 export const WHERE_IT_WENT_REASONS = {
   allowedNotUsed: 'Ask first: allowed when asked, but not used for this question.',
@@ -420,7 +425,8 @@ export const WHERE_IT_WENT_REASONS = {
   onNotUsed: 'On, not used for this question.',
   off: 'Off.',
   notAsked: 'Ask first: not asked for this question.',
-  notSetUp: 'Not set up on this site.',
+  notSetUp: 'Not set up on the site that ran this question.',
+  notPicked: 'Not picked for this question.',
 } as const;
 
 /**
@@ -488,9 +494,89 @@ export const SOURCE_CHOOSER_CONSIDERED = {
   /** The rule's words, by rule and rule version. */
   rules: {
     'directory-set': { '1': 'Those were the sources set up on the site that ran this question, less any turned off for it.' },
+    // Bundle revision 5 `:106` (S3-B W1, B9): a run whose sources the reader picked. Pinned to the installed bundle's
+    // digest by `chooser-reader-picked-revision-5.test.ts`.
+    'reader-picked': { '1': 'The person who asked this question picked those sources. A picked source was left out if it was turned off, or not set up on the site that ran this question.' },
   } as Readonly<Record<string, Readonly<Record<string, string>>>>,
   unknownRule: (rule: string, ruleVersion: string) =>
     `They were chosen by a rule recorded as ${rule}, version ${ruleVersion}, which this site has no words for.`,
+  /** Bundle revision 5 `:106` (S3-B W2): in place of `shown` on a record whose trace holds a search that returned a
+   *  source, since such a search may have added sources after the first list, which `listed` does not count. */
+  firstShown: (listed: number, total: number, inventory: string, version: string) =>
+    `The model was first shown ${listed} of the ${total} sources in the source inventory ${inventory} (version ${version}).`,
+} as const;
+
+/**
+ * A search's words (S3-B W2, npstorey/civic-ai-tools#318): bundle revision 5's sentences, verbatim, one
+ * `find_source` call at a time, after the considered sentences (`composition.routing`, `:88`). Pinned to the
+ * installed bundle's digest by `chooser-search-revision-5.test.ts`. The query is the model's words, set off with
+ * “ ” as the bundle's "set off as a quotation" asks; a host's sentence that quotes them is closed with a period.
+ */
+export const SOURCE_CHOOSER_SEARCH = {
+  /** `trace.searchSpan.searchQuery` (`:205`), a call whose outcome is `searched`. */
+  searched: (query: string) => `The model searched for sources, using the words: “${query}”`,
+  searchedEmpty: 'The model searched for sources with no search words.',
+  /** `trace.searchSpan.searchHits` (`:214`): the hits by the site's names, in the record's order. Joined by the
+   *  chooser's separator, since a name may hold a comma. */
+  hits: (names: readonly string[]) =>
+    names.length === 0
+      ? 'The search returned no sources.'
+      : names.length === 1
+        ? `The search returned one source: ${names[0]}.`
+        : `The search returned ${names.length} sources. They are listed in the search's order, its best match first: ${names.join('; ')}.`,
+  /** `trace.searchSpan.operationType` (`:187`), after a `searched` call's sentences. */
+  bySite: 'The site that ran this question did the search itself. It did not send the search to any source.',
+  /** `trace.searchSpan.searchOutcome` (`:196`), a call whose outcome is `limit-reached`. */
+  limited: (query: string) => `The model asked for another search, using the words: “${query}”`,
+  limitedEmpty: 'The model asked for another search, with no search words.',
+  limitReached: 'The site that ran this question did not run this search. It had already run two searches for this question, which was its limit.',
+} as const;
+
+/**
+ * A recorded routing configuration's small print (S3-B W2): bundle revision 5's `composition.routingConfiguration`
+ * sentence (`:115`), verbatim, each part from its own key. Pinned with the search words above.
+ */
+export const ROUTING_CONFIGURATION_TEXT = {
+  searchNone: 'The model was not offered a search for sources.',
+  searchOffered: (method: string, version: string) =>
+    `The model was offered a search for sources. The search method is recorded as ${method}, version ${version}.`,
+  capNone: 'The first list of sources had no size limit.',
+  cap: (cap: string) => `The first list of sources was limited to ${cap}.`,
+  rule: (id: string, version: string) => `routing rule recorded as ${id}, version ${version}`,
+  inventory: (name: string, version: string) => `built over the source inventory ${name} (version ${version})`,
+  hash: (hash: string) => `routing configuration ${hash}`,
+} as const;
+
+/**
+ * The site's own words for a `find_source` call where the bundle has none (S3-B W2, the ORCH's A2), and the
+ * bundle's where they fit. Words r2, checked by an independent research check (planning
+ * `temp/s3/s3b-orch/words/research-check-w2.md`, 39d99d20…44828; KEEP 11, REVISE 12, folded in r2); the owner's
+ * memo is pending. Ids S1 to S22 are r2's. No route shows any of them in S3: no route offers `find_source`
+ * (G0-4 = A), and the replay dialog shows S22 only for a record whose run offered a search.
+ */
+export const FIND_SOURCE_WORDS = {
+  /** S1, S2: the step label, closed and open. */
+  stepLabel: 'The model asked for a search for sources',
+  /** S3, S4: the progress line at `tool_start`. */
+  progress: (query: string) => `The model asked for a search for sources, using the words: “${query}”`,
+  progressEmpty: 'The model asked for a search for sources, with no search words',
+  /** S9: the reason phrase the loop records for the call. */
+  purpose: 'to search for sources',
+  /** S10: the breadcrumb. */
+  breadcrumb: 'Search for sources',
+  /** S11 to S13: the narrative. */
+  narrativeSearched: 'searched for sources',
+  narrativeLimited: 'asked for another search, which this site did not run',
+  narrativeRequested: 'asked for a search for sources',
+  /** S16: the record page, when the trace cannot be read for the call. */
+  recordUnread: 'The site that ran this question answered this request itself. No source received it.',
+  /** S18, S19: the notebook's note. */
+  notebookHeading: '### Searches for sources',
+  notebookIntro:
+    'The model asked the site that ran this question to search for data sources. The site answered each request itself and sent none to any source, so nothing is re-run for them here.',
+  /** S22: the replay dialog, before the recorded configuration. */
+  replayIntro:
+    'Each of these replays shows the model all the sources it can use, and none offers it a search. The original analysis showed the model its sources under the configuration below, which the replays do not apply again.',
 } as const;
 
 /** The longest recorded method value the chooser line and the card echo; a longer one is cut, with "…". */
@@ -588,8 +674,11 @@ export const SYSTEM_PROMPT_TEXT = {
   /** S5: the text could not be loaded. True of `SkillSection`, which fetches only from its first, idle state. */
   unavailable: 'The text could not be loaded, so it is not shown. Reloading the page tries again.',
   /** S6: more than one distinct prompt, and the section's hash is the last; `count` includes the last. */
+  // Bundle revision 5's `skillMetadata.skillText` sentence, verbatim (S3-B W2, U2): a search whose hits add a source
+  // recomposes the prompt with no load, so revision 4's "as it loaded data sources" no longer holds. Pinned to the
+  // digest by `chooser-search-revision-5.test.ts`.
   manyPrompts: (count: number) =>
-    `The model was given ${count} system prompts as it loaded data sources. This section describes the last one.`,
+    `The model was given ${count} system prompts during this question. This section describes the last one.`,
   /** S6, where the view shows no text of the last prompt. */
   textNotShown: 'Its text is not shown on this page.',
   /** S6: before the earlier prompts' hashes. */

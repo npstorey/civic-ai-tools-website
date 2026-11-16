@@ -74,6 +74,12 @@ export const IN_LOOP_RUN_RECORD_ATTRIBUTE = {
    *  routed against, `version` in `<version>+<hash12>` form, and how many of
    *  its entries the model was shown. In-loop runs only (G0-B7 A). */
   considered: 'analysis.considered',
+  /** JSON `{ rule: { id, version }, cap, search, inventory: { id, version,
+   *  hash }, hash }`, exactly those keys in that order: the routing
+   *  configuration the run was routed under (the router's
+   *  `routingConfiguration`) and its hash (ADR-0033 amendment 5, harness
+   *  0.14.0; S3-B W2, O4). In-loop runs only, as `considered` (G0-B7 A). */
+  routingConfiguration: 'analysis.routing_configuration',
 } as const;
 
 /** What a run states about itself, before encoding. */
@@ -97,12 +103,20 @@ export interface RunRecordInput {
     rule: string;
     ruleVersion: string;
   };
+  /** The routing configuration and its hash (S3-B W2); omitted under all-sources. */
+  routingConfiguration?: {
+    rule: { id: string; version: string };
+    cap: string;
+    search: 'none' | { method: string; version: string };
+    inventory: { id: string; version: string; hash: string };
+    hash: string;
+  };
 }
 
 /** The root-span attributes for a run, ready for `startRoot` or `endRoot`:
- *  five, and each of the last four only when passed, in the harness's order. */
+ *  five, and each of the last five only when passed, in the harness's order. */
 export function runRecordAttributes(run: RunRecordInput): Record<string, string> {
-  const { flowsStatement, routing, definitionHash, considered } = run;
+  const { flowsStatement, routing, definitionHash, considered, routingConfiguration } = run;
   return {
     [RUN_RECORD_ATTRIBUTE.assertedDate]: run.assertedDate,
     [RUN_RECORD_ATTRIBUTE.mcpServers]: JSON.stringify(run.mcpServers),
@@ -125,6 +139,20 @@ export function runRecordAttributes(run: RunRecordInput): Record<string, string>
             listed: considered.listed,
             rule: considered.rule,
             ruleVersion: considered.ruleVersion,
+          }),
+        }
+      : {}),
+    // Exactly the five members and each object's own, in the harness's order (S3-B W2, ADR-0033 amendment 5).
+    ...(routingConfiguration
+      ? {
+          [IN_LOOP_RUN_RECORD_ATTRIBUTE.routingConfiguration]: JSON.stringify({
+            rule: { id: routingConfiguration.rule.id, version: routingConfiguration.rule.version },
+            cap: routingConfiguration.cap,
+            search: routingConfiguration.search === 'none'
+              ? 'none'
+              : { method: routingConfiguration.search.method, version: routingConfiguration.search.version },
+            inventory: { id: routingConfiguration.inventory.id, version: routingConfiguration.inventory.version, hash: routingConfiguration.inventory.hash },
+            hash: routingConfiguration.hash,
           }),
         }
       : {}),

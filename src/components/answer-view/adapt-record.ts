@@ -70,6 +70,7 @@ import type { Notebook } from '../../lib/notebook-author/cells.ts';
 import type { PublishedLayout } from '../../lib/answer-layout/published-line.ts';
 import type { FlowsStatement } from '../../lib/flows/statement.ts';
 import { whereItWentFromPackage } from '../../lib/flows/where-it-went.ts';
+import { SEARCH_OPERATION, searchReadingsByQuery, searchStepOutcome } from '../../lib/flows/search-words.ts';
 import { chooserCardItems, chooserFromPackage } from '../../lib/flows/source-chooser.ts';
 import { CONTENT_SHAPE } from '../../lib/sources/copy.ts';
 
@@ -256,7 +257,9 @@ export function adaptRecord(input: RecordAdapterInput): AnswerViewModel {
   const whereItWent = whereItWentFromPackage(pkg, input.servedStatement ?? null);
   const modelName = formatModelName(pkg.cost.model);
 
-  const stepView = buildRecordStepView(pkg.queries, fromTrace.refused);
+  // A search call (S3-B W2) reads its own words from the trace, paired by position as the harness pairs them.
+  const searches = searchReadingsByQuery(pkg.trace, pkg.queries);
+  const stepView = buildRecordStepView(pkg.queries, fromTrace.refused, searches);
   const steps: StepsPart | null = stepView.steps.length > 0
     ? { kind: 'step-view', author: stepsAuthorLine(instance), view: stepView, closing: [] }
     : null;
@@ -317,7 +320,10 @@ export function adaptRecord(input: RecordAdapterInput): AnswerViewModel {
   // the trace as the refused line does. The signed duration is shown raw only
   // when the outcome sentence does not state it (LAYOUT-W1 P3, #413).
   const recordTrace: RecordTraceEntry[] = pkg.queries.map((q, i) => {
-    const outcome = describeQueryOutcome(q, { refusedInTrace: fromTrace.refused.has(i) });
+    // A search is the instance's own step (S3-B W2): its words, never "No result summary was recorded".
+    const outcome = q.operationType === SEARCH_OPERATION
+      ? { kind: 'answered-by-site' as const, text: searchStepOutcome(searches.get(i)) }
+      : describeQueryOutcome(q, { refusedInTrace: fromTrace.refused.has(i) });
     const duration = outcome.kind === 'unrecorded' ? q.duration_ms : undefined;
     return {
       // Read, and shown, by the upstream name (W2 P2): the name the model called stays where the record states it.

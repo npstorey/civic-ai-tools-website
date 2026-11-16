@@ -193,7 +193,7 @@ async function drive(options: DriveOptions): Promise<Drive> {
       callToolDuringHolds[i] = (callToolDuringHolds[i] ?? 0) + (callToolCount - before.calls);
     },
   });
-  const session = await routingMode.createInLoopRouting({ configured, directory, selection, callTool, pause } as Parameters<typeof routingMode.createInLoopRouting>[0]);
+  const session = await routingMode.createInLoopRouting({ configured, directory, searchable: directory, rule: routingMode.DIRECTORY_SET_RULE, selection, callTool, pause } as Parameters<typeof routingMode.createInLoopRouting>[0]);
   const scripted = await startScriptedModelServer(options.script);
   process.env.MODEL_API_BASE_URL = scripted.url;
   const builder = new TraceBuilder(CIVICAITOOLS_TRACE_CONFIG);

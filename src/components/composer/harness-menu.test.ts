@@ -119,12 +119,14 @@ const W = {
   inLoop: {
     label: 'Auto - find sources for me',
     desc: 'The model chooses which data sources to use, from those you set On or Ask first.',
-    reason: 'Not offered on this site yet. The model chooses from the data sources you set On or Ask first.',
+    // S3-B W1 (B13): the in-loop form's reason left with the commit that enabled the option; S1 describes it there.
+    pickDesc: 'You search for data sources and pick the ones this question can use. The model uses no others.',
   },
   allSources: {
     label: 'Auto - use every source I set On',
     desc: 'Every data source you set On is given to the model from the start. Sources set to Ask first are not used.',
-    reason: 'Not offered on this site yet. Every data source you set On is given to the model.',
+    // S3-B W1: D8 = B's words for the reason (B13 removed the earlier "… yet." with the commit that enabled the option).
+    reason: 'Not offered on this site. Every data source you set On is given to the model.',
   },
   pick: 'Only the ones I pick',
   footer: 'All data sources and your consent',
@@ -408,11 +410,14 @@ test('P3b-2 criterion 1 (2B item 2): Model lists the catalog as radios, the mode
   assert.equal(queries[0].body.model, CAT[1].id, 'the question did not send the chosen model');
 });
 
-for (const [name, routing, form] of [
-  ['in-loop with the store', { routing: 'in-loop', store: true }, 'in-loop'],
-  ['all-sources with the store', { routing: 'all-sources', store: true }, 'all-sources'],
-  ['in-loop with no store', { routing: 'in-loop', store: false }, 'all-sources'],
-  ['the decision read failed (503)', 'fail', 'all-sources'],
+// S3-B W1 (npstorey/civic-ai-tools#318) moved the second row: "Only the ones I pick" is enabled with S1 in the in-loop
+// form, disabled with D8's reason where the read says the site cannot pick, and disabled with no reason while the read
+// is outstanding or failed (R2). Rows that move: the option's state, description and reason; the first row does not.
+for (const [name, routing, form, pick] of [
+  ['in-loop with the store', { routing: 'in-loop', store: true }, 'in-loop', 'enabled'],
+  ['all-sources with the store', { routing: 'all-sources', store: true }, 'all-sources', 'reason'],
+  ['in-loop with no store', { routing: 'in-loop', store: false }, 'all-sources', 'reason'],
+  ['the decision read failed (503)', 'fail', 'all-sources', 'no reason'],
 ] as const) {
   test(`P3b-2 criterion 1 (2B item 3; v2 ruling 1): ${name}: Data sources reads the ${form} form, byte for byte, and the Settings row's Ask-first words agree`, async () => {
     SIGNED_IN();
@@ -422,10 +427,15 @@ for (const [name, routing, form] of [
     const panel = await expand(page, W.ds);
     const words = form === 'in-loop' ? W.inLoop : W.allSources;
     const radios = radiosOf(panel);
+    const pickRow = pick === 'enabled'
+      ? [W.pick, false, false, [W.inLoop.pickDesc], []]
+      : pick === 'reason'
+        ? [W.pick, false, true, [], [W.allSources.reason]]
+        : [W.pick, false, true, [], []];
     assert.deepEqual(radios.map((el) => [labelOf(el), checked(el), disabled(el), descriptionsOf(el), reasonsOf(el)]), [
       [words.label, true, false, [words.desc], []],
-      [W.pick, false, true, [], [words.reason]],
-    ], 'the two options: the first checked with its description; "Only the ones I pick" disabled, its reason its only line');
+      pickRow,
+    ], `the two options: the first checked with its description; "Only the ones I pick" ${pick}`);
     const footer = within(panel).filter((el) => el.type === 'a' && textOf(el) === W.footer);
     assert.deepEqual(footer.map((el) => el.props.href), [SETTINGS_HREF], 'the footer is not one link to SETTINGS_HREF (fix 6)');
     const row = page.elements().filter((el) => el.props['data-source'] === IDS[0]).map((el) => textOf(el));

@@ -27,7 +27,8 @@ import {
   type ConsentPausePayload,
 } from '../streaming.ts';
 import { describeQueryOutcome, secondsText } from '../evidence/query-step.ts';
-import { LOAD_STEP_LABEL } from '../sources/copy.ts';
+import { FIND_SOURCE_WORDS, LOAD_STEP_LABEL } from '../sources/copy.ts';
+import { SEARCH_OPERATION, searchQueryOf, searchStepOutcome, type SearchReading } from '../flows/search-words.ts';
 import { loadAliasReaderName } from '../flows/source-chooser.ts';
 // Type-only: erased at compile time. The kind vocabulary is declared once,
 // beside the table that turns it into reader-facing copy.
@@ -41,6 +42,9 @@ import type { ToolFailureKind } from '../notebook-author/tool-to-cell.ts';
  * signed query entry have in common. No field is renamed from the wire.
  */
 export interface StepCall {
+  /** How a `find_source` call ended, and its hits (S3-B W2), as the loop records them on a search call. */
+  searchOutcome?: string;
+  searchHits?: string[];
   /**
    * Absent — never a stand-in — when the record the call was built from did
    * not carry a tool name (#384: a trace event from before the wire carried
@@ -268,10 +272,12 @@ function loadStepLabel(entries: ProgressLogEntry[], open: boolean): string {
   return open ? LOAD_STEP_LABEL.open(names, count) : LOAD_STEP_LABEL.closed(names, count);
 }
 
-/** The label of a step still open: a load step's own, else `OPEN_STEP_LABEL`. */
-function openStepLabel(entries: ProgressLogEntry[]): string {
+/** The label of a step still open: a load step's own, a search's (S3-B W2, S2), else `OPEN_STEP_LABEL`. */
+export function openStepLabel(entries: ProgressLogEntry[]): string {
   const first = entries.find((entry) => entry.phase === 'tool_start');
-  return first !== undefined && isLoadStart(first) ? loadStepLabel(entries, true) : OPEN_STEP_LABEL;
+  if (first !== undefined && isLoadStart(first)) return loadStepLabel(entries, true);
+  if (first !== undefined && entryOperationType(first) === SEARCH_OPERATION) return FIND_SOURCE_WORDS.stepLabel;
+  return OPEN_STEP_LABEL;
 }
 
 /**
@@ -301,6 +307,8 @@ export function generateGroupLabel(entries: ProgressLogEntry[], previousEntries?
     // these labels have no words for claims nothing.
     const operationType = entryOperationType(named);
     if (operationType === LOAD_OPERATION) return loadStepLabel(toolStarts, false);
+    // The instance's own search (S3-B W2, S1): never "Gathering data", since it gathered none.
+    if (operationType === SEARCH_OPERATION) return FIND_SOURCE_WORDS.stepLabel;
     if (operationType !== undefined && operationType !== NO_STATED_OPERATION) {
       return OPERATION_WORDS[operationType] ?? OPEN_STEP_LABEL;
     }
@@ -734,6 +742,17 @@ export function pairCallsToSteps<C extends StepCall>(groups: ProgressGroup[], ca
 }
 
 function viewCall(call: StepCall): StepViewCall {
+  // A search (S3-B W2) is the instance's own step: its words, from the outcome the loop recorded, never "No result
+  // summary was recorded for this request".
+  if (call.operationType === SEARCH_OPERATION) {
+    const outcome = call.searchOutcome;
+    const reading: SearchReading | undefined = outcome === 'searched'
+      ? { outcome, query: searchQueryOf(call.args), hits: call.searchHits ?? [] }
+      : outcome === 'limit-reached'
+        ? { outcome, query: searchQueryOf(call.args) }
+        : undefined;
+    return { sentence: stepSentence(call), outcome: searchStepOutcome(reading), failed: false };
+  }
   const outcome = describeQueryOutcome({
     failed: call.failed,
     failureKind: call.failureKind,
@@ -805,9 +824,15 @@ export interface RecordStepQuery {
  * iteration), each labelled by `generateGroupLabel` against the entries before
  * it, with the sentence written from the entry's name and arguments and the
  * outcome `describeQueryOutcome` states. `refused` is `readRefusalsFromTrace`'s
- * answer, read by the outcome as section D reads it.
+ * answer, read by the outcome as section D reads it. A search call (S3-B W2) is
+ * the instance's own step: its outcome is its words from the trace (`searches`,
+ * `searchReadingsByQuery`), or, when the trace cannot be read for it, S16.
  */
-export function buildRecordStepView(queries: readonly RecordStepQuery[], refused: ReadonlySet<number> = new Set()): StepView {
+export function buildRecordStepView(
+  queries: readonly RecordStepQuery[],
+  refused: ReadonlySet<number> = new Set(),
+  searches: ReadonlyMap<number, SearchReading> = new Map(),
+): StepView {
   const calls: StepCall[] = queries.map((q) => ({
     name: q.tool,
     operationType: q.operationType,
@@ -815,6 +840,9 @@ export function buildRecordStepView(queries: readonly RecordStepQuery[], refused
     ...(q.failed !== undefined ? { failed: q.failed } : {}),
   }));
   return oneStepPerCall(calls, (call, i) => {
+    if (queries[i].operationType === SEARCH_OPERATION) {
+      return { sentence: stepSentence(call), outcome: searchStepOutcome(searches.get(i)), failed: false };
+    }
     const outcome = describeQueryOutcome(queries[i], { refusedInTrace: refused.has(i) });
     return { sentence: stepSentence(call), outcome: outcome.text, failed: outcome.kind === 'failed' };
   });

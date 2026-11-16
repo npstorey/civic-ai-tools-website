@@ -167,14 +167,22 @@ export function selectionFromStates(configured: readonly string[], states: Reado
  * What a record states for each source (D2 = A): the router's reason, with
  * `not-selected` mapped from the stored state — `reader-off` for Off,
  * `not-consented` for Ask first or no state at all. Every other reason stays.
+ *
+ * A run whose sources the reader picked (S3-B W1, npstorey/civic-ai-tools#318; G0-2 = A, anchor B8) passes the
+ * picks that survived (`picked`): a source the reader did not pick, and did not turn Off, keeps the router's
+ * `not-selected`, which "Where this question went" words as not picked. Off is still `reader-off`, picked or not,
+ * and a picked source that was not On (Ask first) is still `not-consented`. Absent, every run reads as before.
  */
 export function recordSourcesOffered<T extends { sourceId: string; alias: string; reason: string }>(
   offered: readonly T[],
   states: Readonly<Record<string, string>>,
+  picked?: readonly string[],
 ): Array<{ sourceId: string; alias: string; reason: string }> {
   return offered.map(({ sourceId, alias, reason }) => {
     if (reason !== 'not-selected') return { sourceId, alias, reason };
-    return { sourceId, alias, reason: Object.hasOwn(states, sourceId) && states[sourceId] === 'off' ? 'reader-off' : 'not-consented' };
+    if (Object.hasOwn(states, sourceId) && states[sourceId] === 'off') return { sourceId, alias, reason: 'reader-off' };
+    if (picked !== undefined && !picked.includes(sourceId)) return { sourceId, alias, reason: 'not-selected' };
+    return { sourceId, alias, reason: 'not-consented' };
   });
 }
 

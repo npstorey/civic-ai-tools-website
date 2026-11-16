@@ -79,7 +79,7 @@ import {
   streamedBody,
 } from './eval-models.mjs';
 import { BUILT_IN_CATALOG, modelRequestParameters, modelRequestSettings } from '../src/lib/model-catalog.ts';
-import { createInLoopRouting, directorySet } from '../src/lib/mcp/routing-mode.ts';
+import { createInLoopRouting, DIRECTORY_SET_RULE, directorySet } from '../src/lib/mcp/routing-mode.ts';
 import { CONSENT_GATE_ENFORCED } from '../src/lib/sources/consent-enforced.ts';
 import { mcpTools } from '../src/lib/mcp/tools.ts';
 import { HOSTED_SOURCE_KEY_VARIABLE, routedSourceId } from '../src/lib/mcp/registry.ts';
@@ -1288,9 +1288,12 @@ test('EVAL-OW C3: the pause self-test — off ends the load declined; after allo
       const asked = new Set();
       let asks = 0;
       const scripted = scriptedPause(decision, asked);
+      const directory = directorySet(configured, consent);
       const routing = await createInLoopRouting({
         configured,
-        directory: directorySet(configured, consent),
+        directory,
+        searchable: directory,
+        rule: DIRECTORY_SET_RULE,
         selection: [],
         pause: { ask: (id, report) => { asks++; return scripted.ask(id, report); } },
         callTool: async () => 'fixture',
@@ -1494,7 +1497,8 @@ test('EVAL-OW C6: the run\'s limits are 200,000, 4,000 and 20, read from what th
   const source = readFileSync(SCRIPT, 'utf-8');
   assert.match(source, /await runToolLoop\(\{\n\s+client,\n\s+\.\.\.loopOptions\(\{/, 'a row hands the loop loopOptions, whole');
   const configured = readMcpEnv({ SOCRATA_MCP_URL: 'https://fake-socrata.test' });
-  const routing = await createInLoopRouting({ configured, directory: directorySet(configured, consentStates({ mode: 'every-source-on' })), selection: ['socrata'] });
+  const directory = directorySet(configured, consentStates({ mode: 'every-source-on' }));
+  const routing = await createInLoopRouting({ configured, directory, searchable: directory, rule: DIRECTORY_SET_RULE, selection: ['socrata'] });
   const loadStep = { toolName: 'load_source', load: async () => ({ outcome: 'not-offered', text: '' }) };
   const executeToolCall = async () => '';
   const model = ALL_MODELS.find((m) => m.id === 'z-ai/glm-5.3-flash');

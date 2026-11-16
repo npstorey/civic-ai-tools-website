@@ -183,7 +183,8 @@ export function compareLoopOptions(inputs: CompareLoopInputs): ToolLoopOptions {
     dispatchTarget,
     // In loop (#644 W1): the load step; this route holds no stream, so an
     // Ask-first source is declined with no hold.
-    ...(inLoop ? { loadStep: inLoop.loadStep } : {}),
+    // The search step beside it (S3-B W2), when the routing offers one; the loop refuses `find_source` without it.
+    ...(inLoop ? { loadStep: inLoop.loadStep, ...(inLoop.searchStep ? { searchStep: inLoop.searchStep } : {}) } : {}),
   };
 }
 

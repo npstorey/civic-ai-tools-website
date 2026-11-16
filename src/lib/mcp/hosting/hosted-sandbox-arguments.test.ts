@@ -230,7 +230,7 @@ test('R8 W3 criterion 3 (b): switch set, key unset: not configured, named on thr
     assert.equal(routingMode.sourceRoutingMode(), 'in-loop');
     const directory = routingMode.directorySet(configured, { enforced: true, states: { socrata: 'on', 'nys-legislation': 'on' } });
     assert.ok(!directory.some((entry) => entry.sourceId === 'nys-legislation'), 'the in-loop directory lists the keyless source');
-    const inLoop = await routingMode.createInLoopRouting({ configured, directory, selection: ['socrata'] });
+    const inLoop = await routingMode.createInLoopRouting({ configured, directory, searchable: directory, rule: routingMode.DIRECTORY_SET_RULE, selection: ['socrata'] });
     assert.equal((await inLoop.loadStep.load('nys_legislation', { iteration: 1 })).outcome, 'not-offered');
     await assert.rejects(inLoop.executeToolCall('nys_legislation__search', { term: 'climate', type: 'bills' }), (error: Error) => {
       assert.match(error.message, new RegExp(KEY), 'the in-loop refusal does not name the key');

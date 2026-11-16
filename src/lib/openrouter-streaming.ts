@@ -2,7 +2,7 @@ import type { ChatCompletionMessageParam, ChatCompletionTool } from 'openai/reso
 import { getModelClient, classifyModelError, includeStreamUsage, getModelApiKind } from './model-client.ts';
 import { modelRequestParameters, type ModelIdentity } from './model-catalog.ts';
 import { formatConsentPause, formatToolProgress, formatToolResult, classifyStreamError, errorLogFacts, streamErrorPayload, type ConsentPausePayload, type PanelType, type ProgressPhase, type StreamErrorCode, type StreamErrorKind } from './streaming.ts';
-import { runToolLoop, type LoadStep, type LoopEvent, type ToolCallRecord, type TraceContext } from './model-loop/run-tool-loop.ts';
+import { runToolLoop, type LoadStep, type LoopEvent, type SearchStep, type ToolCallRecord, type TraceContext } from './model-loop/run-tool-loop.ts';
 import { describeQueryOutcome } from './evidence/query-step.ts';
 import type { ToolFailureKind } from './notebook-author/tool-to-cell.ts';
 
@@ -207,7 +207,9 @@ function reportLoopEvent(panel: PanelType, event: LoopEvent, callbacks: StreamCa
       return;
     }
     case 'tool_result': {
-      const resultMessage = formatToolResult(event.call.args, event.call.resultSummary, event.call.name, event.call.loadOutcome);
+      // A search's outcome and hits (S3-B W2) reach the result line as a load's outcome does.
+      const search = event.call.searchOutcome ? { outcome: event.call.searchOutcome, hits: event.call.searchHits } : undefined;
+      const resultMessage = formatToolResult(event.call.args, event.call.resultSummary, event.call.name, event.call.loadOutcome, search);
       if (resultMessage) {
         callbacks.onProgress(panel, resultMessage, {
           phase: 'tool_result',
@@ -345,6 +347,8 @@ export type McpToolTransport =
       executeToolCall: (name: string, args: Record<string, unknown>) => Promise<string>;
       dispatchTarget?: (name: string) => string | undefined;
       loadStep?: LoadStep;
+      /** The search step (S3-B W2), when the routing offers `find_source`. */
+      searchStep?: SearchStep;
     };
 
 export async function queryWithMcpStreaming(
@@ -365,8 +369,8 @@ export async function queryWithMcpStreaming(
 ): Promise<void> {
   const startTime = Date.now();
   const panel: PanelType = 'withMcp';
-  const { executeToolCall, dispatchTarget, loadStep } = typeof transport === 'function'
-    ? { executeToolCall: transport, dispatchTarget: undefined, loadStep: undefined }
+  const { executeToolCall, dispatchTarget, loadStep, searchStep } = typeof transport === 'function'
+    ? { executeToolCall: transport, dispatchTarget: undefined, loadStep: undefined, searchStep: undefined }
     : transport;
 
   try {
@@ -394,6 +398,10 @@ export async function queryWithMcpStreaming(
       // In loop (#644 W1): `load_source` is answered by the load step, before
       // and outside the transport. Undefined under all-sources.
       loadStep,
+      // The search step (S3-B W2), answered before and outside the transport
+      // as a load is. Undefined wherever the routing offers no search: every
+      // route in S3 (G0-4 = A).
+      searchStep,
       maxIterations: MAX_ITERATIONS,
       maxTokens: MAX_TOKENS_PER_RESPONSE,
       maxCumulativeTokens: MAX_TOKENS_PER_REQUEST,

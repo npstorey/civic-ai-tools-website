@@ -96,7 +96,7 @@ const { CROSS_SOURCE_PREAMBLE, SOCRATA_SKILL_FALLBACK } = await import('../mcp/s
 const { DATA_COMMONS_PUBLICATION_HOST } = await import('../mcp/data-commons-skill.ts');
 const { NOT_LOADED_FOR_LLM, friendlyStreamError } = await import('../streaming.ts');
 const { TraceBuilder, CIVICAITOOLS_TRACE_CONFIG, hash } = await import('../evidence/trace.ts');
-const { createInLoopRouting, directorySet, entersInLoop } = await import('../mcp/routing-mode.ts');
+const { createInLoopRouting, directorySet, entersInLoop, DIRECTORY_SET_RULE } = await import('../mcp/routing-mode.ts');
 const { runToolLoop } = await import('./run-tool-loop.ts');
 const { replayLoopOptionsForPackage } = await import('./replay-loop.ts');
 const { buildSystemPrompt } = await import('../mcp/socrata-skill.ts');
@@ -157,7 +157,7 @@ async function drive(
 
 test('criterion 3: the first in-loop request carries the directory and one tool, load_source, and nothing of any source', async () => {
   const directory = directorySet(configured, { enforced: false, states: {} });
-  const session = await createInLoopRouting({ configured, directory, selection: undefined, now: NOW });
+  const session = await createInLoopRouting({ configured, directory, searchable: directory, rule: DIRECTORY_SET_RULE, selection: undefined, now: NOW });
   const mcpBefore = MCP_REQUESTS.length;
   const { requests } = await drive(session, [{ content: 'No data was needed to answer this.' }]);
   const first = requests[0];
@@ -180,7 +180,7 @@ test('criterion 3: the first in-loop request carries the directory and one tool,
 
 test('criterion 3: under the one-portal lock, the lock section follows the directory', async () => {
   const directory = directorySet(configured, { enforced: false, states: {} });
-  const session = await createInLoopRouting({ configured, directory, selection: undefined, lockedPortal: 'data.example.org', now: NOW });
+  const session = await createInLoopRouting({ configured, directory, searchable: directory, rule: DIRECTORY_SET_RULE, selection: undefined, lockedPortal: 'data.example.org', now: NOW });
   const expected =
     `${civicRouter.directoryPrompt({ configured, today: TODAY, selection: ALL_IDS })}\n\n---\n\n` +
     civicRouter.aliasedPortalLockGuidance('data.example.org', configured, ALL_IDS);
@@ -284,7 +284,7 @@ const LOAD_RUN_SCRIPT = [
 
 const loadRun = await (async () => {
   const directory = directorySet(configured, { enforced: false, states: {} });
-  const session = await createInLoopRouting({ configured, directory, selection: undefined, now: NOW });
+  const session = await createInLoopRouting({ configured, directory, searchable: directory, rule: DIRECTORY_SET_RULE, selection: undefined, now: NOW });
   const mcpFrom = MCP_REQUESTS.length;
   const run = await drive(session, LOAD_RUN_SCRIPT);
   return { ...run, session, mcp: MCP_REQUESTS.slice(mcpFrom) };
@@ -307,7 +307,7 @@ test('criterion 4: after a load, the next request\'s tools are load_source and t
 
 test('criterion 4: under the lock, the lock section follows the in-loop prompt', async () => {
   const directory = directorySet(configured, { enforced: false, states: {} });
-  const session = await createInLoopRouting({ configured, directory, selection: undefined, lockedPortal: 'data.example.org', now: NOW });
+  const session = await createInLoopRouting({ configured, directory, searchable: directory, rule: DIRECTORY_SET_RULE, selection: undefined, lockedPortal: 'data.example.org', now: NOW });
   const loaded = await session.loadStep.load('socrata', { iteration: 1 });
   assert.equal(loaded.outcome, 'loaded');
   assert.equal(loaded.systemPrompt, await expectedInLoopPrompt(['socrata'], 'data.example.org'));
@@ -374,7 +374,7 @@ test('criterion 4: each load span carries its outcome, names no source, and is n
 
 test('criterion 4: an Ask-first source is declined, its span says so, and nothing is loaded or sent', async () => {
   const directory = directorySet(configured, { enforced: true, states: { socrata: 'on', 'boston-opencontext': 'ask-first' } });
-  const session = await createInLoopRouting({ configured, directory, selection: ['socrata'], now: NOW });
+  const session = await createInLoopRouting({ configured, directory, searchable: directory, rule: DIRECTORY_SET_RULE, selection: ['socrata'], now: NOW });
   const mcpFrom = MCP_REQUESTS.length;
   const run = await drive(session, [
     { toolCalls: [{ id: 'load-boston', name: 'load_source', args: { alias: 'boston' } }] },

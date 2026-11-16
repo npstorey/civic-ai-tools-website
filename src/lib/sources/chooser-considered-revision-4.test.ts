@@ -5,6 +5,11 @@
 // and `civic.packId`'s sentence changed while its fallback, 'a pack recorded as {packId}, using {the host's name for
 // the base}', is byte-equal; so every word pinned here is revision 4's too, and the pin names revision 4's digest.
 //
+// READ AGAIN AT REVISION 5 (S3-B W2, npstorey/civic-ai-tools#318): `composition.considered`'s sentence adds "was
+// first shown" for a record whose search returned a source (pinned in `chooser-search-revision-5.test.ts`) and the
+// words for `reader-picked` (W1's); the count sentence, `directory-set`'s words and the unknown-rule sentence pinned
+// here are byte-equal, and `civic:packId`'s fallback is unchanged, so the pin names revision 5's digest.
+//
 // The bundle the installed verify-core names for this site's producer profile states, at its `:88`
 // (`composition.considered`'s sentence), the two sentences that follow the chooser's in-loop sentence: the count
 // and the inventory, then the rule's words (`directory-set` version 1), or, for a rule this site has no words for,
@@ -30,8 +35,9 @@ import * as copy from './copy.ts';
 type Loose = Record<string, any>; // eslint-disable-line @typescript-eslint/no-explicit-any
 const C = copy as unknown as Loose;
 
-/** The digest of the bundle these words were read from: verify-core 0.15.3's row, revision 4. */
-const BUNDLE_SHA256_OF_THESE_WORDS = '4c623892516dc1996e412c313c2208e0880d594e753ef0c9d2a1a3e4f4ce5c81';
+/** The digest of the bundle these words were read from: verify-core 0.15.4's row, revision 5 (S3-B W2, read again;
+ *  see the header). Revision 4's was 4c623892…5c81. */
+const BUNDLE_SHA256_OF_THESE_WORDS = '9946c58f2a4e800388b10f31a43a099c5a1d97b4f5084dbbff8351480d9223d5';
 
 test('S2-B F9: the installed producer-profile bundle is the one the considered sentences and the pack clause were read from', () => {
   const row = (PRODUCER_PROFILE_SUBTYPES as Record<string, { bundle?: { url: string; sha256: string } }>)['ai-assisted-analysis/civicaitools-v1']?.bundle;
@@ -43,7 +49,8 @@ test('S2-B F9: the considered sentences are revision 3\'s :88, verbatim', () => 
   const W = C.SOURCE_CHOOSER_CONSIDERED as Loose | undefined;
   assert.ok(W, 'copy.ts has no SOURCE_CHOOSER_CONSIDERED');
   assert.equal(W!.shown(4, 7, 'civic', '2026-11-09.1+ed7302810ed4'), 'The model was shown 4 of the 7 sources in the source inventory civic (version 2026-11-09.1+ed7302810ed4).');
-  assert.deepEqual(W!.rules, { 'directory-set': { '1': 'Those were the sources set up on the site that ran this question, less any turned off for it.' } });
+  // S3-B W1 added `reader-picked` (revision 5 :106), pinned by `chooser-reader-picked-revision-5.test.ts`.
+  assert.deepEqual(W!.rules['directory-set'], { '1': 'Those were the sources set up on the site that ran this question, less any turned off for it.' });
   assert.equal(W!.unknownRule('R', 'V'), 'They were chosen by a rule recorded as R, version V, which this site has no words for.');
 });
 

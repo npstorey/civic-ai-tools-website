@@ -3,6 +3,10 @@
 // READ AGAIN AT REVISION 4 (S2-B P3R, the seat's ruling 7): `trace.loadSpan.loadOutcome` is unchanged from
 // revision 3, so the three reasons are revision 4's words too, and the pin names revision 4's digest.
 //
+// READ AGAIN AT REVISION 5 (S3-B W2, npstorey/civic-ai-tools#318): `trace.loadSpan.loadOutcome`'s sentence changed
+// only in its `not-offered` clause (U1: "which was not on its list of sources at the time"), which this site does
+// not copy; the three reasons pinned here are byte-equal, so the pin names revision 5's digest (verify-core 0.15.4).
+//
 // The bundle the installed verify-core names for this site's producer profile
 // (`PRODUCER_PROFILE_SUBTYPES['ai-assisted-analysis/civicaitools-v1'].bundle`) states, at its `:142`
 // (`trace.loadSpan.loadOutcome`'s sentence), the reason the chooser sentence gives for a source requested and
@@ -23,8 +27,9 @@ import assert from 'node:assert/strict';
 import { PRODUCER_PROFILE_SUBTYPES } from '@typedstandards/verify-core';
 import { CHOOSER_REASONS } from './copy.ts';
 
-/** The digest of the bundle these words were read from: verify-core 0.15.3's row, revision 4. */
-const BUNDLE_SHA256_OF_THESE_WORDS = '4c623892516dc1996e412c313c2208e0880d594e753ef0c9d2a1a3e4f4ce5c81';
+/** The digest of the bundle these words were read from: verify-core 0.15.4's row, revision 5 (S3-B W2, read again;
+ *  see the header). Revision 4's was 4c623892…5c81. */
+const BUNDLE_SHA256_OF_THESE_WORDS = '9946c58f2a4e800388b10f31a43a099c5a1d97b4f5084dbbff8351480d9223d5';
 
 test('S2-B W9: the installed producer-profile bundle is the one the chooser reasons were read from', () => {
   const row = (PRODUCER_PROFILE_SUBTYPES as Record<string, { bundle?: { url: string; sha256: string } }>)['ai-assisted-analysis/civicaitools-v1']?.bundle;

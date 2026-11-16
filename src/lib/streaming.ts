@@ -9,6 +9,8 @@ import { BaseChangedError, BaseReadFailedError } from './mcp/base-check.ts';
 import type { ToolFailureKind } from './notebook-author/tool-to-cell.ts';
 import type { FlowsLinks, FlowsSource } from './flows/statement.ts';
 import { readerSourceName } from './sources/source-name.ts';
+import { FIND_SOURCE_WORDS } from './sources/copy.ts';
+import { searchProgressLine, searchResultLine } from './flows/search-words.ts';
 import type { WhereItWentModel } from './flows/where-it-went.ts';
 export type StreamEventType = 'progress' | 'token' | 'complete' | 'error' | 'trace';
 export type PanelType = 'withMcp' | 'withoutMcp';
@@ -186,9 +188,9 @@ export interface ErrorEvent extends StreamEvent {
 // place error-to-copy mapping lives, consumed by every SSE-consuming hook.
 
 /**
- * The thirteen kinds every streaming failure classifies into. Single-sourced as
+ * The fourteen kinds every streaming failure classifies into. Single-sourced as
  * an array rather than a bare union so the round-trip test can enumerate them
- * (#154): a thirteenth kind is covered by that test the moment it is added here.
+ * (#154): a fourteenth kind is covered by that test the moment it is added here.
  *
  * `consent_required` (R6 W2, #632) is set explicitly by the consent gate
  * (`./sources/consent-gate.ts`), never derived from text: a question this site
@@ -199,6 +201,12 @@ export interface ErrorEvent extends StreamEvent {
  * consent is in force, but the reader has no source On (every configured
  * source is Off or Ask first), so the question was refused before the model
  * or any source was called. Its copy points to the panel that satisfies it.
+ *
+ * `no_picks_usable` (S3-B W1, npstorey/civic-ai-tools#318; S10) is set
+ * explicitly by the routes from the reader's picks (`./sources/picks.ts`): the
+ * question was sent with "Only the ones I pick", and none of its picks could
+ * be used (none is configured and not Off, or none is On where the run cannot
+ * ask), so it was refused before the model or any source was called.
  *
  * `not_offered` (R6 W1) is set explicitly by the dispatch, never derived from
  * message text: `SourceNotOfferedError` (`./mcp/registry.ts`) carries it as
@@ -231,12 +239,13 @@ export const STREAM_ERROR_KINDS = [
   'not_offered',
   'consent_required',
   'no_sources_on',
+  'no_picks_usable',
   'generic',
 ] as const;
 
 export type StreamErrorKind = (typeof STREAM_ERROR_KINDS)[number];
 
-/** True for a value that is one of the thirteen kinds (an unknown code is not). */
+/** True for a value that is one of the fourteen kinds (an unknown code is not). */
 export function isStreamErrorKind(value: unknown): value is StreamErrorKind {
   return typeof value === 'string' && (STREAM_ERROR_KINDS as readonly string[]).includes(value);
 }
@@ -407,6 +416,8 @@ const FRIENDLY_STREAM_COPY: Record<StreamErrorKind, string> = {
   // nothing was sent. Data source settings (the Settings overlay) is what
   // turns one On (UX-2 P4b, items 42/50; a link where the surface can carry one).
   no_sources_on: 'Every data source is set to Off or Ask first, so nothing was sent. Turn a source On in Data source settings, then ask again.',
+  // S3-B W1 (S10, D9 = A): the reader picked sources for this question and none could be used, so nothing was sent.
+  no_picks_usable: 'None of the data sources you picked could be used, so nothing was sent. Pick again, or choose Auto.',
   generic: 'Something went wrong while running this query. Please try again in a moment.',
 };
 
@@ -1198,6 +1209,9 @@ export function formatToolProgress(
       const source = loadedSourceName(args);
       return source ? `Loading the ${source} source` : 'Loading a data source';
     }
+    case 'find_source':
+      // The instance's own search (S3-B W2): the words as the span records them.
+      return searchProgressLine(args);
     default:
       // `fetch` derives to no operation type by design (see
       // mcp/operation-types.ts): the identifier's shape decides, server-side,
@@ -1543,6 +1557,8 @@ export function formatToolResult(
   name?: string,
   /** A load's outcome (#644 W1), on a `load_source` call only. */
   loadOutcome?: string,
+  /** A search's outcome and hits (S3-B W2), on a `find_source` call only. */
+  search?: { outcome?: string; hits?: readonly string[] },
 ): string | null {
   const type = resolveOperationType({ name, args }) ?? (args.type as string | undefined);
   const datasetId = args.dataset_id as string | undefined;
@@ -1568,6 +1584,10 @@ export function formatToolResult(
       return `Loaded metadata for ${datasetName}`;
     case 'metrics':
       return `Loaded metrics for ${datasetName}`;
+    case 'find_source':
+      // The search's outcome in the bundle's words (S3-B W2); with none
+      // recorded, nothing is said about how it ended.
+      return searchResultLine(search?.outcome, search?.hits);
     case 'load_source': {
       // A load's outcome, in the reader's words (#644 W1); with none
       // recorded, nothing is said about how it ended.
@@ -1648,6 +1668,8 @@ export function generateToolReason(args: Record<string, unknown>, name?: string)
       const source = loadedSourceName(args);
       return source ? `to load the ${source} source` : 'to load a data source';
     }
+    case 'find_source':
+      return FIND_SOURCE_WORDS.purpose;
     default:
       if (isTool(name, 'fetch')) return id ? `to look up ${id}` : 'to look up one item';
       // A tool whose operation neither its name nor its arguments state: the
@@ -1885,6 +1907,8 @@ export function buildBreadcrumbLabel(
       const source = loadedSourceName(tool.args);
       return source ? `Load ${truncate(source, 22)}` : 'Load a source';
     }
+    case 'find_source':
+      return FIND_SOURCE_WORDS.breadcrumb;
     default: {
       if (isTool(tool.name, 'fetch')) {
         const id = tool.args.id as string | undefined;
@@ -1899,7 +1923,7 @@ export function buildBreadcrumbLabel(
 
 // Describe a tool call in past-tense narrative form
 function describeToolNarrative(
-  tool: { name?: string; args: Record<string, unknown>; operationType?: string; loadOutcome?: string },
+  tool: { name?: string; args: Record<string, unknown>; operationType?: string; loadOutcome?: string; searchOutcome?: string },
   index: number,
   allTools: { name?: string; args: Record<string, unknown>; operationType?: string }[],
 ): string {
@@ -1961,6 +1985,13 @@ function describeToolNarrative(
     }
     case 'metrics':
       return 'checked dataset statistics';
+    case 'find_source':
+      // How the search ended, when the record says (S3-B W2); never a source's call.
+      return tool.searchOutcome === 'searched'
+        ? FIND_SOURCE_WORDS.narrativeSearched
+        : tool.searchOutcome === 'limit-reached'
+          ? FIND_SOURCE_WORDS.narrativeLimited
+          : FIND_SOURCE_WORDS.narrativeRequested;
     case 'load_source': {
       // How the load ended, when the record says (#644 W1); a record that does
       // not is narrated as the request it was.
@@ -2015,7 +2046,7 @@ function describeRejectedAttempt(reason: string | undefined): string {
 
 // Build a narrative summary telling the analytical story of what the AI did
 export function buildNarrativeSummary(
-  toolsCalled: { name?: string; args: Record<string, unknown>; resultSummary?: { rows: number; columns: number }; duration_ms?: number; operationType?: string; reason?: string; failed?: boolean; loadOutcome?: string }[],
+  toolsCalled: { name?: string; args: Record<string, unknown>; resultSummary?: { rows: number; columns: number }; duration_ms?: number; operationType?: string; reason?: string; failed?: boolean; loadOutcome?: string; searchOutcome?: string }[],
 ): string {
   if (toolsCalled.length === 0) return '';
 

@@ -62,6 +62,11 @@ export interface MenuItem {
   href?: string;
   /** Disabled-with-reason: the item is muted and this is its second line. */
   disabledReason?: ReactNode;
+  /**
+   * S3-B W1 (R2): disabled with no reason, for a state whose reason is not yet known (the routing read is outstanding
+   * or failed). Muted and not choosable, exactly as with a reason, and it shows no second line.
+   */
+  disabled?: boolean;
   /** A navigation item that names the page being shown: its link carries `aria-current="page"` (UX-2 P3b-1). */
   current?: boolean;
   /** UX-2 P3b-2: a value at the item's right (`ui-menu-item-value`), cut by CSS when long. */
@@ -278,7 +283,7 @@ export function Menu({
   const renderItem = (item: MenuItem, child: boolean): ReactNode[] => {
     if (item.kind === 'heading') return [<div key={item.id} className="ui-menu-heading">{item.label}</div>];
     if (item.kind === 'rule') return [<hr key={item.id} role="separator" className="ui-menu-rule" />];
-    const itemDisabled = present(item.disabledReason);
+    const itemDisabled = present(item.disabledReason) || item.disabled === true;
     const group = item.children !== undefined && item.children.length > 0 && !itemDisabled;
     const role = child && !item.href ? 'menuitemradio' : kind === 'radio' ? 'menuitemradio' : 'menuitem';
     const checked = child && !item.href ? item.checked === true : kind === 'radio' ? item.id === selectedId : undefined;
@@ -292,7 +297,7 @@ export function Menu({
           </span>
         ) : label}
         {present(item.description) ? <span className="ui-menu-item-description">{item.description}</span> : null}
-        {itemDisabled ? <span className="ui-menu-item-reason">{item.disabledReason}</span> : null}
+        {present(item.disabledReason) ? <span className="ui-menu-item-reason">{item.disabledReason}</span> : null}
       </>
     );
     if (item.kind === 'button') {

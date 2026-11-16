@@ -56,6 +56,11 @@ export const LOAD_SOURCE = 'load_source';
 
 const isLoad = (call) => call?.name === LOAD_SOURCE;
 
+/** The in-loop search step's tool name (S3-B W2): the instance's own step, never a source's call. */
+export const FIND_SOURCE = 'find_source';
+
+const isSearch = (call) => call?.name === FIND_SOURCE;
+
 /** The alias a tool name is offered under (`<alias>__<tool>`), or undefined for a bare name. */
 export function aliasOfToolName(name) {
   const at = typeof name === 'string' ? name.indexOf('__') : -1;
@@ -79,6 +84,8 @@ export function pauseCheck({ consent, toolCalls }) {
       if (call.loadOutcome === 'loaded' && typeof call.args?.alias === 'string') loadedAliases.add(call.args.alias);
       continue;
     }
+    // A search reaches no source, so it is no call to a source before its load (S3-B W2).
+    if (isSearch(call)) continue;
     const alias = aliasOfToolName(call.name);
     if (alias === undefined || !loadedAliases.has(alias)) beforeLoad.push(call.name);
   }

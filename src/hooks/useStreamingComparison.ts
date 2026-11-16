@@ -95,7 +95,7 @@ export function useStreamingComparison() {
     query: string,
     model: string,
     portal: string,
-    opts?: { mcpOnly?: boolean },
+    opts?: { mcpOnly?: boolean; picks?: readonly string[] },
   ) => {
     const mcpOnly = opts?.mcpOnly ?? false;
 
@@ -129,7 +129,9 @@ export function useStreamingComparison() {
         url: '/api/compare-stream',
         // The flag is only serialized when set, so a default (two-arm) run's
         // request body is byte-identical to what the apex has always sent.
-        body: { query, model, portal, ...(mcpOnly ? { mcpOnly: true } : {}) },
+        // S3-B W1: the reader's picks, only when the question was sent with "Only the ones I pick", so an Auto body is
+        // byte-identical to what it was.
+        body: { query, model, portal, ...(mcpOnly ? { mcpOnly: true } : {}), ...(opts?.picks ? { picks: [...opts.picks] } : {}) },
         signal: abortControllerRef.current.signal,
         onEvent: (eventData) => {
           // Record MCP-panel events for trace capture

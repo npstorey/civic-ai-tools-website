@@ -45,15 +45,26 @@
  */
 
 import type { ChatCompletionTool } from 'openai/resources/chat/completions';
-import { CIVIC_INVENTORY, civicRouter, LOAD_SOURCE_TOOL_NAME, type SourceOffered, type SourceSelection } from '@typedstandards/civic-typed-router';
+import {
+  CIVIC_INVENTORY,
+  civicRouter,
+  FIND_SOURCE_LIMIT,
+  FIND_SOURCE_RESULT_TEXT,
+  FIND_SOURCE_TOOL_NAME,
+  LOAD_SOURCE_TOOL_NAME,
+  routingConfiguration,
+  SEARCH_METHOD,
+  type SourceOffered,
+  type SourceSelection,
+} from '@typedstandards/civic-typed-router';
 import type { McpRegistryEnv } from './registry.ts';
 import { dispatchTargetOf, routedSourceId } from './registry.ts';
 import { composeDirectoryPrompt, composeInLoopSystemPrompt, routerComponent, withPortalLockGuidance, type CompositionComponent } from './socrata-skill.ts';
-import { loadSourceTool, mcpToolsFor, offeredMcpTools } from './tools.ts';
+import { findSourceTool, loadSourceTool, mcpToolsFor, offeredMcpTools } from './tools.ts';
 import { sourceIdForToolName } from './operation-types.ts';
 import { classifyStreamError, type ConsentPausePayload } from '../streaming.ts';
 import { callMcpTool, type McpToolCallOptions } from './client.ts';
-import type { LoadStep } from '../model-loop/run-tool-loop.ts';
+import type { LoadStep, SearchStep } from '../model-loop/run-tool-loop.ts';
 import { IN_LOOP_RUN_RECORD_ATTRIBUTE, RUN_RECORD_ATTRIBUTE } from '../evidence/trace.ts';
 import type { SourceRoutingMode } from './source-routing-mode.ts';
 
@@ -201,7 +212,52 @@ export interface ConsentPause {
   ask(sourceId: string, report: (payload: ConsentPausePayload) => void): Promise<PauseResult>;
 }
 
+/** The rule that chose the sources a run lists first, and its version
+ *  (`considered.rule` and the routing configuration's `rule`). */
+export interface RoutingRule {
+  id: string;
+  version: string;
+}
+
+/** The rule every route lists by: the directory set, whole. */
+export const DIRECTORY_SET_RULE: Readonly<RoutingRule> = Object.freeze({ id: 'directory-set', version: '1' });
+
+/** The rule a run whose sources the reader picked lists by (S3-B W1; G0-4 = A, anchor B9): the surviving picks,
+ *  whole, listed and searchable alike, so no search is offered (`../sources/picks.ts`). Bundle revision 5 `:106`. */
+export const READER_PICKED_RULE: Readonly<RoutingRule> = Object.freeze({ id: 'reader-picked', version: '1' });
+
+/** One hit of the router's search: the source, by id and alias. */
+export interface RoutingSearchHit {
+  sourceId: string;
+  alias: string;
+}
+
+/** The router's search as the routing calls it (`civicRouter.searchSources`). */
+export type RoutingSearch = (input: { configured: McpRegistryEnv; query: string; space?: readonly string[]; top?: number }) => RoutingSearchHit[];
+
+/**
+ * Refused at creation (S3-B W2, B3): sets the routing cannot state truly. A listed source the searchable set does
+ * not hold, or rule `directory-set` over a listed set smaller than the searchable set, which would let a record say
+ * the model was shown every usable source when it was not.
+ */
+export class RoutingSetsError extends Error {
+  constructor(message: string) {
+    super(message);
+    this.name = 'RoutingSetsError';
+  }
+}
+
 export interface InLoopRoutingInput {
+  /**
+   * The searchable set (S3-B W2): the sources a search may return, with how a load of each is answered. It holds
+   * every listed source. Every route passes the directory set for both, under `DIRECTORY_SET_RULE`, so it lists
+   * every source it can search and offers no search.
+   */
+  searchable: readonly DirectoryEntry[];
+  /** The rule that chose `directory`, the listed set (S3-B W2): `considered.rule` and the routing configuration's. */
+  rule: RoutingRule;
+  /** For tests: the router's search. Defaults to `civicRouter.searchSources`. */
+  search?: RoutingSearch;
   /** The run's Socrata portal, if any. */
   portal?: string;
   /** The one Socrata portal a locked instance serves, or absent. */
@@ -223,15 +279,19 @@ export interface InLoopRoutingInput {
 
 /** What an in-loop run is given, and what it has loaded so far. */
 export interface InLoopRouting {
-  /** The directory set the run lists. */
+  /** The directory the run lists, as it stands: the listed set, grown by a search's hits (S3-B W2). */
   readonly directory: readonly DirectoryEntry[];
   /** The first request's system prompt: the directory, then the lock
    *  section on a locked instance. */
   readonly firstSystemPrompt: string;
-  /** The first request's tools: `load_source` alone. */
+  /** The first request's tools: `load_source`, then `find_source` only where the searchable set is larger than the
+   *  listed set (S3-B W2, B1); no route passes such sets in S3 (G0-4 = A). */
   readonly firstTools: ChatCompletionTool[];
   /** The loop's load step (`ToolLoopOptions.loadStep`). */
   readonly loadStep: LoadStep;
+  /** The loop's search step (`ToolLoopOptions.searchStep`; S3-B W2): present only when the searchable set holds a
+   *  source the directory does not list, as is `find_source` in the tools. */
+  readonly searchStep: SearchStep | undefined;
   /** The tool transport: a source's tool is sent only once that source is
    *  loaded; a tool of a listed source that is not loaded is refused
    *  `not_offered` as `SourceNotLoadedError`. */
@@ -273,8 +333,8 @@ export interface InLoopConsidered {
   inventory: { id: string; version: string; hash: string };
   total: number;
   listed: number;
-  rule: 'directory-set';
-  ruleVersion: '1';
+  rule: string;
+  ruleVersion: string;
 }
 
 /** The router's inventory in the record's reference form (`<version>+<hash12>`). */
@@ -291,6 +351,18 @@ export interface InLoopRecord {
   routing: { method: 'in-loop'; version: string };
   definitionHash: string;
   considered: InLoopConsidered;
+  /** The routing configuration the run was routed under, and its hash (ADR-0033 amendment 5; S3-B W2): fixed at
+   *  the run's start, as `considered` is. */
+  routingConfiguration: InLoopRoutingConfiguration;
+}
+
+/** `analysis.routing_configuration`'s value: the router's routing configuration, key for key, then its hash. */
+export interface InLoopRoutingConfiguration {
+  rule: { id: string; version: string };
+  cap: string;
+  search: 'none' | { method: string; version: string };
+  inventory: { id: string; version: string; hash: string };
+  hash: string;
 }
 
 /**
@@ -323,13 +395,34 @@ export interface InLoopRecord {
  * it does under all-sources. A hosted source is never woken by a load.
  */
 export async function createInLoopRouting(input: InLoopRoutingInput): Promise<InLoopRouting> {
-  const { portal, lockedPortal, configured, directory, selection, pause, now = new Date() } = input;
+  const { portal, lockedPortal, configured, searchable, rule, selection, pause, now = new Date() } = input;
   const callTool = input.callTool ?? callMcpTool;
-  const directoryIds = directory.map((entry) => entry.sourceId);
+  const search: RoutingSearch = input.search ?? ((query) => civicRouter.searchSources(query));
+  const firstIds = input.directory.map((entry) => entry.sourceId);
+  const searchableIds = searchable.map((entry) => entry.sourceId);
+  // The sets, checked before anything is composed (S3-B W2, B3).
+  const unsearchable = firstIds.filter((id) => !searchableIds.includes(id));
+  if (unsearchable.length > 0) {
+    throw new RoutingSetsError(`createInLoopRouting: a listed source is not in the searchable set: ${unsearchable.join(', ')}`);
+  }
+  const searchOffered = searchableIds.some((id) => !firstIds.includes(id));
+  if (searchOffered && rule.id === DIRECTORY_SET_RULE.id) {
+    throw new RoutingSetsError(
+      'createInLoopRouting: rule directory-set lists every source the run can search, and the listed set is smaller than the searchable set',
+    );
+  }
+  // The directory the run lists: the listed set, then grown by a search's hits, in manifest order (S3-B W2, O8).
+  // Everything below reads it as it stands: the lock section, `load_source`, a load, the loaded set, the
+  // composition, the dispatch's refusal.
+  let directory: readonly DirectoryEntry[] = input.directory;
+  let directoryIds = firstIds;
   // The lock section stays the consumer's and follows the router's text, on
   // every request, over the directory set (the router's flag).
   const withLock = (prompt: string) => withPortalLockGuidance(prompt, lockedPortal, configured, directoryIds);
-  const loadTool = loadSourceTool(configured, directoryIds);
+  let loadTool = loadSourceTool(configured, directoryIds);
+  // `find_source` beside `load_source`, only where the searchable set is larger (S3-B W2, B1).
+  const findTool = searchOffered ? findSourceTool() : undefined;
+  const stepTools = (): ChatCompletionTool[] => (findTool ? [loadTool, findTool] : [loadTool]);
   const loadedIds: string[] = [];
   // How each Ask-first source's pause ended, so a second load asks nothing,
   // and whether a question was put (G0-B1 A): `undefined` when `ask` threw,
@@ -341,7 +434,7 @@ export async function createInLoopRouting(input: InLoopRoutingInput): Promise<In
 
   let current: { systemPrompt: string; tools: ChatCompletionTool[]; components: CompositionComponent[] } = {
     systemPrompt: withLock(composeDirectoryPrompt({ configured, directory: directoryIds, now })),
-    tools: [loadTool],
+    tools: stepTools(),
     components: [routerComponent()],
   };
   const first = current;
@@ -396,27 +489,86 @@ export async function createInLoopRouting(input: InLoopRoutingInput): Promise<In
       loadedIds.push(entry.sourceId);
       current = {
         systemPrompt: withLock(composed.prompt),
-        tools: [loadTool, ...offeredMcpTools(mcpToolsFor(lockedPortal), configured, loadedNow())],
+        tools: [...stepTools(), ...offeredMcpTools(mcpToolsFor(lockedPortal), configured, loadedNow())],
         components: composed.components,
       };
       return { outcome: 'loaded', text: LOAD_RESULT_TEXT.loaded(entry.alias), systemPrompt: current.systemPrompt, tools: current.tools, ...askedPart };
     },
   };
 
-  const listed = new Set(directoryIds);
-  // What the run was routed against (W4): fixed at its start, as the directory is.
+  /**
+   * THE SEARCH STEP (S3-B W2; anchor B2, B3, O1, O8, O9). Answered by the instance: the router's search over the
+   * searchable set as its space, at the router's default cut (10), at most `FIND_SOURCE_LIMIT` (2) times a run; a
+   * later call is `limit-reached` and runs no search. A hit the directory does not list joins it at its manifest
+   * position, with its stored state (an Ask-first hit loads through the pause), and the next request's directory,
+   * `load_source` enum, system prompt, tools and components are rebuilt through the router's calls over the grown
+   * set. Hits that add nothing change nothing, so the next request is the one before it. No source is contacted:
+   * the search reads the router's manifest, and a composition over a loaded source is the load's, as before.
+   */
+  let searches = 0;
+  const searchStep: SearchStep | undefined = searchOffered
+    ? {
+        toolName: FIND_SOURCE_TOOL_NAME,
+        async search(query) {
+          if (searches >= FIND_SOURCE_LIMIT) return { outcome: 'limit-reached', text: FIND_SOURCE_RESULT_TEXT.limit };
+          searches += 1;
+          const hits = search({ configured, query, space: searchableIds });
+          const text = hits.length > 0 ? FIND_SOURCE_RESULT_TEXT.found(hits.map((hit) => hit.alias)) : FIND_SOURCE_RESULT_TEXT.none;
+          const hitIds = hits.map((hit) => hit.sourceId);
+          const added = hitIds.filter((id) => !directoryIds.includes(id));
+          if (added.length === 0) return { outcome: 'searched', text, hits: hitIds };
+          const grown = new Set([...directoryIds, ...added]);
+          directory = searchable.filter((entry) => grown.has(entry.sourceId));
+          directoryIds = directory.map((entry) => entry.sourceId);
+          loadTool = loadSourceTool(configured, directoryIds);
+          const loaded = loadedNow();
+          if (loaded.length === 0) {
+            current = { systemPrompt: withLock(composeDirectoryPrompt({ configured, directory: directoryIds, now })), tools: stepTools(), components: [routerComponent()] };
+          } else {
+            const composed = await composeInLoopSystemPrompt({ portal, configured, directory: directoryIds, loaded, now });
+            current = {
+              systemPrompt: withLock(composed.prompt),
+              tools: [...stepTools(), ...offeredMcpTools(mcpToolsFor(lockedPortal), configured, loaded)],
+              components: composed.components,
+            };
+          }
+          return { outcome: 'searched', text, hits: hitIds, systemPrompt: current.systemPrompt, tools: current.tools };
+        },
+      }
+    : undefined;
+
+  // What the run was routed against (W4): fixed at its start, as the first directory is. `listed` counts the first
+  // list; a search's hits are not counted (bundle revision 5, `composition.considered`).
   const considered: InLoopConsidered = {
     inventory: { ...CIVIC_INVENTORY_REFERENCE },
     total: civicRouter.manifest.length,
-    listed: directory.length,
-    rule: 'directory-set',
-    ruleVersion: '1',
+    listed: firstIds.length,
+    rule: rule.id,
+    ruleVersion: rule.version,
+  };
+  // The routing configuration (ADR-0033 amendment 5; S3-B W2, O4): the router's object, key for key, then its hash.
+  // No rule shortens a list, so `cap` is `none`; `search` names the router's method only where a search is offered.
+  // The inventory is named as `considered` names it, `<version>+<hash12>`, as the hub's search golden writes it.
+  const configuration = routingConfiguration({
+    rule: { id: rule.id, version: rule.version },
+    cap: 'none',
+    search: searchOffered ? { method: SEARCH_METHOD.method, version: SEARCH_METHOD.version } : 'none',
+    inventory: { ...CIVIC_INVENTORY_REFERENCE },
+  });
+  const routingConfigurationValue: InLoopRoutingConfiguration = {
+    ...configuration.routingConfiguration,
+    rule: { ...configuration.routingConfiguration.rule },
+    inventory: { ...configuration.routingConfiguration.inventory },
+    hash: configuration.routingConfigurationHash,
   };
   return {
-    directory,
+    get directory() {
+      return directory;
+    },
     firstSystemPrompt: first.systemPrompt,
     firstTools: first.tools,
     loadStep,
+    searchStep,
     async executeToolCall(name, args) {
       try {
         return await callTool(name, args, { selection: loadedNow() });
@@ -424,7 +576,7 @@ export async function createInLoopRouting(input: InLoopRoutingInput): Promise<In
         // A listed source the model has not loaded: R6's refusal, with R8's
         // model text. A source the run does not list keeps R6's text.
         const sourceId = sourceIdForToolName(name);
-        if (classifyStreamError(error) === 'not_offered' && sourceId !== undefined && listed.has(sourceId)) {
+        if (classifyStreamError(error) === 'not_offered' && sourceId !== undefined && directoryIds.includes(sourceId)) {
           throw new SourceNotLoadedError(name);
         }
         throw error;
@@ -457,6 +609,7 @@ export async function createInLoopRouting(input: InLoopRoutingInput): Promise<In
         components: [...current.components, { id: considered.inventory.id, version: considered.inventory.version }],
       }).hash,
       considered,
+      routingConfiguration: routingConfigurationValue,
     }),
   };
 }

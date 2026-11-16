@@ -67,8 +67,8 @@ export interface ConsentSession {
 
 export interface ConsentRefusalPayload {
   error: string;
-  /** No consent in force (or a re-ask), or a consent in force with no source On. */
-  code: 'consent_required' | 'no_sources_on';
+  /** No consent in force (or a re-ask), a consent in force with no source On, or (S3-B W1) no pick usable. */
+  code: 'consent_required' | 'no_sources_on' | 'no_picks_usable';
   /** The flows statement's hash: the version the surface shows and the consent write echoes. */
   flowsVersion: string;
   /** What is re-asked; for `no_sources_on`, nothing. */
@@ -121,6 +121,20 @@ function refusal(store: 'row' | 'cookie', statement: FlowsStatement, reask: Reas
     store,
     statement,
     payload: { error: friendlyStreamError({ code }), code, flowsVersion: statementHash(statement), reask },
+  };
+}
+
+/**
+ * The refusal of a question whose picks none could be used (S3-B W1; S10; `./picks.ts`), in the shape and on the
+ * channel of the gate's own refusals: the route reads it after an `ok` answer, before the rate limiter and before the
+ * model or any source is called. Nothing is re-asked: the consent in force stands.
+ */
+export function picksRefusalPayload(statement: FlowsStatement | undefined): ConsentRefusalPayload {
+  return {
+    error: friendlyStreamError({ code: 'no_picks_usable' }),
+    code: 'no_picks_usable',
+    flowsVersion: statement ? statementHash(statement) : '',
+    reask: { base: false, sources: [] },
   };
 }
 

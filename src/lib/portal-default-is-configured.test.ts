@@ -330,8 +330,8 @@ const EXCEPTIONS: readonly Exception[] = [
   {
     path: 'node_modules/@typedstandards/civic-typed-router/dist/civic/env.js',
     classification: 'server-endpoint',
-    hits: 1,
-    why: "Google Data Commons' hosted MCP endpoint as the package's default address, which `readMcpEnvFromProcess` applies when `DATA_COMMONS_MCP_URL` is unset — a third-party public service every instance reaches at the same address, not one deployment's city, and the trace records it as real configured routing for exactly that reason (#258 A9; moved from registry.ts).",
+    hits: 3,
+    why: "Google Data Commons' hosted MCP endpoint as the package's default address, which `readMcpEnvFromProcess` applies when `DATA_COMMONS_MCP_URL` is unset — a third-party public service every instance reaches at the same address, not one deployment's city, and the trace records it as real configured routing for exactly that reason (#258 A9; moved from registry.ts). Since router 0.10.0 (S3-B W2, npstorey/civic-ai-tools#318, G0-6 = A), two more: `data.cityofnewyork.us` in `SOCRATA_PACK_PORTALS` and in its comment, the one portal the NYC City Record pack reads (the host its data lives on, as in nyc-record.js's row below), which the router compares a one-portal lock against to leave the pack out when the lock names another portal. A table of a named pack's fixed portal, never a portal a run chooses or inherits.",
   },
   // Router 0.6.0 (R8 W3): NYC City Record's entry names the one host its
   // server queries, in a header comment and in its variant's outbound list.

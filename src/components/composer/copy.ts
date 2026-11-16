@@ -96,16 +96,20 @@ export const DATA_SOURCES_ITEM = {
   inLoop: {
     auto: 'Auto - find sources for me',
     autoDescription: 'The model chooses which data sources to use, from those you set On or Ask first.',
-    pickReason: 'Not offered on this site yet. The model chooses from the data sources you set On or Ask first.',
+    /** S1 (S3-B W1; D9 = A): "Only the ones I pick", offered in this form only. */
+    pickDescription: 'You search for data sources and pick the ones this question can use. The model uses no others.',
   },
   /** Every other case: routing all-sources, no store, or either unread or failed. */
   allSources: {
     auto: 'Auto - use every source I set On',
     autoDescription: 'Every data source you set On is given to the model from the start. Sources set to Ask first are not used.',
-    pickReason: 'Not offered on this site yet. Every data source you set On is given to the model.',
+    /** D8 = B (S3-B W1): the reason "Only the ones I pick" is not offered here (D5 = A). */
+    pickReason: 'Not offered on this site. Every data source you set On is given to the model.',
   },
-  /** Rows 1-3: the second option, with no description (C1 = A). */
+  /** Rows 1-3: the second option. */
   pick: 'Only the ones I pick',
+  /** S13 (S3-B W1): the item's value while "Only the ones I pick" is chosen; "0 picked" with none, never "Auto". */
+  picked: (n: number) => `${n} picked`,
   /** Row 44: the footer, a link to the Settings overlay. */
   footer: 'All data sources and your consent',
 } as const;
@@ -143,3 +147,32 @@ export const SIGN_IN_FOR_MORE = 'Sign in for more options';
 export const HARNESS_SENTENCE = 'A harness is the data sources a question can use and the instructions the model gets for using them.';
 /** Moved verbatim from the form's region (`QueryForm.tsx:850` at b4766f1; Q8 = A): the About tab's link. */
 export const WHY_THESE_MODELS = 'Why these models?';
+
+/**
+ * The picker (S3-B W1, npstorey/civic-ai-tools#318; the owner's W0 rulings, OA-870, D1 = B, D2 = A, D3 = A, D4 = B,
+ * D9 = A; words `w0-words.r2.md`, checked by `research-check-w0.md`). The panel's search field and its no-match line
+ * are the Settings overlay's (`SETTINGS_TEXT.search`, `.noMatch`, S2 and S3); its close control is the site's × "Close"
+ * (S15, `research-check-w1.md`); S10 is `friendlyStreamError`'s; S11 and D7's words are `WHERE_IT_WENT_REASONS`'.
+ */
+export const PICKER_TEXT = {
+  /** S12: the panel's heading, and its name. */
+  heading: 'Pick the data sources for this question',
+  /** S4: a row's pick control, its visible words and its accessible name. */
+  pick: 'Pick for this question',
+  pickName: (name: string) => `Pick ${name} for this question`,
+  /** S5: an Off row, why it cannot be picked. */
+  offReason: 'Off. Set it to On or Ask first to pick it.',
+  /** S6a: a hit this site has not set up. */
+  notSetUp: 'Not set up on this site.',
+  /** S7: under the box, once sources are picked; the names in the statement's order, "A", "A and B", "A, B and C". */
+  picksLine: (names: readonly string[]) => `Your question can use only these data sources: ${joinNames(names)}.`,
+  /** S8: after S7, the control that opens the panel again. */
+  change: 'Change',
+  /** S9 (D4 = B): under the box, after a send with "Only the ones I pick" chosen and nothing picked. */
+  noPickAfterSend: 'No data source is picked, so nothing was sent. Pick at least one, or choose Auto.',
+} as const;
+
+function joinNames(names: readonly string[]): string {
+  if (names.length <= 1) return names.join('');
+  return `${names.slice(0, -1).join(', ')} and ${names[names.length - 1]}`;
+}
