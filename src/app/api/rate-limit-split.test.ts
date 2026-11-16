@@ -5,8 +5,9 @@
 //
 //   1. THIS APP's per-day request budget (`src/lib/rate-limit.ts`). The query
 //      routes check it before doing any work and answer HTTP 429 themselves.
-//      Its kind is `rate_limit` and its copy offers the reader sign-in or
-//      tomorrow — advice that only makes sense for their own allowance.
+//      Its kind is `rate_limit` and its copy tells the reader when their count
+//      resets (RL-1, UX-2 P6 + P10) — advice that only makes sense for their
+//      own allowance.
 //   2. THE MODEL ENDPOINT limiting this server. It arrives as an SDK `APIError`
 //      with `status: 429`, is classified structurally by `classifyModelError`,
 //      and its kind is `model_rate_limited`.
@@ -84,8 +85,10 @@ test('#30 P4: the two limits read differently to a reader', () => {
   const ownLimit = friendlyStreamError({ code: 'rate_limit' });
   const upstream = friendlyStreamError({ code: 'model_rate_limited' });
   assert.notEqual(ownLimit, upstream);
-  // The reader's own allowance is the only one with an action attached.
-  assert.match(ownLimit, /Sign in/);
+  // The reader's own allowance is the only one with an action attached: RL-1's "Ask again after the count resets at
+  // midnight UTC." (UX-2 P6 + P10, criterion 17; 0d item 3). The upstream copy carries no such step.
+  assert.match(ownLimit, /Ask again after the count resets at midnight UTC\./);
+  assert.doesNotMatch(upstream, /Ask again after the count resets/);
   assert.doesNotMatch(upstream, /Sign in/);
   // And the upstream copy says explicitly that it is not the reader's limit,
   // which is the whole content of the fix.
