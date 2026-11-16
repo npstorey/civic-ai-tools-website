@@ -36,8 +36,10 @@
  * and the run goes on with no further pause. The outcome sentences are this
  * card's only (L1), each with item 13's one pointer to Data source settings.
  *
- * ONE PLACE TO ANSWER (UX-2 HG; D1-D4 = A). While `ConsentPausePrompt` asks
- * about a pause, it holds the only buttons and the choices sentence. The card
+ * ONE PLACE TO ANSWER (UX-2 HG; D1-D4 = A; W2 = A). While `ConsentPausePrompt`
+ * asks about a pause, it holds the only buttons, the choices sentence, and the
+ * `change` sentence with its link to Data source settings, so the reader is
+ * told before answering that the choice can be undone. The card
  * in the run's steps for the same pause then states the step without them:
  * the heading, that the AI asked, how long the question waits, then the
  * source's lines, in the steps' own grey frame (`STEP_FRAME`), not the accent
@@ -47,6 +49,13 @@
  * the bus does not hold (none was reported to this page) keeps its buttons in
  * the card. The Sources row's card (`place="row"`) keeps its buttons
  * throughout (D4 A).
+ *
+ * THE RUN ENDED WHILE THE PROMPT ASKS (UX-2 HG, W4 = b). A run that ends or
+ * fails during the hold can leave the page's hold open (#704), so the prompt
+ * still asks while the card's step is closed (`runMovedOn`). The card then reads
+ * as a cancelled card reads: the heading, the source's lines, then `gone`, with
+ * no `asked`, no `wait` and no buttons, in the steps' frame. The prompt is
+ * unchanged.
  *
  * AFTER THE HOLD (R9 P1, #669 D2). The run waits a minute; the entry lives
  * ten (`entryExpiresAt`). Between the two the card keeps Allow and Don't
@@ -59,13 +68,14 @@
  * says the question is no longer waiting. The run's own "moved on" state
  * (`runMovedOn`, the step's `isComplete`) changes the words, never the
  * buttons (the seat's note 4): the bus's entry decides those. While the
- * prompt asks, it changes neither: the bus says the question still waits.
+ * prompt asks, it changes no button, and the words only as THE RUN ENDED
+ * WHILE THE PROMPT ASKS says.
  *
  * IN VIEW (R9 P1, #672). `ConsentPausePrompt`, rendered by the surface that
  * owns the question box (at the top of the answer area on the home page and
  * `/ask`, under the running question on `/explore`), shows the card's
- * heading, what each choice sends and the page's only answer buttons while a
- * hold is open and unanswered. Once per pause, if the prompt is not already in the
+ * heading, what each choice sends, that the choice can be changed, and the
+ * page's only answer buttons while a hold is open and unanswered. Once per pause, if the prompt is not already in the
  * viewport (below the sticky header), it brings the PROMPT into view
  * (`block: 'nearest'`; `behavior: 'auto'` when the reader asked for reduced
  * motion, as `preferredScrollBehavior` says for every scroll the question
@@ -247,7 +257,8 @@ function Pointer({ sentence }: { sentence: string }) {
 
 /**
  * The compact prompt (R9 P1, #672): while a hold is open and unanswered, the
- * card's heading, what each choice sends, and the same two buttons, posting
+ * card's heading, what each choice sends, that the choice can be changed (with
+ * its link to Data source settings), and the page's only answer buttons, posting
  * with the pause's own key. Nothing once the hold ends, an answer is given,
  * or no pause is open. Brought into view once per pause, only if it is not.
  */
@@ -271,7 +282,7 @@ export function ConsentPausePrompt() {
   return (
     <div data-part="consent-pause-prompt" role="group" aria-label={heading} style={PROMPT}>
       <p style={{ margin: 0, flex: '1 1 260px' }}>
-        <span style={{ fontWeight: 600, color: 'var(--text-primary)' }}>{heading}</span> {CONSENT_STEP_TEXT.choices}
+        <span style={{ fontWeight: 600, color: 'var(--text-primary)' }}>{heading}</span> {CONSENT_STEP_TEXT.choices} <Pointer sentence={CONSENT_STEP_TEXT.change} />
       </p>
       <div style={{ display: 'flex', gap: '8px' }}>
         <button type="button" style={PROMPT_BUTTON} disabled={entry.deciding} onClick={() => { void decideConsentPause(key, 'allow'); }}>
@@ -311,9 +322,11 @@ export default function ConsentStep({ pause, runMovedOn = false, place = 'steps'
   // The hold is over: the bus says so, or the run has moved past this step; never while the prompt asks about it.
   const holdEnded = !promptHolds && pause.holds && (runMovedOn || slot?.holdEnded === true);
   const expired = slot?.expired === true;
+  // The run's step has closed while the prompt still asks (W4 = b): the card reads as a cancelled card reads.
+  const runEnded = promptHolds && runMovedOn;
   // An answer given while the run waited reads as it always has.
   const answeredInHold = answered && !afterHold;
-  const outcome = slot?.decision === 'allow'
+  const outcome = runEnded ? CONSENT_STEP_TEXT.gone : slot?.decision === 'allow'
     ? (slot.moved === false
       ? (afterHold ? CONSENT_STEP_TEXT.allowedAfterNotMoved : CONSENT_STEP_TEXT.allowedNotMoved)
       : (afterHold ? CONSENT_STEP_TEXT.allowedAfter : CONSENT_STEP_TEXT.allowed))
@@ -341,10 +354,10 @@ export default function ConsentStep({ pause, runMovedOn = false, place = 'steps'
     <div data-part="consent-step" data-consent-source={source.sourceId} data-consent-place={place} role="group" aria-label={CONSENT_STEP_TEXT.heading(name)} style={promptHolds ? STEP_FRAME : CARD}>
       <p style={{ margin: '0 0 4px', fontWeight: 600, color: 'var(--text-primary)' }}>{CONSENT_STEP_TEXT.heading(name)}</p>
       {!pause.holds && <p style={{ margin: '0 0 6px' }}>{CONSENT_STEP_TEXT.cannotAsk}</p>}
-      {pause.holds && ((!holdEnded && !expired) || answeredInHold) && <p style={{ margin: '0 0 6px' }}>{CONSENT_STEP_TEXT.asked}</p>}
+      {pause.holds && !runEnded && ((!holdEnded && !expired) || answeredInHold) && <p style={{ margin: '0 0 6px' }}>{CONSENT_STEP_TEXT.asked}</p>}
       {pause.holds && holdEnded && !answeredInHold && <p data-part="consent-hold-ended" style={{ margin: '0 0 6px' }}>{CONSENT_STEP_TEXT.ended}</p>}
       {!pause.holds && <p style={{ margin: '0 0 6px' }}>{CONSENT_STEP_TEXT.nextQuestion}</p>}
-      {promptHolds && <p style={{ margin: '0 0 6px' }}>{CONSENT_STEP_TEXT.wait}</p>}
+      {promptHolds && !runEnded && <p style={{ margin: '0 0 6px' }}>{CONSENT_STEP_TEXT.wait}</p>}
       {waiting && key !== undefined && !promptHolds && (
         <>
           {holdEnded ? (

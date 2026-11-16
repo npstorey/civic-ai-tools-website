@@ -5,6 +5,11 @@
 // heading, `asked`, `wait` and the source's lines, in the steps' own grey frame. The card has no buttons exactly when
 // the short box shows the buttons for the same key. Every other state reads as it does today.
 //
+// THE RULED WORDS (W2 = A, W4 = b; #729 6920960303). The box also says the choice can be changed: the `change`
+// sentence, with "Data source settings" as its link, straight after the choices sentence and before the buttons. In
+// state (g) (the run's step closed while the box still asks) the card reads as a cancelled card reads: the heading, the
+// source's lines, then `gone`, with no `asked` and no `wait`, no buttons, in the steps' frame; the box is unchanged.
+//
 // WHAT IS DRIVEN.
 //   - Criterion 1: the three surfaces through their real page components on R6's surface harness
 //     (`src/components/sources/surface-test-harness.ts`, not edited), each fed by a held stream through its real hook,
@@ -94,6 +99,7 @@ const flowsRoute = await load('app/api/flows/route.ts');
 const consentRoute = await load('app/api/sources/consent/route.ts');
 const { buildFlowsStatement, statementHash } = await load('lib/flows/statement.ts');
 const { sourceRowLines } = await load('lib/sources/source-name.ts');
+const { SETTINGS_TEXT, SETTINGS_HREF } = await load('lib/sources/copy.ts');
 
 const ALLOW = 'Allow';
 const DONT_ALLOW = "Don't allow";
@@ -270,6 +276,17 @@ function assertOnePlace(surface: Surface, where: string): void {
     assert.equal(all.length, 1, `${where}: the document has ${all.length} "${label}" buttons, not one`);
     assert.ok(inBox.has(all[0]), `${where}: the one "${label}" is not inside data-part="consent-pause-prompt"`);
   }
+  // W2 A: the box says the choice can be changed, with Data source settings as its link, after the choices and before
+  // the buttons.
+  const boxText = textOf(boxes[0]);
+  assert.ok(boxText.includes(STEP.change), `${where}: the short box does not carry the change sentence: ${boxText}`);
+  assert.ok(boxText.indexOf(STEP.choices) >= 0 && boxText.indexOf(STEP.choices) < boxText.indexOf(STEP.change), `${where}: the change sentence does not follow the choices sentence in the box`);
+  const boxEls = under(boxes[0]);
+  const link = boxEls.filter((el) => el.type === 'a' && textOf(el) === SETTINGS_TEXT.link);
+  assert.equal(link.length, 1, `${where}: the short box does not link "${SETTINGS_TEXT.link}" once`);
+  assert.equal(link[0].props.href, SETTINGS_HREF, `${where}: the box's link does not lead to Data source settings`);
+  const firstButton = boxEls.findIndex((el) => el.type === 'button');
+  assert.ok(boxEls.indexOf(link[0]) < firstButton, `${where}: the change sentence does not come before the buttons`);
   const cards = stepCards(surface);
   assert.equal(cards.length, 1, `${where}: premise: one step card, found ${cards.length}`);
   const card = cards[0];
@@ -406,17 +423,25 @@ test('HG criterion 2 (f), a guard: a pause that is not on the bus keeps its thre
   assert.deepEqual(reading, { box: null, cards: [{ buttons: [ALLOW, DONT_ALLOW, ALLOW_ALL], says: ['asked', 'wait', 'choices', 'change'], frame: ACCENT_FRAME }] }, 'not on the bus: the box asks nothing, and the card reads as today');
 });
 
-const G_CARD: CardReading = { buttons: [], says: ['asked', 'wait'], frame: STEPS_FRAME };
+// W4 = b (#729 6920960303): in state (g) the card reads as a cancelled card reads: the heading, the source's lines,
+// then `gone`; no `asked`, no `wait`, no buttons, in the steps' frame.
+const G_CARD: CardReading = { buttons: [], says: ['gone'], frame: STEPS_FRAME };
+/** State (g)'s card, in order: the heading, the source's lines, then `gone`. */
+function assertGOrder(text: string, where: string): void {
+  const order = [HEADING, WHAT, LOGS, STEP.gone].map((x) => text.indexOf(x));
+  assert.ok(order.every((i, n) => i >= 0 && (n === 0 || i > order[n - 1])), `${where}: the card is not heading, the source's lines, then gone (${order.join(', ')}): ${text.slice(0, 300)}`);
+}
 
-test('HG criterion 2 (g), a red: the run has moved past the step while the bus\'s hold is open: the box keeps its three buttons, and the card has none and reads heading, asked and wait', async () => {
+test('HG criterion 2 (g), a red (W4 = b): the run has moved past the step while the bus\'s hold is open: the box keeps its three buttons, and the card has none and reads the heading, the source\'s lines, then gone', async () => {
   answers();
   const pause = pauseOf();
   bus.reportConsentPause(pause);
-  const { reading } = await boxAndCards([{ pause, runMovedOn: true }]);
-  assert.deepEqual(reading, { box: [ALLOW, DONT_ALLOW, ALLOW_ALL], cards: [G_CARD] }, 'state (g): the box asks, and the card is not D2 A\'s form beside it');
+  const { reading, texts } = await boxAndCards([{ pause, runMovedOn: true }]);
+  assert.deepEqual(reading, { box: [ALLOW, DONT_ALLOW, ALLOW_ALL], cards: [G_CARD] }, 'state (g): the box asks, and the card does not read as a cancelled card');
+  assertGOrder(texts[0], 'state (g)');
 });
 
-test('HG criterion 2 (g), a red, reached on the home page (#704): an error on the panel that paused closes the steps and leaves the bus\'s hold open; the box keeps its three buttons, and the card has none', async () => {
+test('HG criterion 2 (g), a red, reached on the home page (#704; W4 = b): an error on the panel that paused closes the steps and leaves the bus\'s hold open; the box keeps its three buttons, and the card has none and reads gone', async () => {
   ANON();
   answers();
   await consentWith({ 'boston-opencontext': 'ask-first' });
@@ -434,5 +459,6 @@ test('HG criterion 2 (g), a red, reached on the home page (#704): an error on th
   assert.deepEqual(buttonLabels(boxes[0]), [ALLOW, DONT_ALLOW, ALLOW_ALL], 'premise: the box asks');
   const cards = stepCards(page);
   assert.equal(cards.length, 1, `premise: the run's steps still show the card after the error, found ${cards.length}`);
-  assert.deepEqual(readCard(cards[0]), G_CARD, 'state (g) on the home page: the card is not D2 A\'s form beside the box');
+  assert.deepEqual(readCard(cards[0]), G_CARD, 'state (g) on the home page: the card does not read as a cancelled card beside the box');
+  assertGOrder(textOf(cards[0]), 'state (g) on the home page');
 });
