@@ -22,8 +22,10 @@
  * at call time, so a test can set it per run.
  *
  * THE DIRECTORY SET (G0 correction 1, the seat's ruling). The sources an
- * in-loop run lists and may load are read from the consent gate's decision,
- * never from the request. While the gate is dormant (`enforced: false`, its
+ * in-loop run lists and may load are read from the consent gate's decision.
+ * A question's picks can narrow them and never widen them: a picked run lists
+ * the surviving picks only (each route filters this set by `pickedRunOf`'s
+ * `survivors`; S3-B W1, G0-2 = A). While the gate is dormant (`enforced: false`, its
  * `states` empty) every configured source is listed and loads as On: that is
  * what an all-sources run is offered today, where the selection is
  * `undefined`. Read as "a source with no stored state is Ask first" over the

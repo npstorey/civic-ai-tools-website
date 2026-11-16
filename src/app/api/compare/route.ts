@@ -271,7 +271,9 @@ Be honest if you don't have access to current or real-time data.`;
     // R6 W4 (§6): `withMcp.flows`, where the question went. This route writes
     // no trace, so it is read from the run's calls, each call's source by the
     // resolver the run's calls are routed by, and the reasons the record would
-    // state (`recordReasons`, never the router's `not-selected`).
+    // state (`recordReasons`: the router's `not-selected` as the reader's own
+    // state, except on a picked run, where an allowed source the reader did not
+    // pick stays `not-selected`; S3-B W1, B8).
     const flows = whereItWentFromCalls({
       toolCalls: withMcpResult.toolCalls,
       resolveSource: inLoop ? inLoop.resolveToolSource : (name) => routedSourceId(name, configured, selection),

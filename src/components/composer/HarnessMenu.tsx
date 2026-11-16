@@ -27,7 +27,10 @@
  *     picker, also when it is already chosen; while it is chosen the item's value reads S13 ("{n} picked");
  *   - a read that says otherwise (all-sources, or no store): disabled with D8's reason;
  *   - while the routing pair is unread, or its read failed: disabled, with no reason (R2): no sentence about
- *     picking shows until the read says which form is true.
+ *     picking shows until the read says which form is true;
+ *   - in loop with the store while the flows statement is unread, or `/api/flows` answered non-OK (S3-B F, the cold
+ *     read's F3): disabled, with no reason, as R2. The picker lists the statement's sources and words a hit by it, so
+ *     it never opens over an empty list or calls a source this site has set up "Not set up on this site.".
  * A mount that does not offer picking (`/explore`) leaves the item out (A5 = hide): its Data sources lists Auto and
  * the Settings link.
  *
@@ -104,13 +107,17 @@ export default function HarnessMenu({ variant, models, model, onModel, session, 
   // The read says which form is true only when it names all-sources, or in loop with no store (R2).
   const notOffered = consent.routing === 'all-sources' || (consent.routing === 'in-loop' && consent.store === false);
   const pickChosen = picking && inLoopForm && picks.mode === 'pick';
+  // The picker reads the flows statement (S3-B F, F3): until it is read, the option is not offered, and says nothing.
+  const statementRead = consent.statement !== null;
   const pickItem: MenuItem | null = !picking
     ? null
-    : inLoopForm
+    : inLoopForm && statementRead
       ? { id: ID.sourcesPick, label: DATA_SOURCES_ITEM.pick, checked: pickChosen, description: DATA_SOURCES_ITEM.inLoop.pickDescription }
-      : notOffered
-        ? { id: ID.sourcesPick, label: DATA_SOURCES_ITEM.pick, checked: false, disabledReason: DATA_SOURCES_ITEM.allSources.pickReason }
-        : { id: ID.sourcesPick, label: DATA_SOURCES_ITEM.pick, checked: false, disabled: true };
+      : inLoopForm
+        ? { id: ID.sourcesPick, label: DATA_SOURCES_ITEM.pick, checked: pickChosen, disabled: true }
+        : notOffered
+          ? { id: ID.sourcesPick, label: DATA_SOURCES_ITEM.pick, checked: false, disabledReason: DATA_SOURCES_ITEM.allSources.pickReason }
+          : { id: ID.sourcesPick, label: DATA_SOURCES_ITEM.pick, checked: false, disabled: true };
 
   const heading: MenuItem = { id: ID.heading, kind: 'heading', label: HARNESS_HEADING };
   const rule: MenuItem = { id: ID.rule, kind: 'rule', label: '' };
@@ -181,7 +188,7 @@ export default function HarnessMenu({ variant, models, model, onModel, session, 
     else if (id === ID.compare && comparison) comparison.onChange(!comparison.restored);
     else if (id === ID.signIn && signInAction?.kind === 'start') startSignIn(signInAction.providerId);
     else if (id === ID.sourcesAuto) chooseAuto();
-    else if (id === ID.sourcesPick && picking && inLoopForm) choosePicking();
+    else if (id === ID.sourcesPick && picking && inLoopForm && statementRead) choosePicking();
   };
 
   return (

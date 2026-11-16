@@ -5,9 +5,9 @@
 // THE WORDS. Those marked "bundle :N" are bundle revision 5's, verbatim (pinned to its digest in
 // `chooser-search-revision-5.test.ts`). The site's own are words r2 (planning `temp/s3/s3b-orch/words/
 // w2-words-a2.r2.md`), checked by an independent research check (`research-check-w2.md`, 39d99d20…44828; KEEP 11,
-// REVISE 12, folded in r2); the owner's memo is pending. Ids S1 to S23 are r2's. No route shows any of them in S3: no
-// route offers `find_source` (G0-4 = A), and the replay dialog shows S22 and S23 only for a record whose run offered
-// a search (the ORCH's condition 2), which no production record is.
+// REVISE 12, folded in r2); the owner ruled them on 2026-11-16 (D9 = A). Ids S1 to S23 are r2's. No route shows any
+// of them in S3: no route offers `find_source` (G0-4 = A), and the replay dialog shows S22 and S23 only for a record
+// whose run offered a search (the ORCH's condition 2), which no production record is.
 //
 // THE FIX ROUND'S CONDITIONS, each held here: (1) the record page's search step leads with bundle :205's sentence, or
 // :196's (S14, S15); (2) the dialog's decoy is `attestation-dialog-routing-configuration.test.ts`; (3) the progress
@@ -144,6 +144,42 @@ test('A2 (S22, S23): the replay dialog shows the recorded configuration, and say
     inventory: { id: 'civic', version: 'v', hash: 'a'.repeat(64) }, hash: 'b'.repeat(64),
   }), []);
   assert.deepEqual(searchWords.replayRoutingLines(undefined), []);
+});
+
+// S3-B F, F-1 (the cold read's F2): a record's composition block can carry any object as its `routingConfiguration`
+// (`recordRoutingConfiguration` passes any object, and a caller's `extensions` reach the block), and `offeredASearch`
+// asks only that `search` is an object. A configuration not of the complete shape gives no lines and never throws.
+// RED at 71b43b0f: the first two shapes the cold read drove throw reading `rule.id`; the others return six lines,
+// one of which names `undefined` or a number. What makes each able to fail: every shape has an object `search`, so
+// each passes the guard the dialog had; and the complete configuration beside them still gives its six lines.
+const COMPLETE = {
+  rule: { id: 'test-listed-subset', version: '1' }, cap: 'none', search: { method: 'bm25', version: '1' },
+  inventory: { id: 'civic', version: '2026-11-09.1+ed7302810ed4', hash: 'a'.repeat(64) }, hash: 'b'.repeat(64),
+};
+const WITHOUT_HASH = { rule: COMPLETE.rule, cap: COMPLETE.cap, search: COMPLETE.search, inventory: COMPLETE.inventory };
+for (const [name, value] of [
+  ['search with a method and a version, and nothing else (the cold read\'s first)', { search: { method: 'bm25', version: '1' } }],
+  ['an empty search, and nothing else (the cold read\'s second)', { search: {} }],
+  ['the complete configuration with no hash', WITHOUT_HASH],
+  ['a rule with no version', { ...COMPLETE, rule: { id: 'test-listed-subset' } }],
+  ['a number for the cap', { ...COMPLETE, cap: 5 }],
+  ['a search with no version', { ...COMPLETE, search: { method: 'bm25' } }],
+  ['an inventory with no id', { ...COMPLETE, inventory: { version: 'v', hash: 'a'.repeat(64) } }],
+] as const) {
+  test(`F-1: a configuration not of the complete shape gives the dialog no lines and does not throw: ${name}`, () => {
+    let lines: unknown;
+    try {
+      lines = searchWords.replayRoutingLines(value);
+    } catch (error) {
+      lines = `threw: ${(error as Error).message}`;
+    }
+    assert.deepEqual(lines, []);
+  });
+}
+
+test('F-1 pin: the complete configuration still gives the six lines, and a cap other than none is named', () => {
+  assert.equal((searchWords.replayRoutingLines(COMPLETE) as string[]).length, 6);
+  assert.equal((searchWords.replayRoutingLines({ ...COMPLETE, cap: '3' }) as string[])[2], 'The first list of sources was limited to 3.');
 });
 
 test('Where this question went: a search is no contact with any source', () => {

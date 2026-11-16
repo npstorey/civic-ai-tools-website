@@ -550,8 +550,8 @@ export const ROUTING_CONFIGURATION_TEXT = {
 /**
  * The site's own words for a `find_source` call where the bundle has none (S3-B W2, the ORCH's A2), and the
  * bundle's where they fit. Words r2, checked by an independent research check (planning
- * `temp/s3/s3b-orch/words/research-check-w2.md`, 39d99d20…44828; KEEP 11, REVISE 12, folded in r2); the owner's
- * memo is pending. Ids S1 to S22 are r2's. No route shows any of them in S3: no route offers `find_source`
+ * `temp/s3/s3b-orch/words/research-check-w2.md`, 39d99d20…44828; KEEP 11, REVISE 12, folded in r2); the owner
+ * ruled them on 2026-11-16 (D9 = A). Ids S1 to S22 are r2's. No route shows any of them in S3: no route offers `find_source`
  * (G0-4 = A), and the replay dialog shows S22 only for a record whose run offered a search.
  */
 export const FIND_SOURCE_WORDS = {
