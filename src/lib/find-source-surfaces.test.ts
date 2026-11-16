@@ -146,6 +146,42 @@ test('A2 (S22, S23): the replay dialog shows the recorded configuration, and say
   assert.deepEqual(searchWords.replayRoutingLines(undefined), []);
 });
 
+// S3-B F, F-1 (the cold read's F2): a record's composition block can carry any object as its `routingConfiguration`
+// (`recordRoutingConfiguration` passes any object, and a caller's `extensions` reach the block), and `offeredASearch`
+// asks only that `search` is an object. A configuration not of the complete shape gives no lines and never throws.
+// RED at 71b43b0f: the first two shapes the cold read drove throw reading `rule.id`; the others return six lines,
+// one of which names `undefined` or a number. What makes each able to fail: every shape has an object `search`, so
+// each passes the guard the dialog had; and the complete configuration beside them still gives its six lines.
+const COMPLETE = {
+  rule: { id: 'test-listed-subset', version: '1' }, cap: 'none', search: { method: 'bm25', version: '1' },
+  inventory: { id: 'civic', version: '2026-11-09.1+ed7302810ed4', hash: 'a'.repeat(64) }, hash: 'b'.repeat(64),
+};
+const WITHOUT_HASH = { rule: COMPLETE.rule, cap: COMPLETE.cap, search: COMPLETE.search, inventory: COMPLETE.inventory };
+for (const [name, value] of [
+  ['search with a method and a version, and nothing else (the cold read\'s first)', { search: { method: 'bm25', version: '1' } }],
+  ['an empty search, and nothing else (the cold read\'s second)', { search: {} }],
+  ['the complete configuration with no hash', WITHOUT_HASH],
+  ['a rule with no version', { ...COMPLETE, rule: { id: 'test-listed-subset' } }],
+  ['a number for the cap', { ...COMPLETE, cap: 5 }],
+  ['a search with no version', { ...COMPLETE, search: { method: 'bm25' } }],
+  ['an inventory with no id', { ...COMPLETE, inventory: { version: 'v', hash: 'a'.repeat(64) } }],
+] as const) {
+  test(`F-1: a configuration not of the complete shape gives the dialog no lines and does not throw: ${name}`, () => {
+    let lines: unknown;
+    try {
+      lines = searchWords.replayRoutingLines(value);
+    } catch (error) {
+      lines = `threw: ${(error as Error).message}`;
+    }
+    assert.deepEqual(lines, []);
+  });
+}
+
+test('F-1 pin: the complete configuration still gives the six lines, and a cap other than none is named', () => {
+  assert.equal((searchWords.replayRoutingLines(COMPLETE) as string[]).length, 6);
+  assert.equal((searchWords.replayRoutingLines({ ...COMPLETE, cap: '3' }) as string[])[2], 'The first list of sources was limited to 3.');
+});
+
 test('Where this question went: a search is no contact with any source', () => {
   const base = { sourcesOffered: [{ sourceId: 'socrata', alias: 'socrata', reason: 'configured' }], model: 'm', service: 's' };
   const fromCalls = whereItWent.whereItWentFromCalls({ ...base, toolCalls: [SEARCHED], resolveSource: () => 'socrata' });

@@ -899,3 +899,37 @@ test('R9 P3: the model row is named "Model service", and so is its recipient lin
     assert.ok(!JSON.stringify(model).includes('Model endpoint'), `${label}: the model still carries "Model endpoint"`);
   }
 });
+
+// --- S3-B F, F-4 (the cold read's S1): "Not picked for this question." only on a picked record ----------------------
+
+// The publish contract admits `not-selected` in `sourcesOffered` from any producer's trace, where it need not mean a
+// reader's pick. A record says its sources were picked by its composition block's `considered.rule`, `reader-picked`.
+// RED at 71b43b0f: the two records that do not say so read S11 for their `not-selected` source. What makes it able to
+// fail: each record states the same `not-selected` source beside a `selected` one, so its row is listed exactly when
+// the reason has words; only `considered` differs between the three.
+const pickedRecord = (considered: Record<string, unknown> | undefined) => ({
+  extensions: {
+    'org.civicaitools.composition': {
+      sourcesOffered: [
+        { sourceId: 'socrata', alias: 'socrata', reason: 'selected' },
+        { sourceId: 'data-commons', alias: 'data_commons', reason: 'not-selected' },
+      ],
+      ...(considered ? { considered } : {}),
+    },
+  },
+  trace: { resourceSpans: [] },
+});
+const CONSIDERED = (rule: string) => ({ inventory: { id: 'civic', version: 'v', hash: 'a'.repeat(64) }, total: 7, listed: 1, rule, ruleVersion: '1' });
+const notReachedOf = (pkg: unknown) => Object.fromEntries((fromPackage(pkg, null)?.notReached ?? []).map((row) => [row.sourceId, row.whyNotSent]));
+
+test('F-4: a record whose considered rule is directory-set gives its not-selected source no words', () => {
+  assert.deepEqual(notReachedOf(pickedRecord(CONSIDERED('directory-set'))), { socrata: REASON.onNotUsed });
+});
+
+test('F-4: a record with no considered gives its not-selected source no words', () => {
+  assert.deepEqual(notReachedOf(pickedRecord(undefined)), { socrata: REASON.onNotUsed });
+});
+
+test('F-4 pin: a record whose considered rule is reader-picked reads "Not picked for this question." for it', () => {
+  assert.deepEqual(notReachedOf(pickedRecord(CONSIDERED('reader-picked'))), { socrata: REASON.onNotUsed, 'data-commons': REASON.notPicked });
+});

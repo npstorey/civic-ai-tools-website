@@ -335,6 +335,32 @@ test('W1-6 (R2): while the routing pair is unread, the option is disabled and sh
   assert.deepEqual(byClassIn(pickRow!, 'ui-menu-item-description').map(textOf), []);
 });
 
+// S3-B F, F-2 (the cold read's F3): `/api/flows` answering non-OK leaves the store's `statement` null while the
+// decision read can say in loop with the store. RED at 71b43b0f: the option is enabled, and choosing it opens the
+// panel over an empty list. What makes it able to fail: the routing pair is read and says in loop with the store (the
+// premise below), the one form in which the option is enabled; only the statement is unread.
+test('F-2: in loop with the store and the flows statement unread, the option is disabled, shows no reason, and opens no panel', async () => {
+  SIGNED_IN();
+  answers();
+  await consentWith();
+  installFetch(ORIGIN, {
+    '/api/models': () => json({ models: [{ id: 'fixture/model', name: 'Fixture model', tag: 'recommended' }] }),
+    '/api/flows': () => json({ error: 'fixture' }, 503),
+    '/api/sources/consent/decision': () => json({ routing: 'in-loop', store: true }),
+    '/api/sources/consent': (request: Request) => (consentRoute[request.method] as (r: Request) => Promise<Response>)(request),
+    '/api/rate-limit': () => json({ remaining: 7, limit: 10, resets_at: '2099-01-01T00:00:00.000Z', authenticated: true }),
+  });
+  const page = await mountPage(ASK());
+  const rows = await dataSourcesRows(page);
+  assert.equal(rows[0][0], W.inLoopAuto, 'premise: the routing pair is read, in loop with the store');
+  assert.deepEqual(rows[1], [W.pick, false, true, [], []]);
+  // Choosing it opens no panel.
+  const panel = await openDataSources(page);
+  await page.click(within(panel).find((el) => el.props.role === 'menuitemradio' && labelOf(el) === W.pick)!);
+  for (let i = 0; i < 10; i += 1) await settle(page, 10);
+  assert.equal(parts(page, 'pick-panel').length, 0, 'the panel opened over an empty list');
+});
+
 test('W1-6 (A5 = hide): /explore\'s Data sources lists Auto and the Settings link only; the same menu given a picks prop shows the option (decoy)', async () => {
   SIGNED_IN();
   answers();
