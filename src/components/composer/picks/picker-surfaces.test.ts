@@ -354,9 +354,11 @@ test('F-2: in loop with the store and the flows statement unread, the option is 
   const rows = await dataSourcesRows(page);
   assert.equal(rows[0][0], W.inLoopAuto, 'premise: the routing pair is read, in loop with the store');
   assert.deepEqual(rows[1], [W.pick, false, true, [], []]);
-  // Choosing it opens no panel.
+  // Choosing it opens no panel. A disabled item carries no handler, so there is nothing to click; an enabled one is
+  // clicked.
   const panel = await openDataSources(page);
-  await page.click(within(panel).find((el) => el.props.role === 'menuitemradio' && labelOf(el) === W.pick)!);
+  const option = within(panel).find((el) => el.props.role === 'menuitemradio' && labelOf(el) === W.pick)!;
+  if (typeof option.props.onClick === 'function') await page.click(option);
   for (let i = 0; i < 10; i += 1) await settle(page, 10);
   assert.equal(parts(page, 'pick-panel').length, 0, 'the panel opened over an empty list');
 });

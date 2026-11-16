@@ -930,6 +930,9 @@ test('F-4: a record with no considered gives its not-selected source no words', 
   assert.deepEqual(notReachedOf(pickedRecord(undefined)), { socrata: REASON.onNotUsed });
 });
 
-test('F-4 pin: a record whose considered rule is reader-picked reads "Not picked for this question." for it', () => {
-  assert.deepEqual(notReachedOf(pickedRecord(CONSIDERED('reader-picked'))), { socrata: REASON.onNotUsed, 'data-commons': REASON.notPicked });
+test('F-4 pin: a record whose considered rule is reader-picked reads "Not picked for this question." for it', async () => {
+  // The rule this site's picked runs record (`READER_PICKED_RULE`), so the record and its words cannot part.
+  const { READER_PICKED_RULE } = await import('../mcp/routing-mode.ts');
+  assert.equal(READER_PICKED_RULE.id, 'reader-picked');
+  assert.deepEqual(notReachedOf(pickedRecord(CONSIDERED(READER_PICKED_RULE.id))), { socrata: REASON.onNotUsed, 'data-commons': REASON.notPicked });
 });
