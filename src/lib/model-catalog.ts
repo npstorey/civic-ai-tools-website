@@ -91,6 +91,31 @@ export type TokenLimitParameter = (typeof TOKEN_LIMIT_PARAMETERS)[number];
 export interface ModelRequestSettings {
   reasoningEffort?: ReasoningEffort;
   tokenLimitParameter?: TokenLimitParameter;
+  providerRouting?: ProviderRouting;
+}
+
+/**
+ * How OpenRouter may route a request among the providers that serve its model,
+ * sent as the request's `provider` object (#740 P3, ruling R3, and the owner's
+ * ruling OA-863 = B). The first three fields are the ones the November 2026
+ * evaluation sent its open-weight models (`OPEN_WEIGHT_PROVIDER`,
+ * scripts/eval-models.mjs): a price ceiling per million tokens,
+ * `require_parameters`, and `data_collection`.
+ *
+ * `only` is OpenRouter's allow-list: "List of provider slugs to allow for this
+ * request", and "If two or more of the allowed providers can serve the model,
+ * default routing picks among them" (its provider-routing guide, read
+ * 2026-11-15T22:42Z). So it restricts the set without choosing one provider. A
+ * base slug (`cohere`) matches every endpoint of that provider, whatever its
+ * quantization. The type carries no `order` and no `allow_fallbacks`: without
+ * `order`, `allow_fallbacks: false` "keeps only the top-ranked endpoint", which
+ * would pin one provider and stop failover among the allowed ones.
+ */
+export interface ProviderRouting {
+  max_price: { prompt: number; completion: number };
+  require_parameters: boolean;
+  data_collection: 'allow' | 'deny';
+  only?: readonly string[];
 }
 
 /** The request-body fields `modelRequestParameters` produces. */
@@ -98,6 +123,7 @@ export interface ModelRequestParameters {
   max_tokens?: number;
   max_completion_tokens?: number;
   reasoning_effort?: ReasoningEffort;
+  provider?: ProviderRouting;
 }
 
 /**
@@ -151,6 +177,12 @@ export interface CatalogEntry extends ModelDefinition {
    * `modelRequestParameters`.
    */
   tokenLimitParameter?: TokenLimitParameter;
+  /**
+   * Sent as `provider` on every request to this model (#740 P3). Absent:
+   * nothing is sent. Built-in entries only: `validateCatalog` does not accept
+   * the field, so an operator catalog that carries it is refused.
+   */
+  providerRouting?: ProviderRouting;
 }
 
 /**
@@ -184,22 +216,39 @@ export interface ModelIdentity {
  * nothing a record could get wrong: the slug called is the slug recorded, and
  * `model` is correctly omitted throughout.
  *
- * WHICH MODELS ARE OFFERED was settled by the October 2026 evaluation
- * (docs/model-evaluation-2026-10.md) and the owner's rulings on it
- * (civic-ai-tools-website#573): three selectable models, in selector order,
- * each sent the reasoning setting it was evaluated at. The order is the
- * selector's, and the first entry is also where the query form starts. The
- * four models this list carried before — GPT-4o, GPT-5.4, Gemini 3.5 Flash
- * Lite and Claude Sonnet 4.6 — left it on that ruling and are in
- * `HISTORICAL_MODELS` below, so the records that name them keep their names
- * and costs.
+ * WHICH MODELS ARE OFFERED. The three Claude models were settled by the
+ * October 2026 evaluation (docs/model-evaluation-2026-10.md) and the owner's
+ * rulings on it (civic-ai-tools-website#573), each sent the reasoning setting
+ * it was evaluated at. The four models this list carried before — GPT-4o,
+ * GPT-5.4, Gemini 3.5 Flash Lite and Claude Sonnet 4.6 — left it on that
+ * ruling and are in `HISTORICAL_MODELS` below, so the records that name them
+ * keep their names and costs. MiMo-V2.6-Flash, an open-weight model, was added
+ * by the November 2026 evaluation (docs/model-evaluation-2026-11.md) and the
+ * roster memo's rulings on it (civic-ai-tools-website#740, R1-R5, ruled
+ * 2026-11-15; https://claude.ai/artifact/Bh1N7wVv47o3K9gF6peQLR). It is sent
+ * what that run sent it: its limit as `max_tokens`, no reasoning setting, and
+ * the run's provider routing (`providerRouting`, R3), which bounds the price.
+ * The owner's ruling OA-863 = B (#740 comment 6902575273) adds `only`, so
+ * OpenRouter routes it among the three providers that served the run's
+ * MiMo-V2.6-Flash requests (Cohere, GMICloud, Xiaomi) and to no other; it
+ * picks among the three per request, and none of them is pinned.
+ * The order is the selector's, and the first entry is also where the query
+ * form starts.
  *
  * THE ROLES. The notebook default and the summary drafter are Haiku 5.5. The
  * publication gate walks the `evaluator` ranks and takes the first entry that
- * did not run the analysis, so a Haiku 5.5 or Opus 5.5 analysis is judged by
- * Sonnet 5.5, and a Sonnet 5.5 analysis by Opus 5.5.
+ * did not run the analysis, so a Haiku 5.5, Opus 5.5 or MiMo-V2.6-Flash
+ * analysis is judged by Sonnet 5.5, and a Sonnet 5.5 analysis by Opus 5.5.
+ * MiMo-V2.6-Flash takes no role (R4).
  *
- * WHAT THE PRICES MEAN FOR A QUERY. The evaluation measured about $0.006 a
+ * WHAT THE PRICES MEAN FOR A QUERY. MiMo-V2.6-Flash's price is OpenRouter's
+ * listed price for its slug on 2026-11-15 (R5). It is not the cheapest
+ * endpoint's: that day's endpoint listing (read 22:42:33Z) gave GMICloud at
+ * $0.112 / $0.224 and Cohere and Xiaomi at the listed $0.14 / $0.28, so the
+ * estimate was at or above what the three allowed providers listed. Their
+ * prices can change; `max_price` still caps them at $0.15 / $0.60 per million
+ * tokens. The November evaluation recorded about $0.0034 a question on it. The
+ * October evaluation measured about $0.006 a
  * query on Haiku 5.5, $0.11 on Sonnet 5.5 and $0.21 on Opus 5.5. Those are
  * floors for the models that reached the evaluation's 50,000-token per-query
  * bound: Haiku 5.5 and Sonnet 5.5 each did on 3 of 14 queries (one Haiku 5.5
@@ -208,8 +257,9 @@ export interface ModelIdentity {
  * tokens and 20 rounds (`openrouter-streaming.ts`), four times the evaluation's
  * bound and twice its rounds. (`maxTokenBudget` is not read by that route.) The worst case of one query at 180K
  * tokens in and 20K out is about $1.12 on Opus 5.5, $0.56 on Sonnet 5.5 and
- * $0.03 on Haiku 5.5. Haiku 5.5 is billed five times higher on a single prompt
- * above 100,000 tokens, which these prices do not model.
+ * $0.03 on Haiku 5.5, and about $0.03 on MiMo-V2.6-Flash at its listed price
+ * ($0.04 at R3's ceiling). Haiku 5.5 is billed five times higher on a single
+ * prompt above 100,000 tokens, which these prices do not model.
  */
 export const BUILT_IN_CATALOG: readonly CatalogEntry[] = Object.freeze([
   {
@@ -218,7 +268,7 @@ export const BUILT_IN_CATALOG: readonly CatalogEntry[] = Object.freeze([
     tag: 'recommended',
     provider: 'Anthropic',
     supports_tools: true,
-    description: 'Accurate and fast, at the lowest cost',
+    description: 'Accurate and fast, at low cost',
     endpointModel: 'anthropic/claude-haiku-5.5',
     pricing: { input: 0.1, output: 0.5 },
     reasoningEffort: 'low',
@@ -252,6 +302,33 @@ export const BUILT_IN_CATALOG: readonly CatalogEntry[] = Object.freeze([
     reasoningEffort: 'medium',
     // The gate's second evaluator: it judges an analysis Sonnet 5.5 ran.
     evaluator: 2,
+  },
+  {
+    id: 'xiaomi/mimo-v2.6-flash',
+    name: 'MiMo-V2.6-Flash',
+    tag: 'open-weight',
+    provider: 'Xiaomi',
+    supports_tools: true,
+    description: 'Open model weights, at the lowest cost',
+    endpointModel: 'xiaomi/mimo-v2.6-flash',
+    // OpenRouter's listed price, read 2026-11-15T16:39:30Z (R5).
+    pricing: { input: 0.14, output: 0.28 },
+    // What the November 2026 run sent it (scripts/eval-models.mjs, its MiMo
+    // row): the limit under max_tokens, the one name the model lists, and no
+    // reasoning setting, since it lists none.
+    tokenLimitParameter: 'max_tokens',
+    // R3, the run's routing object (`OPEN_WEIGHT_PROVIDER` there), then
+    // OA-863 = B: `only` the three providers that served the run's MiMo
+    // requests, by base slug, which matches each provider's endpoints whatever
+    // their quantization (the endpoint listing read 2026-11-15T22:42:33Z tags
+    // them cohere/fp8, gmicloud/bf16 and xiaomi/fp8). No `allow_fallbacks`:
+    // without `order` it would keep only the top-ranked of the three.
+    providerRouting: Object.freeze({
+      max_price: Object.freeze({ prompt: 0.15, completion: 0.6 }),
+      require_parameters: true,
+      data_collection: 'deny',
+      only: Object.freeze(['cohere', 'gmicloud', 'xiaomi']),
+    }),
   },
 ]);
 
@@ -321,10 +398,17 @@ export function modelIdentity(entry: CatalogEntry): ModelIdentity {
 
 /** The entry's request settings, or undefined when it declares none. */
 export function modelRequestSettings(entry: CatalogEntry): ModelRequestSettings | undefined {
-  if (entry.reasoningEffort === undefined && entry.tokenLimitParameter === undefined) return undefined;
+  if (
+    entry.reasoningEffort === undefined &&
+    entry.tokenLimitParameter === undefined &&
+    entry.providerRouting === undefined
+  ) {
+    return undefined;
+  }
   return {
     ...(entry.reasoningEffort !== undefined ? { reasoningEffort: entry.reasoningEffort } : {}),
     ...(entry.tokenLimitParameter !== undefined ? { tokenLimitParameter: entry.tokenLimitParameter } : {}),
+    ...(entry.providerRouting !== undefined ? { providerRouting: entry.providerRouting } : {}),
   };
 }
 
@@ -348,6 +432,12 @@ export function modelRequestSettings(entry: CatalogEntry): ModelRequestSettings 
  * bytes. Above `none`, a reasoning model counts its reasoning against
  * `max_completion_tokens` too, so a small limit can be spent before any text
  * comes back.
+ *
+ * THE PROVIDER ROUTING (#740 P3). An entry's `providerRouting` is sent as
+ * `provider`, after the limit and the reasoning setting, and only when the
+ * entry sets it; it does not move the limit's name. Every call site spreads
+ * this builder, so a model that carries routing carries it on every request
+ * it makes, and a model that does not carries none.
  */
 export function modelRequestParameters(
   settings: ModelRequestSettings | undefined,
@@ -358,7 +448,12 @@ export function modelRequestParameters(
     settings?.tokenLimitParameter ?? (reasoningEffort !== undefined ? 'max_completion_tokens' : 'max_tokens');
   const limit: ModelRequestParameters =
     parameter === 'max_completion_tokens' ? { max_completion_tokens: tokenLimit } : { max_tokens: tokenLimit };
-  return reasoningEffort !== undefined ? { ...limit, reasoning_effort: reasoningEffort } : limit;
+  const routing = settings?.providerRouting;
+  return {
+    ...limit,
+    ...(reasoningEffort !== undefined ? { reasoning_effort: reasoningEffort } : {}),
+    ...(routing !== undefined ? { provider: routing } : {}),
+  };
 }
 
 /** The summary draft's token limit for a summarizer that does not reason. */
