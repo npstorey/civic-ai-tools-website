@@ -89,9 +89,8 @@ const { readerSourceName } = await load('lib/sources/source-name.ts');
 /** Each source's reader name, as the rows and S7 show it. */
 const NAME: Record<string, string> = Object.fromEntries(statement.sources.map((s: { sourceId: string }) => [s.sourceId, readerSourceName(s)]));
 
-// The picks' page store and the picker's loader, when they exist (absent at 15a52942).
+// The picks' page store, when it exists (absent at 15a52942).
 const store = await load('components/composer/picks/store.ts').catch(() => null);
-const loader = await load('components/composer/picks/load-picker.ts').catch(() => null);
 
 // --- The ruled words (W1's contract r3, the table), byte for byte ---------------------------------------------------
 
@@ -182,10 +181,11 @@ async function mountPage(element: ReactElement): Promise<Surface> {
   const p = await mount(element);
   mounted.push(p);
   await settle(p);
-  // The picker's code loads once the site is known to offer picking; wait for it, as a browser would.
-  if (loader) await loader.loadPicker();
-  await settle(p);
   return p;
+}
+/** The picker's code loads on the panel's first open (fix round 1, item 2): wait for the panel, as a reader would. */
+async function waitForPanel(page: Surface): Promise<void> {
+  for (let i = 0; i < 50 && parts(page, 'pick-panel').length === 0; i += 1) await settle(page, 10);
 }
 /** A signed-in `/ask` with a consent in force, every source On but the ones `states` names. */
 async function askPage(states: Record<string, string> = {}, routing: Routing = { routing: 'in-loop', store: true }): Promise<Surface> {
@@ -249,6 +249,7 @@ async function choose(page: Surface, label: string): Promise<void> {
   assert.equal(disabled(row!), false, `the Data sources item "${label}" is disabled`);
   await page.click(row!);
   await settle(page);
+  if (label === W.pick) await waitForPanel(page);
 }
 function panelOf(page: Surface): HostElement {
   const found = parts(page, 'pick-panel');
@@ -451,6 +452,22 @@ test('W1-4 (B10): an Off row cannot be picked, and shows S5, until its control r
   assert.equal(pickBoxOf(rowFor(page, off))!.props.checked, true);
 });
 
+test('W1-4 (fix round 1, item 1): the Off row\'s disabled pick control is described by S5, so its reason reaches every reader', async () => {
+  const off = IDS[1];
+  const page = await askPage({ [off]: 'off' });
+  await choose(page, W.pick);
+  const row = rowFor(page, off);
+  const box = pickBoxOf(row)!;
+  assert.equal(box.props.disabled, true, 'premise: the Off row\'s pick control is disabled');
+  const describedBy = box.props['aria-describedby'];
+  assert.ok(typeof describedBy === 'string' && describedBy !== '', 'the Off row\'s pick control has no aria-describedby');
+  const reason = within(row).find((el) => el.props.id === describedBy);
+  assert.ok(reason, `aria-describedby names no element in the row: ${String(describedBy)}`);
+  assert.equal(textOf(reason!), W.S5);
+  // Decoy: an On row's pick control is described by nothing.
+  assert.equal(pickBoxOf(rowFor(page, IDS[0]))!.props['aria-describedby'], undefined);
+});
+
 test('W1-4 (B10): a picked row set to Off loses its pick, and does not get it back when set On again', async () => {
   const page = await askPage();
   await choose(page, W.pick);
@@ -547,6 +564,7 @@ test('W1-6 (D3 = A, D6 = A): with picks, S7 names them and "Change" opens the pa
   assert.equal(textOf(change), W.S8);
   await page.click(change);
   await settle(page);
+  await waitForPanel(page);
   assert.equal(parts(page, 'pick-panel').length, 1, '"Change" did not open the panel');
 });
 
