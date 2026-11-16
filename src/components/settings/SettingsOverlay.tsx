@@ -181,6 +181,8 @@ function About() {
 
 export default function SettingsOverlay({ mount = 'intercepted', initialTab = 'data-sources' }: SettingsOverlayProps) {
   const router = useRouter();
+  // #759: the overlay holds the consent store for both sub-pages, so a switch between them never empties it.
+  useSourceConsent();
   const [tab, setTab] = useState<'data-sources' | 'about'>(initialTab);
   // One navigation per opening. A soft navigation is asynchronous: until it
   // unmounts the overlay, the overlay is still open and still the top modal, so
