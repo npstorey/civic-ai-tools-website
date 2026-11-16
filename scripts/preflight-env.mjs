@@ -360,7 +360,7 @@ export const ENV_SPEC = [
   // form (which drops its portal picker and cross-portal examples when on),
   // and prerendered pages bake what the layout resolved. The routes and the
   // loop read it at request time and enforce it whatever a page rendered.
-  { name: 'SITE_PORTAL_LOCKED', readBy: 'build-and-runtime', tier: 'optional', purpose: "Serve ONE Socrata portal: '1'/'true' makes SITE_DEFAULT_PORTAL the only Socrata portal the query routes and the model's socrata__get_data/socrata__fetch calls (or get_data/fetch, the bare names) use; a request or call naming another is refused. Data Commons and Boston OpenContext stay outside it. Off by default", hasFallback: true },
+  { name: 'SITE_PORTAL_LOCKED', readBy: 'build-and-runtime', tier: 'optional', purpose: "Serve ONE Socrata portal: '1'/'true' makes SITE_DEFAULT_PORTAL the only Socrata portal the query routes and the model's socrata__get_data/socrata__fetch calls (or get_data/fetch, the bare names) use; a request or call naming another is refused. Data Commons and Boston OpenContext stay outside it. A lock to a Socrata portal other than New York City's removes NYC City Record (a pack fixed to New York City's portal) from what the site offers, lists and finds. Off by default", hasFallback: true },
   // The answer view's layout (LAYOUT-WEB W4 P1). No coded fallback is needed:
   // absent, every surface renders the built-in `answer-first`. Read at both
   // times for the reason SITE_DEFAULT_PORTAL is: the root layout resolves it
