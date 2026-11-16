@@ -580,6 +580,35 @@ test('W1-6 (D3 = A, D4 = B): with the option chosen and nothing picked, the wher
   assert.equal(page.elements().find((el) => el.type === 'button' && el.props['aria-label'] === 'Submit query')!.props.disabled, false, 'send was disabled (D4 = B keeps it enabled)');
 });
 
+test('fix round 2 (D4 = B): with the panel open, a send with nothing picked keeps the panel open and puts S9 right above it: box, trigger, S9, panel; closed, S9 stays under the chips (decoy)', async () => {
+  const page = await askPage();
+  await choose(page, W.pick);
+  assert.equal(parts(page, 'pick-panel').length, 1, 'premise: the panel is open');
+  await ask(page, 'How many permits were issued?');
+  assert.deepEqual(queries, [], 'a question was sent with nothing picked');
+  assert.equal(parts(page, 'pick-panel').length, 1, 'the press that sent nothing closed the panel');
+  const order = (els: HostElement[]) => {
+    const all = page.elements();
+    return els.map((el) => all.indexOf(el));
+  };
+  const box = page.elements().find((el) => el.type === 'textarea')!;
+  const trigger = within(menuOf(page)).find((el) => el.props['aria-haspopup'] === 'menu')!;
+  const note = parts(page, 'pick-note');
+  assert.equal(note.length, 1, 'S9 does not show');
+  assert.equal(textOf(note[0]), W.S9);
+  assert.equal(note[0].props.role, 'status');
+  const [b, t, n, p] = order([box, trigger, note[0], panelOf(page)]);
+  assert.ok(b < t && t < n && n < p, `the order is not box, trigger, S9, panel: ${JSON.stringify({ box: b, trigger: t, s9: n, panel: p })}`);
+  // Decoy: the panel closed, S9 sits where it always has, under the example chips.
+  await page.click(within(panelOf(page)).find((el) => el.props['aria-label'] === 'Close')!);
+  await settle(page);
+  await ask(page, 'How many permits were issued?');
+  const closedNote = parts(page, 'pick-note');
+  assert.equal(closedNote.length, 1, 'premise: S9 shows with the panel closed');
+  const [chips, n2] = order([parts(page, 'chip-row')[0], closedNote[0]]);
+  assert.ok(chips >= 0 && chips < n2, 'with the panel closed, S9 is not under the example chips');
+});
+
 // --- The request, and the resend (A17) ------------------------------------------------------------------------------------
 
 test('task 7: a picked question carries its picks in the statement\'s order; an Auto question\'s body is as it was, byte for byte', async () => {
