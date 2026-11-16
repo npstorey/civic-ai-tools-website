@@ -49,7 +49,8 @@ test('S2-B F9: the considered sentences are revision 3\'s :88, verbatim', () => 
   const W = C.SOURCE_CHOOSER_CONSIDERED as Loose | undefined;
   assert.ok(W, 'copy.ts has no SOURCE_CHOOSER_CONSIDERED');
   assert.equal(W!.shown(4, 7, 'civic', '2026-11-09.1+ed7302810ed4'), 'The model was shown 4 of the 7 sources in the source inventory civic (version 2026-11-09.1+ed7302810ed4).');
-  assert.deepEqual(W!.rules, { 'directory-set': { '1': 'Those were the sources set up on the site that ran this question, less any turned off for it.' } });
+  // S3-B W1 added `reader-picked` (revision 5 :106), pinned by `chooser-reader-picked-revision-5.test.ts`.
+  assert.deepEqual(W!.rules['directory-set'], { '1': 'Those were the sources set up on the site that ran this question, less any turned off for it.' });
   assert.equal(W!.unknownRule('R', 'V'), 'They were chosen by a rule recorded as R, version V, which this site has no words for.');
 });
 

@@ -200,7 +200,7 @@ test('premise 4: the record page builds the statement it serves and hands it to 
   assert.ok(flat.includes(RECORD_SENTENCE), `the record says "${RECORD_SENTENCE}"`);
   assert.ok(flat.includes('Socrata (socrata-mcp.civicaitools.org)'), 'Socrata at the record\'s host');
   // Ruling (b) = (i): the sources not reached are not rendered.
-  for (const reason of ['Not sent to', 'Off.', 'Not set up on this site.', 'On, not used for this question.']) assert.ok(!flat.includes(reason), `"${reason}" is rendered`);
+  for (const reason of ['Not sent to', 'Off.', 'Not set up on the site that ran this question.', 'On, not used for this question.']) assert.ok(!flat.includes(reason), `"${reason}" is rendered`);
   const details = html.indexOf(`>${DISCLOSURE_LABEL}<`);
   assert.ok(details > end, 'the section sits before the disclosure, outside it');
   assert.ok(html.indexOf('data-part="steps"') < m.index, 'after the steps');

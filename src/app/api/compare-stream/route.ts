@@ -5,9 +5,10 @@ import { queryWithoutMcpStreaming, queryWithMcpStreaming, type StreamCallbacks, 
 import { mcpToolsFor, offeredMcpTools } from '@/lib/mcp/tools';
 import { callMcpTool, startRunServerReads, withReportedKeys } from '@/lib/mcp/client';
 import { composeSystemPrompt, withPortalLockGuidance } from '@/lib/mcp/socrata-skill';
-import { consentInForce } from '@/lib/sources/consent-gate';
+import { canAsk, consentInForce, picksRefusalPayload, type ConsentRefusalPayload } from '@/lib/sources/consent-gate';
+import { pickedRunOf, picksFromBody } from '@/lib/sources/picks';
 import { decisionStoreFromEnv, readerGone, streamingRoutePause } from '@/lib/sources/decision';
-import { createInLoopRouting, DIRECTORY_SET_RULE, directorySet, entersInLoop, sourceRoutingMode } from '@/lib/mcp/routing-mode';
+import { createInLoopRouting, DIRECTORY_SET_RULE, directorySet, entersInLoop, READER_PICKED_RULE, sourceRoutingMode } from '@/lib/mcp/routing-mode';
 import { checkRateLimit, getMissingRateLimitSecretError, incrementRateLimit, isRateLimited } from '@/lib/rate-limit';
 import { headers } from 'next/headers';
 import { encodeSSE, errorLogFacts, panelsForRun, startSseKeepAlive, streamErrorPayload, type StreamErrorCode, type PanelType, type StreamEvent } from '@/lib/streaming';
@@ -33,12 +34,15 @@ interface CompareRequest {
   model: string;
   portal?: string;
   mcpOnly?: boolean;
+  /** "Only the ones I pick" (S3-B W1): the reader's picks; absent, an Auto question (`picksFromBody`). */
+  picks?: unknown;
 }
 
 export async function POST(request: NextRequest) {
   try {
     const body: CompareRequest = await request.json();
     const { query, model: modelId, portal: rawPortal, mcpOnly = false } = body;
+    const requestPicks = picksFromBody(body);
     // The caller's portal, else this instance's configured default, else NONE
     // (#407). It used to be a literal at both halves of this line, so a caller
     // that named no portal ran against one deployment's city and `analysis.portal`
@@ -219,23 +223,32 @@ export async function POST(request: NextRequest) {
     // once per request, before the gate: the gate and the directory below
     // read the same value.
     const routingMode = sourceRoutingMode();
-    const consent = await consentInForce(request, session, { routing: routingMode, store: decisionStoreFromEnv() !== null });
-    if (!consent.ok) {
+    const ask = { routing: routingMode, store: decisionStoreFromEnv() !== null };
+    const consent = await consentInForce(request, session, ask);
+    // A refusal goes out as an error event per panel, with the flows version and what is re-asked.
+    const refuse = (refusal: ConsentRefusalPayload) => {
       const encoder = new TextEncoder();
       const body = panelsForRun(mcpOnly)
         .map((panel) =>
           encodeSSE({
             type: 'error',
             panel,
-            message: consent.payload.error,
-            code: consent.payload.code,
-            flowsVersion: consent.payload.flowsVersion,
-            reask: consent.payload.reask,
+            message: refusal.error,
+            code: refusal.code,
+            flowsVersion: refusal.flowsVersion,
+            reask: refusal.reask,
           } as StreamEvent & { message: string; code: StreamErrorCode })
         )
         .join('');
       return new Response(encoder.encode(body), { headers: SSE_HEADERS });
-    }
+    };
+    if (!consent.ok) return refuse(consent.payload);
+    // S3-B W1 (G0-2 = A): the reader's picks narrow the run, never widen it (`pickedRunOf`). A question none of whose
+    // picks can be used is refused here, on the consent refusal's channel, before the limiter, the model or any source.
+    const picked = requestPicks.kind === 'picked'
+      ? pickedRunOf(requestPicks.ids, readMcpEnvFromProcess(), consent, routingMode === 'in-loop' && canAsk(ask))
+      : null;
+    if (picked && !picked.usable) return refuse(picksRefusalPayload(consent.statement));
 
     // Check rate limit
     const rateLimitInfo = await checkRateLimit(identifier, isAuthenticated);
@@ -276,19 +289,24 @@ export async function POST(request: NextRequest) {
     // opened before anything here contacts a server, read back by `runRecord`.
     const serverReads = startRunServerReads();
     const configured = readMcpEnvFromProcess();
-    const selection = consent.selection;
+    const selection = picked ? picked.selection : consent.selection;
+    // The record's reasons: an allowed source the reader did not pick stays `not-selected` (S3-B W1, B8).
+    const recordReasons = picked ? picked.recordReasons : consent.recordReasons;
     // How the sources reach the model (#644 W1, D9), read once per request,
     // before the gate (above). In loop, the first request carries the
     // directory and `load_source` only, and no source's guidance is fetched
     // until the model loads it; otherwise the composition below, exactly as
     // before the setting existed.
-    const directory = routingMode === 'in-loop' ? directorySet(configured, consent) : [];
+    // A picked run lists the surviving picks, whole, under `reader-picked` (S3-B W1, B9; G0-4 = A: no search).
+    const directory = routingMode === 'in-loop'
+      ? directorySet(configured, consent).filter((entry) => !picked || picked.survivors.includes(entry.sourceId))
+      : [];
     // An Ask-first load pauses to ask the reader (#644 W2): this route holds
     // a stream, so it hands the run a pause; the JSON route and replay do not.
     // A hold ends when its reader is gone (R9 P1, #668): the request's signal, or a cancelled stream.
     const presence = readerGone(request);
     const inLoop = entersInLoop(routingMode, directory)
-      ? await createInLoopRouting({ portal, lockedPortal, configured, directory, searchable: directory, rule: DIRECTORY_SET_RULE, selection, pause: streamingRoutePause(consent, session, configured, presence.signal) })
+      ? await createInLoopRouting({ portal, lockedPortal, configured, directory, searchable: directory, rule: picked ? READER_PICKED_RULE : DIRECTORY_SET_RULE, selection, pause: streamingRoutePause(consent, session, configured, presence.signal) })
       : undefined;
     const composition = inLoop
       ? { prompt: inLoop.firstSystemPrompt, assertedDate: inLoop.assertedDate, sourcesOffered: inLoop.sourcesOffered, components: inLoop.components() }
@@ -347,7 +365,7 @@ export async function POST(request: NextRequest) {
         toolDefinitions: offeredTools,
         // The router's `not-selected` is recorded as the reader's own state:
         // `reader-off` or `not-consented` (D2 = A).
-        sourcesOffered: consent.recordReasons(composition.sourcesOffered),
+        sourcesOffered: recordReasons(composition.sourcesOffered),
         components: composition.components,
         // The flows statement in force: its url, hash and date (D2 = A).
         flowsStatement: consent.reference,
@@ -411,7 +429,7 @@ Be honest if you don't have access to current or real-time data.`;
               flows: whereItWentFromCalls({
                 toolCalls: result.tools_called ?? [],
                 resolveSource: resolveToolSource,
-                sourcesOffered: consent.recordReasons(composition.sourcesOffered),
+                sourcesOffered: recordReasons(composition.sourcesOffered),
                 statement: consent.statement,
                 model: model.declared,
                 service: getGenAiSystem(),

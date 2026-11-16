@@ -222,6 +222,10 @@ export interface RoutingRule {
 /** The rule every route lists by: the directory set, whole. */
 export const DIRECTORY_SET_RULE: Readonly<RoutingRule> = Object.freeze({ id: 'directory-set', version: '1' });
 
+/** The rule a run whose sources the reader picked lists by (S3-B W1; G0-4 = A, anchor B9): the surviving picks,
+ *  whole, listed and searchable alike, so no search is offered (`../sources/picks.ts`). Bundle revision 5 `:106`. */
+export const READER_PICKED_RULE: Readonly<RoutingRule> = Object.freeze({ id: 'reader-picked', version: '1' });
+
 /** One hit of the router's search: the source, by id and alias. */
 export interface RoutingSearchHit {
   sourceId: string;

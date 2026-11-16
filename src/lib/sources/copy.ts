@@ -411,6 +411,11 @@ export const NYC_RECORD_EXAMPLES_SENTENCE = {
  * source's last load first (the first four, then "On, not used" for any
  * other `loaded` load), then its stated reason. Read by
  * `src/lib/flows/where-it-went.ts`.
+ *
+ * S3-B W1 (npstorey/civic-ai-tools#318; the owner's W0 rulings, OA-870): `notSetUp` takes D7 = B's words, since the
+ * reason is read on a record, possibly on another site, and now also names a pack a portal lock removes (G0-6 = A);
+ * the picker keeps the earlier words for its own row (`PICKER_TEXT.notSetUp`, S6a). `notPicked` is S11 (D9 = A), the
+ * reason `not-selected` on a run whose sources the reader picked: an allowed source the reader did not pick.
  */
 export const WHERE_IT_WENT_REASONS = {
   allowedNotUsed: 'Ask first: allowed when asked, but not used for this question.',
@@ -420,7 +425,8 @@ export const WHERE_IT_WENT_REASONS = {
   onNotUsed: 'On, not used for this question.',
   off: 'Off.',
   notAsked: 'Ask first: not asked for this question.',
-  notSetUp: 'Not set up on this site.',
+  notSetUp: 'Not set up on the site that ran this question.',
+  notPicked: 'Not picked for this question.',
 } as const;
 
 /**
@@ -488,6 +494,9 @@ export const SOURCE_CHOOSER_CONSIDERED = {
   /** The rule's words, by rule and rule version. */
   rules: {
     'directory-set': { '1': 'Those were the sources set up on the site that ran this question, less any turned off for it.' },
+    // Bundle revision 5 `:106` (S3-B W1, B9): a run whose sources the reader picked. Pinned to the installed bundle's
+    // digest by `chooser-reader-picked-revision-5.test.ts`.
+    'reader-picked': { '1': 'The person who asked this question picked those sources. A picked source was left out if it was turned off, or not set up on the site that ran this question.' },
   } as Readonly<Record<string, Readonly<Record<string, string>>>>,
   unknownRule: (rule: string, ruleVersion: string) =>
     `They were chosen by a rule recorded as ${rule}, version ${ruleVersion}, which this site has no words for.`,

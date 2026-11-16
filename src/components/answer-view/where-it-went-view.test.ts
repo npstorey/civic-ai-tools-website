@@ -579,7 +579,7 @@ const servedLines = (s: StatementLike) => ({
   socrata: s.sources.find((x) => x.sourceId === 'socrata'),
 });
 
-const D887C1_NOT_REACHED = ['Data Commons', 'Off.', 'Boston OpenContext', 'Not set up on this site.', 'NYC Charter, Laws and Rules', 'On, not used for this question.'];
+const D887C1_NOT_REACHED = ['Data Commons', 'Off.', 'Boston OpenContext', 'Not set up on the site that ran this question.', 'NYC Charter, Laws and Rules', 'On, not used for this question.'];
 
 test('criterion 3: d887c1, passed the statement with its hash: what each receives and the logs lines are the statement\'s, and no link', () => {
   assert.equal(statementHash(SERVED_78), '78c516db86bf5af90f0f0de1f6c3a614b6ff1c9026b27a25620fbc7c52ecd995', 'premise: the saved statement is the one d887c1 references');
@@ -613,7 +613,7 @@ for (const [label, served] of [
       { name: 'The model service (OpenRouter, host not recorded)', texts: ['The model: Claude Haiku 5.5'] },
       { name: rowLine('Socrata', 1), texts: ['Socrata (socrata-mcp.civicaitools.org)'] },
       { name: 'Notebook runner (not recorded)', texts: [RECORD_SENTENCE, D1_LINE] },
-    ], [OLD_RECORD_SENTENCE, ENDPOINT_DEFINED, 'Receives:', 'Who holds its logs', 'Data Commons', 'Off.', 'Not set up on this site.', 'On, not used for this question.'], label);
+    ], [OLD_RECORD_SENTENCE, ENDPOINT_DEFINED, 'Receives:', 'Who holds its logs', 'Data Commons', 'Off.', 'Not set up on the site that ran this question.', 'On, not used for this question.'], label);
     assert.ok(s.flat.indexOf(RECORD_SENTENCE) < s.flat.indexOf(D1_LINE), 'the record sentence, then the reference line');
     assert.equal(s.flat.split(RECORD_SENTENCE).length - 1, 1, 'one sentence for every row');
     assert.equal(s.flat.split('not recorded').length - 1, 2, '"not recorded" only as the two places the record does not hold');
@@ -644,7 +644,7 @@ for (const [label, pkg, name, host, absent] of [
       { name: 'The model service (OpenRouter, host not recorded)', texts: ['The model: Claude Haiku 5.5'] },
       { name: rowLine(name, 2), texts: [`${name} (${host})`] },
       { name: 'Notebook runner (not recorded)', texts: [RECORD_SENTENCE] },
-    ], [...absent, 'Receives:', 'Who holds its logs', 'On, not used for this question.', 'Not set up on this site.', 'where a question can go'], label);
+    ], [...absent, 'Receives:', 'Who holds its logs', 'On, not used for this question.', 'Not set up on the site that ran this question.', 'where a question can go'], label);
     assert.ok(!s.markup.includes('/api/flows'), 'no link to a statement');
     assertNoRetiredWords(s.flat, label);
   });

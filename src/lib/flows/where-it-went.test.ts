@@ -148,7 +148,9 @@ const REASON = {
   onNotUsed: 'On, not used for this question.',
   off: 'Off.',
   notAsked: 'Ask first: not asked for this question.',
-  notSetUp: 'Not set up on this site.',
+  // S3-B W1 (npstorey/civic-ai-tools#318): D7 = B's words for not-configured, and S11 for not-selected (B8).
+  notSetUp: 'Not set up on the site that ran this question.',
+  notPicked: 'Not picked for this question.',
 } as const;
 
 const NOT_RECORDED = 'not recorded';
@@ -843,7 +845,7 @@ test('criterion 4: on a matching record, each reached row\'s "what it got" is th
   ]);
 });
 
-test('criterion 4: the eight reasons are one export of copy.ts, pinned to §2\'s strings in §2\'s order, each 13 words or fewer', () => {
+test('criterion 4: the reasons are one export of copy.ts, pinned to §2\'s strings in §2\'s order (with S3-B W1\'s D7 and S11), each 13 words or fewer', () => {
   const reasons = (copyModule as unknown as Record<string, unknown>).WHERE_IT_WENT_REASONS;
   assert.ok(reasons !== undefined && reasons !== null && typeof reasons === 'object', 'copy.ts exports no WHERE_IT_WENT_REASONS');
   assert.deepEqual(Object.entries(reasons as Record<string, string>), Object.entries(REASON));

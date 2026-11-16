@@ -5,8 +5,9 @@ import { queryWithoutMcp } from '@/lib/openrouter';
 import { runToolLoop } from '@/lib/model-loop/run-tool-loop';
 import { compareLoopOptions, compareCompletionResult } from '@/lib/model-loop/compare-loop';
 import { composeSystemPrompt, withPortalLockGuidance } from '@/lib/mcp/socrata-skill';
-import { consentInForce } from '@/lib/sources/consent-gate';
-import { createInLoopRouting, DIRECTORY_SET_RULE, directorySet, entersInLoop, sourceRoutingMode } from '@/lib/mcp/routing-mode';
+import { consentInForce, picksRefusalPayload } from '@/lib/sources/consent-gate';
+import { pickedRunOf, picksFromBody } from '@/lib/sources/picks';
+import { createInLoopRouting, DIRECTORY_SET_RULE, directorySet, entersInLoop, READER_PICKED_RULE, sourceRoutingMode } from '@/lib/mcp/routing-mode';
 import { checkRateLimit, getMissingRateLimitSecretError, incrementRateLimit, isRateLimited } from '@/lib/rate-limit';
 import { getGenAiSystem, getMissingModelCredentialError, getModelClient, classifyModelError, ModelConfigurationError } from '@/lib/model-client';
 import { whereItWentFromCalls } from '@/lib/flows/where-it-went';
@@ -23,6 +24,8 @@ interface CompareRequest {
   query: string;
   model: string;
   portal?: string;
+  /** "Only the ones I pick" (S3-B W1): the reader's picks; absent, an Auto question (`picksFromBody`). */
+  picks?: unknown;
 }
 
 export async function POST(request: NextRequest) {
@@ -32,6 +35,7 @@ export async function POST(request: NextRequest) {
   try {
     const body: CompareRequest = await request.json();
     const { query, model: modelId, portal: rawPortal } = body;
+    const requestPicks = picksFromBody(body);
     // The caller's portal, else this instance's configured default, else NONE
     // (#407) — the same resolution as the streaming route beside it. An empty
     // string on the wire means "no portal" (the form's "All portals" entry),
@@ -154,6 +158,12 @@ export async function POST(request: NextRequest) {
     if (!consent.ok) {
       return NextResponse.json(consent.payload, { status: 403 });
     }
+    // S3-B W1 (G0-2 = A; the ORCH's A6): the reader's picks narrow the run. This route holds no pause, so an Ask-first
+    // pick is declined at its load, and a question with no surviving pick On is refused, 403, before the limiter.
+    const picked = requestPicks.kind === 'picked' ? pickedRunOf(requestPicks.ids, readMcpEnvFromProcess(), consent, false) : null;
+    if (picked && !picked.usable) {
+      return NextResponse.json(picksRefusalPayload(consent.statement), { status: 403 });
+    }
 
     // THIS APP's own per-day request budget — never the model endpoint's.
     // It answers HTTP 429 and classifies as `rate_limit`; an endpoint's 429 is
@@ -179,14 +189,18 @@ export async function POST(request: NextRequest) {
     // (R6 W2, D3 = A). This route writes no trace, so it records nothing of
     // the composition but the prompt.
     const configured = readMcpEnvFromProcess();
-    const selection = consent.selection;
+    const selection = picked ? picked.selection : consent.selection;
+    const recordReasons = picked ? picked.recordReasons : consent.recordReasons;
     // The mode (#644 W1, C2): in loop, the first request carries the
     // directory and `load_source` only. This route writes no trace and holds
     // no stream, so a load of an Ask-first source is declined with no hold.
     const routingMode = sourceRoutingMode();
-    const directory = routingMode === 'in-loop' ? directorySet(configured, consent) : [];
+    // A picked run lists the surviving picks, whole, under `reader-picked` (S3-B W1, B9).
+    const directory = routingMode === 'in-loop'
+      ? directorySet(configured, consent).filter((entry) => !picked || picked.survivors.includes(entry.sourceId))
+      : [];
     const inLoop = entersInLoop(routingMode, directory)
-      ? await createInLoopRouting({ portal, lockedPortal, configured, directory, searchable: directory, rule: DIRECTORY_SET_RULE, selection })
+      ? await createInLoopRouting({ portal, lockedPortal, configured, directory, searchable: directory, rule: picked ? READER_PICKED_RULE : DIRECTORY_SET_RULE, selection })
       : undefined;
     // In loop, no source's guidance is composed for the first request; the
     // offered reasons the usage count reads are the session's, as composed (C4).
@@ -261,7 +275,7 @@ Be honest if you don't have access to current or real-time data.`;
     const flows = whereItWentFromCalls({
       toolCalls: withMcpResult.toolCalls,
       resolveSource: inLoop ? inLoop.resolveToolSource : (name) => routedSourceId(name, configured, selection),
-      sourcesOffered: consent.recordReasons(composition.sourcesOffered),
+      sourcesOffered: recordReasons(composition.sourcesOffered),
       statement: consent.statement,
       model: model.declared,
       service: getGenAiSystem(),

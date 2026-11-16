@@ -384,8 +384,9 @@ test('criterion 4: an all-sources record (record-d887c1) shows "not recorded" in
 
 // --- R10 P1 fix round 1 ----------------------------------------------------------------------------
 
-test('fix round 1 (6): WHERE_IT_WENT_REASONS is byte-identical to the base, and the chooser line reads its own reasons', async () => {
-  // The base's eight sentences (website main 567a7c2, copy.ts:313-322), owner-approved, unchanged by R10 P1.
+test('fix round 1 (6): WHERE_IT_WENT_REASONS is the owner-approved set, and the chooser line reads its own reasons', async () => {
+  // The base's eight sentences (website main 567a7c2, copy.ts:313-322), owner-approved, unchanged by R10 P1; S3-B W1
+  // (npstorey/civic-ai-tools#318) moved `notSetUp` to D7 = B's words and added S11 (`notPicked`), both owner-ruled.
   assert.deepEqual({ ...copy.WHERE_IT_WENT_REASONS }, {
     allowedNotUsed: 'Ask first: allowed when asked, but not used for this question.',
     declined: 'Ask first: not allowed for this question.',
@@ -394,7 +395,8 @@ test('fix round 1 (6): WHERE_IT_WENT_REASONS is byte-identical to the base, and 
     onNotUsed: 'On, not used for this question.',
     off: 'Off.',
     notAsked: 'Ask first: not asked for this question.',
-    notSetUp: 'Not set up on this site.',
+    notSetUp: 'Not set up on the site that ran this question.',
+    notPicked: 'Not picked for this question.',
   });
   // The chooser line's no-answer reason states both ways a pause ends with no answer.
   assert.match(CR.noAnswer, /could not ask/);

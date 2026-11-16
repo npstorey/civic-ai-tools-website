@@ -196,9 +196,12 @@ function whyNotSentFor(offered: OfferedSource, lastLoad: string | undefined): st
       return R.notAsked;
     case 'not-configured':
       return R.notSetUp;
+    case 'not-selected':
+      // S3-B W1 (B8, S11): on a run whose sources the reader picked, an allowed source the reader did not pick. Every
+      // other run maps the router's `not-selected` to `reader-off` or `not-consented` before it reaches here.
+      return R.notPicked;
     default:
-      // A reason with no words (the router's raw `not-selected`, which every
-      // route maps through `recordReasons` before it reaches here).
+      // A reason with no words.
       return null;
   }
 }
