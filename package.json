@@ -36,7 +36,7 @@
     "@typedstandards/verify-core": "^0.15.4",
     "@vercel/blob": "^2.8.2",
     "@vercel/kv": "^3.0.0",
-    "@vercel/sandbox": "^3.9.1",
+    "@vercel/sandbox": "^4.0.0",
     "bpmn-js": "^18.31.1",
     "canonicalize": "^5.1.0",
     "drizzle-orm": "^0.45.4",
