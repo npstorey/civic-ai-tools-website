@@ -2250,8 +2250,10 @@ re-ask is `consent_required` for the whole question, naming what is re-asked
 (`reask: { base, sources }`); a source is never silently dropped.
 
 A record states the reader's own state for each source: `selected` for On,
-`reader-off` for Off, `not-consented` for Ask first or no state, and the
-flows statement in force (`composition.flowsStatement`). Records published
+`reader-off` for Off, `not-consented` for Ask first or no state, and, on a
+question whose sources the reader picked (`picks`, [In-loop routing](#in-loop-routing)),
+`not-selected` for a source the reader did not pick and has not set to Off.
+It also states the flows statement in force (`composition.flowsStatement`). Records published
 while the gate was off (before #632 W3) carry the reasons they carried then
 (`configured`, `not-configured`) and no flows statement: on new records
 `configured` became `selected`.
@@ -2979,7 +2981,11 @@ The directory follows the reader's settings ("Consent and the flows statement").
 
 The `load_source` result is one line of plain text with no JSON in it. A loaded source's guidance never travels in a tool result. It arrives in the next request's system prompt. Listing a source in the directory contacts nothing. Loading Socrata asks its server for its guidance, and loading Data Commons or Boston OpenContext asks that server for its instructions, as composing the prompt does under `all-sources`.
 
-**What a record states.** A record of an `in-loop` run carries two more keys in its composition block. They are `routing` (`in-loop` and the router's version) and `definitionHash`. Each `load_source` call is a span with its outcome: `loaded`, `declined`, `no-answer`, `unavailable` or `not-offered`. The record's components are the loaded sources and the router. Its tool definitions are the last request's tools. A record of an `all-sources` run has neither key. Leaving the variable unset, or setting it to `all-sources`, changes nothing in it.
+**What a record states.** A record of an `in-loop` run carries four more keys in its composition block. They are `routing` (`in-loop` and the router's version), `definitionHash`, `considered` (the source inventory the run was routed against, how many of its sources the model was shown first, and the rule that chose them and its version: `directory-set`, or `reader-picked` on a question whose sources the reader picked) and `routingConfiguration` (the routing configuration the run was routed under, and its hash). Each `load_source` call is a span with its outcome: `loaded`, `declined`, `no-answer`, `unavailable` or `not-offered`. The record's components are the loaded sources and the router. Its tool definitions are the last request's tools. A record of an `all-sources` run has none of the four keys. Leaving the variable unset, or setting it to `all-sources`, changes nothing in it.
+
+**A question's picks.** A request to `/api/compare-stream`, `/api/query-notebook` or `/api/compare` may carry `picks`, an array of source ids: the reader's "Only the ones I pick". Absent, the question is Auto and runs as it did before the field existed. The server keeps the picks this instance configures and the reader has not set to Off, in manifest order, so a pick can narrow the run and never add a source; entries that are not strings, repeats and ids the manifest does not hold are dropped. In loop, the run lists exactly those sources under the rule `reader-picked`, version `1`, and is offered no search. Under `all-sources`, the run is given those of them that are On, and its record states no `considered`, as on any `all-sources` run. Either way the record states `not-selected` for a source the reader did not pick and has not set to Off.
+
+A `picks` value that is not an array, an empty array, or a list none of whose picks the run can use (none is kept, or none that is kept is On on a run that cannot stop to ask) is refused with `code: "no_picks_usable"` before the rate limiter, the model or any source is called: a `403` on `/api/compare` and `/api/query-notebook`, and an error event per panel on `/api/compare-stream`. Nothing about the picks is stored.
 
 **Models.** Every model in the catalog gets `load_source`. There is no per-model switch.
 

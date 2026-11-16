@@ -284,7 +284,8 @@ export async function POST(request: NextRequest) {
     // The run's configuration, read once, so the prompt, the tools and what
     // the record states about them describe one configuration (#599 W4). The
     // selection is the reader's: configured ∩ On, from the consent store
-    // (R6 W2, D3 = A), never from the request.
+    // (R6 W2, D3 = A). A question's picks can narrow it and never widen it
+    // (`pickedRunOf`; S3-B W1, G0-2 = A).
     // What each server reports of itself, as this run reads it (S2-B P3R):
     // opened before anything here contacts a server, read back by `runRecord`.
     const serverReads = startRunServerReads();
