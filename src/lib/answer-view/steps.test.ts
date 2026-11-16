@@ -140,7 +140,7 @@ test('W3 P1 (8) b8cc28’s shape reads by its operation type in user language th
   const entry = start({ toolName: B8CC28.tool, operationType: B8CC28.operationType });
   const group: ProgressGroup = { iteration: 1, label: OPEN_STEP_LABEL, entries: [entry], isComplete: true };
   const viaRun = buildRunStepView([group], [{ name: B8CC28.tool, operationType: B8CC28.operationType, args: B8CC28.arguments }]).steps[0].label;
-  const viaExposedName = generateGroupLabel([start({ toolName: `boston__${B8CC28.tool}`, operationType: 'metadata', args: B8CC28.arguments })]);
+  const viaExposedName = generateGroupLabel([start({ toolName: `boston_opencontext__${B8CC28.tool}`, operationType: 'metadata', args: B8CC28.arguments })]);
   for (const [path, label] of [['record', viaRecord], ['run', viaRun], ['exposed name', viaExposedName]] as const) {
     assert.equal(label, METADATA_WORDS, `the ${path} path reads by the operation type`);
     assert.doesNotMatch(label, /ckan|get_schema|Calling|__/, `the ${path} path reads by the tool name: "${label}"`);
@@ -534,7 +534,7 @@ const PAUSE = {
 
 test('R8 W2: a consent_pause event is a step of its own: no iteration, its pause kept, and the load it paused stays open', () => {
   const log = run([
-    { message: 'Loading the Boston OpenContext source', phase: 'tool_start', iteration: 1, toolName: 'load_source', operationType: 'load_source', args: { alias: 'boston' } },
+    { message: 'Loading the Boston OpenContext source', phase: 'tool_start', iteration: 1, toolName: 'load_source', operationType: 'load_source', args: { alias: 'boston_opencontext' } },
     { message: 'Waiting for your answer', phase: 'consent_pause', pause: PAUSE } as StepProgressEvent,
   ]);
   const entry = log.progressLog.at(-1) as ProgressLogEntry & { pause?: unknown };
@@ -548,7 +548,7 @@ test('R8 W2: a consent_pause event is a step of its own: no iteration, its pause
 
 test('R8 W2: the next line of the run marks the pause done', () => {
   const log = run([
-    { message: 'Loading the Boston OpenContext source', phase: 'tool_start', iteration: 1, toolName: 'load_source', operationType: 'load_source', args: { alias: 'boston' } },
+    { message: 'Loading the Boston OpenContext source', phase: 'tool_start', iteration: 1, toolName: 'load_source', operationType: 'load_source', args: { alias: 'boston_opencontext' } },
     { message: 'Waiting for your answer', phase: 'consent_pause', pause: PAUSE } as StepProgressEvent,
     { message: 'Loading the Boston OpenContext source', phase: 'tool_complete', iteration: 1, duration_ms: 4000, toolName: 'load_source', operationType: 'load_source' },
   ]);
@@ -594,7 +594,7 @@ test('R10 P1 criterion 6, live: one load of Socrata is "choosing" while open and
 test('R10 P1 criterion 6, live: two loads in one step name both, in call order', async () => {
   const { LOAD_STEP_LABEL } = await import('../sources/copy.ts');
   const [openA] = loadEvents('socrata');
-  const [openB, completeB, resultB] = loadEvents('boston');
+  const [openB, completeB, resultB] = loadEvents('boston_opencontext');
   const opened = run([openA, openB]);
   assert.equal(opened.progressGroups[0].label, LOAD_STEP_LABEL.open(['Socrata', 'Boston OpenContext'], 2));
   const closed = run([completeB, resultB, { message: 'Thinking', phase: 'thinking', iteration: 1 }], opened);

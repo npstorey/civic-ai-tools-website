@@ -388,7 +388,7 @@ test('note 4, ProgressLog (the home page): the run moves on and completes with t
   const stream = streams[0];
   assert.ok(stream, 'premise: the page started a run');
   const pause = pauseAt(nextKey(), Date.now());
-  stream.push({ type: 'progress', panel: 'withMcp', message: 'Loading the Boston OpenContext source', phase: 'tool_start', iteration: 1, args: { alias: 'boston' }, toolName: 'load_source', operationType: 'load_source' });
+  stream.push({ type: 'progress', panel: 'withMcp', message: 'Loading the Boston OpenContext source', phase: 'tool_start', iteration: 1, args: { alias: 'boston_opencontext' }, toolName: 'load_source', operationType: 'load_source' });
   stream.push({ type: 'progress', panel: 'withMcp', message: 'Waiting for your answer about Boston OpenContext, which is set to Ask first', phase: 'consent_pause', pause });
   await settle(page);
   // UX-2 HG: during the hold the short box holds the answers, and the card in the steps none.
@@ -418,7 +418,7 @@ test('note 4, AnswerView (/ask, notebook mode): the run moves on with the questi
   assert.ok(stream, 'premise: the page started a run');
   const pause = pauseAt(nextKey(), Date.now());
   stream.push({ type: 'phase', name: 'A', message: 'Discovering datasets…' });
-  stream.push({ type: 'phase_a_progress', message: 'Loading the Boston OpenContext source', phase: 'tool_start', iteration: 1, args: { alias: 'boston' }, toolName: 'load_source', operationType: 'load_source' });
+  stream.push({ type: 'phase_a_progress', message: 'Loading the Boston OpenContext source', phase: 'tool_start', iteration: 1, args: { alias: 'boston_opencontext' }, toolName: 'load_source', operationType: 'load_source' });
   stream.push({ type: 'phase_a_progress', message: 'Waiting for your answer about Boston OpenContext, which is set to Ask first', phase: 'consent_pause', pause });
   await settle(page);
   // UX-2 HG: during the hold the short box holds the answers, and the card in the steps none.

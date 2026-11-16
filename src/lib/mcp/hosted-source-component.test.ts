@@ -43,6 +43,8 @@ const CHARTER_ON: McpRegistryEnv = {
   dataCommonsUrl: 'http://data-commons.invalid/mcp',
   bostonOpencontextUrl: 'http://boston.invalid/mcp',
   nycCharterHosting: 'sandbox',
+  // Router 0.11.0 (CKAN-1 P3): the hosted CKAN server is an addressed source too, offered only with its address set.
+  ckanUrl: 'http://ckan.invalid/mcp',
 };
 const CHARTER = CIVIC_MANIFEST.find((entry) => entry.sourceId === 'nyc-charter')!;
 

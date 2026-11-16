@@ -242,14 +242,22 @@ const SELECTIONS: Array<string[] | undefined> = [
   undefined,
   ...Array.from({ length: 2 ** SOURCE_IDS.length }, (_, mask) => SOURCE_IDS.filter((_, bit) => (mask >> bit) & 1)),
 ];
-const PACK_NAMES = [...civicRouter.dispatchMap.values()].filter((t) => t.base !== undefined).map((t) => t.exposedName);
+const PACK_TARGETS = [...civicRouter.dispatchMap.values()].filter((t) => t.base !== undefined);
+// Router 0.11.0 (CKAN-1 P3): the Boston pack's base, the CKAN server, is not routable here (`CKAN_MCP_URL` is unset,
+// and at stage L read by nothing), so its six tools are outside this criterion's premise; City Record's two are in it.
+const ROUTABLE_PACK_TARGETS = PACK_TARGETS.filter((t) => buildMcpRegistry(configured).servers[t.base!] !== undefined);
+const PACK_NAMES = ROUTABLE_PACK_TARGETS.map((t) => t.exposedName);
 
 test('the send refuses a pack\'s tool the selection leaves out as not offered, whenever its base is routable', () => {
+  assert.deepEqual(PACK_TARGETS.filter((t) => !ROUTABLE_PACK_TARGETS.includes(t)).map((t) => t.sourceId), Array(6).fill('boston-ckan'), 'premise: only the Boston pack\'s base is unroutable');
+  assert.deepEqual(PACK_NAMES, ['nyc_record__get_data', 'nyc_record__fetch'], 'premise: City Record\'s two tools are the routable pack tools');
   const wrong: string[] = [];
   let rows = 0;
   for (const selection of SELECTIONS) {
-    if (selection === undefined || selection.includes('nyc-record')) continue;
-    for (const name of PACK_NAMES) {
+    if (selection === undefined) continue;
+    for (const target of ROUTABLE_PACK_TARGETS) {
+      if (selection.includes(target.sourceId)) continue;
+      const name = target.exposedName;
       rows += 1;
       try {
         routeToolCall(buildMcpRegistry(configured, selection), name);
@@ -328,6 +336,12 @@ for (const selection of SELECTIONS) {
 
 /** The refused rows' recorded arguments, as measured on the tree before this change; sha256 of their canonical JSON. */
 const REFUSED_ROWS_ARGUMENTS_SHA256 = 'ce8878e6d24d8fd8a44045f4d1dfe44331c59f7b1e126ca61e75fe6d84971e79';
+/** CKAN-1 P3 (router 0.11.0): the same over the 0.11.0 table (nine sources, so 2^9 selections, and the Boston pack's
+ *  six names and their bare spellings), measured at stage L. The rows of the 0.10.0 table, Boston OpenContext's
+ *  renamed back, still hash to the pin above: the move is the two entries and the rename, and nothing else. */
+const REFUSED_ROWS_ARGUMENTS_SHA256_ROUTER_0_11_0 = 'dd502a052dfd67fd3eb1ccd45a8c4823527bec33a288650923a2810c29fe1c5b';
+const NEW_SOURCE_IDS = ['ckan-server', 'boston-ckan'];
+const NEW_NAMES = new Set([...civicRouter.dispatchMap.values()].filter((t) => t.sourceId === 'boston-ckan').flatMap((t) => [t.exposedName, t.upstreamName]));
 
 test('every name the dispatch refuses, under every selection: the recorded arguments are the called name\'s, as a caller with no decision records them', () => {
   const parted: string[] = [];
@@ -343,7 +357,11 @@ test('every name the dispatch refuses, under every selection: the recorded argum
   }
   assert.ok(refused.some(([, name, args]) => packFilterOf(name) !== undefined && args.portal === PACK.portal), 'the table cannot fail: no refused row carries a pack\'s values');
   assert.deepEqual(parted, []);
-  assert.equal(crypto.createHash('sha256').update(JSON.stringify(refused)).digest('hex'), REFUSED_ROWS_ARGUMENTS_SHA256);
+  assert.ok(NEW_NAMES.size === 12 && refused.some(([, name]) => NEW_NAMES.has(name)), 'premise: the table holds the Boston pack\'s names');
+  const before = refused.filter(([selection, name]) => !NEW_NAMES.has(name) && !(selection ?? []).some((id) => NEW_SOURCE_IDS.includes(id)));
+  assert.ok(before.length < refused.length, 'premise: the 0.11.0 table has rows the 0.10.0 table did not');
+  assert.equal(crypto.createHash('sha256').update(JSON.stringify(before).replaceAll('boston_opencontext__', 'boston__')).digest('hex'), REFUSED_ROWS_ARGUMENTS_SHA256);
+  assert.equal(crypto.createHash('sha256').update(JSON.stringify(refused)).digest('hex'), REFUSED_ROWS_ARGUMENTS_SHA256_ROUTER_0_11_0);
 });
 
 test('every name the dispatch accepts, under every selection: the injected values are its target\'s pack\'s', () => {

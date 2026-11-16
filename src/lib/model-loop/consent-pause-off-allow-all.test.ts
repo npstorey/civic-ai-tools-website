@@ -282,7 +282,7 @@ test('UX-2 P4b criterion 5 (guard): a later run whose directory holds the source
 test('UX-2 P4b criterion 6 (S4): Allow all at the first pause loads that source, and the second Ask-first source loads with no pause and no entry', async () => {
   const d = await drive({
     states: { socrata: 'on', 'data-commons': 'ask-first', 'boston-opencontext': 'ask-first' },
-    script: [load('load-dc', 'data_commons'), load('load-boston', 'boston'), ANSWER],
+    script: [load('load-dc', 'data_commons'), load('load-boston', 'boston_opencontext'), ANSWER],
     decide: [{ afterMs: 2_000, decision: 'allow-all' }],
   });
   assert.equal(d.pauses.length, 1, `the run paused ${d.pauses.length} times after Allow all`);
@@ -294,7 +294,7 @@ test('UX-2 P4b criterion 6 (S4): Allow all at the first pause loads that source,
 test('UX-2 P4b criterion 6 (decoy): the same run with Allow, not Allow all, at the first pause pauses on the second load', async () => {
   const d = await drive({
     states: { socrata: 'on', 'data-commons': 'ask-first', 'boston-opencontext': 'ask-first' },
-    script: [load('load-dc', 'data_commons'), load('load-boston', 'boston'), ANSWER],
+    script: [load('load-dc', 'data_commons'), load('load-boston', 'boston_opencontext'), ANSWER],
     decide: [{ afterMs: 2_000, decision: 'allow' }],
   });
   assert.equal(d.pauses.length, 2, 'the decoy did not pause on the second load: the instrument cannot see a second pause');

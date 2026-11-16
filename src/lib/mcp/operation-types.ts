@@ -15,7 +15,7 @@ import { CIVIC_MANIFEST, civicRouter } from '@typedstandards/civic-typed-router'
 // --- Both spellings (#599 W3) -------------------------------------------------
 //
 // Since W3 the model sees every tool as `<alias>__<upstream name>`
-// (`socrata__get_data`, `boston__ckan__search_datasets`), and every record made
+// (`socrata__get_data`, `boston_opencontext__ckan__search_datasets`), and every record made
 // before W3 names it bare (`get_data`). Every site in this repository that
 // keys on a tool name reads both: it keys on the UPSTREAM name, which the
 // router's dispatch map gives for an exposed name and which a bare name already

@@ -47,7 +47,7 @@ export function getAllHelperSources(): string {
  * Map an MCP tool name, in either spelling, to the helper it implies. Used by
  * the prompt template to pick the minimal helper subset for the notebook
  * based on which MCP tools the LLM actually called during Phase A discovery.
- * Read by the upstream name (#599 W3): `boston__ckan__query_data` and
+ * Read by the upstream name (#599 W3): `boston_opencontext__ckan__query_data` and
  * `ckan__query_data` imply the same helper.
  */
 export function helperForToolName(calledName: string): HelperId | null {

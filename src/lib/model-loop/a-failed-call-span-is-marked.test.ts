@@ -52,7 +52,7 @@ const PATHS: Array<{ id: string; path: string; call: ScriptedToolCall; kind: str
   { id: 'envelope', path: 'a JSON-RPC error answer', call: call('envelope', 'socrata__get_data', { type: 'query', dataset_id: 'eeee-5555', query: 'x' }), kind: 'unknown' },
   { id: 'iserror', path: 'an isError result', call: call('iserror', 'socrata__get_data', { type: 'query', dataset_id: 'ffff-6666', query: 'x' }), kind: 'unknown' },
   { id: 'offered', path: 'a source the run was not offered', call: call('offered', 'data_commons__get_observations', { variable_dcids: ['Count_Person'] }), kind: 'not_offered' },
-  { id: 'configured', path: 'a source not configured', call: call('configured', 'boston__ckan__search', { q: 'x' }), kind: 'not_configured' },
+  { id: 'configured', path: 'a source not configured', call: call('configured', 'boston_opencontext__ckan__search', { q: 'x' }), kind: 'not_configured' },
   { id: 'ambiguous', path: 'a bare name two sources share', call: call('ambiguous', 'get_data', { type: 'query', dataset_id: 'gggg-7777', query: 'x' }), kind: 'unknown' },
 ];
 
@@ -89,7 +89,7 @@ const result = await runToolLoop({
   executeToolCall: async (name, args) => {
     if (name === PACK) return '[{"notice":"fixture"}]';
     if (name.startsWith('data_commons__')) throw new SourceNotOfferedError(name);
-    if (name.startsWith('boston__')) throw new McpConfigurationError('BOSTON_OPENCONTEXT_MCP_URL is not set');
+    if (name.startsWith('boston_opencontext__')) throw new McpConfigurationError('BOSTON_OPENCONTEXT_MCP_URL is not set');
     const behaviour = datasetBehaviour[String(args.dataset_id)];
     assert.ok(behaviour, `no behaviour for ${name} ${JSON.stringify(args)}`);
     return behaviour();

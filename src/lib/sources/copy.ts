@@ -378,6 +378,17 @@ export const SOURCE_DESCRIPTIONS: Readonly<Record<string, SourceDescription>> = 
     publisher: 'BetaNYC',
     link: 'https://github.com/BetaNYC/nys-openlegislation-mcp',
   },
+  // Router 0.11.0 (CKAN-1 P3, hub #314). DRAFT: both `what` lines are replaced by the ruled words before merge.
+  'ckan-server': {
+    what: 'a connector for open-data portals that run CKAN, an open-source portal platform. It has no data of its own: each source that uses it reads one portal.',
+    publisher: 'onData',
+    link: 'https://github.com/npstorey/ckan-mcp-server',
+  },
+  'boston-ckan': {
+    what: "the City of Boston's open data portal, Analyze Boston, at data.boston.gov.",
+    publisher: 'Civic AI Tools',
+    link: 'https://data.boston.gov',
+  },
 };
 
 /**

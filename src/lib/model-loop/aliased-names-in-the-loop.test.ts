@@ -167,7 +167,7 @@ test('both spellings record the same operation type and the same reason, and the
     { id: 'b', name: 'search', args: { query: 'noise' } },
     { id: 'c', name: 'data_commons__search_indicators', args: { query: 'income' } },
     { id: 'd', name: 'search_indicators', args: { query: 'income' } },
-    { id: 'e', name: 'boston__ckan__get_schema', args: { resource_id: 'r' } },
+    { id: 'e', name: 'boston_opencontext__ckan__get_schema', args: { resource_id: 'r' } },
     { id: 'f', name: 'ckan__get_schema', args: { resource_id: 'r' } },
     { id: 'g', name: 'socrata__fetch', args: { id: 'abcd-1234' } },
     { id: 'h', name: 'fetch', args: { id: 'abcd-1234' } },
@@ -180,7 +180,7 @@ test('both spellings record the same operation type and the same reason, and the
   }
   assert.deepEqual(recorded.map(([op]) => op), ['search', 'search', 'search', 'search', 'metadata', 'metadata', undefined, undefined]);
   for (const record of result.toolCalls) {
-    assert.ok(!/(socrata|data_commons|boston)__/.test(record.reason ?? ''), `the reason names an alias: ${record.reason}`);
+    assert.ok(!/(socrata|data_commons|boston_opencontext|boston)__/.test(record.reason ?? ''), `the reason names an alias: ${record.reason}`);
   }
   // The record keeps the name the model called.
   assert.deepEqual(result.toolCalls.map((r) => r.name), calls.map((c) => c.name));
@@ -190,7 +190,7 @@ test('every mcp_tool_call span states mcp.source, tool.upstream_name, mcp.alias 
   const calls: StubToolCall[] = [
     { id: 'a', name: 'socrata__get_data', args: { type: 'catalog', query: 'noise' } },
     { id: 'b', name: 'data_commons__get_observations', args: { variable_dcid: 'Count_Person', place_dcid: 'geoId/36' } },
-    { id: 'c', name: 'boston__ckan__search_datasets', args: { query: '311' } },
+    { id: 'c', name: 'boston_opencontext__ckan__search_datasets', args: { query: '311' } },
     { id: 'd', name: 'get_data', args: { type: 'catalog', query: 'noise' } },
     { id: 'e', name: 'no_such_tool', args: {} },
   ];
@@ -204,7 +204,7 @@ test('every mcp_tool_call span states mcp.source, tool.upstream_name, mcp.alias 
   assert.deepEqual(stated, [
     ['socrata__get_data', 'get_data', 'socrata', 'socrata', id('socrata')],
     ['data_commons__get_observations', 'get_observations', 'data-commons', 'data_commons', id('data-commons')],
-    ['boston__ckan__search_datasets', 'ckan__search_datasets', 'boston-opencontext', 'boston', id('boston-opencontext')],
+    ['boston_opencontext__ckan__search_datasets', 'ckan__search_datasets', 'boston-opencontext', 'boston_opencontext', id('boston-opencontext')],
     // S2-B (G1-1 = A): since router 0.8.0 a bare get_data is refused as ambiguous (NYC City Record's pack has one
     // too), so no source answered it and the span states `unknown`, as for a call no server took.
     ['get_data', 'get_data', 'unknown', 'unknown', 'unknown'],

@@ -201,7 +201,7 @@ const model = http.createServer((req, res) => {
         ]
       : [
           { id: 'call-socrata', type: 'function', function: { name: 'socrata__get_data', arguments: JSON.stringify({ type: 'query', dataset_id: 'aaaa-1111', limit: 1 }) } },
-          { id: 'call-boston', type: 'function', function: { name: 'boston__ckan__query_data', arguments: JSON.stringify({ resource_id: 'r-1', limit: 1 }) } },
+          { id: 'call-boston', type: 'function', function: { name: 'boston_opencontext__ckan__query_data', arguments: JSON.stringify({ resource_id: 'r-1', limit: 1 }) } },
         ];
     res.writeHead(200, { 'Content-Type': 'application/json' });
     res.end(JSON.stringify({
@@ -373,7 +373,7 @@ for (const d of [COMPARE_STREAM, NOTEBOOK]) {
   test(`${d.name}: the tool definitions are, byte for byte, the tools the model was offered`, () => {
     const root = rootAttributes(traceOf(d));
     const offered = JSON.stringify(mcpRequest(d).body.tools);
-    assert.ok(offered.includes('socrata__get_data') && offered.includes('boston__ckan__query_data'), 'premise — the model was offered the aliased tools');
+    assert.ok(offered.includes('socrata__get_data') && offered.includes('boston_opencontext__ckan__query_data'), 'premise — the model was offered the aliased tools');
     assert.equal(root['analysis.tool_definitions'], offered);
   });
 
@@ -390,7 +390,7 @@ for (const d of [COMPARE_STREAM, NOTEBOOK]) {
     assert.deepEqual(JSON.parse(root['analysis.sources_offered'] ?? 'null'), [
       { sourceId: 'socrata', alias: 'socrata', reason: 'selected' },
       { sourceId: 'data-commons', alias: 'data_commons', reason: 'selected' },
-      { sourceId: 'boston-opencontext', alias: 'boston', reason: 'selected' },
+      { sourceId: 'boston-opencontext', alias: 'boston_opencontext', reason: 'selected' },
       // Router 0.3.0's hosted source, with NYC_CHARTER_HOSTING unset: the row
       // the anchor names for the pin (#617 P3). No component and no server
       // entry come with it.
@@ -402,6 +402,10 @@ for (const d of [COMPARE_STREAM, NOTEBOOK]) {
       { sourceId: 'nyc-checkbook', alias: 'nyc_checkbook', reason: 'not-configured' },
       { sourceId: 'nyc-record', alias: 'nyc_record', reason: 'selected' },
       { sourceId: 'nys-legislation', alias: 'nys_legislation', reason: 'not-configured' },
+      // Router 0.11.0 (CKAN-1 P3): the CKAN server and its Boston pack, `CKAN_MCP_URL` unset. No component and no
+      // server entry come with them.
+      { sourceId: 'ckan-server', alias: 'ckan', reason: 'not-configured' },
+      { sourceId: 'boston-ckan', alias: 'boston', reason: 'not-configured' },
     ]);
   });
 
@@ -438,7 +442,7 @@ test('#495 at the routes: after a restart with a different Boston address, the r
       name: e.name as string,
       args: (e.args ?? {}) as Record<string, unknown>,
     }));
-    assert.deepEqual(toolCalls.map((c) => c.name), ['socrata__get_data', 'boston__ckan__query_data'], 'premise — the run called Socrata and Boston');
+    assert.deepEqual(toolCalls.map((c) => c.name), ['socrata__get_data', 'boston_opencontext__ckan__query_data'], 'premise — the run called Socrata and Boston');
     const { pkg } = buildEvidencePackage({
       trace,
       prompt: QUESTION,
@@ -621,7 +625,7 @@ const LOOP_CASES: Array<{ name: string; aliases: string[]; pause: PauseKind; exp
   },
   {
     name: 'a held pause, whatever its decision (allow, off, not-now, no-answer), then a repeat of the allowed source',
-    aliases: ['socrata', 'data_commons', 'boston', 'nyc_record', 'socrata'],
+    aliases: ['socrata', 'data_commons', 'boston_opencontext', 'nyc_record', 'socrata'],
     pause: { kind: 'scripted', answers: { socrata: held('allow'), 'data-commons': held('off'), 'boston-opencontext': held('not-now'), 'nyc-record': held('no-answer') } },
     expected: [
       { outcome: 'loaded', asked: true },

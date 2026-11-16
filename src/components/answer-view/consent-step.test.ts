@@ -175,7 +175,7 @@ test('criterion 3 (a): the card names the source by its reader name, never a too
   const card = await mountCard();
   const text = textOf(cardOf(card));
   assert.ok(text.startsWith(`${NAME} is set to Ask first.`), `the card opens: ${text.slice(0, 120)}`);
-  assert.doesNotMatch(text, /MCP Server|boston__|load_source/);
+  assert.doesNotMatch(text, /MCP Server|boston_opencontext__|boston__|load_source/);
   card.unmount();
 });
 

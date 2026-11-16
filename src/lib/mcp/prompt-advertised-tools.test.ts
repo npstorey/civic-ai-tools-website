@@ -120,6 +120,8 @@ const EVERY_SOURCE = {
   // since router 0.8.0 made NYC City Record a pack over Socrata (S2-B).
   nycCheckbookHosting: 'sandbox' as const,
   nysLegislationHosting: 'sandbox' as const,
+  // Router 0.11.0 (CKAN-1 P3): the hosted CKAN server, and with it the Boston pack over it.
+  ckanUrl: 'https://ckan.invalid',
 };
 const EVERY_SOURCE_ID = civicRouter.manifest.map((entry) => entry.sourceId);
 
@@ -339,13 +341,20 @@ test('#323: the extractor recognises each anchor it claims to', () => {
 });
 
 test('#644 W1: every name the in-loop directory backticks is an alias it lists or a tool an in-loop run can call', () => {
-  const aliases = new Set(civicRouter.manifest.map((entry) => entry.alias));
+  // Router 0.11.0: a pack's base with no tool names of its own (the CKAN server) is in no list the model reads, the
+  // directory included (its CHANGELOG); every other entry is listed. The base is held absent, so the rule is exercised.
+  const unlistedBases = new Set(civicRouter.manifest
+    .filter((entry) => entry.toolNames.length === 0 && civicRouter.manifest.some((pack) => pack.base === entry.sourceId))
+    .map((entry) => entry.alias));
+  assert.deepEqual([...unlistedBases], ['ckan'], 'premise: the CKAN server is the one tool-less base');
+  const aliases = new Set(civicRouter.manifest.map((entry) => entry.alias).filter((alias) => !unlistedBases.has(alias)));
   const callable = callableToolNames();
   const named = [...IN_LOOP_DIRECTORY.matchAll(/`([a-z][a-z0-9_]*)`/g)].map((m) => m[1]);
   // The paragraph names `load_source` and each line names its alias: if the
   // directory stops naming them, this test has stopped measuring.
   assert.ok(named.includes('load_source'), 'the directory names no load_source');
   assert.ok(named.filter((n) => aliases.has(n)).length === aliases.size, 'the directory does not list every alias');
+  assert.ok(!named.some((n) => unlistedBases.has(n)), 'the directory lists a pack\'s tool-less base');
   const neither = named.filter((n) => !aliases.has(n) && !callable.has(n));
   assert.deepEqual(neither, [], `the directory names ${JSON.stringify(neither)}, which is neither a listed alias nor a tool an in-loop run can call`);
 });

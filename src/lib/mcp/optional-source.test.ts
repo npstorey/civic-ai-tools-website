@@ -42,7 +42,7 @@ const CKAN_TOOLS = [
   'ckan__aggregate_data',
 ];
 
-/** The six as the model is offered them, `boston__<tool>`, since #599 W3:
+/** The six as the model is offered them, `boston_opencontext__<tool>`, since #599 W3:
  *  read off the router's dispatch map, never composed by hand. */
 const CKAN_EXPOSED = CKAN_TOOLS.map(
   (tool) => [...civicRouter.dispatchMap.values()].find((t) => t.upstreamName === civicRouter.upstreamToolName(tool))!.exposedName,
@@ -63,7 +63,7 @@ const CHARTER_EXPOSED = NYC_CHARTER_TOOL_NAMES.map((tool) => `nyc_charter__${too
  *  S2-B: two since router 0.8.0, under which NYC City Record is a pack over
  *  Socrata, offered wherever Socrata is: their thirty-four tools, beside
  *  Charter's five. */
-const NEW_HOSTED = civicRouter.manifest.filter((entry) => ['nyc-checkbook', 'nys-legislation'].includes(entry.sourceId));
+const NEW_HOSTED = civicRouter.manifest.filter((entry) => ['nyc-checkbook', 'nys-legislation', 'boston-ckan'].includes(entry.sourceId));
 /** The website's preamble helper composes the three code sources' entries; a pack's entry is the router's (its goldens). */
 const CODE_SOURCES = <T extends string>(sources: readonly T[]): T[] => sources.filter((id) => id !== 'nyc-record');
 const NEW_HOSTED_EXPOSED = NEW_HOSTED.flatMap((entry) => entry.toolNames.map((tool) => `${entry.alias}__${tool}`));
@@ -72,7 +72,12 @@ const HOSTED_PREFIXES = ['nyc_charter__', ...NEW_HOSTED.map((entry) => `${entry.
 
 const UNSET: McpRegistryEnv = { socrataUrl: 'https://socrata.invalid', dataCommonsUrl: 'https://data-commons.invalid' };
 const SET: McpRegistryEnv = { ...UNSET, bostonOpencontextUrl: 'https://opencontext.invalid/mcp' };
-const ALL_ON: McpRegistryEnv = { ...SET, nycCharterHosting: 'sandbox', nycCheckbookHosting: 'sandbox', nysLegislationHosting: 'sandbox' };
+const ALL_ON: McpRegistryEnv = { ...SET, nycCharterHosting: 'sandbox', nycCheckbookHosting: 'sandbox', nysLegislationHosting: 'sandbox', ckanUrl: 'https://ckan.invalid/mcp' };
+/** Router 0.11.0 (CKAN-1 P3, stage L): the website builds no `ckan-server` server yet, so with `ckanUrl` set the
+ *  registry still refuses the Boston pack's six tools naming `CKAN_MCP_URL`. Stage G wires the server. */
+const PACK_UNCONFIGURED_AT_L = Object.fromEntries(
+  civicRouter.manifest.filter((entry) => entry.sourceId === 'boston-ckan').flatMap((entry) => entry.toolNames.map((tool) => [`${entry.alias}__${tool}`, 'CKAN_MCP_URL'])),
+);
 const hostedUnconfigured = {
   ...Object.fromEntries(CHARTER_EXPOSED.map((tool) => [tool, 'NYC_CHARTER_HOSTING'])),
   ...Object.fromEntries(NEW_HOSTED.flatMap((entry) => entry.toolNames.map((tool) => [`${entry.alias}__${tool}`, entry.configuration.addressVariable]))),
@@ -85,15 +90,16 @@ test('the registry: configured, the Boston server routes its six tools; unset, t
   const set = buildMcpRegistry(SET);
   assert.equal(set.servers['boston-opencontext']?.endpointUrl, 'https://opencontext.invalid/mcp');
   assert.deepEqual(set.unconfiguredTools, hostedUnconfigured, 'with Boston set, only the hosted sources\' tools (switches unset) are refused, each naming its own switch');
-  assert.deepEqual([...new Set(Object.values(hostedUnconfigured))], ['NYC_CHARTER_HOSTING', 'NYC_CHECKBOOK_HOSTING', 'NYS_LEGISLATION_HOSTING']);
-  assert.deepEqual(buildMcpRegistry(ALL_ON).unconfiguredTools, {}, 'with every optional source on, nothing is refused');
+  assert.deepEqual([...new Set(Object.values(hostedUnconfigured))], ['NYC_CHARTER_HOSTING', 'NYC_CHECKBOOK_HOSTING', 'NYS_LEGISLATION_HOSTING', 'CKAN_MCP_URL']);
+  assert.equal(Object.keys(PACK_UNCONFIGURED_AT_L).length, 6, 'premise: the Boston pack has six tools');
+  assert.deepEqual(buildMcpRegistry(ALL_ON).unconfiguredTools, PACK_UNCONFIGURED_AT_L, 'with every optional source on, nothing but the unwired pack is refused');
   const unset = buildMcpRegistry(UNSET);
   assert.equal(unset.servers['boston-opencontext'], undefined);
   for (const tool of CKAN_EXPOSED) {
     assert.equal(unset.toolIndex[tool], undefined, `${tool} is routable with the source unset`);
     assert.equal(unset.unconfiguredTools[tool], 'BOSTON_OPENCONTEXT_MCP_URL', `${tool} does not name its variable`);
   }
-  assert.deepEqual(Object.keys(unset.unconfiguredTools).sort(), [...CKAN_EXPOSED, ...HOSTED_EXPOSED].sort(), 'unset refuses more or fewer than Boston\'s six and the hosted sources\' thirty-nine');
+  assert.deepEqual(Object.keys(unset.unconfiguredTools).sort(), [...CKAN_EXPOSED, ...HOSTED_EXPOSED].sort(), 'unset refuses more or fewer than Boston OpenContext\'s six and the hosted sources\' and the Boston pack\'s forty-five');
   assert.deepEqual(Object.keys(unset.servers), ['socrata', 'data-commons']);
   assert.deepEqual(Object.keys(set.servers), ['socrata', 'data-commons', 'boston-opencontext'], 'insertion order moved');
   // An empty string is unset, as `configuredAddressForSource` reads it.
@@ -124,14 +130,15 @@ test('the offered tools: configured, the very same array; unset, the list withou
     assert.equal(offeredMcpTools(all, ALL_ON), all, 'an instance with every optional source on is not handed the same array');
     // SET: Boston on, the three hosted switches unset: the vocabulary less
     // the hosted sources' thirty-nine (Charter's five, and thirty-four since
-    // router 0.8.0 made City Record a pack; router 0.6.0's forty-one before).
+    // router 0.8.0 made City Record a pack; router 0.6.0's forty-one before),
+    // and since router 0.11.0 the Boston pack's six (`CKAN_MCP_URL` unset).
     const set = offeredMcpTools(all, SET);
     assert.deepEqual(set, all.filter((t) => t.type === 'function' && !HOSTED_PREFIXES.some((prefix) => t.function.name.startsWith(prefix))), 'SET is not the vocabulary less the hosted sources\' tools');
-    assert.equal(names(all).length - names(set).length, 39);
+    assert.equal(names(all).length - names(set).length, 45);
     const offered = offeredMcpTools(all, UNSET);
-    assert.deepEqual(names(offered), names(set).filter((n) => !n.startsWith('boston__ckan__')));
+    assert.deepEqual(names(offered), names(set).filter((n) => !n.startsWith('boston_opencontext__ckan__')));
     assert.equal(names(set).length - names(offered).length, 6);
-    assert.deepEqual(offered, set.filter((t) => t.type === 'function' && !t.function.name.startsWith('boston__ckan__')), 'the kept schemas changed');
+    assert.deepEqual(offered, set.filter((t) => t.type === 'function' && !t.function.name.startsWith('boston_opencontext__ckan__')), 'the kept schemas changed');
   }
 });
 

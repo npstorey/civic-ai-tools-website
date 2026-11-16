@@ -215,8 +215,8 @@ const EXCEPTIONS: readonly Exception[] = [
   {
     path: 'src/lib/sources/copy.ts',
     classification: 'server-endpoint',
-    hits: 1,
-    why: "Boston OpenContext's what-line on the Sources rows (R6 PL, ruling D1 = A) names the domain that server fronts, so a reader knows whose data it is; it is reader text, and no run reads it.",
+    hits: 3,
+    why: "Boston OpenContext's what-line on the Sources rows (R6 PL, ruling D1 = A) names the domain that server fronts, so a reader knows whose data it is; it is reader text, and no run reads it. Since router 0.11.0 (CKAN-1 P3) two more, on the Analyze Boston pack's row: its what-line names the one portal the pack reads, and its link is that portal, the address in the pack's inventory id (pinned by source-name.test.ts). Reader text; no run reads it.",
   },
   {
     path: 'src/lib/notebook-author/helpers/fetch_data_commons.py',
@@ -343,6 +343,20 @@ const EXCEPTIONS: readonly Exception[] = [
     classification: 'server-endpoint',
     hits: 13,
     why: "The one portal the NYC City Record pack reads (its City Record Online dataset, dg92-zbpx), fixed by the pack's filter and named in its header comments, its query recipes, the filter, its inventory id and, since router 0.9.0, its `api` member; the pack's, every instance's the same, never a portal a run chooses or inherits.",
+  },
+  // Router 0.11.0 (CKAN-1 P2, hub #314): Analyze Boston, a pack over the hosted CKAN server, fixes its one portal in
+  // its filter, its tools' `server_url` enum and its inventory id, and names it in its guidance and its words.
+  {
+    path: 'node_modules/@typedstandards/civic-typed-router/dist/civic/boston-ckan.js',
+    classification: 'server-endpoint',
+    hits: 10,
+    why: "The one portal the Analyze Boston pack reads, every instance's the same: in two header comments, its guidance (four hits: the portal it reads, the data it holds, the citation), its inventory id, its filter (`server_url`), its `api` host and a doc comment. Never a portal a run chooses or inherits: a call naming another is refused.",
+  },
+  {
+    path: 'node_modules/@typedstandards/civic-typed-router/dist/civic/ckan-words.js',
+    classification: 'server-endpoint',
+    hits: 3,
+    why: "The Analyze Boston pack's words: its description, freshness line and their citation naming the portal its data lives on (data.boston.gov), as nyc-record.js's rows name City Record's.",
   },
 ];
 

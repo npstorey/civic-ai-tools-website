@@ -176,7 +176,7 @@ function turnFor(body: Record<string, unknown>): Call[] | null {
   const turns = ((body.messages ?? []) as Array<{ role?: string }>).filter((m) => m.role === 'assistant').length;
   if (!tools.some((t) => t.function.name === 'load_source')) return turns === 0 ? [DC_CALL] : null;
   if (turns === 0) return [call('call-load-dc', 'load_source', { alias: 'data_commons' })];
-  if (turns === 1) return [DC_CALL, call('call-boston', 'boston__ckan__query_data', { resource_id: 'r-1', limit: 1 })];
+  if (turns === 1) return [DC_CALL, call('call-boston', 'boston_opencontext__ckan__query_data', { resource_id: 'r-1', limit: 1 })];
   return null;
 }
 

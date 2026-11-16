@@ -7,7 +7,7 @@
  * one rule, so this test drives every name down both and fails where they part, as
  * `scripts/outbound-proxy.test.mjs` does for the proxy decision.
  *
- * THE TABLE. Every subset of the installed manifest's source ids as the selection (2^7 at router 0.10.0, as at 0.9.0), and no
+ * THE TABLE. Every subset of the installed manifest's source ids as the selection (2^9 at router 0.11.0; 2^7 at 0.10.0 and 0.9.0), and no
  * selection; every name in `civicRouter.dispatchMap`, and every bare upstream name those entries carry. With
  * `SOCRATA_MCP_URL` set:
  *   - when the send routes a name, the resolver returns exactly the exposed name it routed;

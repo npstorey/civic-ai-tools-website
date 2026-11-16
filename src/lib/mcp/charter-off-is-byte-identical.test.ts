@@ -106,11 +106,22 @@ if (process.env.P3_PRINT === '1') process.stderr.write(`${JSON.stringify(observe
 // composition gains its entry, block, citation and lock mention, and the tools array its two tools. The router holds
 // every golden byte for byte with the pack left out of the selection (its 0.8.0 CHANGELOG); so does this criterion.
 const BASE_THREE = ['socrata', 'data-commons', 'boston-opencontext'];
+// CKAN-1 P3 (router 0.11.0, hub #314): Boston OpenContext's alias is `boston_opencontext` (it was `boston`, which the
+// Boston pack takes), so every name it is offered under and every line naming them moves by that one rename. The
+// texts are hashed with the rename undone, and only that string: any other byte still fails. The premise below shows
+// the undo is exercised, and that no name of the pack (`boston__…`, offered only with `CKAN_MCP_URL` set) is there.
+const OLD_ALIAS = (text: string) => text.replaceAll('boston_opencontext', 'boston');
+const withoutPackText = {
+  promptWithPortal: (await composeSystemPrompt({ portal: PORTAL, configured, now: NOW, selection: BASE_THREE })).prompt,
+  promptNoPortal: (await composeSystemPrompt({ configured, now: NOW, selection: BASE_THREE })).prompt,
+  toolsUnlocked: JSON.stringify(offeredMcpTools(mcpToolsFor(undefined), configured, BASE_THREE)),
+  toolsLocked: JSON.stringify(offeredMcpTools(mcpToolsFor(PORTAL), configured, BASE_THREE)),
+};
 const withoutPack = {
-  promptWithPortal: sha((await composeSystemPrompt({ portal: PORTAL, configured, now: NOW, selection: BASE_THREE })).prompt),
-  promptNoPortal: sha((await composeSystemPrompt({ configured, now: NOW, selection: BASE_THREE })).prompt),
-  toolsUnlocked: sha(JSON.stringify(offeredMcpTools(mcpToolsFor(undefined), configured, BASE_THREE))),
-  toolsLocked: sha(JSON.stringify(offeredMcpTools(mcpToolsFor(PORTAL), configured, BASE_THREE))),
+  promptWithPortal: sha(OLD_ALIAS(withoutPackText.promptWithPortal)),
+  promptNoPortal: sha(OLD_ALIAS(withoutPackText.promptNoPortal)),
+  toolsUnlocked: sha(OLD_ALIAS(withoutPackText.toolsUnlocked)),
+  toolsLocked: sha(OLD_ALIAS(withoutPackText.toolsLocked)),
 };
 
 /** Captured at 3e9717b (router 0.2.0) by this file with `P3_PRINT=1`. */
@@ -169,7 +180,13 @@ test('premise: the three sources are configured and the switch is unset', () => 
   assert.deepEqual(withPortal.sourcesOffered.slice(0, 3).map((s) => s.reason), ['configured', 'configured', 'configured']);
   // S3-B W2 (npstorey/civic-ai-tools#318): router 0.10.0. Its search, its routing configuration and its lock rule for a
   // Socrata pack move nothing an unlocked composition with no search states; only the version below moves.
-  assert.equal(ROUTER_VERSION, '0.10.0', 'premise: the installed router is the pin this criterion is for');
+  // CKAN-1 P3 (hub #314): router 0.11.0. With `CKAN_MCP_URL` unset its two entries are offered nowhere; the alias
+  // rename and the two not-configured rows below are what moves.
+  assert.equal(ROUTER_VERSION, '0.11.0', 'premise: the installed router is the pin this criterion is for');
+  for (const [key, text] of Object.entries(withoutPackText)) {
+    assert.ok(text.includes('boston_opencontext__ckan__'), `premise: ${key} names Boston OpenContext's tools under the new alias`);
+    assert.ok(!text.includes('boston__'), `premise: ${key} names a tool under the old alias, or the pack's`);
+  }
 });
 
 test('criterion P: the composed prompt is byte-identical to 3e9717b\'s, with and without a portal', () => {
@@ -182,7 +199,7 @@ test('criterion P: the offered tools are byte-identical to 3e9717b\'s, unlocked 
   assert.equal(withoutPack.toolsLocked, AT_BASE.toolsLocked);
 });
 
-test('criterion P: the composition moves exactly the two named facts', () => {
+test('criterion P: the composition moves exactly the two named facts', async () => {
   assert.deepEqual(observed.sourcesOffered, [
     ...AT_BASE.sourcesOffered,
     { sourceId: 'nyc-charter', alias: 'nyc_charter', reason: 'not-configured' },
@@ -191,18 +208,34 @@ test('criterion P: the composition moves exactly the two named facts', () => {
     // Router 0.8.0 (S2-B): NYC City Record, a pack over Socrata, is configured wherever Socrata is.
     { sourceId: 'nyc-record', alias: 'nyc_record', reason: 'configured' },
     { sourceId: 'nys-legislation', alias: 'nys_legislation', reason: 'not-configured' },
-  ]);
+    // Router 0.11.0 (CKAN-1 P3): the CKAN server and its Boston pack, `CKAN_MCP_URL` unset.
+    { sourceId: 'ckan-server', alias: 'ckan', reason: 'not-configured' },
+    { sourceId: 'boston-ckan', alias: 'boston', reason: 'not-configured' },
+  ].map((row) => (row.sourceId === 'boston-opencontext' ? { ...row, alias: 'boston_opencontext' } : row)));
   const base = AT_BASE.components;
   // S2-B: the three sources' components are as at the base; City Record's pack, offered since router 0.8.0, adds its
   // own before the router's (what it states is P3's, W6).
   // S2-B P3R: router 0.9.0 carries G0-C1 = A (hub #317 6835239767), Data Commons' new id. The base's bytes above
   // stay as captured; that one moved fact is named here, so any other change to a source's component still fails.
   const G0_C1 = { from: 'datacommons-mcp@https://github.com/datacommonsorg/agent-toolkit', to: 'Data Commons MCP Server@https://api.datacommons.org/mcp' };
-  const expected = base.slice(0, -1).map((c) => ((c as { id: string }).id === G0_C1.from ? { ...c, id: G0_C1.to } : c));
+  // CKAN-1 P3 (router 0.11.0): Boston OpenContext's block names its tools under the alias `boston_opencontext`, so its
+  // hash moves; the block with that one rename undone hashes to the base's bytes, so nothing else in it moved.
+  const { civicRouter } = await import('@typedstandards/civic-typed-router');
+  const openContext = civicRouter.manifest.find((entry) => entry.sourceId === 'boston-opencontext')!;
+  const block = await openContext.guidance.fetchText(
+    { portal: PORTAL, publicationHost: '', fetchPrompt: async () => { throw new Error('fixture: no prompt'); }, fetchInstructions: async () => undefined } as never,
+    civicRouter.aliasedView as never,
+  );
+  const OPENCONTEXT_ID = 'opencontext@https://data-mcp.boston.gov/mcp';
+  const baseOpenContext = base.find((c) => (c as { id: string }).id === OPENCONTEXT_ID) as { guidanceHash: string };
+  assert.equal(sha(OLD_ALIAS(block)), baseOpenContext.guidanceHash, 'premise: the OpenContext block is the base\'s with the alias renamed');
+  assert.notEqual(sha(block), baseOpenContext.guidanceHash, 'premise: the rename moves the OpenContext block');
+  const expected = base.slice(0, -1).map((c) => ((c as { id: string }).id === G0_C1.from ? { ...c, id: G0_C1.to } : c))
+    .map((c) => ((c as { id: string }).id === OPENCONTEXT_ID ? { ...c, guidanceHash: sha(block) } : c));
   assert.notDeepEqual(expected, base.slice(0, -1), 'premise: the base states Data Commons by its old id');
   assert.deepEqual(observed.components.slice(0, 3), expected, 'a source\'s component moved');
   assert.equal(observed.components.length, base.length + 1);
   assert.equal((observed.components[3] as { id: string }).id, 'nyc-record@https://data.cityofnewyork.us/d/dg92-zbpx');
   assert.deepEqual(base.at(-1), { id: '@typedstandards/civic-typed-router', version: '0.2.0' });
-  assert.deepEqual(observed.components.at(-1), { id: '@typedstandards/civic-typed-router', version: '0.10.0' });
+  assert.deepEqual(observed.components.at(-1), { id: '@typedstandards/civic-typed-router', version: '0.11.0' });
 });

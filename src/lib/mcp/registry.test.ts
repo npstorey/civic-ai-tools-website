@@ -186,17 +186,20 @@ test('#258 C4: with no socrataUrl the registry omits the Socrata server and name
       .filter((e) => sourceIds.includes(e.sourceId))
       .flatMap((e) => e.toolNames.map((t) => [`${e.alias}__${t}`, e.configuration.addressVariable])),
   );
+  // Router 0.11.0 (CKAN-1 P3, stage L): the Boston pack is optional and its
+  // variable, `CKAN_MCP_URL`, is read by nothing yet, so its six tools are
+  // refused naming it in every registry here, as an unset switch's are.
   assert.deepEqual(
     buildMcpRegistry({ ...TEST_ENV, nycCharterHosting: 'sandbox', nycCheckbookHosting: 'sandbox', nysLegislationHosting: 'sandbox' }).unconfiguredTools,
-    {},
+    switchedTools(['boston-ckan']),
   );
   assert.deepEqual(
     buildMcpRegistry({ ...TEST_ENV, nycCharterHosting: 'sandbox' }).unconfiguredTools,
-    switchedTools(['nyc-checkbook', 'nys-legislation']),
+    switchedTools(['nyc-checkbook', 'nys-legislation', 'boston-ckan']),
   );
   assert.deepEqual(
     buildMcpRegistry(TEST_ENV).unconfiguredTools,
-    switchedTools(['nyc-charter', 'nyc-checkbook', 'nys-legislation']),
+    switchedTools(['nyc-charter', 'nyc-checkbook', 'nys-legislation', 'boston-ckan']),
   );
   assert.equal(
     Object.values(buildMcpRegistry(TEST_ENV).unconfiguredTools).filter((v) => v === 'NYC_CHARTER_HOSTING').length,

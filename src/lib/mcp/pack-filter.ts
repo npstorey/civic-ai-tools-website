@@ -50,9 +50,17 @@ function onlyValue(property: { enum?: unknown[] } | undefined): string | undefin
   return property?.enum?.length === 1 && typeof property.enum[0] === 'string' ? property.enum[0] : undefined;
 }
 
-/** Each pack's filter, by its `sourceId`, read once from the manifest. */
+/**
+ * The base whose pack schemas this module reads. A Socrata pack fixes its
+ * values in `get_data` and `fetch`; a pack over another kind's server (since
+ * router 0.11.0, Analyze Boston over the CKAN server, which fixes
+ * `server_url`) states them in other tools, which this module does not read.
+ */
+const SOCRATA_BASE = 'socrata';
+
+/** Each Socrata pack's filter, by its `sourceId`, read once from the manifest. */
 const FILTERS: ReadonlyMap<string, PackFilter> = new Map(
-  CIVIC_MANIFEST.filter((entry) => entry.base !== undefined).map((entry) => {
+  CIVIC_MANIFEST.filter((entry) => entry.base === SOCRATA_BASE).map((entry) => {
     const getData = propertiesOf(entry, 'get_data');
     const fetchId = propertiesOf(entry, 'fetch').id?.pattern;
     const portal = onlyValue(getData.portal);
