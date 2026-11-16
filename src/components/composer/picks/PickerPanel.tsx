@@ -63,9 +63,11 @@ export function pickerRows(query: string, statement: FlowsStatement | null, conf
 const ROW = { padding: '8px 0', borderTop: '1px solid var(--border-color)' } as const;
 const capitalized = (what: string | null) => (what === null ? null : what.charAt(0).toUpperCase() + what.slice(1));
 
-/** S4: a row's pick control. Disabled on an Off row, with S5 under it. */
+/** S4: a row's pick control. Disabled on an Off row, with S5 under it as its description (fix round 1, item 1: the
+ *  reason reaches a reader who hears the control, not only one who sees the line). */
 export function PickControl({ sourceId, name, state, picked }: { sourceId: string; name: string; state: SourceStateValue; picked: boolean }) {
   const off = state === 'off';
+  const reasonId = `pick-off-reason-${useId()}`;
   return (
     <div data-part="pick-control" style={{ marginTop: '6px' }}>
       <label style={{ display: 'inline-flex', alignItems: 'center', gap: '6px', color: off ? 'var(--text-muted)' : 'var(--text-primary)', fontWeight: 500, cursor: off ? 'not-allowed' : 'pointer' }}>
@@ -74,11 +76,12 @@ export function PickControl({ sourceId, name, state, picked }: { sourceId: strin
           aria-label={PICKER_TEXT.pickName(name)}
           checked={!off && picked}
           disabled={off}
+          aria-describedby={off ? reasonId : undefined}
           onChange={() => togglePick(sourceId)}
         />
         {PICKER_TEXT.pick}
       </label>
-      {off ? <div data-part="pick-off-reason">{PICKER_TEXT.offReason}</div> : null}
+      {off ? <div id={reasonId} data-part="pick-off-reason">{PICKER_TEXT.offReason}</div> : null}
     </div>
   );
 }

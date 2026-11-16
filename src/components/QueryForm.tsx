@@ -21,7 +21,7 @@ import { SignInControl, useSignInAction } from '@/components/composer/SignInCont
 import { COUNT_LINE, PICKER_TEXT, SIGN_IN_LINE, WHERE_LINE } from '@/components/composer/copy';
 import { canPauseToAsk, noSourceOnReason, panelStates, useSourceConsent, type SourceStateValue } from '@/components/sources/useSourceConsent';
 import { closePicker, dropPicks, markRefused, openPicker, usePicks } from '@/components/composer/picks/store';
-import { LoadedPickerPanel, loadPicker } from '@/components/composer/picks/load-picker';
+import { LoadedPickerPanel } from '@/components/composer/picks/load-picker';
 import { readerSourceName } from '@/lib/sources/source-name';
 import { useDefaultPortalArg, usePortalLocked } from '@/components/DefaultPortalProvider';
 import { useNotebooksOffered } from '@/components/NotebookModeProvider';
@@ -333,11 +333,7 @@ export default function QueryForm({
   useEffect(() => {
     if (offPicks.length > 0) dropPicks(offPicks);
   });
-  // The picker's code loads once this site is known to offer picking, before the reader opens it (A1).
-  const offersPicking = canPauseToAsk(consent);
-  useEffect(() => {
-    if (offersPicking) void loadPicker();
-  }, [offersPicking]);
+  // The picker's code loads when the panel first opens (`LoadedPickerPanel`; contract task 3), never before.
   // R4: no panel during a run; a run that starts closes it.
   useEffect(() => {
     if (isLoading) closePicker();

@@ -1,14 +1,14 @@
 'use client';
 
 /**
- * The picker's code, loaded on its own (S3-B W1; the ORCH's A1): `PickerPanel` is a separate chunk, so the first
- * page's code carries only this loader and the call that starts it. The mount starts the load once it knows the site
- * offers picking (the routing read says in loop, with the decision store), before the reader opens the panel, so the
- * panel's open sends no request of its own. The router the search reads is in the first page's code already
- * (`src/lib/streaming.ts` imports it), so it adds nothing here.
+ * The picker's code, loaded on its own (S3-B W1; the ORCH's A1; contract task 3 and fix round 1, item 2):
+ * `PickerPanel` is a separate chunk, so the first page's code carries only this loader. The load starts when the panel
+ * first opens (`LoadedPickerPanel` mounts only then: the option chosen, "Change", or the option re-chosen), and never
+ * before, so a reader who never picks never fetches it. The router the search reads is in the first page's code
+ * already (`src/lib/streaming.ts` imports it), so it adds nothing here.
  */
 
-import { createElement, useSyncExternalStore, type ComponentType } from 'react';
+import { createElement, useEffect, useSyncExternalStore, type ComponentType } from 'react';
 
 type Panel = ComponentType<{ docked: boolean }>;
 
@@ -35,8 +35,12 @@ export function usePickerPanel(): Panel | null {
   return useSyncExternalStore(subscribe, () => panel, () => null);
 }
 
-/** The picker's panel, once its code has loaded; nothing until then. One component the mount renders. */
+/** The picker's panel: rendered by the mount only while the panel is open, it starts the load on its first open and
+ *  shows the panel once the code has arrived. */
 export function LoadedPickerPanel({ docked }: { docked: boolean }) {
   const Loaded = usePickerPanel();
+  useEffect(() => {
+    void loadPicker();
+  }, []);
   return Loaded ? createElement(Loaded, { docked }) : null;
 }
