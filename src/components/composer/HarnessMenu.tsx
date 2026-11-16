@@ -19,7 +19,17 @@
  *
  * DATA SOURCES words itself by the instance's routing through `canPauseToAsk`, the predicate the Settings row reads
  * (v2 ruling 1): the in-loop form only in loop with the decision store, both read; the all-sources form otherwise,
- * an unread or failed read included (the known window, v3 conflict ruling 1). Its item changes nothing in a run.
+ * an unread or failed read included (the known window, v3 conflict ruling 1).
+ *
+ * "ONLY THE ONES I PICK" (S3-B W1, npstorey/civic-ai-tools#318; the owner's W0 rulings D5 = A, D8 = B, D9 = A; the
+ * ORCH's R2, R6 and A5 as the owner ruled it). On a mount that offers picking (`picking`, the home page and `/ask`):
+ *   - in loop with the decision store, both read: enabled, S1 under it; choosing it closes the menu and opens the
+ *     picker, also when it is already chosen; while it is chosen the item's value reads S13 ("{n} picked");
+ *   - a read that says otherwise (all-sources, or no store): disabled with D8's reason;
+ *   - while the routing pair is unread, or its read failed: disabled, with no reason (R2): no sentence about
+ *     picking shows until the read says which form is true.
+ * A mount that does not offer picking (`/explore`) leaves the item out (A5 = hide): its Data sources lists Auto and
+ * the Settings link.
  *
  * IT HOLDS NO RUN STATE. The model, the session type and the comparison are the mount's; the menu reports choices.
  */
@@ -31,6 +41,7 @@ import { NOTEBOOK_MODE_UNAVAILABLE_REASON, type NotebookModeAffordance } from '@
 import { SETTINGS_HREF } from '@/lib/sources/copy';
 import { canPauseToAsk, useSourceConsent } from '@/components/sources/useSourceConsent';
 import { startSignIn, useSignInAction } from './SignInControl';
+import { chooseAuto, choosePicking, usePicks } from './picks/store';
 import {
   ALL_SETTINGS,
   COMPARE_ITEM,
@@ -61,6 +72,8 @@ export interface HarnessMenuProps {
   comparison?: { restored: boolean; onChange: (restored: boolean) => void };
   /** A run is under way: the trigger is disabled, as the gear's controls were. */
   disabled?: boolean;
+  /** S3-B W1: this mount offers "Only the ones I pick" (the picker is its own, `QueryForm`); absent, the item is left out. */
+  picking?: boolean;
 }
 
 const ID = {
@@ -80,22 +93,34 @@ const ID = {
   signIn: 'sign-in',
 } as const;
 
-export default function HarnessMenu({ variant, models, model, onModel, session, comparison, disabled = false }: HarnessMenuProps) {
+export default function HarnessMenu({ variant, models, model, onModel, session, comparison, disabled = false, picking = false }: HarnessMenuProps) {
   // The mount reads the consent (QueryForm, TraceControls); the menu only reads the routing pair it holds.
   const consent = useSourceConsent({ load: false });
   const signInAction = useSignInAction();
   const modelName = models.find((m) => m.id === model)?.name ?? '';
-  const form = canPauseToAsk(consent) ? DATA_SOURCES_ITEM.inLoop : DATA_SOURCES_ITEM.allSources;
+  const inLoopForm = canPauseToAsk(consent);
+  const form = inLoopForm ? DATA_SOURCES_ITEM.inLoop : DATA_SOURCES_ITEM.allSources;
+  const picks = usePicks();
+  // The read says which form is true only when it names all-sources, or in loop with no store (R2).
+  const notOffered = consent.routing === 'all-sources' || (consent.routing === 'in-loop' && consent.store === false);
+  const pickChosen = picking && inLoopForm && picks.mode === 'pick';
+  const pickItem: MenuItem | null = !picking
+    ? null
+    : inLoopForm
+      ? { id: ID.sourcesPick, label: DATA_SOURCES_ITEM.pick, checked: pickChosen, description: DATA_SOURCES_ITEM.inLoop.pickDescription }
+      : notOffered
+        ? { id: ID.sourcesPick, label: DATA_SOURCES_ITEM.pick, checked: false, disabledReason: DATA_SOURCES_ITEM.allSources.pickReason }
+        : { id: ID.sourcesPick, label: DATA_SOURCES_ITEM.pick, checked: false, disabled: true };
 
   const heading: MenuItem = { id: ID.heading, kind: 'heading', label: HARNESS_HEADING };
   const rule: MenuItem = { id: ID.rule, kind: 'rule', label: '' };
   const sources: MenuItem = {
     id: ID.sources,
     label: DATA_SOURCES_ITEM.label,
-    value: DATA_SOURCES_ITEM.value,
+    value: pickChosen ? DATA_SOURCES_ITEM.picked(picks.picked.length) : DATA_SOURCES_ITEM.value,
     children: [
-      { id: ID.sourcesAuto, label: form.auto, description: form.autoDescription, checked: true },
-      { id: ID.sourcesPick, label: DATA_SOURCES_ITEM.pick, checked: false, disabledReason: form.pickReason },
+      { id: ID.sourcesAuto, label: form.auto, description: form.autoDescription, checked: !pickChosen },
+      ...(pickItem ? [pickItem] : []),
       { id: ID.sourcesSettings, kind: 'footer', label: DATA_SOURCES_ITEM.footer, href: SETTINGS_HREF },
     ],
   };
@@ -155,6 +180,8 @@ export default function HarnessMenu({ variant, models, model, onModel, session, 
     else if (id === ID.sandbox) session?.onMode('notebook');
     else if (id === ID.compare && comparison) comparison.onChange(!comparison.restored);
     else if (id === ID.signIn && signInAction?.kind === 'start') startSignIn(signInAction.providerId);
+    else if (id === ID.sourcesAuto) chooseAuto();
+    else if (id === ID.sourcesPick && picking && inLoopForm) choosePicking();
   };
 
   return (

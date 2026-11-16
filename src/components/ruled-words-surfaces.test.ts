@@ -517,8 +517,10 @@ const MENU_WORDS = {
   heading: 'Harness · Civic AI harness v1',
   items: ['Model', 'Data sources', 'Session type', 'Compare with a second harness', 'All settings'],
   values: ['Fixture model', 'Auto', 'Sandbox'],
-  inLoop: ['Auto - find sources for me', 'The model chooses which data sources to use, from those you set On or Ask first.', 'Only the ones I pick', 'Not offered on this site yet. The model chooses from the data sources you set On or Ask first.', 'All data sources and your consent'],
-  allSources: ['Auto - use every source I set On', 'Every data source you set On is given to the model from the start. Sources set to Ask first are not used.', 'Only the ones I pick', 'Not offered on this site yet. Every data source you set On is given to the model.', 'All data sources and your consent'],
+  // S3-B W1 (npstorey/civic-ai-tools#318; B13, D8 = B, D9 = A): the in-loop form offers "Only the ones I pick" with S1;
+  // the all-sources form's reason is D8's. The earlier reasons left with the commit that enabled the option.
+  inLoop: ['Auto - find sources for me', 'The model chooses which data sources to use, from those you set On or Ask first.', 'Only the ones I pick', 'You search for data sources and pick the ones this question can use. The model uses no others.', 'All data sources and your consent'],
+  allSources: ['Auto - use every source I set On', 'Every data source you set On is given to the model from the start. Sources set to Ask first are not used.', 'Only the ones I pick', 'Not offered on this site. Every data source you set On is given to the model.', 'All data sources and your consent'],
   session: ['Standard', 'Sandbox', 'Generates and executes a Jupyter notebook against live data. Typically 30 to 90 seconds. The notebook and a cryptographic execution record are signed by this site.'],
   compareReason: 'Not offered in a Sandbox session. Switch Session type to Standard to compare.',
   signedOut: ['Sign in to choose a model.', 'Sign in for more options'],

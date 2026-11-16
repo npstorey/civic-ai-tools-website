@@ -18,8 +18,11 @@ import { SETTINGS_HREF } from '@/lib/sources/copy';
 import Composer from '@/components/composer/Composer';
 import HarnessMenu from '@/components/composer/HarnessMenu';
 import { SignInControl, useSignInAction } from '@/components/composer/SignInControl';
-import { COUNT_LINE, SIGN_IN_LINE, WHERE_LINE } from '@/components/composer/copy';
-import { noSourceOnReason, panelStates, useSourceConsent, type SourceStateValue } from '@/components/sources/useSourceConsent';
+import { COUNT_LINE, PICKER_TEXT, SIGN_IN_LINE, WHERE_LINE } from '@/components/composer/copy';
+import { canPauseToAsk, noSourceOnReason, panelStates, useSourceConsent, type SourceStateValue } from '@/components/sources/useSourceConsent';
+import { closePicker, dropPicks, markRefused, openPicker, usePicks } from '@/components/composer/picks/store';
+import { LoadedPickerPanel, loadPicker } from '@/components/composer/picks/load-picker';
+import { readerSourceName } from '@/lib/sources/source-name';
 import { useDefaultPortalArg, usePortalLocked } from '@/components/DefaultPortalProvider';
 import { useNotebooksOffered } from '@/components/NotebookModeProvider';
 import { notebookModeAffordance } from '@/lib/notebook-availability';
@@ -48,7 +51,8 @@ function useStoredMode(
 }
 
 interface QueryFormProps {
-  onSubmit: (query: string, model: string, portal: string, mode: QueryMode) => void;
+  /** `picks`: the reader's picks, sent with the question when "Only the ones I pick" is chosen (S3-B W1); else absent. */
+  onSubmit: (query: string, model: string, portal: string, mode: QueryMode, picks?: string[]) => void;
   isLoading: boolean;
   queryCount?: number;
   /**
@@ -117,6 +121,8 @@ interface QuestionCount { remaining: number; limit: number }
 
 /** The sign-in control reads as a link in every branch, a button where it starts the sign-in in place. */
 const SIGN_IN_CONTROL: React.CSSProperties = { background: 'none', border: 'none', padding: 0, color: 'var(--accent)', textDecoration: 'underline', cursor: 'pointer', font: 'inherit' };
+/** "Change" (S8) reads as a link, as "Select sources" beside it does; a button, since it opens the panel in place. */
+const CHANGE_CONTROL: React.CSSProperties = SIGN_IN_CONTROL;
 
 export default function QueryForm({
   onSubmit,
@@ -238,6 +244,15 @@ export default function QueryForm({
   // through this form.
   const consent = useSourceConsent();
   const [cardOpen, setCardOpen] = useState(false);
+  // "Only the ones I pick" (S3-B W1, npstorey/civic-ai-tools#318): the reader's picks, in the page's memory only
+  // (`picks/store.ts`). Offered in loop with the decision store (`canPauseToAsk`; D5 = A), so only there do they narrow
+  // the where-line, name themselves under the box (S7) and travel with the question.
+  const picks = usePicks();
+  const picking = picks.mode === 'pick' && canPauseToAsk(consent);
+  const statementIds = consent.statement?.sources.map((s) => s.sourceId) ?? [];
+  const pickStates = consent.status ? panelStates({ status: consent.status, pending: consent.pending }, statementIds) : {};
+  /** The picks, in the statement's order: what S7 names and what the question carries. */
+  const picked = statementIds.filter((id) => picks.picked.includes(id) && pickStates[id] !== 'off');
   // The where-line (UX-2 P3b-1, 1B.1; D5 B; addenda 1-3), before and after a first consent. Nothing until the
   // statement and the status are both read (a failed read leaves either null, with `loaded` true). Before a consent
   // it reads the pending states, which Allow writes (`panelStates`); after one, the guard's own lookup. One predicate
@@ -245,7 +260,10 @@ export default function QueryForm({
   const whereLine = (() => {
     const statement = consent.statement;
     const status = consent.status;
-    const ids = statement?.sources.map((s) => s.sourceId) ?? [];
+    // S3-B W1 (NOTE 1; D3 = A): while picking, the ruled forms are computed over the picks; with none picked the line
+    // is hidden (S9 takes its place after a send).
+    const all = statement?.sources.map((s) => s.sourceId) ?? [];
+    const ids = picking ? all.filter((id) => picked.includes(id)) : all;
     if (!statement || !status || ids.length === 0) return null;
     const pending = status.inForce ? null : panelStates({ status, pending: consent.pending }, ids);
     const stateOf = (id: string): SourceStateValue | undefined => (pending ? pending[id] : status.states?.[id]?.state);
@@ -310,8 +328,31 @@ export default function QueryForm({
   const declined = declinedQuery !== null && query.trim() === declinedQuery;
   const canSubmit = query.trim().length > 0 && model !== '' && !isLoading && !declined && !consent.writing;
 
+  // A picked source set to Off loses its pick (B10), wherever it was set Off: here, in Settings, or at a pause.
+  const offPicks = picks.picked.filter((id) => pickStates[id] === 'off');
+  useEffect(() => {
+    if (offPicks.length > 0) dropPicks(offPicks);
+  });
+  // The picker's code loads once this site is known to offer picking, before the reader opens it (A1).
+  const offersPicking = canPauseToAsk(consent);
+  useEffect(() => {
+    if (offersPicking) void loadPicker();
+  }, [offersPicking]);
+  // R4: no panel during a run; a run that starts closes it.
+  useEffect(() => {
+    if (isLoading) closePicker();
+  }, [isLoading]);
+
   const ask = () => {
-    const args = [query.trim(), model, portal, mode] as const;
+    // D4 = B: "Only the ones I pick" with nothing picked sends nothing, and S9 says so under the box.
+    if (picking && picked.length === 0) {
+      markRefused(true);
+      return;
+    }
+    markRefused(false);
+    // R4: a send closes the panel.
+    closePicker();
+    const args = [query.trim(), model, portal, mode, picking ? [...picked] : undefined] as const;
     const run = () => {
       lastSentRef.current = () => onSubmit(...args);
       setLastSentQuery(args[0]);
@@ -371,13 +412,32 @@ export default function QueryForm({
       docked={docked}
       placeholder="What data is available about child care in NYC?"
       chips={exampleQueries.map((example, idx) => ({ id: String(idx), label: example.text, onSelect: () => handleExampleClick(example) }))}
-      line={whereLine !== null ? (
-        <p data-part="where-this-question-goes" className="composer-line">
-          {whereLine}{WHERE_LINE.separator}
-          {/* UX-2 P4b: the Settings overlay, a client-side link so the form beneath stays mounted. */}
-          <Link href={SETTINGS_HREF}>{WHERE_LINE.link}</Link>
-        </p>
-      ) : null}
+      line={(
+        <>
+          {/* S3-B W1 (D3 = A): with picks, S7 names them, then "Change" (S8), which opens the picker again. */}
+          {picking && picked.length > 0 ? (
+            <p data-part="picks-line" className="composer-line">
+              {PICKER_TEXT.picksLine(picked.map((id) => {
+                const source = consent.statement?.sources.find((s) => s.sourceId === id);
+                return source ? readerSourceName(source) : id;
+              }))}{' '}
+              <button type="button" data-part="picks-change" style={CHANGE_CONTROL} onClick={openPicker} disabled={isLoading}>{PICKER_TEXT.change}</button>
+            </p>
+          ) : null}
+          {/* D4 = B: after a send with nothing picked, S9 in the where-line's place. */}
+          {picking && picked.length === 0 && picks.refused ? (
+            <p data-part="pick-note" role="status" className="composer-line">{PICKER_TEXT.noPickAfterSend}</p>
+          ) : null}
+          {whereLine !== null ? (
+            <p data-part="where-this-question-goes" className="composer-line">
+              {whereLine}{WHERE_LINE.separator}
+              {/* UX-2 P4b: the Settings overlay, a client-side link so the form beneath stays mounted. */}
+              <Link href={SETTINGS_HREF}>{WHERE_LINE.link}</Link>
+            </p>
+          ) : null}
+        </>
+      )}
+      pickPanel={picking && picks.open ? <LoadedPickerPanel docked={docked} /> : null}
       firstTimeLine={showFirstTimeLine ? (isAuthenticated ? 'signed-in' : 'signed-out') : null}
       accountLine={accountLine}
       guard={{
@@ -411,6 +471,7 @@ export default function QueryForm({
           session={{ mode, onMode: updateMode, affordance: notebookAffordance }}
           comparison={comparisonControl}
           disabled={isLoading}
+          picking
         />
       }
     >

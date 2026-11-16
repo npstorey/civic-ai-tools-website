@@ -56,6 +56,9 @@ import { CHIP_ROW_LABEL, DOCKED_PLACEHOLDER, FIRST_TIME_LINE } from './copy';
  * when a slot gives way to another (the card to the decline line) or closes.
  * Focus is not touched.
  *
+ * THE PICKER (S3-B W1, D1 = B): the mount's panel (`pickPanel`), first under the box before the dock, and docked
+ * above the box inside the bar, in the slots' place, so the box stays where it is as the panel opens and closes.
+ *
  * THE FIRST-TIME LINE (X24) is one plain paragraph (the owner, 6753017330):
  * signed in both sentences, signed out the first only (O4 = A).
  */
@@ -107,6 +110,8 @@ export interface ComposerProps {
   harness?: ReactNode;
   /** What the mount renders beneath the lines (the models-error status). */
   children?: ReactNode;
+  /** S3-B W1: the picker's panel, when it is open (`QueryForm`). */
+  pickPanel?: ReactNode;
 }
 
 // Full class names, never built from a template.
@@ -137,6 +142,7 @@ export default function Composer({
   guard,
   harness,
   children,
+  pickPanel,
 }: ComposerProps) {
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const fieldRef = useRef<HTMLDivElement>(null);
@@ -192,8 +198,10 @@ export default function Composer({
     if (canSubmit) onSubmit();
   };
 
-  const slots = guard.cardOpen || guard.declined || guard.noneOn ? (
+  const dockedPanel = docked && pickPanel ? pickPanel : null;
+  const slots = guard.cardOpen || guard.declined || guard.noneOn || dockedPanel ? (
     <div className="composer-slots" ref={slotsRef}>
+      {dockedPanel}
       {guard.cardOpen ? (
         <div data-part="consent-card">
           <ConsentCard onAllow={guard.onAllow} onNotNow={guard.onNotNow} />
@@ -295,6 +303,8 @@ export default function Composer({
       </div>
 
       <div className="composer-col composer-lines">
+        {!docked && pickPanel ? pickPanel : null}
+
         {/* The example questions (P9's ChipRow, 1B), before the first send only (O5 = A; leg H, dock at send). */}
         {!docked && chips && chips.length > 0 ? (
           <div data-part="chip-row">
