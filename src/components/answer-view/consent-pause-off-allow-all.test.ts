@@ -3,7 +3,8 @@
 // THE PAUSE RENDERS TWICE: the step card (`ConsentStep`'s default export, in
 // the run's steps and in a Sources panel row) and the compact prompt at the top
 // of the results (`ConsentPausePrompt`). The buttons and the choices sentence
-// land on both:
+// land on the prompt and on the row's card; while the prompt asks, the card in
+// the run's steps carries neither (UX-2 HG, `one-pause-card.test.ts`):
 //   - "Don't allow" (item 8) posts the Off value, `off`: the source is turned
 //     Off in the store (here the cookie, signed out) and reads Off in the panel;
 //   - "Allow all data sources" (item 9) is a third button below the pair, full
@@ -223,7 +224,7 @@ test('decoy (M5): a third button given the pair\'s own style reads NO; a grey, r
 
 // --- Criterion 6: the third button on both renderings ----------------------------------------------
 
-for (const which of ['step card', 'prompt'] as const) {
+for (const which of ['row card', 'prompt'] as const) {
   test(`UX-2 P4b criterion 6 (${which}): "Allow all data sources" renders below the pair, full width, lighter than the pair; the choices sentence is item 39's with B4c`, async () => {
     const { page } = await paused();
     const node = renderingOf(page, which);
@@ -244,7 +245,7 @@ for (const which of ['step card', 'prompt'] as const) {
   });
 }
 
-for (const which of ['step card', 'prompt'] as const) {
+for (const which of ['row card', 'prompt'] as const) {
   test(`UX-2 P4b criterion 6 (${which}): pressing "Allow all data sources" posts allow-all and writes every configured source On`, async () => {
     const { page, net } = await paused();
     await page.click(buttonOf(page, which, ALLOW_ALL));
@@ -259,7 +260,8 @@ for (const which of ['step card', 'prompt'] as const) {
 
 test('UX-2 P4b criterion 6 (B4b, item 13): after "Allow all" the step card and the row card say every source is On, with one pointer', async () => {
   const { page } = await paused();
-  await page.click(buttonOf(page, 'step card', ALLOW_ALL));
+  // UX-2 HG: the answer is given in the prompt, which holds the answers while it asks.
+  await page.click(buttonOf(page, 'prompt', ALLOW_ALL));
   await page.settle();
   for (const which of ['step card', 'row card'] as const) {
     const node = renderingOf(page, which);
@@ -271,7 +273,7 @@ test('UX-2 P4b criterion 6 (B4b, item 13): after "Allow all" the step card and t
 
 // --- Criterion 5: "Don't allow" turns the source Off, on both renderings --------------------------
 
-for (const which of ['step card', 'prompt'] as const) {
+for (const which of ['row card', 'prompt'] as const) {
   test(`UX-2 P4b criterion 5 (${which}): "Don't allow" posts off, turns the source Off in the cookie, and the panel reads it Off`, async () => {
     const { page, net } = await paused();
     await page.click(buttonOf(page, which, DONT_ALLOW));
@@ -287,7 +289,8 @@ for (const which of ['step card', 'prompt'] as const) {
 
 test('UX-2 P4b criterion 5 (items 13, 21): after "Don\'t allow" the step card and the row card say it is Off now, with one pointer', async () => {
   const { page } = await paused();
-  await page.click(buttonOf(page, 'step card', DONT_ALLOW));
+  // UX-2 HG: the answer is given in the prompt, which holds the answers while it asks.
+  await page.click(buttonOf(page, 'prompt', DONT_ALLOW));
   await page.settle();
   for (const which of ['step card', 'row card'] as const) {
     const node = renderingOf(page, which);

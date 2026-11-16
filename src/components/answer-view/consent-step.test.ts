@@ -18,6 +18,10 @@
 // decision route is answered by the test, which records each request. The
 // panel's row reads the pause from the bus in `useSourceConsent.ts`
 // (`reportConsentPause`), as the streaming hooks feed it.
+// UX-2 HG: a card whose pause is on the bus is mounted beside the short box
+// (`ConsentPausePrompt`), as the pages mount them; while the box asks it holds
+// the answers, and the card none. The card's own buttons are read on a pause
+// no hook reported to the page (`mountCardOffBus`).
 //
 // THE FIXTURE CAN FAIL. Its three posture rows differ in every way the card
 // could flatten: one dated with a retention, one "not stated", one stated by
@@ -141,11 +145,29 @@ function cardOf(surface: Surface): HostElement {
   return found[0];
 }
 
+/**
+ * The card for a pause the run reported to the bus, beside the short box (`ConsentPausePrompt`), as the pages mount
+ * them. While the box asks, it holds the answers, and the card none (UX-2 HG).
+ */
 async function mountCard(pause: Json = PAUSE): Promise<Surface> {
   answers();
   bus.reportConsentPause?.(pause);
+  return mount(h('div', null, h(cardModule!.ConsentPausePrompt as ComponentType), h(Card(), { pause })));
+}
+
+/** The card for a pause no hook reported to this page: the only state in which the card carries the answers during a hold. */
+async function mountCardOffBus(pause: Json = PAUSE): Promise<Surface> {
+  answers();
   return mount(h(Card(), { pause }));
 }
+
+/** The short box's own element. */
+function promptOf(surface: Surface): HostElement {
+  const found = surface.elements().filter((el) => el.props['data-part'] === 'consent-pause-prompt');
+  assert.equal(found.length, 1, `expected one short box, found ${found.length}: ${surface.text().slice(0, 400)}`);
+  return found[0];
+}
+const buttonsIn = (node: HostElement): HostElement[] => [...within(node.props.children)].filter((el) => el.type === 'button');
 
 // --- (a) every item, from the fixture ----------------------------------------------------
 
@@ -192,10 +214,17 @@ test('criterion 3 (a): the hosts it would reach, the privacy page, and the guide
 
 // UX-2 P4b (item 8): the decline reads "Don't allow"; the pair stays equal.
 test('criterion 3 (a): Allow and Don\'t allow, one button each, equal in size and style', async () => {
-  const card = await mountCard();
-  const allow = card.button('Allow');
-  const dontAllow = card.button("Don't allow");
+  // UX-2 HG: while the short box asks, it holds the pair, and the card none.
+  const page = await mountCard();
+  const allow = page.button('Allow');
+  const dontAllow = page.button("Don't allow");
+  assert.ok(buttonsIn(promptOf(page)).includes(allow) && buttonsIn(promptOf(page)).includes(dontAllow), 'the pair is not in the short box');
   assert.deepEqual(allow.props.style, dontAllow.props.style, 'the two buttons are styled differently');
+  assert.deepEqual(buttonsIn(cardOf(page)), [], 'the card has buttons while the short box asks');
+  page.unmount();
+  // A pause the bus does not hold: the card carries the pair, equal as before.
+  const card = await mountCardOffBus();
+  assert.deepEqual(card.button('Allow').props.style, card.button("Don't allow").props.style, 'the card\'s two buttons are styled differently');
   card.unmount();
 });
 
@@ -208,7 +237,13 @@ test('criterion 3 (a): Allow and Don\'t allow, one button each, equal in size an
 const CHOICES = "Allow: this question is sent to it, and it is turned On for later questions. Don't allow: nothing is sent to it, and it is turned Off for later questions. Allow all data sources: every data source is turned On, and this question goes on without asking again.";
 
 test('item 3: the card says what each choice sends', async () => {
-  const card = await mountCard();
+  // UX-2 HG: while the short box asks, it says what each choice sends, and the card does not.
+  const page = await mountCard();
+  assert.ok(textOf(promptOf(page)).includes(CHOICES), `the short box's choices: ${textOf(promptOf(page))}`);
+  assert.ok(!textOf(cardOf(page)).includes(CHOICES), `the card repeats the choices while the short box asks: ${textOf(cardOf(page))}`);
+  page.unmount();
+  // A pause the bus does not hold: the card says them.
+  const card = await mountCardOffBus();
   const text = textOf(cardOf(card));
   assert.ok(text.includes(CHOICES), `the card's choices: ${text}`);
   assert.ok(!text.includes('may use it'), `the card keeps the old Allow half: ${text}`);
@@ -216,7 +251,8 @@ test('item 3: the card says what each choice sends', async () => {
 });
 
 test('item 3: the decision comes before the explanation: Allow precedes "Who holds its logs"', async () => {
-  const card = await mountCard();
+  // A card that carries the answers: a pause the bus does not hold (UX-2 HG; while the short box asks the card has none).
+  const card = await mountCardOffBus();
   const inCard = [...within(cardOf(card))];
   const allowAt = inCard.findIndex((el) => el.type === 'button' && textOf(el) === 'Allow');
   const logsAt = inCard.findIndex((el) => el.type !== 'a' && textOf(el).startsWith('Who holds its logs'));
@@ -256,6 +292,7 @@ for (const [label, decision, outcome] of [
   test(`criterion 3 (b): after ${label}, the card posts its own key and shows the outcome, with no buttons`, async () => {
     answerStatus = 200;
     const card = await mountCard();
+    // UX-2 HG: the answer is given in the short box; the card shows its outcome.
     await card.click(card.button(label));
     assert.deepEqual(decisions.map((d) => JSON.parse(d.body)), [{ key: KEY, decision }]);
     const text = textOf(cardOf(card));

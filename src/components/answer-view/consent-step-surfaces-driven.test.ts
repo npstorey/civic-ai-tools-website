@@ -211,18 +211,26 @@ function stepCard(surface: Surface, where: string): HostElement {
   return found[0].element;
 }
 
-function assertCard(card: HostElement, where: string): void {
-  const text = textOf(card);
-  assert.ok(text.startsWith('Boston OpenContext is set to Ask first.'), `${where}: the card reads: ${text.slice(0, 200)}`);
-  const buttons = (function* walk(node: unknown): Generator<HostElement> {
-    if (Array.isArray(node)) { for (const c of node) yield* walk(c); return; }
-    if (node === null || typeof node !== 'object' || !('props' in (node as object))) return;
-    const el = node as HostElement;
+function buttonsOf(node: HostElement): string[] {
+  const buttons = (function* walk(child: unknown): Generator<HostElement> {
+    if (Array.isArray(child)) { for (const c of child) yield* walk(c); return; }
+    if (child === null || typeof child !== 'object' || !('props' in (child as object))) return;
+    const el = child as HostElement;
     if (el.type === 'button') yield el;
     yield* walk((el.props as { children?: unknown }).children);
-  })(card.props.children);
-  // UX-2 P4b: the pair, then Allow all data sources while the pause asks.
-  assert.deepEqual([...buttons].map((b) => textOf(b)), ['Allow', "Don't allow", 'Allow all data sources'], `${where}: the card's buttons`);
+  })(node.props.children);
+  return [...buttons].map((b) => textOf(b));
+}
+
+function assertCard(surface: Surface, card: HostElement, where: string): void {
+  const text = textOf(card);
+  assert.ok(text.startsWith('Boston OpenContext is set to Ask first.'), `${where}: the card reads: ${text.slice(0, 200)}`);
+  // UX-2 HG (D1-D3 = A): while the pause asks, the short box carries the pair, then Allow all data sources; the card
+  // in the steps carries none.
+  const prompts = surface.elements().filter((el) => el.props['data-part'] === 'consent-pause-prompt');
+  assert.equal(prompts.length, 1, `${where}: expected one short box, found ${prompts.length}`);
+  assert.deepEqual(buttonsOf(prompts[0]), ['Allow', "Don't allow", 'Allow all data sources'], `${where}: the short box's buttons`);
+  assert.deepEqual(buttonsOf(card), [], `${where}: the card's buttons`);
 }
 
 const ANON = () => {
@@ -250,7 +258,7 @@ test('criterion 3 (d), a comparison surface (home): the pause reaches the card i
   try {
     await new Promise((resolve) => setTimeout(resolve, 50));
     await page.settle();
-    assertCard(stepCard(page, 'the home page'), 'the home page');
+    assertCard(page, stepCard(page, 'the home page'), 'the home page');
   } finally {
     stream.push({ type: 'complete', panel: 'withMcp', data: { content: 'An answer.', duration_ms: 1, tools_called: [] } });
     stream.push({ type: 'complete', panel: 'withoutMcp', data: { content: 'An answer.', duration_ms: 1 } });
@@ -277,7 +285,7 @@ test('criterion 3 (d), the executed run (/ask, notebook mode): the pause reaches
   try {
     await new Promise((resolve) => setTimeout(resolve, 50));
     await page.settle();
-    assertCard(stepCard(page, '/ask'), '/ask');
+    assertCard(page, stepCard(page, '/ask'), '/ask');
   } finally {
     stream.close();
     await page.settle();
@@ -301,7 +309,7 @@ test('criterion 3 (d), /explore [E]: the pause reaches the card through useLiveT
   try {
     await new Promise((resolve) => setTimeout(resolve, 50));
     await page.settle();
-    assertCard(stepCard(page, '/explore'), '/explore');
+    assertCard(page, stepCard(page, '/explore'), '/explore');
   } finally {
     stream.push({ type: 'complete', panel: 'withMcp', data: { content: 'An answer.', duration_ms: 1, tools_called: [] } });
     stream.close();
