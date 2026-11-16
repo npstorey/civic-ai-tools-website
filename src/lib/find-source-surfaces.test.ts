@@ -5,9 +5,9 @@
 // THE WORDS. Those marked "bundle :N" are bundle revision 5's, verbatim (pinned to its digest in
 // `chooser-search-revision-5.test.ts`). The site's own are words r2 (planning `temp/s3/s3b-orch/words/
 // w2-words-a2.r2.md`), checked by an independent research check (`research-check-w2.md`, 39d99d20…44828; KEEP 11,
-// REVISE 12, folded in r2); the owner's memo is pending. Ids S1 to S23 are r2's. No route shows any of them in S3: no
-// route offers `find_source` (G0-4 = A), and the replay dialog shows S22 and S23 only for a record whose run offered
-// a search (the ORCH's condition 2), which no production record is.
+// REVISE 12, folded in r2); the owner ruled them on 2026-11-16 (D9 = A). Ids S1 to S23 are r2's. No route shows any
+// of them in S3: no route offers `find_source` (G0-4 = A), and the replay dialog shows S22 and S23 only for a record
+// whose run offered a search (the ORCH's condition 2), which no production record is.
 //
 // THE FIX ROUND'S CONDITIONS, each held here: (1) the record page's search step leads with bundle :205's sentence, or
 // :196's (S14, S15); (2) the dialog's decoy is `attestation-dialog-routing-configuration.test.ts`; (3) the progress

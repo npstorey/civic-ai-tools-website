@@ -370,7 +370,9 @@ export async function POST(request: NextRequest) {
       assertedDate: composition.assertedDate,
       mcpServers: configuredMcpServers(configured),
       toolDefinitions: offeredTools,
-      // The router's `not-selected` as the reader's state (D2 = A).
+      // The router's `not-selected` as the reader's state (D2 = A), except on a
+      // picked run, where an allowed source the reader did not pick stays
+      // `not-selected` (`picked.recordReasons`; S3-B W1, B8).
       sourcesOffered: recordReasons(composition.sourcesOffered),
       components: composition.components,
       // The flows statement in force (D2 = A).

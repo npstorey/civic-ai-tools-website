@@ -365,7 +365,9 @@ export async function POST(request: NextRequest) {
         mcpServers: configuredMcpServers(configured),
         toolDefinitions: offeredTools,
         // The router's `not-selected` is recorded as the reader's own state:
-        // `reader-off` or `not-consented` (D2 = A).
+        // `reader-off` or `not-consented` (D2 = A), except on a picked run,
+        // where an allowed source the reader did not pick stays `not-selected`
+        // (`picked.recordReasons`; S3-B W1, B8).
         sourcesOffered: recordReasons(composition.sourcesOffered),
         components: composition.components,
         // The flows statement in force: its url, hash and date (D2 = A).
