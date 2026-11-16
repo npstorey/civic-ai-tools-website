@@ -303,3 +303,23 @@ test('R8 W3 criterion 4 (b): get_updates with a type derives nothing; get_data w
   // A name no source offers, carrying a string `type`, records nothing either.
   assert.equal(deriveOperationType('no_such_tool', { type: 'query' }), undefined);
 });
+
+// CKAN-1 P3 (npstorey/civic-ai-tools#314), stage R, criterion A17: a row for each of the Boston pack's six tools, in
+// both spellings. RED at stage L (`a9f092b`): none of the six derives an operation type.
+test('A17: the Boston pack\'s six tools each derive their operation type, in either spelling', () => {
+  const EXPECTED: Record<string, string> = {
+    ckan_package_search: 'search',
+    ckan_find_relevant_datasets: 'search',
+    ckan_package_show: 'metadata',
+    ckan_list_resources: 'metadata',
+    ckan_datastore_search: 'query',
+    ckan_datastore_search_sql: 'query',
+  };
+  const pack = civicRouter.manifest.find((entry) => entry.sourceId === 'boston-ckan')!;
+  assert.deepEqual([...pack.toolNames].sort(), Object.keys(EXPECTED).sort(), 'premise: the pack\'s six tools are the six rows');
+  const derived = Object.fromEntries(Object.keys(EXPECTED).flatMap((upstream) => [
+    [`${pack.alias}__${upstream}`, deriveOperationType(`${pack.alias}__${upstream}`, { server_url: 'https://data.boston.gov' })],
+    [upstream, deriveOperationType(upstream, { server_url: 'https://data.boston.gov' })],
+  ]));
+  assert.deepEqual(derived, Object.fromEntries(Object.entries(EXPECTED).flatMap(([upstream, type]) => [[`${pack.alias}__${upstream}`, type], [upstream, type]])));
+});
