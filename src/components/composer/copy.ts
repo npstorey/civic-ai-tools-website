@@ -99,7 +99,7 @@ export const DATA_SOURCES_ITEM = {
     /** S1 (S3-B W1; D9 = A): "Only the ones I pick", offered in this form only. */
     pickDescription: 'You search for data sources and pick the ones this question can use. The model uses no others.',
   },
-  /** Every other case: routing all-sources, no store, or either unread or failed. */
+  /** Where the read names all-sources, or in loop with no store. While the pair is unread or failed, Auto reads `value` alone (PQ6 = (b)). */
   allSources: {
     auto: 'Auto - use every source I set On',
     autoDescription: 'Every data source you set On is given to the model from the start. Sources set to Ask first are not used.',

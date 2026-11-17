@@ -6,7 +6,7 @@ import { getBrandName } from '@/lib/brand-config';
  *
  * This copy used to sit in the ROOT layout, where both route groups
  * inherited it — so an operator instance's gated `/ask` page advertised
- * itself with "- MCP Demo" and the with-and-without-MCP comparison pitch.
+ * itself with the marketing title and the with-and-without-MCP comparison pitch.
  * The copy is not wrong, it was in the wrong place: it describes the
  * reference project's own website, which is exactly what the `(marketing)`
  * group is since #259.
@@ -24,21 +24,24 @@ import { getBrandName } from '@/lib/brand-config';
  */
 const brandName = getBrandName();
 
+/** P10-1 (home Q4 = A, C1 = A): the ruled name, with the instance's brand, or alone with none. */
+const TITLE = brandName !== null ? `${brandName} - Reference implementation` : 'Typed Standards reference implementation';
+
 const DEMO_DESCRIPTION =
   'See the difference MCP makes when querying civic data. Compare AI responses with and without live data access.';
 
 export const metadata: Metadata = {
-  title: brandName !== null ? `${brandName} - MCP Demo` : 'MCP Demo',
+  title: TITLE,
   description:
     'See the difference MCP (Model Context Protocol) makes when querying civic data. Compare AI responses with and without live data access.',
   openGraph: {
-    title: brandName !== null ? `${brandName} - MCP Demo` : 'MCP Demo',
+    title: TITLE,
     description: DEMO_DESCRIPTION,
     type: 'website',
   },
   twitter: {
     card: 'summary_large_image',
-    title: brandName !== null ? `${brandName} - MCP Demo` : 'MCP Demo',
+    title: TITLE,
     description: DEMO_DESCRIPTION,
   },
 };

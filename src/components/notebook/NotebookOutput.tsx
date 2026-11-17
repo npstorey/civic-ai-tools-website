@@ -86,6 +86,10 @@ export default function NotebookOutput({ state, prompt, model, portal, onRetry }
   // fixtures without the event simply don't show the button.
   const canPublish =
     !!state.notebook && !state.isLoading && !!state.answerContent && !!state.evidenceTrace;
+  // UX-2 P6 + P10 fix round 2, A5 (b) (OA-942): the site's own daily limit refused the question. The block then holds
+  // the refusal alone (RL-1): its heading names a generation that failed, and Standard mode and Retry are refused
+  // again until the count resets. Every other kind keeps the block as built.
+  const limitRefusal = state.errorKind === 'rate_limit';
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: '24px' }}>
@@ -105,7 +109,7 @@ export default function NotebookOutput({ state, prompt, model, portal, onRetry }
             margin: '0 auto',
           }}
         >
-          <strong>Couldn&apos;t generate a reproducible notebook.</strong>
+          {!limitRefusal && <strong>Couldn&apos;t generate a reproducible notebook.</strong>}
           <span style={{ fontSize: '13px' }}>{state.error}</span>
           {/* #516: the notebook's own traceback, the reader's detail, under
               the message and with its reference. Sent only for a notebook's
@@ -133,11 +137,13 @@ export default function NotebookOutput({ state, prompt, model, portal, onRetry }
               </pre>
             </div>
           )}
-          <span style={{ fontSize: '13px', color: 'var(--text-secondary)' }}>
-            You can switch back to <em>Standard</em> mode and try the same
-            question, or retry below.
-          </span>
-          {onRetry && (
+          {!limitRefusal && (
+            <span style={{ fontSize: '13px', color: 'var(--text-secondary)' }}>
+              You can switch back to <em>Standard</em> mode and try the same
+              question, or retry below.
+            </span>
+          )}
+          {!limitRefusal && onRetry && (
             <button
               type="button"
               onClick={onRetry}

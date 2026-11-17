@@ -38,6 +38,9 @@ const RAW_CASES: { raw: unknown; kind: ReturnType<typeof classifyStreamError> }[
   { raw: undefined, kind: 'generic' },
 ];
 
+/** RL-1, the limit's refusal as ruled (C1 = A, the batched gate's `report.md`), byte for byte. */
+const RL1 = 'You have no questions left today, so this question went no further than this site. Ask again after the count resets at midnight UTC.';
+
 test('classifyStreamError maps each real raw string to the right kind', () => {
   for (const { raw, kind } of RAW_CASES) {
     assert.equal(classifyStreamError(raw), kind, `classify: ${JSON.stringify(raw)}`);
@@ -68,7 +71,8 @@ test('friendlyStreamError gives distinct copy for timeout vs unavailable vs rate
   const rate = friendlyStreamError({ status: 429 });
   assert.match(timeout, /too long to respond/i);
   assert.match(unavailable, /temporarily unavailable/i);
-  assert.match(rate, /request limit/i);
+  // UX-2 P6 + P10, RL-1 (C1 = A; contract p6p10.md v5.2, criterion 17): the reader's own daily limit, in the ruled words.
+  assert.equal(rate, RL1);
   // "data source" is user language (design-principles P9), not "MCP server".
   assert.match(timeout, /data source/i);
   assert.match(unavailable, /data source/i);
@@ -167,10 +171,10 @@ test('#30 P4: this app’s own limiter still classifies as rate_limit', () => {
   assert.equal(classifyStreamError({ status: 429, message: 'Rate limit exceeded' }), 'rate_limit');
   assert.equal(classifyStreamError('Rate limit exceeded'), 'rate_limit');
   assert.equal(classifyStreamError({ status: 429 }), 'rate_limit');
-  // And its copy is untouched — the reader's own daily allowance, with the
-  // sign-in affordance that only applies to it.
-  assert.match(friendlyStreamError({ status: 429 }), /today’s request limit/);
-  assert.match(friendlyStreamError({ status: 429 }), /Sign in/);
+  // And its copy is RL-1's, byte for byte (UX-2 P6 + P10, criterion 17; C1 = A): the reader's own daily allowance,
+  // with the reset as the one step the reader can take. One text serves a signed-in reader too, so it asks no sign-in.
+  assert.equal(friendlyStreamError({ status: 429 }), RL1);
+  assert.doesNotMatch(friendlyStreamError({ status: 429 }), /Sign in/);
 });
 
 test('#30 P4: a carried model_rate_limited code renders its own copy', () => {

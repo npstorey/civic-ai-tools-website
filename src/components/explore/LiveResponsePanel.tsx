@@ -185,7 +185,7 @@ export default function LiveResponsePanel({
           {timeoutMessage === '__too_complex__' ? (
             <>
               <div>
-                This query is taking longer than usual. Complex queries on this demo are subject to token and tool-call limits &mdash; the analysis may be cut short. Don&apos;t close this tab &mdash; results will appear when complete.
+                This query is taking longer than usual. Complex queries on this site are subject to token and tool-call limits &mdash; the analysis may be cut short. Don&apos;t close this tab &mdash; results will appear when complete.
               </div>
               <div style={{ marginTop: '6px', fontSize: '13px', color: 'var(--text-muted)', fontWeight: 400 }}>
                 {onAbort && (

@@ -1,6 +1,8 @@
 'use client';
 
-import { useState, useMemo, useCallback, useRef, useEffect } from 'react';
+import { useState, useMemo, useCallback } from 'react';
+import { Disclosure } from '@/components/ui/Disclosure';
+import FilterDropdown from '@/components/directory/FilterDropdown';
 import { useSearchParams, useRouter } from 'next/navigation';
 import type { PortalEntry } from '@/lib/mcp/portal-data';
 import { prose } from '@/styles/page-styles';
@@ -58,121 +60,6 @@ const SORT_LABELS: Record<PortalSortOption, string> = {
   ownerType: 'Owner Type',
 };
 
-// --- FilterDropdown (duplicated from DirectoryClient for component independence) ---
-
-function FilterDropdown({
-  label,
-  value,
-  options,
-  onChange,
-}: {
-  label: string;
-  value: string;
-  options: { value: string; label: string }[];
-  onChange: (value: string) => void;
-}) {
-  const [open, setOpen] = useState(false);
-  const ref = useRef<HTMLDivElement>(null);
-
-  useEffect(() => {
-    if (!open) return;
-    const handleClick = (e: MouseEvent) => {
-      if (ref.current && !ref.current.contains(e.target as Node)) {
-        setOpen(false);
-      }
-    };
-    document.addEventListener('mousedown', handleClick);
-    return () => document.removeEventListener('mousedown', handleClick);
-  }, [open]);
-
-  const selectedLabel = options.find((o) => o.value === value)?.label || label;
-
-  return (
-    <div ref={ref} style={{ position: 'relative' }}>
-      <button
-        type="button"
-        onClick={() => setOpen(!open)}
-        style={{
-          textAlign: 'left',
-          padding: '8px 28px 8px 12px',
-          fontSize: '14px',
-          border: '1px solid var(--border-color)',
-          borderRadius: '4px',
-          backgroundColor: 'var(--white)',
-          color: value ? 'var(--text-primary)' : 'var(--text-muted)',
-          cursor: 'pointer',
-          appearance: 'none' as const,
-          position: 'relative' as const,
-          fontFamily: 'inherit',
-          whiteSpace: 'nowrap',
-        }}
-      >
-        {selectedLabel}
-        <span
-          style={{
-            position: 'absolute',
-            right: '10px',
-            top: '50%',
-            transform: 'translateY(-50%)',
-            fontSize: '10px',
-            color: 'var(--text-muted)',
-            pointerEvents: 'none',
-          }}
-        >
-          &#9662;
-        </span>
-      </button>
-      {open && (
-        <ul
-          style={{
-            position: 'absolute',
-            top: '100%',
-            left: 0,
-            minWidth: '100%',
-            margin: '2px 0 0 0',
-            padding: '4px 0',
-            listStyle: 'none',
-            backgroundColor: 'var(--white)',
-            border: '1px solid var(--border-color)',
-            borderRadius: '4px',
-            boxShadow: '0 4px 12px rgba(0,0,0,0.1)',
-            zIndex: 10,
-            maxHeight: '280px',
-            overflowY: 'auto',
-            whiteSpace: 'nowrap',
-          }}
-        >
-          {options.map((opt) => (
-            <li
-              key={opt.value}
-              onClick={() => {
-                onChange(opt.value);
-                setOpen(false);
-              }}
-              style={{
-                padding: '6px 12px',
-                cursor: 'pointer',
-                fontSize: '14px',
-                backgroundColor:
-                  opt.value === value ? 'var(--card-background)' : 'transparent',
-              }}
-              onMouseOver={(e) => {
-                e.currentTarget.style.backgroundColor = 'var(--card-background)';
-              }}
-              onMouseOut={(e) => {
-                e.currentTarget.style.backgroundColor =
-                  opt.value === value ? 'var(--card-background)' : 'transparent';
-              }}
-            >
-              {opt.label}
-            </li>
-          ))}
-        </ul>
-      )}
-    </div>
-  );
-}
-
 // --- Platform badge ---
 
 function PlatformBadge({ platform }: { platform: string }) {
@@ -184,10 +71,9 @@ function PlatformBadge({ platform }: { platform: string }) {
         fontWeight: 600,
         padding: '2px 8px',
         borderRadius: '3px',
-        color: isSocrata ? '#2B6CB0' : '#1D6F42',
-        backgroundColor: isSocrata
-          ? 'rgba(43, 108, 176, 0.1)'
-          : 'rgba(29, 111, 66, 0.1)',
+        // PQ8 = (a): the neutral pair, as the server cards' platform badges.
+        color: 'var(--text-secondary)',
+        backgroundColor: 'var(--card-background)',
         whiteSpace: 'nowrap',
       }}
     >
@@ -471,31 +357,16 @@ export default function PortalDirectoryClient({
           />
         </div>
 
-        {/* Mobile filter toggle */}
-        <button
-          className="portal-filter-toggle"
-          onClick={() => setMobileFiltersOpen(!mobileFiltersOpen)}
-          style={{
-            display: 'none',
-            width: '100%',
-            padding: '10px 16px',
-            fontSize: '14px',
-            border: '1px solid var(--border-color)',
-            borderRadius: '4px',
-            background: 'var(--card-background)',
-            cursor: 'pointer',
-            fontFamily: 'inherit',
-            color: 'var(--text-secondary)',
-            marginBottom: '12px',
-          }}
+        {/* The filters (R14; 0d item 6): a Disclosure below 640 px, always shown at 640 px and up (globals.css). */}
+        <div className="directory-filter-toggle">
+        <Disclosure
+          summary={`${mobileFiltersOpen ? 'Hide Filters' : 'Show Filters'}${hasFilters ? ' (active)' : ''}`}
+          open={mobileFiltersOpen}
+          onToggle={setMobileFiltersOpen}
         >
-          {mobileFiltersOpen ? 'Hide Filters' : 'Show Filters'}
-          {hasFilters ? ' (active)' : ''}
-        </button>
-
         {/* Filter row */}
         <div
-          className="portal-filters"
+          className="portal-filters directory-filters"
           style={{
             display: 'flex',
             flexWrap: 'wrap',
@@ -557,6 +428,8 @@ export default function PortalDirectoryClient({
             </button>
           )}
         </div>
+        </Disclosure>
+        </div>
       </div>
 
       {/* Results count + CSV */}
@@ -614,7 +487,9 @@ export default function PortalDirectoryClient({
         </div>
       ) : (
         <>
-          <div style={{ overflowX: 'auto' }}>
+          {/* Item 6 (PQ11 = (a)): a table at 640 px and up, in its sideways-scrolling wrapper; below 640 px each row is a
+              card (globals.css, `.portal-table`), its cells labelled by their column's own heading. */}
+          <div className="portal-table" style={{ overflowX: 'auto' }}>
             <table style={{ width: '100%', borderCollapse: 'collapse', minWidth: '700px', tableLayout: 'fixed' }}>
               <thead>
                 <tr>
@@ -648,12 +523,13 @@ export default function PortalDirectoryClient({
                         {portal.name || portal.id}
                       </a>
                     </td>
-                    <td style={tdStyle}>
+                    <td data-label="Platform" style={tdStyle}>
                       <PlatformBadge platform={portal.platform} />
                     </td>
-                    <td style={{ ...tdStyle, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{portal.country_name || '\u2014'}</td>
-                    <td style={{ ...tdStyle, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }} title={portal.owner_name || undefined}>{portal.owner_name || '\u2014'}</td>
+                    <td data-label="Country" style={{ ...tdStyle, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{portal.country_name || '\u2014'}</td>
+                    <td data-label="Owner" style={{ ...tdStyle, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }} title={portal.owner_name || undefined}>{portal.owner_name || '\u2014'}</td>
                     <td
+                      data-label="Datasets"
                       style={{
                         ...tdStyle,
                         textAlign: 'right',
@@ -666,7 +542,7 @@ export default function PortalDirectoryClient({
                           : portal.dataset_count.toLocaleString()
                         : '\u2014'}
                     </td>
-                    <td style={tdStyle}>
+                    <td data-label="Links" style={tdStyle}>
                       <a
                         href={portal.url}
                         target="_blank"
@@ -826,18 +702,6 @@ export default function PortalDirectoryClient({
         </a>
       </div>
 
-      {/* Mobile filter styles */}
-      <style jsx>{`
-        @media (max-width: 640px) {
-          .portal-filter-toggle {
-            display: block !important;
-          }
-          .portal-filters {
-            display: ${mobileFiltersOpen ? 'flex' : 'none'} !important;
-            flex-direction: column;
-          }
-        }
-      `}</style>
     </div>
   );
 }

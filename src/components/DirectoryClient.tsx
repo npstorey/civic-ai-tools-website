@@ -1,7 +1,9 @@
 'use client';
 
-import { useState, useMemo, useCallback, useRef, useEffect } from 'react';
+import { useState, useMemo, useCallback } from 'react';
+import Link from 'next/link';
 import { useSearchParams, useRouter } from 'next/navigation';
+import { useSession } from 'next-auth/react';
 import {
   McpServerEntry,
   CivicDomain,
@@ -13,6 +15,12 @@ import {
   DATA_PLATFORM_LABELS,
 } from '@/lib/mcp/directory-data';
 import { prose } from '@/styles/page-styles';
+import { Disclosure } from '@/components/ui/Disclosure';
+import FilterDropdown from '@/components/directory/FilterDropdown';
+import { useHostLinks } from '@/components/HostLinksProvider';
+import { useCrossHostSession } from '@/hooks/useCrossHostSession';
+import { offeredSourceFor } from '@/lib/directory-source-map';
+import type { SessionAffordanceTarget } from '@/lib/allowed-origins';
 
 const SUGGEST_SERVER_URL =
   'https://github.com/npstorey/civic-ai-tools/issues/new?template=suggest-server.yml&labels=directory-submission';
@@ -79,113 +87,38 @@ const SORT_LABELS: Record<SortOption, string> = {
   category: 'Category',
 };
 
-// --- FilterDropdown: matches QueryForm custom dropdown style ---
-
-function FilterDropdown({
-  label,
-  value,
-  options,
-  onChange,
-}: {
-  label: string;
-  value: string;
-  options: { value: string; label: string }[];
-  onChange: (value: string) => void;
-}) {
-  const [open, setOpen] = useState(false);
-  const ref = useRef<HTMLDivElement>(null);
-
-  useEffect(() => {
-    if (!open) return;
-    const handleClick = (e: MouseEvent) => {
-      if (ref.current && !ref.current.contains(e.target as Node)) {
-        setOpen(false);
-      }
-    };
-    document.addEventListener('mousedown', handleClick);
-    return () => document.removeEventListener('mousedown', handleClick);
-  }, [open]);
-
-  const selectedLabel = options.find((o) => o.value === value)?.label || label;
-
-  return (
-    <div ref={ref} style={{ position: 'relative' }}>
-      <button
-        type="button"
-        onClick={() => setOpen(!open)}
-        style={{
-          textAlign: 'left',
-          padding: '8px 28px 8px 12px',
-          fontSize: '14px',
-          border: '1px solid var(--border-color)',
-          borderRadius: '4px',
-          backgroundColor: 'var(--white)',
-          color: value ? 'var(--text-primary)' : 'var(--text-muted)',
-          cursor: 'pointer',
-          appearance: 'none' as const,
-          position: 'relative' as const,
-          fontFamily: 'inherit',
-          whiteSpace: 'nowrap',
-        }}
-      >
-        {selectedLabel}
-        <span style={{
-          position: 'absolute',
-          right: '10px',
-          top: '50%',
-          transform: 'translateY(-50%)',
-          fontSize: '10px',
-          color: 'var(--text-muted)',
-          pointerEvents: 'none',
-        }}>
-          &#9662;
-        </span>
-      </button>
-      {open && (
-        <ul style={{
-          position: 'absolute',
-          top: '100%',
-          left: 0,
-          minWidth: '100%',
-          margin: '2px 0 0 0',
-          padding: '4px 0',
-          listStyle: 'none',
-          backgroundColor: 'var(--white)',
-          border: '1px solid var(--border-color)',
-          borderRadius: '4px',
-          boxShadow: '0 4px 12px rgba(0,0,0,0.1)',
-          zIndex: 10,
-          maxHeight: '280px',
-          overflowY: 'auto',
-          whiteSpace: 'nowrap',
-        }}>
-          {options.map((opt) => (
-            <li
-              key={opt.value}
-              onClick={() => { onChange(opt.value); setOpen(false); }}
-              style={{
-                padding: '6px 12px',
-                cursor: 'pointer',
-                fontSize: '14px',
-                backgroundColor: opt.value === value ? 'var(--card-background)' : 'transparent',
-              }}
-              onMouseOver={(e) => { e.currentTarget.style.backgroundColor = 'var(--card-background)'; }}
-              onMouseOut={(e) => { e.currentTarget.style.backgroundColor = opt.value === value ? 'var(--card-background)' : 'transparent'; }}
-            >
-              {opt.label}
-            </li>
-          ))}
-        </ul>
-      )}
-    </div>
-  );
-}
-
 // --- Component ---
 
-export default function DirectoryClient({ servers, portalCounts }: { servers: McpServerEntry[]; portalCounts?: { socrata: number; ckan: number; total: number } }) {
+/** What a row needs to link "Ask with this source" (UX-2 P6 + P10, item 7; 0d items 1 and 9). */
+export interface RowActionTargets {
+  /** The sources this instance's statement offers, read by the directory page at its render. */
+  offeredSourceIds?: readonly string[];
+  /** The app host's session probe on a full split topology (`resolveSessionAffordance`), else null. */
+  sessionProbe?: SessionAffordanceTarget | null;
+  /** Where Ask lives (`resolveAskHref`): `/ask`, or the app origin's `/ask` on a split topology. */
+  askHref?: string;
+}
+
+export default function DirectoryClient({
+  servers,
+  portalCounts,
+  offeredSourceIds = [],
+  sessionProbe = null,
+  askHref = '/ask',
+}: { servers: McpServerEntry[]; portalCounts?: { socrata: number; ckan: number; total: number } } & RowActionTargets) {
   const searchParams = useSearchParams();
   const router = useRouter();
+
+  // "Ask with this source" (C5 = (b), G0-8, X27; PQ4 = (a), 0d item 1). Signed in (a local session, or the Header's
+  // probe of the app host reporting one) it opens /ask with the source; otherwise the home page with it. While the
+  // probe is pending, or after it fails, the row links the home page.
+  const { data: session } = useSession();
+  const { marketingOrigin } = useHostLinks();
+  const probedIn = useCrossHostSession(sessionProbe?.statusUrl ?? null, !session);
+  const signedIn = Boolean(session) || probedIn;
+  const actionHref = (sourceId: string) =>
+    signedIn ? `${askHref}?source=${encodeURIComponent(sourceId)}` : `${marketingOrigin ?? ''}/?source=${encodeURIComponent(sourceId)}`;
+  const siteSourceOf = useCallback((server: McpServerEntry) => offeredSourceFor(server.id, offeredSourceIds), [offeredSourceIds]);
 
   // Read initial state from URL
   const initialQ = searchParams.get('q') || '';
@@ -288,9 +221,12 @@ export default function DirectoryClient({ servers, portalCounts }: { servers: Mc
       result = result.filter((s) => s.verificationStatus === 'official');
     }
 
+    // This site's own sources first (D-14 (i)): the rows that carry the action, never the index's `included` flag.
     result = [...result].sort((a, b) => {
-      if (a.included && !b.included) return -1;
-      if (!a.included && b.included) return 1;
+      const aSite = siteSourceOf(a) !== null;
+      const bSite = siteSourceOf(b) !== null;
+      if (aSite && !bSite) return -1;
+      if (!aSite && bSite) return 1;
       switch (sortBy) {
         case 'name':
           return a.name.localeCompare(b.name);
@@ -306,7 +242,7 @@ export default function DirectoryClient({ servers, portalCounts }: { servers: Mc
     });
 
     return result;
-  }, [servers, query, domainFilter, levelFilter, transportFilter, platformFilter, officialOnly, sortBy]);
+  }, [servers, query, domainFilter, levelFilter, transportFilter, platformFilter, officialOnly, sortBy, siteSourceOf]);
 
   const clearFilters = () => {
     setQuery('');
@@ -334,7 +270,8 @@ export default function DirectoryClient({ servers, portalCounts }: { servers: Mc
           marginBottom: '20px',
           lineHeight: '1.5',
         }}>
-          These MCP servers connect AI to data from{' '}
+          {/* D-13 (DIR = A): the counts are the portal lists' lengths, not portals a server was shown to reach. */}
+          Some of these MCP servers read data from Socrata or CKAN portals. The Data Portals tab lists{' '}
           {portalCounts.socrata.toLocaleString()} Socrata portals and{' '}
           {portalCounts.ckan.toLocaleString()} CKAN portals worldwide.{' '}
           <button
@@ -394,28 +331,14 @@ export default function DirectoryClient({ servers, portalCounts }: { servers: Mc
           />
         </div>
 
-        {/* Mobile filter toggle */}
-        <button
-          className="sm-hidden-desktop"
-          onClick={() => setMobileFiltersOpen(!mobileFiltersOpen)}
-          style={{
-            display: 'none',
-            width: '100%',
-            padding: '10px 16px',
-            fontSize: '14px',
-            border: '1px solid var(--border-color)',
-            borderRadius: '4px',
-            background: 'var(--card-background)',
-            cursor: 'pointer',
-            fontFamily: 'inherit',
-            color: 'var(--text-secondary)',
-            marginBottom: '12px',
-          }}
+        {/* The filters (R14; 0d item 6): below 640 px a Disclosure, "Show Filters" / "Hide Filters"; at 640 px and up
+            its summary is hidden and the filters always show (globals.css, \`.directory-filter-toggle\`). */}
+        <div className="directory-filter-toggle">
+        <Disclosure
+          summary={`${mobileFiltersOpen ? 'Hide Filters' : 'Show Filters'}${hasFilters ? ' (active)' : ''}`}
+          open={mobileFiltersOpen}
+          onToggle={setMobileFiltersOpen}
         >
-          {mobileFiltersOpen ? 'Hide Filters' : 'Show Filters'}
-          {hasFilters ? ` (active)` : ''}
-        </button>
-
         {/* Filter row */}
         <div
           className="directory-filters"
@@ -517,6 +440,8 @@ export default function DirectoryClient({ servers, portalCounts }: { servers: Mc
             </button>
           )}
         </div>
+        </Disclosure>
+        </div>
       </div>
 
       {/* Results count + CSV download */}
@@ -582,7 +507,7 @@ export default function DirectoryClient({ servers, portalCounts }: { servers: Mc
           }}
         >
           {filtered.map((server) => (
-            <ServerCard key={server.id} server={server} />
+            <ServerCard key={server.id} server={server} siteSource={siteSourceOf(server)} actionHref={actionHref} />
           ))}
         </div>
       )}
@@ -637,34 +562,35 @@ export default function DirectoryClient({ servers, portalCounts }: { servers: Mc
         </p>
       </section>
 
-      {/* Mobile filter styles */}
-      <style jsx>{`
-        @media (max-width: 640px) {
-          .sm-hidden-desktop {
-            display: block !important;
-          }
-          .directory-filters {
-            display: ${mobileFiltersOpen ? 'flex' : 'none'} !important;
-            flex-direction: column;
-          }
-        }
-      `}</style>
     </div>
   );
 }
 
 // --- ServerCard ---
 
-function ServerCard({ server }: { server: McpServerEntry }) {
+/** The neutral pair every platform, transport and Commercial badge takes (PQ8 = (a)): 10.89:1 on the light tokens. */
+const NEUTRAL_BADGE = { color: 'var(--text-secondary)', bg: 'var(--card-background)' } as const;
+
+function ServerCard({
+  server,
+  siteSource,
+  actionHref,
+}: {
+  server: McpServerEntry;
+  /** The offered source this entry is (D-14 (i), item 7), or null. */
+  siteSource: string | null;
+  actionHref: (sourceId: string) => string;
+}) {
   const profileUrl = buildGitHubProfileUrl(server.maintainer);
 
   return (
     <div
+      data-server={server.id}
       style={{
-        border: `1px solid ${server.included ? 'var(--accent)' : 'var(--border-color)'}`,
+        border: `1px solid ${siteSource ? 'var(--accent)' : 'var(--border-color)'}`,
         borderRadius: '4px',
         padding: '20px',
-        backgroundColor: server.included ? 'rgba(var(--accent-rgb), 0.03)' : 'var(--background)',
+        backgroundColor: siteSource ? 'rgba(var(--accent-rgb), 0.03)' : 'var(--background)',
         display: 'flex',
         flexDirection: 'column',
         gap: '10px',
@@ -681,12 +607,12 @@ function ServerCard({ server }: { server: McpServerEntry }) {
           >
             {server.name}
           </a>
-          {server.included && <Badge color="var(--accent)" bg="rgba(var(--accent-rgb), 0.1)">Included</Badge>}
+          {siteSource && <Badge color="var(--accent)" bg="rgba(var(--accent-rgb), 0.1)">{"This site's data source"}</Badge>}
           {server.verificationStatus === 'official' && (
-            <Badge color="var(--success)" bg="rgba(0, 138, 2, 0.1)">Official</Badge>
+            <Badge color="var(--success)" bg="rgba(var(--success-rgb), 0.1)">Official</Badge>
           )}
           {server.verificationStatus === 'commercial' && (
-            <Badge color="#B8860B" bg="rgba(184, 134, 11, 0.1)">Commercial</Badge>
+            <Badge color={NEUTRAL_BADGE.color} bg={NEUTRAL_BADGE.bg}>Commercial</Badge>
           )}
         </div>
         <p style={{ fontSize: '14px', color: 'var(--text-secondary)', margin: 0, lineHeight: '1.5' }}>
@@ -697,22 +623,14 @@ function ServerCard({ server }: { server: McpServerEntry }) {
       {/* Transport + platform badges */}
       <div style={{ display: 'flex', gap: '6px', flexWrap: 'wrap' }}>
         {server.transport.map((t) => (
-          <Badge
-            key={t}
-            color={t === 'http' ? 'var(--accent)' : t === 'sse' ? '#B8860B' : 'var(--text-muted)'}
-            bg={t === 'http' ? 'rgba(var(--accent-rgb), 0.08)' : t === 'sse' ? 'rgba(184, 134, 11, 0.08)' : 'var(--card-background)'}
-          >
+          <Badge key={t} color={NEUTRAL_BADGE.color} bg={NEUTRAL_BADGE.bg}>
             {t}
           </Badge>
         ))}
         {(server.dataPlatform || [])
           .filter((p) => p !== 'custom-api')
           .map((p) => (
-            <Badge
-              key={p}
-              color={p === 'socrata' ? '#2B6CB0' : p === 'ckan' ? '#1D6F42' : p === 'data-commons' ? '#7B341E' : '#5B21B6'}
-              bg={p === 'socrata' ? 'rgba(43, 108, 176, 0.1)' : p === 'ckan' ? 'rgba(29, 111, 66, 0.1)' : p === 'data-commons' ? 'rgba(123, 52, 30, 0.1)' : 'rgba(91, 33, 182, 0.1)'}
-            >
+            <Badge key={p} color={NEUTRAL_BADGE.color} bg={NEUTRAL_BADGE.bg}>
               {DATA_PLATFORM_LABELS[p]}
             </Badge>
           ))}
@@ -764,7 +682,17 @@ function ServerCard({ server }: { server: McpServerEntry }) {
       </div>
 
       {/* Action links */}
-      <div style={{ display: 'flex', gap: '12px', flexWrap: 'wrap', marginTop: 'auto', paddingTop: '4px' }}>
+      <div style={{ display: 'flex', gap: '12px', flexWrap: 'wrap', alignItems: 'baseline', marginTop: 'auto', paddingTop: '4px' }}>
+        {/* C5 = (b), X27: the one in-app action, on this site's own sources only. */}
+        {siteSource && (
+          <Link
+            href={actionHref(siteSource)}
+            className="directory-row-action"
+            style={{ fontSize: '12px', fontWeight: 600, color: 'var(--accent)', textDecoration: 'none' }}
+          >
+            Ask with this source
+          </Link>
+        )}
         <ActionLink href={server.repoUrl} label="GitHub" />
         {server.docsUrl && <ActionLink href={server.docsUrl} label="Docs" />}
         {server.npmPackage && (

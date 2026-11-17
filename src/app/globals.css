@@ -1656,3 +1656,80 @@ footer a:visited {
   white-space: nowrap !important;
   border: 0 !important;
 }
+
+/* UX-2 P6 (#729): the directory's filters and portal list, at the site's 639/640 split (PQ11 = (a)).
+   - A filter keeps its own width in the filter row (a field menu otherwise fills its container).
+   - The filters sit in a Disclosure ("Show Filters") below 640 px; at 640 px and up its summary is hidden and its
+     content always shows, as before the change (0d item 6).
+   - The portal list is a table at 640 px and up (its wrapper scrolls sideways) and one card per row below, each cell
+     labelled by its column's own heading. */
+.directory-filter {
+  flex: 0 1 auto;
+}
+
+/* Fix round 1 (#729, seat 6936790257 item 1): a filter's open panel keeps the 280 px cap of the dropdown it replaced.
+   Menu's panel is up to 60vh and is capped to the room only for a menu with a group, so a filter opened mid-screen ran
+   past the window. */
+.directory-filter .ui-menu-panel {
+  max-height: min(60vh, 280px);
+}
+
+/* Fix round 2, A3 (b) (#729, OA-942): the Settings row "Ask with this source" landed on carries the mark the directory
+   gives that source's card (DirectoryClient's server card: an accent border, the accent at 3%). The overlay sets the
+   attribute before it scrolls the row into view. The row's own padding and top border are inline (SourceRow), so these
+   two take `!important`; the vertical padding stays the row's 8px. */
+ul[data-target-source] > li[data-landing-target] {
+  border: 1px solid var(--accent) !important;
+  border-radius: 4px;
+  background-color: rgba(var(--accent-rgb), 0.03);
+  padding: 8px !important;
+}
+
+@media (min-width: 640px) {
+  .directory-filter-toggle > .ui-disclosure {
+    border-top: none;
+  }
+  .directory-filter-toggle > .ui-disclosure > .ui-disclosure-summary {
+    display: none;
+  }
+  .directory-filter-toggle > .ui-disclosure::details-content {
+    content-visibility: visible;
+    display: block;
+  }
+  .directory-filter-toggle > .ui-disclosure > .ui-disclosure-body {
+    margin-top: 0;
+  }
+}
+
+@media (max-width: 639px) {
+  .directory-filters {
+    flex-direction: column;
+    align-items: stretch !important;
+  }
+  .portal-table table {
+    min-width: 0 !important;
+    table-layout: auto !important;
+  }
+  .portal-table thead {
+    display: none;
+  }
+  .portal-table tr,
+  .portal-table td {
+    display: block;
+  }
+  .portal-table tr {
+    border: 1px solid var(--border-color);
+    border-radius: 4px;
+    padding: 8px 12px;
+    margin-bottom: 12px;
+  }
+  .portal-table td {
+    border: none !important;
+    padding: 2px 0 !important;
+    white-space: normal !important;
+  }
+  .portal-table td[data-label]::before {
+    content: attr(data-label) ': ';
+    color: var(--text-muted);
+  }
+}

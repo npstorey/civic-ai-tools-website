@@ -1,5 +1,6 @@
 'use client';
 
+import { Disclosure } from '@/components/ui/Disclosure';
 import { useState, useRef, useCallback, useEffect, useMemo } from 'react';
 import BpmnViewerComponent, { type BpmnViewerHandle } from './BpmnViewer';
 import TraceControls, { type DiagramMode } from './TraceControls';
@@ -579,47 +580,21 @@ export default function McpFlowDiagram() {
 
       {/* Download link */}
       <div style={{ display: 'flex', alignItems: 'center', gap: '16px', fontSize: '14px' }}>
-        <a
-          href="/bpmn/mcp-query-flow.bpmn"
-          download
-          style={{ color: 'var(--text-muted)', fontWeight: 400 }}
-        >
+        <a href="/bpmn/mcp-query-flow.bpmn" download>
           Download BPMN file
         </a>
       </div>
 
-      {/* Understanding this diagram */}
-      <details
-        style={{
-          border: '1px solid var(--border-color)',
-          borderRadius: '4px',
-        }}
-      >
-        <summary
-          style={{
-            padding: '12px 16px',
-            cursor: 'pointer',
-            fontSize: '14px',
-            fontWeight: 500,
-            color: 'var(--text-secondary)',
-          }}
-        >
-          Understanding this diagram
-        </summary>
-        <div
-          style={{
-            padding: '0 16px 16px',
-            fontSize: '13px',
-            color: 'var(--text-muted)',
-            lineHeight: '1.6',
-          }}
-        >
+      {/* Understanding this diagram: the site's Disclosure (R14; UX-2 P6 item 8), its first paragraph X28's ruled words
+          (R1 = A), the link kept on "BPMN 2.0". */}
+      <Disclosure summary="Understanding this diagram">
+        <div style={{ fontSize: '13px', color: 'var(--text-muted)', lineHeight: '1.6' }}>
           <p style={{ margin: '0 0 8px 0' }}>
-            This is a{' '}
+            This diagram shows the steps in order. It uses a standard notation,{' '}
             <a href="https://www.bpmn.org/" target="_blank" rel="noopener noreferrer">
               BPMN 2.0
             </a>{' '}
-            (Business Process Model and Notation) diagram &mdash; a standard way to visualize workflows.
+            (the link explains it).
           </p>
           <ul style={{ paddingLeft: '20px', margin: '0', display: 'flex', flexDirection: 'column', gap: '4px' }}>
             <li><strong>Rounded rectangles</strong> = Tasks (actions performed by a participant)</li>
@@ -635,7 +610,7 @@ export default function McpFlowDiagram() {
             (e.g., <a href="https://demo.bpmn.io/" target="_blank" rel="noopener noreferrer">bpmn.io</a>).
           </p>
         </div>
-      </details>
+      </Disclosure>
     </div>
   );
 }

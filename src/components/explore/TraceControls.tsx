@@ -12,6 +12,7 @@ import { useSignInAction } from '@/components/composer/SignInControl';
 import { useSession } from 'next-auth/react';
 import type { Model } from '@/lib/model-list';
 import { ConsentPausePrompt } from '@/components/answer-view/ConsentStep';
+import { Tabs } from '@/components/ui/Tabs';
 
 export type DiagramMode = 'examples' | 'live';
 
@@ -188,47 +189,16 @@ export default function TraceControls({
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
-      {/* Mode tabs */}
-      <div style={{ display: 'flex', gap: '0', borderBottom: '2px solid var(--border-color)' }}>
-        <button
-          className="mode-tab"
-          onClick={() => onModeChange('examples')}
-          style={{
-            padding: '8px 20px',
-            fontSize: '13px',
-            fontWeight: 600,
-            fontFamily: 'inherit',
-            cursor: 'pointer',
-            border: 'none',
-            borderBottom: mode === 'examples' ? '2px solid var(--accent)' : '2px solid transparent',
-            marginBottom: '-2px',
-            background: 'none',
-            color: mode === 'examples' ? 'var(--accent)' : 'var(--text-muted)',
-            transition: 'all 0.15s ease',
-          }}
-        >
-          Example traces
-        </button>
-        <button
-          className="mode-tab"
-          onClick={() => onModeChange('live')}
-          style={{
-            padding: '8px 20px',
-            fontSize: '13px',
-            fontWeight: 600,
-            fontFamily: 'inherit',
-            cursor: 'pointer',
-            border: 'none',
-            borderBottom: mode === 'live' ? '2px solid var(--accent)' : '2px solid transparent',
-            marginBottom: '-2px',
-            background: 'none',
-            color: mode === 'live' ? 'var(--accent)' : 'var(--text-muted)',
-            transition: 'all 0.15s ease',
-          }}
-        >
-          Try your own
-        </button>
-      </div>
+      {/* Mode tabs, on the site's Tabs (P8; UX-2 P6 item 1): the same two words, roles and a roving tabindex. */}
+      <Tabs
+        label="Explore"
+        tabs={[
+          { id: 'examples', label: 'Example traces' },
+          { id: 'live', label: 'Try your own' },
+        ]}
+        selectedId={mode}
+        onSelect={(id) => onModeChange(id === 'live' ? 'live' : 'examples')}
+      />
 
       {mode === 'examples' && (
         <>
@@ -618,9 +588,6 @@ export default function TraceControls({
       <style jsx>{`
         .trace-pill:hover {
           border-color: var(--accent) !important;
-        }
-        .mode-tab:hover {
-          color: var(--accent) !important;
         }
         .secondary-btn:hover {
           border-color: var(--neutral-70) !important;

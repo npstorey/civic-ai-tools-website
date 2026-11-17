@@ -161,7 +161,7 @@ const json = (body: unknown, status = 200) => new Response(JSON.stringify(body),
 const sse = (events: Json[]) => new Response(events.map((e) => `data: ${JSON.stringify(e)}\n\n`).join(''), { status: 200, headers: { 'Content-Type': 'text/event-stream' } });
 
 /** The decision route's answer for a fixture: a routing and store pair, or a failed read. */
-type Routing = { routing: string; store: boolean } | 'fail';
+type Routing = { routing: string; store: boolean } | 'fail' | 'held';
 let decision: Routing = { routing: 'in-loop', store: true };
 let queries: Array<{ path: string; body: Json }> = [];
 
@@ -171,7 +171,7 @@ function answers(routing: Routing = { routing: 'in-loop', store: true }) {
   return installFetch(ORIGIN, {
     '/api/models': () => json({ models: CAT }),
     '/api/flows': () => flowsRoute.GET(),
-    '/api/sources/consent/decision': () => (decision === 'fail' ? json({ error: 'fixture' }, 503) : json(decision)),
+    '/api/sources/consent/decision': () => (decision === 'held' ? new Promise<Response>(() => {}) : decision === 'fail' ? json({ error: 'fixture' }, 503) : json(decision)),
     '/api/sources/consent': (request: Request) => (consentRoute[request.method] as (r: Request) => Promise<Response>)(request),
     '/api/rate-limit': () => json({ remaining: 7, limit: 10, resets_at: '2099-01-01T00:00:00.000Z', authenticated: sessions.server !== null }),
     '/api/compare-stream': async (request: Request) => {
@@ -417,7 +417,8 @@ for (const [name, routing, form, pick] of [
   ['in-loop with the store', { routing: 'in-loop', store: true }, 'in-loop', 'enabled'],
   ['all-sources with the store', { routing: 'all-sources', store: true }, 'all-sources', 'reason'],
   ['in-loop with no store', { routing: 'in-loop', store: false }, 'all-sources', 'reason'],
-  ['the decision read failed (503)', 'fail', 'all-sources', 'no reason'],
+  // UX-2 P6 + P10, PQ6 = (b) (criterion 18): while the read has failed, Auto reads the item's own value, with no line.
+  ['the decision read failed (503)', 'fail', 'unread', 'no reason'],
 ] as const) {
   test(`P3b-2 criterion 1 (2B item 3; v2 ruling 1): ${name}: Data sources reads the ${form} form, byte for byte, and the Settings row's Ask-first words agree`, async () => {
     SIGNED_IN();
@@ -426,6 +427,7 @@ for (const [name, routing, form, pick] of [
     const page = await mountPage(h(Fragment, null, ASK(), h(SettingsOverlay, { mount: 'page', initialTab: 'data-sources' })));
     const panel = await expand(page, W.ds);
     const words = form === 'in-loop' ? W.inLoop : W.allSources;
+    const firstRow = form === 'unread' ? [W.auto, true, false, [], []] : [words.label, true, false, [words.desc], []];
     const radios = radiosOf(panel);
     const pickRow = pick === 'enabled'
       ? [W.pick, false, false, [W.inLoop.pickDesc], []]
@@ -433,7 +435,7 @@ for (const [name, routing, form, pick] of [
         ? [W.pick, false, true, [], [W.allSources.reason]]
         : [W.pick, false, true, [], []];
     assert.deepEqual(radios.map((el) => [labelOf(el), checked(el), disabled(el), descriptionsOf(el), reasonsOf(el)]), [
-      [words.label, true, false, [words.desc], []],
+      firstRow,
       pickRow,
     ], `the two options: the first checked with its description; "Only the ones I pick" ${pick}`);
     const footer = within(panel).filter((el) => el.type === 'a' && textOf(el) === W.footer);
@@ -441,9 +443,35 @@ for (const [name, routing, form, pick] of [
     const row = page.elements().filter((el) => el.props['data-source'] === IDS[0]).map((el) => textOf(el));
     assert.equal(row.length, 1, 'premise: the Settings row for the Ask-first source');
     const rowSays = row[0].includes(ASK_FIRST_MEANS_WITH_PAUSE) ? 'in-loop' : row[0].includes(ASK_FIRST_MEANS) ? 'all-sources' : 'neither';
-    assert.equal(rowSays, form, 'the Settings row and the menu word Ask first differently');
+    assert.equal(rowSays, form === 'unread' ? 'all-sources' : form, 'the Settings row and the menu word Ask first differently');
   });
 }
+
+// UX-2 P6 + P10, PQ6 = (b) (contract p6p10.md v5.2, items 19-21, criterion 18): while the routing pair is unread, the
+// Auto option claims no routing. Its label is the item's own value, "Auto" (`DATA_SOURCES_ITEM.value`), with no
+// description; no new string. The decision route never answers within the read (the window #318 6921668675 reports).
+// At the base the window shows the all-sources form, false on an in-loop site.
+test('UX-2 P6 + P10 criterion 18 (PQ6 = (b)): while the routing read is unread, Data sources lists "Auto" with no description, and "Only the ones I pick" disabled with no reason', async () => {
+  SIGNED_IN();
+  answers('held');
+  await consentWith();
+  const page = await mount(ASK());
+  mounted.push(page);
+  await new Promise((resolve) => setTimeout(resolve, 60));
+  await page.click(triggerOf(page));
+  await new Promise((resolve) => setTimeout(resolve, 30));
+  await page.click(rowIn(panelOf(page), W.ds));
+  await new Promise((resolve) => setTimeout(resolve, 30));
+  const radios = radiosOf(panelOf(page));
+  assert.deepEqual(radios.map((el) => [labelOf(el), checked(el), disabled(el), descriptionsOf(el), reasonsOf(el)]), [
+    [W.auto, true, false, [], []],
+    [W.pick, false, true, [], []],
+  ]);
+  const text = textOf(panelOf(page));
+  for (const line of [W.allSources.label, W.allSources.desc, W.inLoop.label, W.inLoop.desc]) {
+    assert.ok(!text.includes(line), `the unread window shows a routing line: ${line}`);
+  }
+});
 
 test('P3b-2 criterion 1 (2B item 4; 2D): Session type holds Standard and Sandbox, Sandbox checked on /ask with its description; choosing Standard then Sandbox moves the where-line and the route the surface calls', async () => {
   SIGNED_IN();

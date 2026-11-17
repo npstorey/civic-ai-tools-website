@@ -32,7 +32,7 @@
  * instance (new constants; `KEPT_*` stay the privacy page's), the privacy link.
  */
 
-import { useRef, useState } from 'react';
+import { useEffect, useRef, useState, useSyncExternalStore } from 'react';
 import { useRouter } from 'next/navigation';
 import { Dialog } from '@/components/ui/Dialog';
 import { Tabs } from '@/components/ui/Tabs';
@@ -46,6 +46,7 @@ import { readerSourceName, sourceRowLines } from '@/lib/sources/source-name';
 import { matchingSources } from '@/lib/sources/source-search';
 import { useHostLinks } from '@/components/HostLinksProvider';
 import { HARNESS_SENTENCE, WHY_THESE_MODELS } from '@/components/composer/copy';
+import { readAddressSource } from '@/components/SourceLanding';
 
 export interface SettingsOverlayProps {
   mount?: 'intercepted' | 'page';
@@ -71,6 +72,9 @@ function dateInWords(value: string): string {
 const PARA = { margin: '0 0 10px' } as const;
 const MUTED = { margin: '0 0 10px', color: 'var(--text-secondary)' } as const;
 
+const noSubscription = () => () => {};
+const noAddress = () => null;
+
 function DataSources() {
   const consent = useSourceConsent();
   const status = consent.status;
@@ -87,6 +91,60 @@ function DataSources() {
   const searchable = sources.map((source) => ({ sourceId: source.sourceId, name: readerSourceName(source), what: sourceRowLines(source).what, source }));
   const shown = matchingSources(searchable, query);
   const lead = inForce ? '' : panelLeadBeforeConsent({ on: count('on'), askFirst: count('ask-first'), off: count('off') });
+  // "Ask with this source" lands here as `/settings?source=<id>` (UX-2 P6 + P10, item 7; 0d item 9). The list marks the
+  // row it was opened for (`data-target-source`) and brings that row into view inside the dialog's own scroller. An id
+  // this instance does not list marks nothing, and focus stays where the Dialog puts it (Close).
+  // Fix round 2, A3 (b) (OA-942): the row itself carries the mark the directory gives that source's card
+  // (`data-landing-target`, its border and tint in globals.css), set BEFORE the scroll so the scroll counts it, and takes
+  // focus, named by the source's reader name (the row's own first line), so no radio holds focus and an arrow key changes
+  // no setting. SourceRow is not changed: the overlay marks and focuses the row it rendered, found inside its own marked
+  // list. The Dialog focuses Close in the same commit (a parent's effect runs after its child's), so the row takes focus
+  // a frame later, without scrolling again.
+  const addressSource = useSyncExternalStore(noSubscription, readAddressSource, noAddress);
+  const targetSource = addressSource !== null && ids.includes(addressSource) ? addressSource : null;
+  const targetName = searchable.find((s) => s.sourceId === targetSource)?.name ?? null;
+  // Fix round 4 (#729): the landing ends when its target does. An overlay rendered again at an address with no source (or
+  // another one) takes back what the landing set on its row: the attribute, `tabindex` and `aria-label`, and a focus not
+  // yet given; focus the row holds goes to the dialog's first enabled button (Close), where a no-source open puts it.
+  // `broughtIntoView` is reset with it, so a later landing on the same source marks and focuses the row again. One
+  // effect does both, so the order React runs a component's effects in cannot clear a landing just made.
+  const broughtIntoView = useRef<string | null>(null);
+  const landing = useRef<{ row: HTMLElement; cancelFocus: () => void } | null>(null);
+  useEffect(() => {
+    if (typeof document === 'undefined') return;
+    const landed = landing.current;
+    if (landed !== null && broughtIntoView.current !== targetSource) {
+      landing.current = null;
+      broughtIntoView.current = null;
+      landed.cancelFocus();
+      if (document.activeElement === landed.row) {
+        landed.row.closest<HTMLElement>('[role="dialog"]')?.querySelector<HTMLElement>('button:not([disabled])')?.focus();
+      }
+      landed.row.removeAttribute('data-landing-target');
+      landed.row.removeAttribute('tabindex');
+      landed.row.removeAttribute('aria-label');
+    }
+    if (targetSource === null || broughtIntoView.current === targetSource) return;
+    // A quoted attribute value: only a backslash and a double quote need escaping (the id is one the statement lists).
+    const id = targetSource.replace(/["\\]/g, '\\$&');
+    const row = document.querySelector<HTMLElement>(`ul[data-target-source="${id}"] > li[data-source="${id}"]`);
+    if (!row) return;
+    broughtIntoView.current = targetSource;
+    row.setAttribute('data-landing-target', '');
+    row.scrollIntoView({ block: 'nearest' });
+    row.tabIndex = -1;
+    if (targetName !== null) row.setAttribute('aria-label', targetName);
+    const focusRow = () => row.focus({ preventScroll: true });
+    let cancelFocus: () => void;
+    if (typeof requestAnimationFrame === 'function') {
+      const frame = requestAnimationFrame(focusRow);
+      cancelFocus = () => cancelAnimationFrame(frame);
+    } else {
+      const timer = setTimeout(focusRow, 0);
+      cancelFocus = () => clearTimeout(timer);
+    }
+    landing.current = { row, cancelFocus };
+  }, [targetSource, targetName, shown.length]);
 
   return (
     <div style={{ fontSize: '14px', lineHeight: 1.6, color: 'var(--text-primary)' }}>
@@ -117,7 +175,7 @@ function DataSources() {
         </p>
       )}
       {shown.length === 0 && searchable.length > 0 && <p style={MUTED}>{SETTINGS_TEXT.noMatch}</p>}
-      <ul style={{ listStyle: 'none', margin: '0 0 10px', padding: 0, fontSize: '13px', color: 'var(--text-secondary)' }}>
+      <ul data-target-source={targetSource ?? undefined} style={{ listStyle: 'none', margin: '0 0 10px', padding: 0, fontSize: '13px', color: 'var(--text-secondary)' }}>
         {shown.map(({ source, name }) => {
           const control: SourceStateControlProps = {
             sourceId: source.sourceId,

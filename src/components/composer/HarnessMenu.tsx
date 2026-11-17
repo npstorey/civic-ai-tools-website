@@ -18,8 +18,10 @@
  *   - `sources-only` (`/explore` where no sign-in is offered; v3 conflict ruling 2): the heading row and Data sources.
  *
  * DATA SOURCES words itself by the instance's routing through `canPauseToAsk`, the predicate the Settings row reads
- * (v2 ruling 1): the in-loop form only in loop with the decision store, both read; the all-sources form otherwise,
- * an unread or failed read included (the known window, v3 conflict ruling 1).
+ * (v2 ruling 1): the in-loop form only in loop with the decision store, both read; the all-sources form where the read
+ * says all-sources, or in loop with no store. While the routing pair is unread, or its read failed, the Auto option
+ * claims no routing: its label is the item's own value, "Auto", with no description (UX-2 P6 + P10, PQ6 = (b), the
+ * owner's ruling OA-917; R2's rule applied to Auto). This closes the known window of v3 conflict ruling 1.
  *
  * "ONLY THE ONES I PICK" (S3-B W1, npstorey/civic-ai-tools#318; the owner's W0 rulings D5 = A, D8 = B, D9 = A; the
  * ORCH's R2, R6 and A5 as the owner ruled it). On a mount that offers picking (`picking`, the home page and `/ask`):
@@ -106,6 +108,8 @@ export default function HarnessMenu({ variant, models, model, onModel, session, 
   const picks = usePicks();
   // The read says which form is true only when it names all-sources, or in loop with no store (R2).
   const notOffered = consent.routing === 'all-sources' || (consent.routing === 'in-loop' && consent.store === false);
+  // PQ6 = (b): a form is known only once the read names one; until then Auto states no routing.
+  const formKnown = inLoopForm || notOffered;
   const pickChosen = picking && inLoopForm && picks.mode === 'pick';
   // The picker reads the flows statement (S3-B F, F3): until it is read, the option is not offered, and says nothing.
   const statementRead = consent.statement !== null;
@@ -126,7 +130,9 @@ export default function HarnessMenu({ variant, models, model, onModel, session, 
     label: DATA_SOURCES_ITEM.label,
     value: pickChosen ? DATA_SOURCES_ITEM.picked(picks.picked.length) : DATA_SOURCES_ITEM.value,
     children: [
-      { id: ID.sourcesAuto, label: form.auto, description: form.autoDescription, checked: !pickChosen },
+      formKnown
+        ? { id: ID.sourcesAuto, label: form.auto, description: form.autoDescription, checked: !pickChosen }
+        : { id: ID.sourcesAuto, label: DATA_SOURCES_ITEM.value, checked: !pickChosen },
       ...(pickItem ? [pickItem] : []),
       { id: ID.sourcesSettings, kind: 'footer', label: DATA_SOURCES_ITEM.footer, href: SETTINGS_HREF },
     ],

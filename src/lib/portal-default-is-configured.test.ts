@@ -171,8 +171,14 @@ const EXCEPTIONS: readonly Exception[] = [
   {
     path: 'src/app/(marketing)/learn/page.tsx',
     classification: 'marketing-copy',
-    hits: 6,
-    why: 'Teaching copy on /learn quoting real skill text and a real tool call so a reader can see what one looks like, and a local set-up example naming a portal for the reader to replace; the page starts no run.',
+    hits: 1,
+    why: 'Teaching copy on /learn quoting a real tool call so a reader can see what one looks like; the page starts no run. Its skill-text excerpts left with P10-33 and its set-up example moved to /project (UX-2 P10, site Q3 = P).',
+  },
+  {
+    path: 'src/app/(marketing)/project/page.tsx',
+    classification: 'marketing-copy',
+    hits: 2,
+    why: 'The local set-up example in "Run it yourself", moved from /learn by UX-2 P10 (site Q3 = P): a configuration and a command naming a portal for the reader to replace; the page starts no run.',
   },
   // UX-2 P3b-2 (Q7 = A) removed the form's `PORTALS` menu, and with it this list's `src/components/QueryForm.tsx` row
   // (`reference-table`, 5 hits): the form now names no portal hostname.

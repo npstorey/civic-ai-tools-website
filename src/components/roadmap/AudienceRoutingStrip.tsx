@@ -52,7 +52,7 @@ const CARDS: AudienceCard[] = [
   },
   {
     audience: 'End users',
-    why: 'The demo. Try a query; publish an analysis as a signed record.',
+    why: 'This site. Try a query; publish an analysis as a signed record.',
     linkLabel: 'civicaitools.org home',
     href: '/',
     external: false,
