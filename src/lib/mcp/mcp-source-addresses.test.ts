@@ -42,6 +42,8 @@ const FULLY_CONFIGURED: McpRegistryEnv = {
   socrataUrl: 'http://decoy-socrata.invalid/mcp',
   dataCommonsUrl: 'http://decoy-data-commons.invalid/mcp',
   bostonOpencontextUrl: 'http://decoy-boston.invalid/mcp',
+  // Router 0.11.0 (CKAN-1 P3): the hosted CKAN server.
+  ckanUrl: 'http://decoy-ckan.invalid/mcp',
 };
 
 const MAPPED = Object.keys(MCP_SOURCE_ADDRESS_FIELD).sort();
@@ -78,10 +80,14 @@ test('(3) each mapping names the field its server is routed by', () => {
   }
 });
 
-test('(4) the mapped source ids equal CIVIC_SOURCE_REGISTRY\'s keys', () => {
+test('(4) the mapped source ids equal the provenance registry\'s keys: CIVIC_SOURCE_REGISTRY\'s, and the instance\'s addressed sources it lacks', async () => {
+  // CKAN-1 P3: the hosted CKAN server is not in the harness's reference registry (no harness release in P3); the
+  // provenance registry adds it after the reference's, with this instance's vocabulary (`sourceRegistryForPolicy`).
+  const { sourceRegistryForPolicy } = await import('../evidence/packager.ts');
+  assert.deepEqual(Object.keys(sourceRegistryForPolicy('unknown')), [...Object.keys(CIVIC_SOURCE_REGISTRY), 'ckan-server'], 'premise: the provenance registry is the reference\'s and the CKAN server');
   assert.deepEqual(
     MAPPED,
-    Object.keys(CIVIC_SOURCE_REGISTRY).sort(),
+    Object.keys(sourceRegistryForPolicy('unknown')).sort(),
     'the provenance registry walks CIVIC_SOURCE_REGISTRY and asks this mapping for each address; ' +
       'a source in one and not the other reaches a record with no address',
   );
@@ -147,6 +153,7 @@ test('a2: a hosted server is listed by its purl, after the addressed servers', (
     { url: 'http://decoy-socrata.invalid/mcp', name: 'socrata' },
     { url: 'http://decoy-data-commons.invalid/mcp', name: 'data-commons' },
     { url: 'http://decoy-boston.invalid/mcp', name: 'boston-opencontext' },
+    { url: 'http://decoy-ckan.invalid/mcp', name: 'ckan-server' },
     { url: CHARTER_PURL, name: 'nyc-charter' },
   ]);
 });
@@ -174,6 +181,7 @@ test('a2: the purl encodes the scope and the name separately (no %2F)', () => {
   assert.ok(!url.includes('%2F'), 'the whole package name was encoded');
 });
 
-test('a2: with the switch unset the list is the three addressed servers, unchanged', () => {
-  assert.deepEqual(configuredMcpServers(FULLY_CONFIGURED).map((s) => s.name), ['socrata', 'data-commons', 'boston-opencontext']);
+test('a2: with the switch unset the list is the four addressed servers, unchanged', () => {
+  // Router 0.11.0 (CKAN-1 P3): the hosted CKAN server is the fourth addressed server.
+  assert.deepEqual(configuredMcpServers(FULLY_CONFIGURED).map((s) => s.name), ['socrata', 'data-commons', 'boston-opencontext', 'ckan-server']);
 });

@@ -63,4 +63,6 @@ test('callMcpTool rejects promptly and the error-copy layer renders the refusal'
   assert.match(llmText, /Do not estimate, guess, or fabricate/);
   assert.match(llmText, /no live data source configured/);
   assert.ok(!llmText.includes('SOCRATA_MCP_URL'), 'no raw configuration detail is fed to the model');
+  // The refusal carries its variable by field (website #539, CKAN-1 P3); Socrata's keeps the no-primary-source text.
+  assert.equal((caught as { variable?: string }).variable, 'SOCRATA_MCP_URL');
 });

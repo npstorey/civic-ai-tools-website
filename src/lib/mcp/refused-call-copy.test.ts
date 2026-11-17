@@ -244,8 +244,14 @@ test('A6: a refusal the source worded "timed out" or "unavailable" keeps its own
   assert.equal(toolMessage('c4'), BASE_UNAVAILABLE_COPY);
 });
 
-test('A6: the not-configured kind keeps its own copy, byte-identical to base', () => {
+test('A6: the not-configured kind keeps its own copy, byte-identical to base, for Socrata and for a refusal that names no variable', () => {
   assert.equal(streaming.describeToolFailureForLlm('get_data', { code: 'mcp_not_configured' }), BASE_NOT_CONFIGURED_COPY);
+  assert.equal(streaming.describeToolFailureForLlm('get_data', { code: 'mcp_not_configured', variable: 'SOCRATA_MCP_URL' }), BASE_NOT_CONFIGURED_COPY);
+  // Website #539 (CKAN-1 P3, A18): a source this instance does not configure is named by its variable, and the model is
+  // not told that no data can be retrieved at all.
+  const other = streaming.describeToolFailureForLlm('ckan__search_datasets', { code: 'mcp_not_configured', variable: 'BOSTON_OPENCONTEXT_MCP_URL' });
+  assert.equal(other, streaming.sourceNotConfiguredForLlm('BOSTON_OPENCONTEXT_MCP_URL'));
+  assert.ok(other.includes('BOSTON_OPENCONTEXT_MCP_URL') && !other.includes('no data can be retrieved'));
 });
 
 test('scope: a failure no source answered — nothing refused it — keeps the copy it had, byte-identical to base', () => {

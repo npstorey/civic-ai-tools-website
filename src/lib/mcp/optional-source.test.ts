@@ -73,11 +73,6 @@ const HOSTED_PREFIXES = ['nyc_charter__', ...NEW_HOSTED.map((entry) => `${entry.
 const UNSET: McpRegistryEnv = { socrataUrl: 'https://socrata.invalid', dataCommonsUrl: 'https://data-commons.invalid' };
 const SET: McpRegistryEnv = { ...UNSET, bostonOpencontextUrl: 'https://opencontext.invalid/mcp' };
 const ALL_ON: McpRegistryEnv = { ...SET, nycCharterHosting: 'sandbox', nycCheckbookHosting: 'sandbox', nysLegislationHosting: 'sandbox', ckanUrl: 'https://ckan.invalid/mcp' };
-/** Router 0.11.0 (CKAN-1 P3, stage L): the website builds no `ckan-server` server yet, so with `ckanUrl` set the
- *  registry still refuses the Boston pack's six tools naming `CKAN_MCP_URL`. Stage G wires the server. */
-const PACK_UNCONFIGURED_AT_L = Object.fromEntries(
-  civicRouter.manifest.filter((entry) => entry.sourceId === 'boston-ckan').flatMap((entry) => entry.toolNames.map((tool) => [`${entry.alias}__${tool}`, 'CKAN_MCP_URL'])),
-);
 const hostedUnconfigured = {
   ...Object.fromEntries(CHARTER_EXPOSED.map((tool) => [tool, 'NYC_CHARTER_HOSTING'])),
   ...Object.fromEntries(NEW_HOSTED.flatMap((entry) => entry.toolNames.map((tool) => [`${entry.alias}__${tool}`, entry.configuration.addressVariable]))),
@@ -91,8 +86,11 @@ test('the registry: configured, the Boston server routes its six tools; unset, t
   assert.equal(set.servers['boston-opencontext']?.endpointUrl, 'https://opencontext.invalid/mcp');
   assert.deepEqual(set.unconfiguredTools, hostedUnconfigured, 'with Boston set, only the hosted sources\' tools (switches unset) are refused, each naming its own switch');
   assert.deepEqual([...new Set(Object.values(hostedUnconfigured))], ['NYC_CHARTER_HOSTING', 'NYC_CHECKBOOK_HOSTING', 'NYS_LEGISLATION_HOSTING', 'CKAN_MCP_URL']);
-  assert.equal(Object.keys(PACK_UNCONFIGURED_AT_L).length, 6, 'premise: the Boston pack has six tools');
-  assert.deepEqual(buildMcpRegistry(ALL_ON).unconfiguredTools, PACK_UNCONFIGURED_AT_L, 'with every optional source on, nothing but the unwired pack is refused');
+  assert.deepEqual(buildMcpRegistry(ALL_ON).unconfiguredTools, {}, 'with every optional source on, nothing is refused');
+  // Router 0.11.0 (CKAN-1 P3): with every optional source on, the Boston pack's six route to the CKAN server.
+  const allOn = buildMcpRegistry(ALL_ON);
+  const pack = civicRouter.manifest.find((entry) => entry.sourceId === 'boston-ckan')!;
+  assert.deepEqual(pack.toolNames.map((tool) => allOn.toolIndex[`${pack.alias}__${tool}`]), Array(6).fill('ckan-server'));
   const unset = buildMcpRegistry(UNSET);
   assert.equal(unset.servers['boston-opencontext'], undefined);
   for (const tool of CKAN_EXPOSED) {

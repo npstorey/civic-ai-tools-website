@@ -28,6 +28,7 @@ import {
   configuredSources,
   DATA_COMMONS_TOOL_NAMES,
   exposedToolName,
+  CKAN_SERVER_SOURCE_ID,
   readMcpEnv,
   resolveCalledName,
   SOCRATA_TOOL_NAMES,
@@ -247,10 +248,10 @@ const BOSTON_OPENCONTEXT_TOOLS = [...BOSTON_OPENCONTEXT_TOOL_NAMES];
  * whose `configuration.requirement` is `optional`, with its address variable
  * and its routing list.
  */
-const OPTIONAL_SOURCES: Record<string, { variable: string; alias: string; tools: readonly string[] }> = Object.fromEntries(
+const OPTIONAL_SOURCES: Record<string, { variable: string; alias: string; tools: readonly string[]; base?: string }> = Object.fromEntries(
   CIVIC_MANIFEST.filter((entry) => entry.configuration.requirement === 'optional').map((entry) => [
     entry.sourceId,
-    { variable: entry.configuration.addressVariable, alias: entry.alias, tools: entry.toolNames },
+    { variable: entry.configuration.addressVariable, alias: entry.alias, tools: entry.toolNames, ...(entry.base !== undefined ? { base: entry.base } : {}) },
   ]),
 );
 
@@ -365,6 +366,21 @@ export function buildMcpRegistry(env: McpRegistryEnv, selection?: SourceSelectio
           },
         }
       : {}),
+    // The hosted CKAN server (router 0.11.0, CKAN-1 P3), optional: present only
+    // when `CKAN_MCP_URL` is set. It declares no tools of its own (ruling D7 =
+    // D); its packs' tools are indexed to it below, as City Record's are to
+    // Socrata's, so a pack's call goes to this server.
+    ...(env.ckanUrl
+      ? {
+          [CKAN_SERVER_SOURCE_ID]: {
+            sourceId: CKAN_SERVER_SOURCE_ID,
+            label: 'CKAN MCP Server',
+            endpointUrl: normalizeMcpEndpoint(env.ckanUrl),
+            tools: [],
+            ...manifestIdentity(CKAN_SERVER_SOURCE_ID),
+          },
+        }
+      : {}),
   };
 
   // Sources the instance runs itself, offered by their switch rather than an
@@ -419,8 +435,14 @@ export function buildMcpRegistry(env: McpRegistryEnv, selection?: SourceSelectio
     const baseVariable = CIVIC_MANIFEST.find((entry) => entry.sourceId === target.base)?.configuration.addressVariable;
     if (baseVariable) unconfiguredTools[target.exposedName] = baseVariable;
   }
-  for (const [sourceId, { variable, alias, tools }] of Object.entries(OPTIONAL_SOURCES)) {
+  for (const [sourceId, { variable, alias, tools, base }] of Object.entries(OPTIONAL_SOURCES)) {
     if (servers[sourceId] || hosted[sourceId]) continue;
+    // A pack has no server of its own (CKAN-1 P3, C2): the loop above names its
+    // base's variable when the base is not routable, and when it is, the pack's
+    // tools are routable and a selection that leaves the pack out refuses them
+    // `not-offered`, as City Record's are. Recording them here would refuse a
+    // pack the reader turned Off as not configured while its variable is set.
+    if (base !== undefined) continue;
     // A keyed source whose switch is on and whose key is not set names the
     // key, the one thing the operator has left to set (R8 W3).
     const missing = env.hostedKeyMissing && Object.hasOwn(env.hostedKeyMissing, sourceId) ? env.hostedKeyMissing[sourceId] : undefined;
@@ -466,6 +488,8 @@ export const MCP_SOURCE_ADDRESS_FIELD = {
   socrata: 'socrataUrl',
   'data-commons': 'dataCommonsUrl',
   'boston-opencontext': 'bostonOpencontextUrl',
+  // Router 0.11.0 (CKAN-1 P3): the hosted CKAN server; its packs take its address.
+  'ckan-server': 'ckanUrl',
 } as const satisfies Record<string, keyof McpRegistryEnv>;
 
 /** A source's configured address as configured, or `undefined` when the
@@ -694,6 +718,7 @@ export function routeToolCall(
     case 'not-configured':
       throw new McpConfigurationError(
         `The MCP server for tool "${toolName}" is not configured: ${resolved.variable} is missing or empty in the server environment. Set it and restart the server.`,
+        resolved.variable,
       );
     case 'not-offered':
       throw new SourceNotOfferedError(toolName);
@@ -788,7 +813,7 @@ function presentOrUndefined(raw: string | undefined): string | undefined {
  * builds a configuration with the router's raw reader.
  */
 export function readMcpEnvFromProcess(): McpRegistryEnv {
-  // The package's reader over exactly these seven variables, each read by name
+  // The package's reader over exactly these eight variables, each read by name
   // here so the environment this module reads stays visible
   // (`scripts/env-reads-declared.test.mjs`); `process.env` is never handed over
   // whole.
@@ -797,6 +822,9 @@ export function readMcpEnvFromProcess(): McpRegistryEnv {
     DATA_COMMONS_MCP_URL: process.env.DATA_COMMONS_MCP_URL,
     DATA_COMMONS_API_KEY: process.env.DATA_COMMONS_API_KEY,
     BOSTON_OPENCONTEXT_MCP_URL: process.env.BOSTON_OPENCONTEXT_MCP_URL,
+    // The hosted CKAN server (router 0.11.0, CKAN-1 P3): its address offers it
+    // and the packs over it (Analyze Boston), each optional.
+    CKAN_MCP_URL: process.env.CKAN_MCP_URL,
     // The switches that offer the hosted sources (#617 D7; router 0.6.0, R8
     // W3): only `sandbox` turns one on; none names an address. NYC City
     // Record's switch was retired by router 0.8.0 (a pack over Socrata).
@@ -841,10 +869,17 @@ export function readMcpEnvFromProcess(): McpRegistryEnv {
  */
 export class McpConfigurationError extends Error {
   readonly code = 'mcp_not_configured' as const;
+  /**
+   * The variable that configures the source, when the refusal is one tool's
+   * whose source is known (`routeToolCall`): read by `describeToolFailureForLlm`
+   * (`../streaming.ts`) by this field, never from the message (website #539).
+   */
+  readonly variable?: string;
 
-  constructor(message: string) {
+  constructor(message: string, variable?: string) {
     super(message);
     this.name = 'McpConfigurationError';
+    if (variable !== undefined) this.variable = variable;
   }
 }
 

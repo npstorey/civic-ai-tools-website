@@ -62,6 +62,7 @@ import { buildSystemPrompt } from '../mcp/socrata-skill.ts';
 import { sourceIdForToolName } from '../mcp/operation-types.ts';
 import { CIVIC_SOURCE_REGISTRY } from '../evidence/data-sources.ts';
 import type { ToolLoopOptions } from './run-tool-loop.ts';
+import { recordedAliasResolver } from '../flows/recorded-alias.ts';
 import { createInLoopRouting, directorySet, DIRECTORY_SET_RULE, type InLoopRouting } from '../mcp/routing-mode.ts';
 
 /** Tool-calling rounds before the loop stops and asks for an answer. */
@@ -388,8 +389,12 @@ export interface ReplayOfferedSetSource {
  */
 export type ReplayOfferedSetWithLoads = ReplayOfferedSet & { loadedUnstated?: string[] };
 
-/** The sources the record's inline trace shows loaded (a load span whose outcome is `loaded`), in manifest order. */
-function loadedInTrace(trace: unknown): string[] {
+/**
+ * The sources the record's inline trace shows loaded (a load span whose outcome is `loaded`), in manifest order.
+ * Each alias is read as the record meant it (CKAN-1 P3, A-C6: `recordedAliasResolver`), not by the live manifest.
+ */
+function loadedInTrace(pkg: ReplayOfferedSetSource): string[] {
+  const trace = pkg.trace;
   const resourceSpans = trace && typeof trace === 'object' ? (trace as { resourceSpans?: unknown }).resourceSpans : undefined;
   if (!Array.isArray(resourceSpans)) return [];
   const aliases = new Set<string>();
@@ -407,7 +412,9 @@ function loadedInTrace(trace: unknown): string[] {
       }
     }
   }
-  return CIVIC_MANIFEST.filter((entry) => aliases.has(entry.alias)).map((entry) => entry.sourceId);
+  const resolve = recordedAliasResolver(pkg);
+  const loaded = new Set([...aliases].map((alias) => resolve(alias)).filter((id): id is string => id !== undefined));
+  return CIVIC_MANIFEST.filter((entry) => loaded.has(entry.sourceId)).map((entry) => entry.sourceId);
 }
 
 /** The method a record's composition block states its sources were chosen
@@ -517,7 +524,7 @@ export function replayOfferedSet(
     };
   }
   const named = new Set(stated.ids);
-  const loadedUnstated = loadedInTrace(pkg.trace).filter((id) => !named.has(id));
+  const loadedUnstated = loadedInTrace(pkg).filter((id) => !named.has(id));
   return {
     from: stated.from,
     sources: manifestIds.filter((id) => named.has(id) && routable(id) && replayerOn(id)),

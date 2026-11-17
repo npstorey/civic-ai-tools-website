@@ -93,6 +93,9 @@ baseServer.unref();
 for (const k of ['SITE_DEFAULT_PORTAL', 'SITE_PORTAL_LOCKED', 'SOURCE_ROUTING', 'BOSTON_OPENCONTEXT_MCP_URL', 'DATA_COMMONS_API_KEY', 'NYC_CHARTER_HOSTING', 'NYC_CHECKBOOK_HOSTING', 'NYS_LEGISLATION_HOSTING']) delete process.env[k];
 process.env.SOCRATA_MCP_URL = `http://127.0.0.1:${(baseServer.address() as AddressInfo).port}/mcp`;
 process.env.DATA_COMMONS_MCP_URL = 'http://127.0.0.1:9/mcp';
+// The hosted CKAN server (router 0.11.0, CKAN-1 P3), so the Boston pack's base is routable and criterion 3 holds its
+// six tools beside City Record's two. Nothing in this file sends to it: the table's transport sends nothing.
+process.env.CKAN_MCP_URL = 'https://ckan.example.test/mcp';
 process.env.OPENROUTER_API_KEY = 'not-a-credential-s2b-p2';
 
 const { CIVIC_MANIFEST, civicRouter } = await import('@typedstandards/civic-typed-router');
@@ -243,14 +246,13 @@ const SELECTIONS: Array<string[] | undefined> = [
   ...Array.from({ length: 2 ** SOURCE_IDS.length }, (_, mask) => SOURCE_IDS.filter((_, bit) => (mask >> bit) & 1)),
 ];
 const PACK_TARGETS = [...civicRouter.dispatchMap.values()].filter((t) => t.base !== undefined);
-// Router 0.11.0 (CKAN-1 P3): the Boston pack's base, the CKAN server, is not routable here (`CKAN_MCP_URL` is unset,
-// and at stage L read by nothing), so its six tools are outside this criterion's premise; City Record's two are in it.
+// Every pack's base is routable here: Socrata's, and since router 0.11.0 the CKAN server (`CKAN_MCP_URL` is set).
 const ROUTABLE_PACK_TARGETS = PACK_TARGETS.filter((t) => buildMcpRegistry(configured).servers[t.base!] !== undefined);
 const PACK_NAMES = ROUTABLE_PACK_TARGETS.map((t) => t.exposedName);
 
 test('the send refuses a pack\'s tool the selection leaves out as not offered, whenever its base is routable', () => {
-  assert.deepEqual(PACK_TARGETS.filter((t) => !ROUTABLE_PACK_TARGETS.includes(t)).map((t) => t.sourceId), Array(6).fill('boston-ckan'), 'premise: only the Boston pack\'s base is unroutable');
-  assert.deepEqual(PACK_NAMES, ['nyc_record__get_data', 'nyc_record__fetch'], 'premise: City Record\'s two tools are the routable pack tools');
+  assert.deepEqual(PACK_TARGETS.filter((t) => !ROUTABLE_PACK_TARGETS.includes(t)).map((t) => t.sourceId), [], 'premise: every pack\'s base is routable');
+  assert.deepEqual([...new Set(ROUTABLE_PACK_TARGETS.map((t) => t.sourceId))], ['nyc-record', 'boston-ckan'], 'premise: both packs\' tools are in the table');
   const wrong: string[] = [];
   let rows = 0;
   for (const selection of SELECTIONS) {
@@ -337,9 +339,9 @@ for (const selection of SELECTIONS) {
 /** The refused rows' recorded arguments, as measured on the tree before this change; sha256 of their canonical JSON. */
 const REFUSED_ROWS_ARGUMENTS_SHA256 = 'ce8878e6d24d8fd8a44045f4d1dfe44331c59f7b1e126ca61e75fe6d84971e79';
 /** CKAN-1 P3 (router 0.11.0): the same over the 0.11.0 table (nine sources, so 2^9 selections, and the Boston pack's
- *  six names and their bare spellings), measured at stage L. The rows of the 0.10.0 table, Boston OpenContext's
+ *  six names and their bare spellings), measured at CKAN-1 P3's stage G with `CKAN_MCP_URL` set (the pack's base routable). The rows of the 0.10.0 table, Boston OpenContext's
  *  renamed back, still hash to the pin above: the move is the two entries and the rename, and nothing else. */
-const REFUSED_ROWS_ARGUMENTS_SHA256_ROUTER_0_11_0 = 'dd502a052dfd67fd3eb1ccd45a8c4823527bec33a288650923a2810c29fe1c5b';
+const REFUSED_ROWS_ARGUMENTS_SHA256_ROUTER_0_11_0 = '8400c1673a242010ee577703ad7e020d1b73db04f3d8c52fef095d406020da71';
 const NEW_SOURCE_IDS = ['ckan-server', 'boston-ckan'];
 const NEW_NAMES = new Set([...civicRouter.dispatchMap.values()].filter((t) => t.sourceId === 'boston-ckan').flatMap((t) => [t.exposedName, t.upstreamName]));
 

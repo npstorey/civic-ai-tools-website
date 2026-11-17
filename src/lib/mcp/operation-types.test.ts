@@ -201,24 +201,15 @@ test('#323: every tool the model can call is either typed or knowingly untyped',
     nycCharterHosting: 'sandbox',
     nycCheckbookHosting: 'sandbox',
     nysLegislationHosting: 'sandbox',
+    // Router 0.11.0 (CKAN-1 P3): the hosted CKAN server, whose Boston pack's six tools route to it.
+    ckanUrl: 'https://ckan.invalid/mcp',
   };
   const exposedNames = mcpTools.flatMap((t) => (t.type === 'function' ? [t.function.name] : []));
-  // CKAN-1 P3, STAGE L ONLY (router 0.11.0, hub #314): the Boston pack's six tools are in the vocabulary, but at this
-  // stage the website reads no `CKAN_MCP_URL` and builds no `ckan-server` server, so no instance can offer them, no
-  // dispatch routes them and no operation type derives from them. Each is held to exactly that state here; stage G
-  // wires the server and types the six (criteria A13, A16, A17), and removes this block so the loop below holds them.
-  const PACK_AT_L = new Set(civicRouter.manifest.filter((entry) => entry.sourceId === 'boston-ckan').flatMap((entry) => entry.toolNames.map((tool) => `${entry.alias}__${tool}`)));
-  assert.equal(PACK_AT_L.size, 6, 'premise: the Boston pack has six tools');
-  for (const exposed of PACK_AT_L) {
-    assert.ok(exposedNames.includes(exposed), `premise: ${exposed} is in the vocabulary`);
-    assert.equal(civicRouter.dispatchMap.get(exposed)?.base, 'ckan-server', `${exposed} is not a pack tool over the CKAN server`);
-    assert.equal(routedSourceId(exposed, { ...ALL_ON, ckanUrl: 'https://ckan.invalid/mcp' }), undefined, `${exposed} routes before stage G`);
-    assert.equal(deriveOperationType(exposed, {}), undefined, `${exposed} derives an operation type before stage G`);
-  }
+  // The Boston pack's six (router 0.11.0, CKAN-1 P3) are in the loop below: premise that it reaches them.
+  assert.ok(exposedNames.filter((name) => civicRouter.dispatchMap.get(name)?.base === 'ckan-server').length === 6, 'premise: the vocabulary holds the Boston pack\'s six');
 
   for (const tool of mcpTools) {
     if (tool.type !== 'function') continue;
-    if (PACK_AT_L.has(tool.function.name)) continue;
     // The model is offered each tool as `<alias>__<upstream>` since #599 W3;
     // the decisions below are keyed by the upstream name, and both spellings
     // must resolve.

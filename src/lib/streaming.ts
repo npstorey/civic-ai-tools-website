@@ -4,7 +4,7 @@ import { deriveOperationType, isTool, upstreamToolName } from './mcp/operation-t
 import { isSourceRefusal } from './mcp/tool-call-failure.ts';
 import { ambiguousToolNameOf } from './mcp/tool-name-refusal.ts';
 import { PortalLockedCallError } from './portal-lock.ts';
-import { PackFilterRefusedError, type PackFilter } from './mcp/pack-filter.ts';
+import { PackFilterRefusedError, SqlStatementRefusedError, type PackFilter } from './mcp/pack-filter.ts';
 import { BaseChangedError, BaseReadFailedError } from './mcp/base-check.ts';
 import type { ToolFailureKind } from './notebook-author/tool-to-cell.ts';
 import type { FlowsLinks, FlowsSource } from './flows/statement.ts';
@@ -987,6 +987,51 @@ export function packFilterRefusalForLlm(filter: Pick<PackFilter, 'source' | 'por
 }
 
 /**
+ * What the model is told when the loop core did not send a CKAN pack's
+ * `ckan_datastore_search_sql` call because its `sql` is not one read-only
+ * statement (CKAN-1 P3, D3 = A): the statement's twin of
+ * `packFilterRefusalForLlm`, recognised by its own type so the model is not told
+ * a portal was wrong when a statement was. The rule is the tool's own `sql`
+ * description's, word for word, and `isOneReadOnlyStatement` (`./mcp/pack-filter.ts`)
+ * enforces it. The call was never sent.
+ */
+export function sqlStatementRefusalForLlm(filter: Pick<PackFilter, 'source'>): string {
+  const { source } = filter;
+  return (
+    `${TOOL_FAILURE_PREAMBLE} This tool belongs to ${source}, which sends one read-only statement only: it begins, after any whitespace and SQL comments, with SELECT or WITH, and no second statement follows a semicolon outside a quoted literal. This request's sql was not one such statement, so it was not sent.` +
+    ` If the question can be answered by one SELECT or WITH statement, make the request again with that statement;` +
+    ` if it cannot, tell the user in plain language that the query could not be run, and do not include any raw error text, status codes, server names, or system details.`
+  );
+}
+
+/**
+ * What the model is told when a call's source is not configured on this
+ * instance (website #539; CKAN-1 P3, A18): the dispatch refused it before any
+ * request because the variable that configures the source is not set
+ * (`routeToolCall`, `./mcp/registry.ts`, which carries the variable on the
+ * error). It names the variable, so the model is not told that no data can be
+ * retrieved at all: other sources may answer. Socrata's variable keeps the
+ * no-primary-source text (`describeToolFailureForLlm`), since a run with no
+ * Socrata is refused up front and this is only its backstop.
+ */
+export function sourceNotConfiguredForLlm(variable: string): string {
+  return (
+    `${TOOL_FAILURE_PREAMBLE} This source is not configured on this instance: the setting that configures it, ${variable}, is not set, so this request was not sent.` +
+    ` Do not call this source's tools again for this question. If the question can be answered from another data source you have tools for, make that request instead;` +
+    ` if it cannot, tell the user in plain language that this data source is not set up on the site that ran this question, and do not include any raw error text, setting names, status codes, server names, or system details.`
+  );
+}
+
+/** The variable a not-configured refusal names, read by its field (`McpConfigurationError.variable`), never its words. */
+function unconfiguredVariableOf(input: unknown): string | undefined {
+  const variable = input !== null && typeof input === 'object' ? (input as { variable?: unknown }).variable : undefined;
+  return typeof variable === 'string' && variable !== '' ? variable : undefined;
+}
+
+/** The required source's variable: its absence keeps the no-primary-source text. */
+const PRIMARY_SOURCE_VARIABLE = 'SOCRATA_MCP_URL';
+
+/**
  * What the model is told when the loop core did not send a pack's call because
  * the server its requests go through did not match what the pack was written
  * for (S2-B P3R, the base check; the owner's D3 in R2, OA-790): the twin of
@@ -1043,6 +1088,8 @@ export function describeToolFailureForLlm(_toolName: string, input: unknown): st
   // The pack's twin (S2-B W3): refused by the loop core before anything was
   // sent; recognised by type, as the lock's is.
   if (input instanceof PackFilterRefusedError) return packFilterRefusalForLlm(input.filter);
+  // The statement's twin (CKAN-1 P3, D3 = A): refused before anything was sent, recognised by its own type.
+  if (input instanceof SqlStatementRefusedError) return sqlStatementRefusalForLlm(input.filter);
   // The base check's refusal (S2-B P3R): not sent, recognised by type.
   if (input instanceof BaseChangedError) return baseChangedRefusalForLlm(input.filter);
   // Dispatch refused a bare name two offered sources share (#599 W3, D6),
@@ -1057,13 +1104,19 @@ export function describeToolFailureForLlm(_toolName: string, input: unknown): st
       );
     case 'mcp_unavailable':
       return tellUser('The live data source is temporarily unavailable. Suggest trying again shortly.');
-    case 'mcp_not_configured':
+    case 'mcp_not_configured': {
+      // One source this instance does not configure, named by its variable
+      // (website #539): the model is told that source is not set up here,
+      // not that no data can be retrieved at all.
+      const variable = unconfiguredVariableOf(input);
+      if (variable !== undefined && variable !== PRIMARY_SOURCE_VARIABLE) return sourceNotConfiguredForLlm(variable);
       // Backstop only: the routes refuse up front when no data source is
       // configured (#258 C4), but if a tool call still fires the model must
       // relay honest absence, not raw configuration detail.
       return tellUser(
         'This server has no live data source configured, so no data can be retrieved. Suggest contacting whoever operates this instance.',
       );
+    }
     case 'not_offered':
       // R6 W1: the dispatch refused a call to a data source this run was not
       // offered, before anything was sent. Its own copy, not the preamble's

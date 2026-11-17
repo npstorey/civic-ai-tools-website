@@ -150,7 +150,7 @@ const { startScriptedModelServer } = await import('./test-harness.ts');
 const { runToolLoop } = await import('./run-tool-loop.ts');
 const { compareLoopOptions } = await import('./compare-loop.ts');
 const { _resetDefaultModelClientForTests, getModelClient } = await import('../model-client.ts');
-const { buildMcpRegistry, configuredMcpServers, readMcpEnvFromProcess, routeToolCall, routedSourceId } = await import('../mcp/registry.ts');
+const { buildMcpRegistry, configuredMcpServers, dispatchTargetOf, readMcpEnvFromProcess, routeToolCall, routedSourceId } = await import('../mcp/registry.ts');
 const { composeSystemPrompt } = await import('../mcp/socrata-skill.ts');
 const { mcpToolsFor, offeredMcpTools } = await import('../mcp/tools.ts');
 const { classifyStreamError, describeToolFailureForLlm } = await import('../streaming.ts');
@@ -248,6 +248,26 @@ const attr = (span: Span | undefined, key: string): unknown => {
 const sentCalls = (r: Run) => r.seen.filter((s) => s.method === 'tools/call');
 const failureOf = (c: ToolCallRecord) => ({ failed: c.failed === true, failureKind: c.failureKind ?? null });
 
+// --- The driven runs, all before any test is defined: a test that unsets `CKAN_MCP_URL` (A13 unset, A13c, A-C1) runs
+// as soon as it is defined, so a run started after it would race it.
+
+const A13B = await run({ 'ckan-server': 'off', 'boston-ckan': 'on' }, [[call('b1', exposed('ckan_package_search'), { server_url: PORTAL, q: 'potholes' })]]);
+
+const A14_OTHER = await run({}, [[call('p1', exposed('ckan_package_search'), { server_url: OTHER_PORTAL, q: 'potholes' })]]);
+const A14_SENT = await run({}, [[
+  call('p2', exposed('ckan_package_search'), { server_url: 'HTTPS://Data.Boston.GOV', q: 'potholes' }),
+  call('p3', exposed('ckan_package_show'), { server_url: `${PORTAL}/`, id: '311-service-requests' }),
+]]);
+
+const SQL_REFUSED = ['DELETE FROM "x"', '/* c */ drop table x', 'SELECT 1; DROP TABLE x'];
+const SQL_SENT = ['SELECT count(*) FROM "x"', 'WITH t AS (SELECT 1) SELECT * FROM t', 'SELECT * FROM "x" WHERE name = \'a;b\'', '/* c */ SELECT 1'];
+const A15 = await run({}, [[...SQL_SENT, ...SQL_REFUSED].map((sql, i) => call(`s${i}`, exposed('ckan_datastore_search_sql'), { server_url: PORTAL, sql }))]);
+
+const A16 = await run({}, [[
+  call('r1', exposed('ckan_datastore_search'), { server_url: PORTAL, resource_id: 'abc-123', limit: 1 }),
+  call('r2', exposed('ckan_package_search'), { server_url: OTHER_PORTAL, q: 'potholes' }),
+]]);
+
 // --- A13: offered through the gate, with the variable set; and nothing of it with the variable unset ---------------
 
 const PACK_TOOLS = PACK.toolNames.map(exposed);
@@ -340,7 +360,6 @@ test('A-C1: with CKAN_MCP_URL set, neither CKAN row names Tyler Technologies or 
 
 // --- A13b: the base Off, the pack On ------------------------------------------------------------------------------
 
-const A13B = await run({ 'ckan-server': 'off', 'boston-ckan': 'on' }, [[call('b1', exposed('ckan_package_search'), { server_url: PORTAL, q: 'potholes' })]]);
 
 test('A13b: with the base Off and the pack On, the pack\'s call is answered by the base\'s server; the record\'s pack row reads selected, its base row reader-off', () => {
   assert.deepEqual(sentCalls(A13B).map((s) => [s.tool, s.args?.server_url]), [['ckan_package_search', PORTAL]], `the hosted server did not answer the pack's call: ${JSON.stringify(A13B.calls.map(failureOf))}`);
@@ -365,6 +384,9 @@ test('A13c: with CKAN_MCP_URL set, the base On and the pack Off, a pack call in 
         prompt: 'Boston, with the pack Off.',
         tools: [],
         executeToolCall: async (name: string) => { routeToolCall(registry, name); return 'fixture answer, nothing sent'; },
+        // The target the dispatch sends each call to, as every route supplies it (`compareLoopOptions`): a name it
+        // refuses has none, so nothing is read from the base for it.
+        dispatchTarget: (name: string) => dispatchTargetOf(name, readMcpEnvFromProcess(), decision.selection),
       })).toolCalls;
       return calls.map((c) => c.failureKind ?? null);
     } finally {
@@ -386,11 +408,6 @@ test('A13c: with CKAN_MCP_URL set, the base On and the pack Off, a pack call in 
 
 // --- A14: the portal lock, call-time -------------------------------------------------------------------------------
 
-const A14_OTHER = await run({}, [[call('p1', exposed('ckan_package_search'), { server_url: OTHER_PORTAL, q: 'potholes' })]]);
-const A14_SENT = await run({}, [[
-  call('p2', exposed('ckan_package_search'), { server_url: 'HTTPS://Data.Boston.GOV', q: 'potholes' }),
-  call('p3', exposed('ckan_package_show'), { server_url: `${PORTAL}/`, id: '311-service-requests' }),
-]]);
 
 test('A14: a pack call naming another portal is refused before any request and recorded rejected; the pack\'s portal in another case or with a trailing slash is sent', () => {
   assert.deepEqual(
@@ -415,9 +432,6 @@ test('A14: a pack call naming another portal is refused before any request and r
 
 // --- A15: the SELECT-only check ---------------------------------------------------------------------------------
 
-const SQL_REFUSED = ['DELETE FROM "x"', '/* c */ drop table x', 'SELECT 1; DROP TABLE x'];
-const SQL_SENT = ['SELECT count(*) FROM "x"', 'WITH t AS (SELECT 1) SELECT * FROM t', 'SELECT * FROM "x" WHERE name = \'a;b\'', '/* c */ SELECT 1'];
-const A15 = await run({}, [[...SQL_SENT, ...SQL_REFUSED].map((sql, i) => call(`s${i}`, exposed('ckan_datastore_search_sql'), { server_url: PORTAL, sql }))]);
 
 test('A15: ckan_datastore_search_sql sends one read-only statement and refuses the rest before they are sent, as its own sql description states', () => {
   const sentSql = sentCalls(A15).map((s) => s.args?.sql);
@@ -447,10 +461,6 @@ test('A15: ckan_datastore_search_sql sends one read-only statement and refuses t
 
 // --- A16: the record -------------------------------------------------------------------------------------------
 
-const A16 = await run({}, [[
-  call('r1', exposed('ckan_datastore_search'), { server_url: PORTAL, resource_id: 'abc-123', limit: 1 }),
-  call('r2', exposed('ckan_package_search'), { server_url: OTHER_PORTAL, q: 'potholes' }),
-]]);
 
 function packageOf(trace: unknown, calls: ToolCallRecord[]) {
   return buildEvidencePackage({

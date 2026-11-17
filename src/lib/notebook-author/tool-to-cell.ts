@@ -354,7 +354,7 @@ export interface StepCandidate {
  * Tools whose result this notebook re-fetches with a helper of its own. Each
  * has a renderer below that emits a `dfN = fetch_*(` cell.
  */
-const RERUNNABLE_STEP_TOOLS = new Set(['get_observations', 'ckan__query_data', 'ckan__execute_sql']);
+const RERUNNABLE_STEP_TOOLS = new Set(['get_observations', 'ckan__query_data', 'ckan__execute_sql', 'ckan_datastore_search', 'ckan_datastore_search_sql']);
 
 /**
  * Tools that are steps this notebook CANNOT re-run — stated as such, one cell
@@ -769,7 +769,8 @@ function renderOpenContextSqlCell(
     cells: [markdownCell(md), codeCell(code)],
     producedDataFrame: true,
     dataFrameVariable: dfVar,
-    citation: { id: 'boston-ckan', label: 'data.boston.gov (CKAN)', url: 'https://data.boston.gov' },
+    // Boston OpenContext's own id (CKAN-1 P3, A-C6): `boston-ckan` is the Boston pack's `sourceId` since router 0.11.0.
+    citation: { id: 'boston-opencontext', label: 'data.boston.gov (CKAN)', url: 'https://data.boston.gov' },
   };
 }
 
@@ -805,6 +806,65 @@ function renderOpenContextQueryCell(
     dataFrameVariable: dfVar,
     citation: { id: resourceId, label: `data.boston.gov: ${resourceId}`, url: `https://data.boston.gov/dataset/${resourceId}` },
   };
+}
+
+/**
+ * A CKAN pack's datastore call (router 0.11.0, CKAN-1 P3, A17), re-run against
+ * the `server_url` the call carried, never a portal this file fixes: the pack's
+ * check sent the call only for its own portal, and a record states the value as
+ * the call named it. `fetch_ckan` (`./helpers/fetch_ckan.py`) reads the portal's
+ * own CKAN action API.
+ */
+function renderCkanDatastoreCell(call: PhaseAToolCall, ctx: ToolCellContext): ToolCellOutput {
+  const dfVar = `df${ctx.dataFrameIndex}`;
+  const serverUrl = String(call.args.server_url ?? '');
+  const host = hostLabel(serverUrl);
+  const sql = typeof call.args.sql === 'string' ? call.args.sql : undefined;
+  if (sql !== undefined) {
+    const md = [
+      `### Step ${ctx.dataFrameIndex}: Run a SQL statement against ${host}`,
+      '',
+      'We run the read-only statement below against the CKAN DataStore of the portal the original call named.',
+    ].join('\n');
+    const code = [
+      `_sql = ${JSON.stringify(sql)}`,
+      guardedFetch(dfVar, `Step ${ctx.dataFrameIndex}`, `${dfVar} = fetch_ckan(${JSON.stringify(serverUrl)}, sql=_sql)`),
+    ].join('\n');
+    return {
+      cells: [markdownCell(md), codeCell(code)],
+      producedDataFrame: true,
+      dataFrameVariable: dfVar,
+      citation: { id: `${host} (CKAN SQL)`, label: `${host} (CKAN)`, url: serverUrl },
+    };
+  }
+  const resourceId = String(call.args.resource_id ?? '');
+  const filters = call.args.filters as Record<string, unknown> | undefined;
+  const limit = (call.args.limit as number | undefined) ?? 1000;
+  const md = [
+    `### Step ${ctx.dataFrameIndex}: Query a CKAN resource on ${host}`,
+    '',
+    `We fetch records from CKAN resource \`${resourceId}\`.`,
+    call.resultSummary ? `Original execution returned ${call.resultSummary.rows} rows.` : '',
+  ].filter(Boolean).join('\n');
+  const codeLines = [`${dfVar} = fetch_ckan(`, `    ${JSON.stringify(serverUrl)},`, `    resource_id=${JSON.stringify(resourceId)},`];
+  if (filters && Object.keys(filters).length > 0) codeLines.push(`    filters=${pyRepr(filters, '    ')},`);
+  codeLines.push(`    limit=${limit},`);
+  codeLines.push(')');
+  return {
+    cells: [markdownCell(md), codeCell(guardedFetch(dfVar, `Step ${ctx.dataFrameIndex}`, codeLines.join('\n')))],
+    producedDataFrame: true,
+    dataFrameVariable: dfVar,
+    citation: { id: resourceId, label: `${host}: ${resourceId}`, url: `${serverUrl.replace(/\/+$/, '')}/api/3/action/datastore_search?resource_id=${encodeURIComponent(resourceId)}` },
+  };
+}
+
+/** The host of a portal address, for a heading; the address itself when it has none. */
+function hostLabel(address: string): string {
+  try {
+    return new URL(address).host || address;
+  } catch {
+    return address;
+  }
 }
 
 /**
@@ -1128,6 +1188,8 @@ export function renderFetchToolCell(
   // Boston OpenContext.
   if (call.name === 'ckan__execute_sql') return renderOpenContextSqlCell(call, ctx);
   if (call.name === 'ckan__query_data') return renderOpenContextQueryCell(call, ctx);
+  // A CKAN pack (CKAN-1 P3, A17).
+  if (call.name === 'ckan_datastore_search' || call.name === 'ckan_datastore_search_sql') return renderCkanDatastoreCell(call, ctx);
   // `fetch` and `ckan__aggregate_data`: steps with no cell that could re-run them.
   return renderNotRerunnableStepCell(call);
 }

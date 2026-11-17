@@ -227,11 +227,16 @@ test('#258 C4: friendlyStreamError names SOCRATA_MCP_URL and stays distinct from
   assert.notEqual(copy, friendlyStreamError(new Error('MCP tool "get_data" timed out after 45s')));
 });
 
-test('#258 C4: describeToolFailureForLlm handles the unconfigured kind without leaking configuration detail', () => {
-  const text = describeToolFailureForLlm('get_data', { code: 'mcp_not_configured' });
+test('#258 C4: describeToolFailureForLlm handles the unconfigured kind; Socrata\'s names no variable, another source\'s names its own (#539)', () => {
+  const text = describeToolFailureForLlm('get_data', { code: 'mcp_not_configured', variable: 'SOCRATA_MCP_URL' });
   assert.match(text, /Do not estimate, guess, or fabricate/);
   assert.match(text, /no live data source configured/i);
-  assert.ok(!text.includes('SOCRATA_MCP_URL'), 'env-var names never reach the model-relayed answer');
+  assert.ok(!text.includes('SOCRATA_MCP_URL'), 'the primary source\'s variable reaches the model');
+  // Website #539 (CKAN-1 P3, A18): the model is told which setting is missing, and told not to relay it.
+  const other = describeToolFailureForLlm('ckan__search_datasets', { code: 'mcp_not_configured', variable: 'BOSTON_OPENCONTEXT_MCP_URL' });
+  assert.match(other, /Do not estimate, guess, or fabricate/);
+  assert.match(other, /This source is not configured on this instance/);
+  assert.ok(other.includes('BOSTON_OPENCONTEXT_MCP_URL') && /do not include any raw error text, setting names/.test(other));
 });
 
 // --- #154: the wire carries a typed kind, never raw infrastructure text -----
