@@ -42,7 +42,7 @@ import {
   type HostElement,
   type Surface,
 } from '../sources/surface-test-harness.ts';
-import { childrenOf, within } from '../ui/ui-test-helpers.ts';
+import { childrenOf, one, within } from '../ui/ui-test-helpers.ts';
 
 registerSurfaceHooks({ ...CONSENT_SURFACE_STUBS });
 
@@ -68,8 +68,12 @@ function at(search: string): void {
 // --- The document double ------------------------------------------------------------------------------------------
 
 /** What the Dialog focuses when it opens (the harness attaches no ref, so it focuses nothing; this stands for Close). */
-const CLOSE = { label: 'Close' };
-interface RowDouble { id: string; tabIndex: number; attrs: Map<string, string>; setAttribute(k: string, v: string): void; getAttribute(k: string): string | null; removeAttribute(k: string): void; scrollIntoView(o?: unknown): void; focus(o?: { preventScroll?: boolean }): void; closest(): null }
+const CLOSE: { label: string; focus(): void } = { label: 'Close', focus() { doc.activeElement = CLOSE; } };
+/** The dialog's panel, as a row's `closest('[role="dialog"]')` reaches it: its first enabled button is Close. */
+const PANEL = { querySelector: (selector: string) => (selector.startsWith('button') ? CLOSE : null) };
+// `tabIndex` reflects the `tabindex` attribute, as the DOM's does; with no attribute it reads 0 here (a browser reads -1
+// for an `li`), so a test that reads the property can fail, and the reopen reads the attribute, as the Chrome probe does.
+interface RowDouble { id: string; tabIndex: number; attrs: Map<string, string>; setAttribute(k: string, v: string): void; getAttribute(k: string): string | null; removeAttribute(k: string): void; scrollIntoView(o?: unknown): void; focus(o?: { preventScroll?: boolean }): void; closest(selector: string): typeof PANEL | null }
 const calls: string[] = [];
 const selectors: string[] = [];
 const rows = new Map<string, RowDouble>();
@@ -85,14 +89,15 @@ const doc = {
     if (!rows.has(id)) {
       const row: RowDouble = {
         id,
-        tabIndex: 0,
+        get tabIndex() { const v = this.attrs.get('tabindex'); return v === undefined ? 0 : Number(v); },
+        set tabIndex(v: number) { this.attrs.set('tabindex', String(v)); },
         attrs: new Map(),
         setAttribute(k, v) { calls.push(`${id} set ${k}`); this.attrs.set(k, String(v)); },
         getAttribute(k) { return this.attrs.get(k) ?? null; },
         removeAttribute(k) { calls.push(`${id} remove ${k}`); this.attrs.delete(k); },
         scrollIntoView() { calls.push(`${id} scroll`); },
         focus(o) { calls.push(`${id} focus${o?.preventScroll ? ' (preventScroll)' : ''}`); doc.activeElement = row; },
-        closest() { return null; },
+        closest(selector) { return selector === '[role="dialog"]' ? PANEL : null; },
       };
       rows.set(id, row);
     }
@@ -225,3 +230,75 @@ for (const [shape, search] of [['Settings opened from the menu (no source)', '']
     assert.equal(doc.activeElement, CLOSE, 'focus moved off Close');
   });
 }
+
+// --- Fix round 4 (#729 6961859983): the landing ends when its target does -------------------------------------------
+//
+// THE DEFECT. Land at a source, close Settings, open it again with no source: the row still carried the landing's
+// attribute, `tabindex="-1"` and `aria-label`, and held focus (planning `temp/ux-2/orch/probes/reopen-mark/`). The list
+// had lost `data-target-source`, so the overlay had rendered again at an address with no source, and nothing took back
+// what the landing had set on the row.
+//
+// THE SHAPE DRIVEN. One overlay, landed at `?source=<the last of seven>`, then the SAME overlay rendered again at an
+// address with no source. The harness re-renders a mounted surface only on a state change inside it (it has no prop or
+// address subscription; `readAddressSource` is read again at every render, as React's `useSyncExternalStore` reads its
+// snapshot), so the address is changed and then the overlay's own search is typed: a space, which shows the same seven
+// rows, and then nothing, which shows them again. The rendered list's `data-target-source` is read after each change,
+// so a re-render that never read the new address reads red as a premise, not green. The row is the same double
+// throughout: one overlay, one row element.
+
+/** Change the address, then re-render the same overlay through its own search (`query` keeps all seven rows). */
+async function sameOverlayAt(page: Surface, search: string, query: string): Promise<void> {
+  at(search);
+  const input = one(page.elements().filter((el) => el.type === 'input' && el.props.type === 'search'), 'the search');
+  await page.type(input, query);
+  for (let i = 0; i < 4; i += 1) {
+    await new Promise((resolve) => setTimeout(resolve, 50));
+    await page.settle();
+  }
+}
+
+/** What the landing left on the row and on focus; empty when the row reads as on a no-source open. */
+function landingLeftovers(row: RowDouble): string[] {
+  const left: string[] = [];
+  if (row.getAttribute('data-landing-target') !== null) left.push('the row keeps data-landing-target');
+  if (row.getAttribute('tabindex') === '-1') left.push('the row keeps tabindex="-1"');
+  if (row.getAttribute('aria-label') !== null) left.push(`the row keeps aria-label="${row.getAttribute('aria-label')}"`);
+  if (doc.activeElement === row) left.push('focus is on the row');
+  else if (doc.activeElement !== CLOSE) left.push('focus is neither on the row nor on Close');
+  return left;
+}
+
+test('fix round 4 (acceptance 1): landed at <the last of seven>, then the same overlay with no source, the row keeps nothing the landing set and focus is on Close', async () => {
+  const page = await overlayAt(`?source=${LAST.sourceId}`);
+  const row = rows.get(LAST.sourceId);
+  assert.ok(row, `premise: the landing reached the row: ${JSON.stringify(selectors)}`);
+  assert.equal(row!.getAttribute('data-landing-target'), '', 'premise: the landing marked the row');
+  assert.equal(doc.activeElement, row, 'premise: the landing focused the row');
+  await sameOverlayAt(page, '', ' ');
+  const { list, rows: shown } = overlayList(page);
+  assert.equal(list.props['data-target-source'], undefined, 'premise: the re-render read the address with no source');
+  assert.equal(shown.length, 7, `premise: the same seven rows (${shown.length})`);
+  assert.equal(rows.get(LAST.sourceId), row, 'premise: one row element throughout');
+  assert.deepEqual(landingLeftovers(row!), [], `calls: ${JSON.stringify(calls)}`);
+});
+
+test('fix round 4 (acceptance 2): after that reopen, a second landing on the same source marks, scrolls and focuses the row again', async () => {
+  const page = await overlayAt(`?source=${LAST.sourceId}`);
+  const row = rows.get(LAST.sourceId);
+  assert.ok(row, `premise: the landing reached the row: ${JSON.stringify(selectors)}`);
+  await sameOverlayAt(page, '', ' ');
+  assert.equal(overlayList(page).list.props['data-target-source'], undefined, 'premise: the reopen read no source');
+  const from = calls.length;
+  await sameOverlayAt(page, `?source=${LAST.sourceId}`, '');
+  assert.equal(overlayList(page).list.props['data-target-source'], LAST.sourceId, 'premise: the second landing read the source');
+  const again = calls.slice(from);
+  const problems: string[] = [];
+  for (const want of [`${LAST.sourceId} set data-landing-target`, `${LAST.sourceId} scroll`, `${LAST.sourceId} focus (preventScroll)`]) {
+    if (!again.includes(want)) problems.push(`the second landing did not: ${want}`);
+  }
+  if (row!.getAttribute('data-landing-target') === null) problems.push('the row is not marked');
+  if (row!.getAttribute('tabindex') !== '-1') problems.push('the row has no tabindex="-1"');
+  if (row!.getAttribute('aria-label') !== readerSourceName(LAST)) problems.push('the row is not named by the source');
+  if (doc.activeElement !== row) problems.push('focus is not on the row');
+  assert.deepEqual(problems, [], `calls after the reopen: ${JSON.stringify(again)}`);
+});
