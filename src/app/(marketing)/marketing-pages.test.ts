@@ -784,7 +784,7 @@ const MOVED_LIST = [
   'Your own data connector. npx -y socrata-mcp-server --stdio runs the open-source Socrata server on your machine, so an MCP client such as Claude Desktop can query any Socrata open-data portal.',
 ];
 
-test('UX-2 P6 + P10 criterion 10 (P10-15, P10-16): /project holds the moved list under its re-dated heading, five items verbatim and P10-16', () => {
+test('UX-2 P6 + P10 criterion 10 (P10-15, P10-16): /project holds the moved list under its heading, "What you can use", five items verbatim and P10-16', () => {
   const s = PAGES['/project'];
   const items = s.elements().filter((el) => el.type === 'li').map((el) => plain(readText(el)));
   assert.deepEqual(MOVED_LIST.filter((line) => !items.includes(line)), [], 'moved items missing');

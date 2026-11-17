@@ -87,9 +87,10 @@ const cardMeta: React.CSSProperties = {
 // owner's ruling (UX-1 G0-2 (ii)), in a commit of its own.
 const SECTIONS = {
   pillars: { id: 'three-pillars', heading: 'Three pillars' },
-  // UX-2 P10 (site Q3 = P, home Q5 = A): the list that was the home band's, re-dated (P10-15), and the setup that was
-  // /learn's, under the band's button words (P10-17); the band and /learn link #run-it-yourself.
-  use: { id: 'what-you-can-use', heading: 'What you can use (last checked November 2026)' },
+  // UX-2 P10 (site Q3 = P, home Q5 = A): the list that was the home band's, under a heading that names no date (the
+  // owner's note, P6P10-1, OA-950), and the setup that was /learn's, under the band's button words (P10-17); the band
+  // and /learn link #run-it-yourself.
+  use: { id: 'what-you-can-use', heading: 'What you can use' },
   setup: { id: 'run-it-yourself', heading: 'Run it yourself' },
   consortium: { id: 'consortium', heading: 'Consortium' },
   contact: { id: 'contact', heading: 'Contact us' },
