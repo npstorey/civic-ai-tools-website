@@ -42,14 +42,14 @@ test('the load step: the progress line and the reason name the source in the rea
   assert.equal(formatToolProgress(LOAD, { alias: 'socrata' }), 'Loading the Socrata source');
   assert.equal(formatToolProgress(LOAD, { alias: 'data_commons' }), 'Loading the Google Data Commons source');
   assert.equal(formatToolProgress(LOAD, { alias: UNKNOWN_ALIAS }), 'Loading a data source');
-  assert.equal(generateToolReason({ alias: 'boston' }, LOAD), 'to load the Boston OpenContext source');
+  assert.equal(generateToolReason({ alias: 'boston_opencontext' }, LOAD), 'to load the Boston OpenContext source');
   assert.equal(generateToolReason({ alias: UNKNOWN_ALIAS }, LOAD), 'to load a data source');
 });
 
 test('the load step: the result line states each outcome W1 records, and nothing without one', () => {
   assert.equal(formatToolResult({ alias: 'socrata' }, undefined, LOAD, 'loaded'), 'Loaded the Socrata source');
   assert.equal(
-    formatToolResult({ alias: 'boston' }, undefined, LOAD, 'declined'),
+    formatToolResult({ alias: 'boston_opencontext' }, undefined, LOAD, 'declined'),
     'The Boston OpenContext source is set to Ask first, so it was not used for this question',
   );
   assert.equal(
@@ -68,7 +68,7 @@ test('the load step: the annotation, the breadcrumb and the narrative have a loa
   assert.equal(buildBreadcrumbLabel({ name: LOAD, args: { alias: UNKNOWN_ALIAS } }), 'Load a source');
   const narrative = buildNarrativeSummary([
     { name: LOAD, args: { alias: 'socrata' }, operationType: 'load_source', loadOutcome: 'loaded' },
-    { name: LOAD, args: { alias: 'boston' }, operationType: 'load_source', loadOutcome: 'declined' },
+    { name: LOAD, args: { alias: 'boston_opencontext' }, operationType: 'load_source', loadOutcome: 'declined' },
     { name: LOAD, args: { alias: UNKNOWN_ALIAS }, operationType: 'load_source', loadOutcome: 'not-offered' },
     { name: LOAD, args: { alias: 'data_commons' }, operationType: 'load_source' },
   ]);
@@ -95,7 +95,7 @@ test('the load step: no renderer narrates a load as a data request or echoes an 
 
 test('the load step: the notebook states a load as a note, never a fetch cell or a discovery call', () => {
   const load: PhaseAToolCall = { name: LOAD, args: { alias: 'socrata' }, operationType: 'load_source', reason: 'to load the Socrata source', loadOutcome: 'loaded' };
-  const declined: PhaseAToolCall = { name: LOAD, args: { alias: 'boston' }, operationType: 'load_source', loadOutcome: 'declined' };
+  const declined: PhaseAToolCall = { name: LOAD, args: { alias: 'boston_opencontext' }, operationType: 'load_source', loadOutcome: 'declined' };
   const unknown: PhaseAToolCall = { name: LOAD, args: { alias: UNKNOWN_ALIAS }, operationType: 'load_source', loadOutcome: 'not-offered' };
   const search: PhaseAToolCall = { name: 'socrata__search', args: { query: 'potholes' }, operationType: 'search', reason: 'to find datasets about "potholes"' };
   assert.equal(isAnalysisStep(load), false);
@@ -108,7 +108,7 @@ test('the load step: the notebook states a load as a note, never a fetch cell or
   assert.ok(!discovery.includes('load_source'), `a load is listed as a discovery call:\n${text}`);
   assert.match(discovery, /`search`/);
   assert.match(note, /- `socrata`: loaded/);
-  assert.match(note, /- `boston`: not used, set to Ask first/);
+  assert.match(note, /- `boston_opencontext`: not used, set to Ask first/);
   assert.match(note, /- a request that named no source of the directory: nothing loaded/);
   assert.ok(!text.includes('injected'), 'an unknown alias was echoed into the notebook');
 

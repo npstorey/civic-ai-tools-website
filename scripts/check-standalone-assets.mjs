@@ -60,6 +60,10 @@ export const ASSETS = [
     file: 'src/lib/notebook-author/helpers/fetch_opencontext.py',
     reason: 'inlined into executed notebooks (ADR-0005 §3); read via node:fs at runtime',
   },
+  {
+    file: 'src/lib/notebook-author/helpers/fetch_ckan.py',
+    reason: 'inlined into executed notebooks (ADR-0005 §3); read via node:fs at runtime',
+  },
 ];
 
 function sha256(filePath) {

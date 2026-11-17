@@ -61,12 +61,12 @@ const ELEVEN: ReadonlyArray<readonly [upstream: string, exposed: string, sourceI
   ['fetch', 'socrata__fetch', 'socrata'],
   ['search_indicators', 'data_commons__search_indicators', 'data-commons'],
   ['get_observations', 'data_commons__get_observations', 'data-commons'],
-  ['ckan__search_datasets', 'boston__ckan__search_datasets', 'boston-opencontext'],
-  ['ckan__get_dataset', 'boston__ckan__get_dataset', 'boston-opencontext'],
-  ['ckan__get_schema', 'boston__ckan__get_schema', 'boston-opencontext'],
-  ['ckan__query_data', 'boston__ckan__query_data', 'boston-opencontext'],
-  ['ckan__aggregate_data', 'boston__ckan__aggregate_data', 'boston-opencontext'],
-  ['ckan__execute_sql', 'boston__ckan__execute_sql', 'boston-opencontext'],
+  ['ckan__search_datasets', 'boston_opencontext__ckan__search_datasets', 'boston-opencontext'],
+  ['ckan__get_dataset', 'boston_opencontext__ckan__get_dataset', 'boston-opencontext'],
+  ['ckan__get_schema', 'boston_opencontext__ckan__get_schema', 'boston-opencontext'],
+  ['ckan__query_data', 'boston_opencontext__ckan__query_data', 'boston-opencontext'],
+  ['ckan__aggregate_data', 'boston_opencontext__ckan__aggregate_data', 'boston-opencontext'],
+  ['ckan__execute_sql', 'boston_opencontext__ckan__execute_sql', 'boston-opencontext'],
 ];
 
 /** Router 0.3.0's hosted source (#617 P3): its five tools join the vocabulary
@@ -95,6 +95,9 @@ const toolsOf = (sourceIds: readonly string[]): string[] => sourceIds.flatMap((s
 });
 const AFTER_CHARTER_THIRTY_SIX: readonly string[] = toolsOf(['nyc-checkbook', 'nyc-record', 'nys-legislation']);
 const HOSTED_THIRTY_FOUR: readonly string[] = toolsOf(['nyc-checkbook', 'nys-legislation']);
+/** Router 0.11.0 (CKAN-1 P2): the CKAN server declares no tools; its Boston pack's six join the vocabulary last, under
+ *  the alias `boston` (Boston OpenContext's is `boston_opencontext` since), withheld while `CKAN_MCP_URL` is unset. */
+const PACK_SIX: readonly string[] = toolsOf(['ckan-server', 'boston-ckan']);
 
 const FULL: McpRegistryEnv = {
   socrataUrl: 'https://socrata.invalid',
@@ -102,8 +105,8 @@ const FULL: McpRegistryEnv = {
   bostonOpencontextUrl: 'https://opencontext.invalid/mcp',
 };
 const NO_BOSTON: McpRegistryEnv = { socrataUrl: FULL.socrataUrl, dataCommonsUrl: FULL.dataCommonsUrl };
-/** Every optional source on, the four hosted ones included. */
-const ALL_ON: McpRegistryEnv = { ...FULL, nycCharterHosting: 'sandbox', nycCheckbookHosting: 'sandbox', nysLegislationHosting: 'sandbox' };
+/** Every optional source on, the four hosted ones and the CKAN server (router 0.11.0) included. */
+const ALL_ON: McpRegistryEnv = { ...FULL, nycCharterHosting: 'sandbox', nycCheckbookHosting: 'sandbox', nysLegislationHosting: 'sandbox', ckanUrl: 'https://ckan.invalid/mcp' };
 
 const names = (tools: typeof mcpTools) => tools.map((t) => (t.type === 'function' ? t.function.name : t.type));
 
@@ -116,8 +119,10 @@ test('the tools array names every tool <alias>__<upstream>, and is the router\'s
   assert.deepEqual(names(mcpTools).slice(0, 11).sort(), ELEVEN.map(([, exposed]) => exposed).sort());
   assert.deepEqual(names(mcpTools).slice(11, 16), [...CHARTER_FIVE]);
   assert.equal(AFTER_CHARTER_THIRTY_SIX.length, 36);
-  assert.deepEqual(names(mcpTools).slice(16), [...AFTER_CHARTER_THIRTY_SIX]);
-  assert.equal(names(mcpTools).length, 52);
+  assert.deepEqual(names(mcpTools).slice(16, 52), [...AFTER_CHARTER_THIRTY_SIX]);
+  assert.equal(PACK_SIX.length, 6);
+  assert.deepEqual(names(mcpTools).slice(52), [...PACK_SIX]);
+  assert.equal(names(mcpTools).length, 58);
   assert.equal(JSON.stringify(mcpTools), JSON.stringify(civicRouter.aliasedMcpTools));
   for (const lock of [undefined, 'data.cityofnewyork.us']) {
     assert.equal(JSON.stringify(mcpToolsFor(lock)), JSON.stringify(civicRouter.aliasedMcpToolsFor(lock)), `lock ${lock}`);
@@ -147,10 +152,10 @@ test('the withheld tools are named as the model would have been offered them', (
   // Router 0.6.0 (R8 W3): the three new hosted sources' forty-one likewise,
   // while their switches are unset; since router 0.8.0 the two hosted ones'
   // thirty-four (City Record is a pack, offered wherever Socrata is).
-  assert.deepEqual(withheldToolNames(FULL), [...CHARTER_FIVE, ...HOSTED_THIRTY_FOUR]);
+  assert.deepEqual(withheldToolNames(FULL), [...CHARTER_FIVE, ...HOSTED_THIRTY_FOUR, ...PACK_SIX]);
   assert.deepEqual(
     new Set(withheldToolNames(NO_BOSTON)),
-    new Set([...ELEVEN.filter(([, , source]) => source === 'boston-opencontext').map(([, exposed]) => exposed), ...CHARTER_FIVE, ...HOSTED_THIRTY_FOUR]),
+    new Set([...ELEVEN.filter(([, , source]) => source === 'boston-opencontext').map(([, exposed]) => exposed), ...CHARTER_FIVE, ...HOSTED_THIRTY_FOUR, ...PACK_SIX]),
   );
 });
 
@@ -170,7 +175,7 @@ test('deriveOperationType, sourceIdForToolName and routedSourceId answer the sam
   }
   // A Boston tool on an instance that did not configure Boston: no source for
   // either spelling, which the loop records as `unknown`.
-  assert.equal(routedSourceId('boston__ckan__query_data', NO_BOSTON), undefined);
+  assert.equal(routedSourceId('boston_opencontext__ckan__query_data', NO_BOSTON), undefined);
   assert.equal(routedSourceId('ckan__query_data', NO_BOSTON), undefined);
 });
 

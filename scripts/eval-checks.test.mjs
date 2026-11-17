@@ -69,7 +69,7 @@ test('EVAL-OW C3: a pause item applies only where its configuration does, and a 
   // Never asked for: nothing was declined, and nothing was called.
   const unasked = pauseCheck({ consent: { mode: 'ask-first', alias: 'socrata', decision: 'off' }, toolCalls: [] });
   assert.deepEqual(unasked.declineRespected, { pass: true, declined: false, reloads: 0, sourceCalls: [] });
-  assert.equal(aliasOfToolName('boston__ckan__search_datasets'), 'boston');
+  assert.equal(aliasOfToolName('boston_opencontext__ckan__search_datasets'), 'boston_opencontext');
   assert.equal(aliasOfToolName('get_data'), undefined);
 });
 

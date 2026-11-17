@@ -15,7 +15,7 @@ import { CIVIC_MANIFEST, civicRouter } from '@typedstandards/civic-typed-router'
 // --- Both spellings (#599 W3) -------------------------------------------------
 //
 // Since W3 the model sees every tool as `<alias>__<upstream name>`
-// (`socrata__get_data`, `boston__ckan__search_datasets`), and every record made
+// (`socrata__get_data`, `boston_opencontext__ckan__search_datasets`), and every record made
 // before W3 names it bare (`get_data`). Every site in this repository that
 // keys on a tool name reads both: it keys on the UPSTREAM name, which the
 // router's dispatch map gives for an exposed name and which a bare name already
@@ -32,7 +32,36 @@ import { CIVIC_MANIFEST, civicRouter } from '@typedstandards/civic-typed-router'
 export function upstreamToolName(toolName: string): string;
 export function upstreamToolName(toolName: string | undefined): string | undefined;
 export function upstreamToolName(toolName: string | undefined): string | undefined {
-  return toolName === undefined ? undefined : civicRouter.upstreamToolName(toolName);
+  if (toolName === undefined) return undefined;
+  const upstream = civicRouter.upstreamToolName(toolName);
+  return upstream === toolName ? legacyUpstreamToolName(toolName) ?? upstream : upstream;
+}
+
+/**
+ * Aliases a source had before a router release gave them to another source,
+ * by alias, with the source and its upstream names then (CKAN-1 P3, A-C6).
+ * Router 0.11.0 renamed Boston OpenContext's alias from `boston` to
+ * `boston_opencontext` and gave `boston` to the Boston pack, so a record made
+ * between #599 W3 and that release names OpenContext's tools
+ * `boston__ckan__query_data` and the rest, which the router no longer maps.
+ * Such a name is unambiguous: the pack's tools are `ckan_*`, never one of
+ * OpenContext's `ckan__*`, and `legacy-tool-names.test.ts` fails the day a
+ * source under one of these aliases gains a tool whose name this table maps.
+ */
+export const LEGACY_TOOL_ALIASES: Readonly<Record<string, { sourceId: string; tools: readonly string[] }>> = {
+  boston: {
+    sourceId: 'boston-opencontext',
+    tools: CIVIC_MANIFEST.find((entry) => entry.sourceId === 'boston-opencontext')?.toolNames ?? [],
+  },
+};
+
+/** The upstream name a legacy exposed name (`<old alias>__<upstream>`) stands for, or `undefined`. */
+function legacyUpstreamToolName(toolName: string): string | undefined {
+  const at = toolName.indexOf('__');
+  if (at <= 0) return undefined;
+  const legacy = LEGACY_TOOL_ALIASES[toolName.slice(0, at)];
+  const upstream = toolName.slice(at + 2);
+  return legacy !== undefined && legacy.tools.includes(upstream) ? upstream : undefined;
 }
 
 /** Whether `toolName`, in either spelling, is the civic tool `upstream`. */
@@ -110,6 +139,15 @@ const TOOL_OPERATION_TYPES: Record<string, string> = {
   ckan__query_data: 'query',
   ckan__execute_sql: 'query',
   ckan__aggregate_data: 'query',
+  // The Boston pack's six over the hosted CKAN server (router 0.11.0, CKAN-1 P3,
+  // A17): two find datasets, two read a dataset's description and its
+  // resources, and the two datastore tools read records.
+  ckan_package_search: 'search',
+  ckan_find_relevant_datasets: 'search',
+  ckan_package_show: 'metadata',
+  ckan_list_resources: 'metadata',
+  ckan_datastore_search: 'query',
+  ckan_datastore_search_sql: 'query',
   //
   // NYC CHARTER, LAWS AND RULES' FOUR OTHER TOOLS ARE DELIBERATELY ABSENT
   // (#617 P4, measured against each kind's readers: the step copy in
@@ -193,6 +231,9 @@ export const DERIVABLE_OPERATION_TYPES: readonly string[] = (() => {
  */
 export function sourceIdForToolName(toolName: string): string | undefined {
   // An exposed name resolves by the dispatch map; a bare name by the
-  // package's index, as before W3 (#599 W3: both spellings answer the same).
+  // package's index, as before W3 (#599 W3: both spellings answer the same);
+  // a legacy exposed name by the source it named then (CKAN-1 P3, A-C6).
+  const legacy = legacyUpstreamToolName(toolName);
+  if (legacy !== undefined && civicRouter.upstreamToolName(toolName) === toolName) return LEGACY_TOOL_ALIASES[toolName.slice(0, toolName.indexOf('__'))].sourceId;
   return civicRouter.sourceForAliasedName(toolName)?.sourceId ?? civicRouter.sourceIdForToolName(toolName);
 }

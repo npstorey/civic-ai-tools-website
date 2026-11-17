@@ -114,7 +114,7 @@ test('b2: the same lines for the three pre-existing sources are byte-identical t
       'Search catalog',
       '{"singular":"statistical indicator","plural":"statistical indicators"}',
     ],
-    boston__ckan__search_datasets: [
+    boston_opencontext__ckan__search_datasets: [
       'Searching the catalog for datasets about "rent stabilization"',
       'Found 3 datasets matching the search',
       'Found 1 dataset matching the search',

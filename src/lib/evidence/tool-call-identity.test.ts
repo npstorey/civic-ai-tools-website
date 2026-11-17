@@ -204,8 +204,8 @@ test('a call that carries no portal is not given one', () => {
 
 const PRE_W3_SOURCES = new Set(['socrata', 'data-commons', 'boston-opencontext']);
 const PINNED_NAMES = [
-  'boston__ckan__aggregate_data', 'boston__ckan__execute_sql', 'boston__ckan__get_dataset', 'boston__ckan__get_schema',
-  'boston__ckan__query_data', 'boston__ckan__search_datasets', 'ckan__aggregate_data', 'ckan__execute_sql',
+  'boston_opencontext__ckan__aggregate_data', 'boston_opencontext__ckan__execute_sql', 'boston_opencontext__ckan__get_dataset', 'boston_opencontext__ckan__get_schema',
+  'boston_opencontext__ckan__query_data', 'boston_opencontext__ckan__search_datasets', 'ckan__aggregate_data', 'ckan__execute_sql',
   'ckan__get_dataset', 'ckan__get_schema', 'ckan__query_data', 'ckan__search_datasets',
   'data_commons__get_observations', 'data_commons__search_indicators', 'fetch', 'get_data', 'get_observations',
   'search', 'search_indicators', 'socrata__fetch', 'socrata__get_data', 'socrata__search',

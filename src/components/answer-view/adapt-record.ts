@@ -72,6 +72,7 @@ import type { FlowsStatement } from '../../lib/flows/statement.ts';
 import { whereItWentFromPackage } from '../../lib/flows/where-it-went.ts';
 import { SEARCH_OPERATION, searchReadingsByQuery, searchStepOutcome } from '../../lib/flows/search-words.ts';
 import { chooserCardItems, chooserFromPackage } from '../../lib/flows/source-chooser.ts';
+import { withCurrentLoadAliases } from '../../lib/flows/recorded-alias.ts';
 import { CONTENT_SHAPE } from '../../lib/sources/copy.ts';
 
 /** What the page resolved before rendering (`resolvePackageForRender`). */
@@ -259,7 +260,9 @@ export function adaptRecord(input: RecordAdapterInput): AnswerViewModel {
 
   // A search call (S3-B W2) reads its own words from the trace, paired by position as the harness pairs them.
   const searches = searchReadingsByQuery(pkg.trace, pkg.queries);
-  const stepView = buildRecordStepView(pkg.queries, fromTrace.refused, searches);
+  // A load's alias read as the record meant it (CKAN-1 P3, A-C6): a record made before router 0.11.0 that loaded
+  // `boston` loaded Boston OpenContext, whose alias the Boston pack now has.
+  const stepView = buildRecordStepView(withCurrentLoadAliases(pkg.queries, pkg), fromTrace.refused, searches);
   const steps: StepsPart | null = stepView.steps.length > 0
     ? { kind: 'step-view', author: stepsAuthorLine(instance), view: stepView, closing: [] }
     : null;

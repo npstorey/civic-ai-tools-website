@@ -288,8 +288,8 @@ function comparisonEvents(answer: string): Array<Record<string, unknown>> {
     progress({ message: 'Counting 311 Service Requests...', phase: 'tool_complete', iteration: 2, toolName: 'socrata__get_data', operationType: 'query', duration_ms: 1210 }),
     progress({ message: 'Counting records in qq7x-k2rd...', phase: 'tool_complete', iteration: 2, toolName: 'socrata__get_data', operationType: 'query', duration_ms: 3050, failed: true, failureKind: 'timeout' }),
     progress({ message: 'Thinking...', phase: 'thinking', iteration: 2 }),
-    progress({ message: 'Reading the schema...', phase: 'tool_start', iteration: 3, toolName: 'boston__ckan__get_schema', operationType: 'metadata', args: SCHEMA }),
-    progress({ message: 'Reading the schema...', phase: 'tool_complete', iteration: 3, toolName: 'boston__ckan__get_schema', operationType: 'metadata', duration_ms: 300 }),
+    progress({ message: 'Reading the schema...', phase: 'tool_start', iteration: 3, toolName: 'boston_opencontext__ckan__get_schema', operationType: 'metadata', args: SCHEMA }),
+    progress({ message: 'Reading the schema...', phase: 'tool_complete', iteration: 3, toolName: 'boston_opencontext__ckan__get_schema', operationType: 'metadata', duration_ms: 300 }),
     { type: 'token', content: answer },
     {
       type: 'complete',
@@ -303,7 +303,7 @@ function comparisonEvents(answer: string): Array<Record<string, unknown>> {
           { name: 'socrata__search', args: { query: 'noise' }, operationType: 'search', duration_ms: 840, reason: 'to find datasets about "noise"' },
           { name: 'socrata__get_data', args: ANSWERED, operationType: 'query', duration_ms: 1210, resultSummary: { rows: 1, columns: 1 }, reason: 'to count complaints' },
           { name: 'socrata__get_data', args: REJECTED, operationType: 'query', duration_ms: 3050, failed: true, failureKind: 'timeout', reason: 'to count permits' },
-          { name: 'boston__ckan__get_schema', args: SCHEMA, operationType: 'metadata', duration_ms: 300, reason: 'to understand dataset structure' },
+          { name: 'boston_opencontext__ckan__get_schema', args: SCHEMA, operationType: 'metadata', duration_ms: 300, reason: 'to understand dataset structure' },
         ],
       },
     },
@@ -401,13 +401,13 @@ function runEvents(notebook: Record<string, unknown>, through: 'complete' | 'C' 
     ...lines(1, 'Reading the columns', TOOL, 'metadata'),
     ...lines(1, 'Counting complaints', TOOL, 'query'),
     ...lines(2, 'Querying permits', TOOL, 'query', true),
-    ...lines(3, 'Reading the schema', 'boston__ckan__get_schema', 'metadata'),
+    ...lines(3, 'Reading the schema', 'boston_opencontext__ckan__get_schema', 'metadata'),
   ];
   const calls: Array<Record<string, unknown>> = [
     { type: 'phase_a_tool_call', name: TOOL, operationType: 'metadata', reason: 'x', args: RUN_ARGS.metadata, duration_ms: 120 },
     { type: 'phase_a_tool_call', name: TOOL, operationType: 'query', reason: 'x', args: RUN_ARGS.count, resultSummary: { rows: 7, columns: 1 }, duration_ms: 300 },
     { type: 'phase_a_tool_call', name: TOOL, operationType: 'query', reason: 'x', args: RUN_ARGS.permits, failed: true, failureKind: 'timeout', duration_ms: 45000 },
-    { type: 'phase_a_tool_call', name: 'boston__ckan__get_schema', operationType: 'metadata', reason: 'x', args: SCHEMA, duration_ms: 90 },
+    { type: 'phase_a_tool_call', name: 'boston_opencontext__ckan__get_schema', operationType: 'metadata', reason: 'x', args: SCHEMA, duration_ms: 90 },
   ];
   const rest: Array<Record<string, unknown>> = [
     { type: 'phase_a_answer', content: RUN_ANSWER },

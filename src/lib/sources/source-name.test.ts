@@ -36,6 +36,10 @@ import * as sourceNameModule from './source-name.ts';
 
 test('T13: every manifest entry reads the record page\'s name, from its displayName and from a registry label alike', () => {
   assert.ok(CIVIC_MANIFEST.length >= 4, 'premise: the manifest has its four entries');
+  // Router 0.11.0 (CKAN-1 P3): the CKAN server and its Boston pack are in the loop below, and read "CKAN" and
+  // "Analyze Boston" on both surfaces (the data-source registry's entries, `../evidence/data-sources.ts`).
+  assert.ok(['ckan-server', 'boston-ckan'].every((id) => CIVIC_MANIFEST.some((entry) => entry.sourceId === id)), 'premise: the manifest holds the CKAN server and its pack');
+  assert.deepEqual(['ckan-server', 'boston-ckan'].map((id) => displayNameForSource(id)), ['CKAN', 'Analyze Boston']);
   for (const entry of CIVIC_MANIFEST) {
     // S2-B P3R: since router 0.9.0 a pack, which has no server of its own, is named without the suffix
     // ("NYC City Record"); every source with a server keeps it. The reader name is the same either way.

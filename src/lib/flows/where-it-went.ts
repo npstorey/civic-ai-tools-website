@@ -48,6 +48,7 @@ import { recipientWhere, roleLabel } from '../sources/source-name.ts';
 import { WHERE_IT_WENT_REASONS } from '../sources/copy.ts';
 import { SEARCH_OPERATION } from './search-words.ts';
 import { NOTEBOOK_EXTENSION_KEY, readNotebookProvenanceOfNotebook } from '../notebook-author/notebook-provenance-reading.ts';
+import { CIVIC_MANIFEST, civicRouter } from '@typedstandards/civic-typed-router';
 import { aliasOf, attributesOf, chooserFromPackage, NOT_RECEIVED, sourceReaderName, spansOfTrace, type SourceChooser } from './source-chooser.ts';
 
 // --- The model ------------------------------------------------------------------------
@@ -68,7 +69,19 @@ export interface WhereRecipientRow {
 
 export type WhereReachedRow =
   | { kind: 'model'; name: string; model: string | null; service: string | null; recipients: WhereRecipientRow[] }
-  | { kind: 'source'; sourceId: string; name: string; calls: number; recipients: WhereRecipientRow[] }
+  | {
+      kind: 'source';
+      sourceId: string;
+      name: string;
+      calls: number;
+      recipients: WhereRecipientRow[];
+      /**
+       * For a pack's row (CKAN-1 P3 fix round 1, F6): the base whose server answered the pack's calls. A pack's call
+       * states both facts (`mcp.pack_id` and the base's `mcp.source`); how the page counts it is
+       * `PACK_CALL_COUNTED_UNDER`'s.
+       */
+      answeredBy?: { sourceId: string; name: string };
+    }
   | { kind: 'notebook'; name: string; recipients: WhereRecipientRow[] };
 
 /**
@@ -111,7 +124,7 @@ const LOAD_OPERATION = 'load_source';
 const READER_PICKED = 'reader-picked';
 
 type Contact =
-  | { kind: 'call'; source: string | undefined; failureKind: string | undefined }
+  | { kind: 'call'; source: string | undefined; failureKind: string | undefined; pack?: string }
   | { kind: 'load'; alias: string | undefined; outcome: string };
 
 interface ServerEntry { url: string; name?: string }
@@ -169,14 +182,14 @@ function hostOfAddress(url: string): string {
   }
 }
 
-function sourceRecipients(side: Side, sourceId: string): WhereRecipientRow[] {
+function sourceRecipients(side: Side, sourceId: string, base?: string): WhereRecipientRow[] {
   if (side.kind === 'statement') {
     const row = side.statement.sources.find((s) => s.sourceId === sourceId);
     if (row && row.recipients.length > 0) return row.recipients.map((r) => shown(r, sourceId));
     return [recorded(roleLabel('source'), NOT_RECORDED)];
   }
-  // The record's facts: one recipient, at the address the run's servers name.
-  const server = side.servers?.find((s) => s.name === sourceId);
+  // The record's facts: one recipient, at the address the run's servers name; a pack's, at its base's (F6).
+  const server = side.servers?.find((s) => s.name === sourceId) ?? (base !== undefined ? side.servers?.find((s) => s.name === base) : undefined);
   if (!server) return [recorded(roleLabel('source'), NOT_RECORDED)];
   if (server.url.startsWith('pkg:')) return [recorded(roleLabel('sandbox-platform'), recipientWhere({ runsAt: 'instance-sandbox' }))];
   return [recorded(roleLabel('source'), hostOfAddress(server.url))];
@@ -219,14 +232,60 @@ function whyNotSentFor(offered: OfferedSource, lastLoad: string | undefined, not
   }
 }
 
-function build(input: CoreInput): WhereItWentModel {
+/**
+ * How a pack's call is counted (CKAN-1 P3 fix round 1, F6; the seat's ruling 6934343514): the one place the owner's
+ * ruling on the display is written. A source whose pack id a call's span carries was reached by that call, and a
+ * start-of-run exclusion (`not-consented`, `not-selected`) never outranks it. The model carries both facts either way
+ * (the pack's row and its `answeredBy`, the base whose server answered).
+ *   - `pack` (the default the ORCH recommends): the pack is listed as reached with its calls and its recipients (its
+ *     statement row's, which are the base's server's); the base's own count holds only the calls that carry no pack
+ *     id, and a base with none reads as a source with no calls reads.
+ *   - `base`: the call is counted under the base, as before F6; the pack is listed as neither reached nor not used.
+ *   - `both`: the pack is listed as reached with its calls, and the base with every call its server answered.
+ */
+export const PACK_CALL_COUNTED_UNDER: 'pack' | 'base' | 'both' = 'pack';
+
+/** The pack a manifest id names (`mcp.pack_id`), by `sourceId`, or `undefined` for an id the manifest lacks. */
+function packSourceOfId(packId: string | undefined): string | undefined {
+  return packId === undefined ? undefined : CIVIC_MANIFEST.find((entry) => entry.base !== undefined && entry.id === packId)?.sourceId;
+}
+
+/**
+ * The pack a call's dispatch target belongs to, by `sourceId`, or `undefined` when the target is no pack's (or there
+ * is none). The target is the exposed name the dispatch sends the call to under the run's configuration and selection
+ * (`dispatchTargetOf`, `../mcp/registry.ts`; in loop, the routing's own `dispatchTarget`): the same decision the loop
+ * core reads for `mcp.pack_id`. A tool name is never split to find it (fix round 2, F8): a bare upstream name the
+ * selection resolves to a pack is that pack's call.
+ */
+export function packOfDispatchTarget(target: string | undefined): string | undefined {
+  if (target === undefined) return undefined;
+  const resolved = civicRouter.dispatchMap.get(target);
+  return resolved?.base !== undefined ? resolved.sourceId : undefined;
+}
+
+function build(input: CoreInput, countedUnder: typeof PACK_CALL_COUNTED_UNDER = PACK_CALL_COUNTED_UNDER): WhereItWentModel {
+  // Each answered (or possibly answered) call, in first-contact order: under the source it counts for, and, for a
+  // pack's call, the base whose server answered it.
   const calls = new Map<string, number>();
+  const answeredBy = new Map<string, string>();
+  /** Sources a pack's answered call reached, which no stated reason outranks. */
+  const reachedByPack = new Set<string>();
+  const count = (sourceId: string) => calls.set(sourceId, (calls.get(sourceId) ?? 0) + 1);
   for (const contact of input.contacts) {
     if (contact.kind !== 'call') continue;
-    const { source, failureKind } = contact;
+    const { source, failureKind, pack } = contact;
     if (!source || source === 'unknown') continue;
     if (failureKind !== undefined && NOT_RECEIVED.has(failureKind)) continue;
-    calls.set(source, (calls.get(source) ?? 0) + 1);
+    if (pack === undefined) {
+      count(source);
+      continue;
+    }
+    reachedByPack.add(pack);
+    if (countedUnder !== 'base') {
+      count(pack);
+      answeredBy.set(pack, source);
+    }
+    if (countedUnder !== 'pack') count(source);
   }
 
   const lastLoad = new Map<string, string>();
@@ -239,9 +298,18 @@ function build(input: CoreInput): WhereItWentModel {
   const reached: WhereReachedRow[] = [
     { kind: 'model', name: roleLabel('model-endpoint'), model: input.model, service: input.service, recipients: baseRecipients(input.side, 'model-endpoint') },
   ];
-  for (const [sourceId, count] of calls) {
+  for (const [sourceId, n] of calls) {
     const alias = input.sourcesOffered.find((o) => o.sourceId === sourceId)?.alias;
-    reached.push({ kind: 'source', sourceId, name: nameOf(sourceId, alias), calls: count, recipients: sourceRecipients(input.side, sourceId) });
+    const base = answeredBy.get(sourceId);
+    if (base === undefined) {
+      reached.push({ kind: 'source', sourceId, name: nameOf(sourceId, alias), calls: n, recipients: sourceRecipients(input.side, sourceId) });
+      continue;
+    }
+    const baseAlias = input.sourcesOffered.find((o) => o.sourceId === base)?.alias;
+    reached.push({
+      kind: 'source', sourceId, name: nameOf(sourceId, alias), calls: n, recipients: sourceRecipients(input.side, sourceId, base),
+      answeredBy: { sourceId: base, name: nameOf(base, baseAlias) },
+    });
   }
   if (input.executed) {
     reached.push({ kind: 'notebook', name: roleLabel('notebook-executor'), recipients: baseRecipients(input.side, 'notebook-executor') });
@@ -249,7 +317,7 @@ function build(input: CoreInput): WhereItWentModel {
 
   const notReached: WhereNotReachedRow[] = [];
   for (const offered of input.sourcesOffered) {
-    if (calls.has(offered.sourceId)) continue;
+    if (calls.has(offered.sourceId) || reachedByPack.has(offered.sourceId)) continue;
     const whyNotSent = whyNotSentFor(offered, lastLoad.get(offered.sourceId), input.notSelectedIsUnpicked);
     if (whyNotSent !== null) notReached.push({ sourceId: offered.sourceId, name: nameOf(offered.sourceId, offered.alias), whyNotSent });
   }
@@ -286,7 +354,8 @@ function readSpans(spans: readonly unknown[]): { contacts: Contact[]; model: str
         contacts.push({ kind: 'load', alias: aliasOf(text(attrs.get('tool.arguments'))), outcome: text(attrs.get('tool.load_outcome')) ?? '' });
       } else {
         const failed = attrs.get('error') === true || attrs.has('error.kind');
-        contacts.push({ kind: 'call', source: text(attrs.get('mcp.source')), failureKind: failed ? text(attrs.get('error.kind')) ?? 'unknown' : undefined });
+        const pack = packSourceOfId(text(attrs.get('mcp.pack_id')));
+        contacts.push({ kind: 'call', source: text(attrs.get('mcp.source')), failureKind: failed ? text(attrs.get('error.kind')) ?? 'unknown' : undefined, ...(pack !== undefined ? { pack } : {}) });
       }
     }
   }
@@ -320,6 +389,11 @@ export interface WhereToolCall {
 export function whereItWentFromCalls(input: {
   toolCalls: readonly WhereToolCall[];
   resolveSource: (name: string) => string | undefined;
+  /**
+   * The pack a call belongs to, by `sourceId`, from the decision the loop core made for it (fix round 2, F8): the
+   * routes pass `packOfDispatchTarget` over the run's dispatch target. Absent, no call is read as a pack's.
+   */
+  resolvePack?: (name: string) => string | undefined;
   sourcesOffered: readonly OfferedSource[];
   statement?: FlowsStatement | null;
   model: string;
@@ -330,7 +404,10 @@ export function whereItWentFromCalls(input: {
   const contacts: Contact[] = input.toolCalls.filter((call) => call.operationType !== SEARCH_OPERATION).map((call): Contact =>
     call.operationType === LOAD_OPERATION
       ? { kind: 'load', alias: text(call.args?.alias), outcome: call.loadOutcome ?? '' }
-      : { kind: 'call', source: input.resolveSource(call.name), failureKind: call.failed ? call.failureKind ?? 'unknown' : undefined },
+      : (() => {
+        const pack = input.resolvePack?.(call.name);
+        return { kind: 'call' as const, source: input.resolveSource(call.name), failureKind: call.failed ? call.failureKind ?? 'unknown' : undefined, ...(pack !== undefined ? { pack } : {}) };
+      })(),
   );
   return build({
     contacts, model: input.model, service: input.service, sourcesOffered: input.sourcesOffered,

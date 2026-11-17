@@ -221,8 +221,8 @@ const EXCEPTIONS: readonly Exception[] = [
   {
     path: 'src/lib/sources/copy.ts',
     classification: 'server-endpoint',
-    hits: 1,
-    why: "Boston OpenContext's what-line on the Sources rows (R6 PL, ruling D1 = A) names the domain that server fronts, so a reader knows whose data it is; it is reader text, and no run reads it.",
+    hits: 3,
+    why: "Boston OpenContext's what-line on the Sources rows (R6 PL, ruling D1 = A) names the domain that server fronts, so a reader knows whose data it is; it is reader text, and no run reads it. Since router 0.11.0 (CKAN-1 P3) two more, on the Analyze Boston pack's row: its what-line names the one portal the pack reads, and its link is that portal, the address in the pack's inventory id (pinned by source-name.test.ts). Reader text; no run reads it.",
   },
   {
     path: 'src/lib/notebook-author/helpers/fetch_data_commons.py',
@@ -350,6 +350,20 @@ const EXCEPTIONS: readonly Exception[] = [
     hits: 13,
     why: "The one portal the NYC City Record pack reads (its City Record Online dataset, dg92-zbpx), fixed by the pack's filter and named in its header comments, its query recipes, the filter, its inventory id and, since router 0.9.0, its `api` member; the pack's, every instance's the same, never a portal a run chooses or inherits.",
   },
+  // Router 0.11.0 (CKAN-1 P2, hub #314): Analyze Boston, a pack over the hosted CKAN server, fixes its one portal in
+  // its filter, its tools' `server_url` enum and its inventory id, and names it in its guidance and its words.
+  {
+    path: 'node_modules/@typedstandards/civic-typed-router/dist/civic/boston-ckan.js',
+    classification: 'server-endpoint',
+    hits: 10,
+    why: "The one portal the Analyze Boston pack reads, every instance's the same: in two header comments, its guidance (four hits: the portal it reads, the data it holds, the citation), its inventory id, its filter (`server_url`), its `api` host and a doc comment. Never a portal a run chooses or inherits: a call naming another is refused.",
+  },
+  {
+    path: 'node_modules/@typedstandards/civic-typed-router/dist/civic/ckan-words.js',
+    classification: 'server-endpoint',
+    hits: 3,
+    why: "The Analyze Boston pack's words: its description, freshness line and their citation naming the portal its data lives on (data.boston.gov), as nyc-record.js's rows name City Record's.",
+  },
 ];
 
 /**
@@ -365,7 +379,7 @@ const OUT_OF_SCOPE = /\.test\.(?:ts|tsx|js|jsx|mjs)$/;
 
 /**
  * ONE CAVEAT ON `documentation`, found by driving a notebook rather than by
- * reading the tree (#407). The three Python helpers under
+ * reading the tree (#407). The Python helpers under
  * `lib/notebook-author/helpers/` are embedded VERBATIM into cell 3 of every
  * executed notebook, and an executed notebook is an extension of a signed
  * record package. Text in them is therefore shipped, not developer-facing, and
@@ -373,9 +387,11 @@ const OUT_OF_SCOPE = /\.test\.(?:ts|tsx|js|jsx|mjs)$/;
  * `fetch_socrata.py` had one worked example naming a city in its `portal`
  * docstring; it rode into every instance's signed notebooks and this phase
  * replaced it with the `<portal>` placeholder the same docstring already used
- * one line above. The other two helpers keep their hostnames as
- * `server-endpoint`: those are the URLs the embedded cell actually requests,
- * so the notebook stating them is the notebook stating what it does.
+ * one line above. `fetch_data_commons.py` and `fetch_opencontext.py` keep their
+ * hostnames as `server-endpoint`: those are the URLs the embedded cell actually
+ * requests, so the notebook stating them is the notebook stating what it does.
+ * `fetch_ckan.py` (CKAN-1 P3) names no host: it requests the `server_url` each
+ * call carried.
  */
 interface Hit {
   readonly path: string;

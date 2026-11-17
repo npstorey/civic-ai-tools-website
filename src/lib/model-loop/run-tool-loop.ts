@@ -56,7 +56,7 @@ import { hash as traceHash } from '../evidence/trace.ts';
 import { deriveOperationType, isTool, toolSpanNames, upstreamToolName } from '../mcp/operation-types.ts';
 import type { ToolFailureKind } from '../notebook-author/tool-to-cell.ts';
 import { PortalLockedCallError, portalOutsideLock } from '../portal-lock.ts';
-import { injectPackFilter, packCallOutsideFilter, packFilterOf, PackFilterRefusedError } from '../mcp/pack-filter.ts';
+import { injectPackFilter, packCallRefusal, packFilterOf } from '../mcp/pack-filter.ts';
 import { BaseChangedError, createBaseCheck, type BaseCheck, type BaseReader } from '../mcp/base-check.ts';
 
 /** The base check's read: the client's `tools/list` read, loaded when a pack call first needs it. */
@@ -1234,8 +1234,9 @@ export async function runToolLoop(options: ToolLoopOptions): Promise<ToolLoopRes
       // The pack's twin of the lock (S2-B W3): a pack call naming a portal,
       // dataset or identifier outside its pack's fixed values is refused
       // before anything is sent, and recorded like any other rejected call.
-      const packRefusal =
-        pack && !argumentsMalformed && packCallOutsideFilter(upstreamToolName(name), args, pack) ? new PackFilterRefusedError(pack) : null;
+      // CKAN-1 P3: a CKAN pack's call is refused for its portal (the lowercase hostname) and, for its SQL tool, for
+      // anything but one statement beginning with SELECT or WITH (D3 = A), each with its own type (`packCallRefusal`).
+      const packRefusal = pack && !argumentsMalformed ? packCallRefusal(upstreamToolName(name), args, pack) : null;
 
       const operationType = deriveOperationType(name, args);
       const reason = generateToolReason(args, name);

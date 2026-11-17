@@ -458,7 +458,7 @@ export const LIVE_CAPTURES = [
   {
     id: 'boston-opencontext-live',
     source: 'boston-opencontext',
-    tool: 'boston__ckan__search_datasets',
+    tool: 'boston_opencontext__ckan__search_datasets',
     args: { query: 'building permits', limit: 3 },
   },
 ];

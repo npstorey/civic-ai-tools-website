@@ -30,7 +30,8 @@
 // because replay derives the `get_data`-addressable catalogue types from it,
 // and `readerFacingSourceNames` keeps it as its default.
 
-import { CIVIC_MANIFEST } from '@typedstandards/civic-typed-router';
+import { CIVIC_MANIFEST, CKAN_SERVER_SOURCE_ID } from '@typedstandards/civic-typed-router';
+import { packFilters } from '../mcp/pack-filter.ts';
 import { sourceIdForToolName } from '../mcp/operation-types.ts';
 import { hostedServerPurl, npmPackageVariants } from '../mcp/registry.ts';
 import { RETIRED_HOSTED_SERVERS } from '../mcp/retired-sources.ts';
@@ -95,6 +96,27 @@ export function dataSourceRegistry(runMcpServers?: readonly DatHereMcpServer[]):
       catalogType: hosting.kind,
       aggregatePortalUrl: recorded ? recorded : hostedServerPurl(hosting),
     };
+  }
+  // The hosted CKAN server and its packs (router 0.11.0, CKAN-1 P3, A16): an
+  // AGGREGATE entry, `catalogType` `ckan`, whose `portalUrl` is the one portal
+  // its pack reads, as the pack's filter fixes it (C5: one static value per
+  // source in harness 0.14.0, so a second pack over the same server is S6's). A
+  // pack's calls are attributed to the server (`mcp.source`), so the server's
+  // entry is the one a run mints; the pack's own entry names it for display.
+  for (const entry of CIVIC_MANIFEST) {
+    if (entry.base !== CKAN_SERVER_SOURCE_ID) continue;
+    const portal = packFilters().get(entry.sourceId)?.portal;
+    if (portal === undefined) continue;
+    const server = CIVIC_MANIFEST.find((candidate) => candidate.sourceId === CKAN_SERVER_SOURCE_ID);
+    for (const source of [server, entry]) {
+      if (!source || Object.hasOwn(registry, source.sourceId)) continue;
+      registry[source.sourceId] = {
+        displayName: source.displayName.replace(/ MCP Server$/, ''),
+        agentTitle: `${source.sourceId} MCP Server`,
+        catalogType: 'ckan',
+        aggregatePortalUrl: portal,
+      };
+    }
   }
   for (const [sourceId, retired] of Object.entries(RETIRED_HOSTED_SERVERS)) {
     if (Object.hasOwn(registry, sourceId)) continue;

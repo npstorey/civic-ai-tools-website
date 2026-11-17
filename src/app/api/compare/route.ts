@@ -10,11 +10,11 @@ import { pickedRunOf, picksFromBody } from '@/lib/sources/picks';
 import { createInLoopRouting, DIRECTORY_SET_RULE, directorySet, entersInLoop, READER_PICKED_RULE, sourceRoutingMode } from '@/lib/mcp/routing-mode';
 import { checkRateLimit, getMissingRateLimitSecretError, incrementRateLimit, isRateLimited } from '@/lib/rate-limit';
 import { getGenAiSystem, getMissingModelCredentialError, getModelClient, classifyModelError, ModelConfigurationError } from '@/lib/model-client';
-import { whereItWentFromCalls } from '@/lib/flows/where-it-went';
+import { packOfDispatchTarget, whereItWentFromCalls } from '@/lib/flows/where-it-went';
 import { resolveModelIdentity, ModelNotOfferedError } from '@/lib/model-resolver';
 import type { ModelIdentity } from '@/lib/model-catalog';
 import { errorLogFacts, streamErrorPayload } from '@/lib/streaming';
-import { getMissingMcpRoutingError, readMcpEnvFromProcess, routedSourceId } from '@/lib/mcp/registry';
+import { dispatchTargetOf, getMissingMcpRoutingError, readMcpEnvFromProcess, routedSourceId } from '@/lib/mcp/registry';
 import { resolveRunPortal } from '@/lib/site-config';
 import { PORTAL_LOCK_NOT_CONFIGURED_MESSAGE } from '@/lib/portal-lock';
 import { headers } from 'next/headers';
@@ -277,6 +277,8 @@ Be honest if you don't have access to current or real-time data.`;
     const flows = whereItWentFromCalls({
       toolCalls: withMcpResult.toolCalls,
       resolveSource: inLoop ? inLoop.resolveToolSource : (name) => routedSourceId(name, configured, selection),
+      // F8 (CKAN-1 P3): a call's pack from the same dispatch decision the loop core made for it.
+      resolvePack: (name) => packOfDispatchTarget(inLoop ? inLoop.dispatchTarget(name) : dispatchTargetOf(name, configured, selection)),
       sourcesOffered: recordReasons(composition.sourcesOffered),
       statement: consent.statement,
       model: model.declared,

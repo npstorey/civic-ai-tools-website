@@ -93,7 +93,7 @@ test('criterion 1, at the unit: a selection refuses a configured source it leave
 
 test('criterion 1, at the unit: configuration comes first — an unconfigured source a selection names is still not-configured (green at the base)', () => {
   const registry = buildWithSelection(CHARTER_ON_SOCRATA_SET, ['socrata', 'boston-opencontext']);
-  const caught = refusalOf(() => routeToolCall(registry, 'boston__ckan__search_datasets'));
+  const caught = refusalOf(() => routeToolCall(registry, 'boston_opencontext__ckan__search_datasets'));
   assert.ok(caught instanceof McpConfigurationError, `${String(caught)}`);
   assert.match(caught.message, /BOSTON_OPENCONTEXT_MCP_URL/);
 });

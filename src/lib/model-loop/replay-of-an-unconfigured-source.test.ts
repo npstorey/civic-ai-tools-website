@@ -90,7 +90,7 @@ test('replay still offers the Boston tools the record used (its tool list is unc
   const offered = ((scripted.requests[0]?.tools ?? []) as Array<{ function?: { name?: string } }>).map((t) => t.function?.name);
   // Offered by its exposed name since #599 W3; the record (and the scripted
   // replay below) calls it bare, which the dispatch rule accepts.
-  assert.ok(offered.includes('boston__ckan__query_data'), 'premise: the replayed model was offered the tool it calls');
+  assert.ok(offered.includes('boston_opencontext__ckan__query_data'), 'premise: the replayed model was offered the tool it calls');
 });
 
 test('the replayed ckan__ call is one failed call, not_configured, and nothing is sent anywhere but the fixtures', () => {

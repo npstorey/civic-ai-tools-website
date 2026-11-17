@@ -134,7 +134,7 @@ function pauseOf({ holds = true, holdMs = 60_000, entryMs = 600_000 }: { holds?:
     holds,
   };
 }
-const LOAD_START = { message: 'Loading the Boston OpenContext source', phase: 'tool_start', iteration: 1, args: { alias: 'boston' }, toolName: 'load_source', operationType: 'load_source' };
+const LOAD_START = { message: 'Loading the Boston OpenContext source', phase: 'tool_start', iteration: 1, args: { alias: 'boston_opencontext' }, toolName: 'load_source', operationType: 'load_source' };
 const PAUSE_LINE = 'Waiting for your answer about Boston OpenContext, which is set to Ask first';
 
 interface Held { response: Response; push: (event: Json) => void; close: () => void }

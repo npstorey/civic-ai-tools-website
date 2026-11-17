@@ -13,7 +13,7 @@
  * agree instead by test (`./source-name.test.ts`).
  */
 import type { FlowsKeptBy, FlowsRecipient, FlowsSource } from '../flows/statement.ts';
-import { KEPT_FOR_OPERATOR, NYC_RECORD_EXAMPLES_SENTENCE, REACH_SENTENCE, SOURCE_DESCRIPTIONS } from './copy.ts';
+import { CKAN_PACK_ROW_SENTENCES, KEPT_FOR_OPERATOR, NYC_RECORD_EXAMPLES_SENTENCE, REACH_SENTENCE, SOURCE_DESCRIPTIONS } from './copy.ts';
 
 const SUFFIX = ' MCP Server';
 
@@ -127,6 +127,15 @@ export interface SourceRowLines {
 export function sourceRowLines(source: Pick<FlowsSource, 'sourceId' | 'publisher' | 'host' | 'variant'>): SourceRowLines {
   const where = sourceWhere(source);
   const entry = Object.prototype.hasOwnProperty.call(SOURCE_DESCRIPTIONS, source.sourceId) ? SOURCE_DESCRIPTIONS[source.sourceId] : undefined;
+  if (entry !== undefined && entry.base === 'ckan-server') {
+    // A CKAN pack (CKAN-1 P3): the CKAN source's connector, linked as that row links it; no examples sentence.
+    const base = SOURCE_DESCRIPTIONS[entry.base];
+    const after = [CKAN_PACK_ROW_SENTENCES.queryInAddress, CKAN_PACK_ROW_SENTENCES.guidanceAuthor].filter((text): text is string => text !== null).map((text) => ` ${text}`);
+    return {
+      what: entry.what,
+      reach: [REACH_SENTENCE.throughCkan, { link: base.link, text: base.publisher }, `${REACH_SENTENCE.after}${where}${REACH_SENTENCE.end}`, ...after],
+    };
+  }
   if (entry !== undefined && entry.base !== undefined) {
     const base = SOURCE_DESCRIPTIONS[entry.base];
     return {

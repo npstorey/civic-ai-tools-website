@@ -270,7 +270,7 @@ test('criterion 3 (#667), /ask in notebook mode: after Allow on one pause and Do
   assert.deepEqual(live.map((c) => [c.source, c.outcome]), [[A, CONSENT_STEP_TEXT.allowed], [B, `${CONSENT_STEP_TEXT.declined} ${CONSENT_STEP_TEXT.pointer}`]], `premise: the live view reads both outcomes: ${summary(page)}`);
 
   // The swap: the run's calls, then the notebook, so the live view unmounts and the finished view mounts.
-  stream.push({ type: 'phase_a_tool_call', name: 'load_source', operationType: 'load_source', args: { alias: 'boston' }, duration_ms: 4000 });
+  stream.push({ type: 'phase_a_tool_call', name: 'load_source', operationType: 'load_source', args: { alias: 'boston_opencontext' }, duration_ms: 4000 });
   stream.push({ type: 'phase_a_tool_call', name: 'load_source', operationType: 'load_source', args: { alias: 'data_commons' }, duration_ms: 4000 });
   stream.push({ type: 'phase_a_answer', content: RUN_ANSWER });
   stream.push({ type: 'phase', name: 'B', message: 'Synthesizing notebook…' });
