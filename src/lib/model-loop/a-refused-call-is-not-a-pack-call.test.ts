@@ -248,7 +248,6 @@ const SELECTIONS: Array<string[] | undefined> = [
 const PACK_TARGETS = [...civicRouter.dispatchMap.values()].filter((t) => t.base !== undefined);
 // Every pack's base is routable here: Socrata's, and since router 0.11.0 the CKAN server (`CKAN_MCP_URL` is set).
 const ROUTABLE_PACK_TARGETS = PACK_TARGETS.filter((t) => buildMcpRegistry(configured).servers[t.base!] !== undefined);
-const PACK_NAMES = ROUTABLE_PACK_TARGETS.map((t) => t.exposedName);
 
 test('the send refuses a pack\'s tool the selection leaves out as not offered, whenever its base is routable', () => {
   assert.deepEqual(PACK_TARGETS.filter((t) => !ROUTABLE_PACK_TARGETS.includes(t)).map((t) => t.sourceId), [], 'premise: every pack\'s base is routable');
