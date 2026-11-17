@@ -74,7 +74,12 @@ test('NOT_RECEIVED holds base_changed: a pack call not sent does not count as a 
     model: 'fake/model',
     service: 'fixture service',
   });
-  const calls = (failureKind: string) => (run(failureKind).reached.find((row) => row.kind === 'source' && row.sourceId === 'socrata') as { calls?: number } | undefined)?.calls;
-  assert.equal(calls('base_changed'), 1, 'the unsent pack call was counted as received by its base');
-  assert.equal(calls('unknown'), 2, 'decoy: a call that failed as unknown was sent, and counts');
+  // CKAN-1 P3 fix round 1, F6: a pack's call counts under the pack (`PACK_CALL_COUNTED_UNDER`, default `pack`), with the
+  // base whose server answered it; the base's own count holds its own calls. The property kept: an unsent pack call
+  // counts nowhere, and a call that failed as unknown was sent and counts.
+  const calls = (failureKind: string, sourceId: string) => (run(failureKind).reached.find((row) => row.kind === 'source' && row.sourceId === sourceId) as { calls?: number } | undefined)?.calls;
+  assert.equal(calls('base_changed', 'socrata'), 1, 'the unsent pack call was counted as received by its base');
+  assert.equal(calls('base_changed', 'nyc-record'), undefined, 'the unsent pack call was counted as received by its pack');
+  assert.equal(calls('unknown', 'nyc-record'), 1, 'decoy: a call that failed as unknown was sent, and counts');
+  assert.equal(calls('unknown', 'socrata'), 1, 'decoy: the base\'s own count holds its own call only');
 });
