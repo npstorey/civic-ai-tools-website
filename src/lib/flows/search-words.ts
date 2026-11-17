@@ -100,24 +100,47 @@ export interface RoutingConfigurationShown {
 }
 
 /** Whether a recorded configuration states that the run offered the model a search (the dialog's condition). */
-export function offeredASearch(configuration: unknown): configuration is RoutingConfigurationShown {
+export function offeredASearch(configuration: unknown): boolean {
   const search = (configuration as { search?: unknown } | null | undefined)?.search;
   return search !== null && typeof search === 'object';
+}
+
+/** Whether `value` is an object whose members `keys` are each a string. */
+function hasStrings(value: unknown, ...keys: string[]): boolean {
+  if (value === null || typeof value !== 'object') return false;
+  const record = value as Record<string, unknown>;
+  return keys.every((key) => typeof record[key] === 'string');
+}
+
+/**
+ * A recorded configuration of the complete shape the dialog reads, with a search (S3-B F, the cold read's F2): `rule`
+ * with `id` and `version`, `cap`, `search` with `method` and `version`, `inventory` with `id` and `version`, and
+ * `hash`, each a string (`cap` may be `'none'`). Null for any other value: a record's composition block can carry any
+ * object (`recordRoutingConfiguration`), and a caller's `extensions` reach that block.
+ */
+function shownConfiguration(configuration: unknown): (RoutingConfigurationShown & { search: { method: string; version: string } }) | null {
+  if (!offeredASearch(configuration)) return null;
+  const c = configuration as Record<string, unknown>;
+  const complete = hasStrings(c, 'cap', 'hash')
+    && hasStrings(c.rule, 'id', 'version')
+    && hasStrings(c.search, 'method', 'version')
+    && hasStrings(c.inventory, 'id', 'version');
+  return complete ? (configuration as RoutingConfigurationShown & { search: { method: string; version: string } }) : null;
 }
 
 /**
  * The replay dialog's lines for a recorded routing configuration (S22, then bundle :115's small print, S23): shown
  * only for a record whose run offered a search (`offeredASearch`), which is the one case where a replay, which lists
- * its whole set and offers no search, is routed differently from the run. Empty for any other value.
+ * its whole set and offers no search, is routed differently from the run, and only for a configuration of the complete
+ * shape it reads (`shownConfiguration`). Empty for any other value; it never throws.
  */
 export function replayRoutingLines(configuration: unknown): string[] {
-  if (!offeredASearch(configuration)) return [];
+  const c = shownConfiguration(configuration);
+  if (c === null) return [];
   const T = ROUTING_CONFIGURATION_TEXT;
-  const c = configuration;
-  const search = c.search as { method: string; version: string };
   return [
     FIND_SOURCE_WORDS.replayIntro,
-    T.searchOffered(search.method, search.version),
+    T.searchOffered(c.search.method, c.search.version),
     c.cap === 'none' ? T.capNone : T.cap(c.cap),
     T.rule(c.rule.id, c.rule.version),
     T.inventory(c.inventory.id, c.inventory.version),
