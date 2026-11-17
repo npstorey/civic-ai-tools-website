@@ -1,5 +1,5 @@
 // UX-2 P6 + P10 (#729), the directory-to-source mapping: contract p6p10.md v5.2, item 7, PQ3 = (a), 0c (v5.1's rule)
-// and 0d item 2 (no `ckan-server` row at this pin).
+// and 0d item 2 (no `ckan-server` row: hub #329's).
 //
 // THE RULE. An entry maps to a source when it is that source's server or package, or the entry the router keeps for it
 // (`nyc-record` keeps `nyc-record-mcp`, the retired package's entry). One explicit table; every value a manifest
@@ -7,11 +7,12 @@
 // entries found only in the live index. `offeredSourceFor` returns the row's source only when the instance offers it.
 //
 // WHAT MAKES IT ABLE TO FAIL. The table is compared whole with the ruled one, so a missing row (the two the snapshot
-// lacks) or an extra one (`boston-core-mcp`, another maintainer's server, or `ckan-mcp-server` before its pin) is red;
+// lacks) or an extra one (`boston-core-mcp`, another maintainer's server, or `ckan-mcp-server`, hub #329's) is red;
 // `offeredSourceFor` is driven on an entry mapped to a source the instance does not offer.
 //
-// BLIND SPOTS, stated. `ckan-server` and `boston-ckan` are sources the action does not reach at this pin (0d item 2):
-// neither is a manifest `sourceId` at router 0.10.0, and `boston-ckan` has no directory entry. Keys found only in the
+// BLIND SPOTS, stated. `ckan-server` and `boston-ckan` are sources the action does not reach (0d item 2): both are
+// manifest `sourceId`s from router 0.11.0 and no entry maps to either; the `ckan-mcp-server` row and its badge are hub
+// #329's (OA-941 = A, `CKAN_MCP_URL` unset), and `boston-ckan` has no directory entry. Keys found only in the
 // live index (`LIVE_ONLY`) are checked against that list, not against the hub's file, which this test does not fetch.
 //
 // Run with: npm test
@@ -39,7 +40,7 @@ const RULED: Record<string, string> = {
 };
 /** Keys the live index holds and the snapshot does not (hub `1d97e0e`, 74 entries; snapshot 69). */
 const LIVE_ONLY = ['nyc-checkbook-mcp', 'nys-openlegislation-mcp', 'opencontext'];
-/** Sources the action does not reach at this pin (0d item 2): the test's stated blind spot. */
+/** Sources the action does not reach (0d item 2; hub #329, OA-941 = A): the test's stated blind spot. */
 const NOT_REACHED = ['ckan-server', 'boston-ckan'];
 
 test('the mapping is the ruled table, whole', () => {
