@@ -366,8 +366,9 @@ export function classifyStreamError(input: unknown): StreamErrorKind {
 
 const FRIENDLY_STREAM_COPY: Record<StreamErrorKind, string> = {
   // THIS APP's own per-day budget — the reader's own allowance, and the only
-  // one of the two limits they can do anything about.
-  rate_limit: 'You’ve reached today’s request limit. Sign in for more requests, or try again tomorrow.',
+  // one of the two limits they can do anything about. RL-1 (C1 = A; UX-2 P6 + P10):
+  // one text for every reader, so it asks no sign-in; the reset is its one step.
+  rate_limit: 'You have no questions left today, so this question went no further than this site. Ask again after the count resets at midnight UTC.',
   // The MODEL SERVICE's limit, which has nothing to do with the reader's
   // allowance (website#30 G0 D6). Saying so explicitly is the point: without
   // this kind, every upstream limit told a reader they had hit a daily cap they

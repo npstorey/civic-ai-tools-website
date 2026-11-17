@@ -1,16 +1,18 @@
 import Link from 'next/link';
-import { prose, sectionHeading, sectionSpacing, calloutBox, excerptBlock, card } from '@/styles/page-styles';
+import { prose, sectionHeading, sectionSpacing, calloutBox, card } from '@/styles/page-styles';
 import { pageTitle } from '@/lib/brand-config';
 import { Page } from '@/components/ui/Page';
 import { PageToc } from '@/components/ui/PageToc';
+import { STREAMING_SOURCE_BASE, STREAMING_SOURCE_LINES } from '@/lib/streaming-source-links';
+import { buildFlowsStatement } from '@/lib/flows/statement';
+import { sourcesSentence } from '@/lib/flows/sources-sentence';
 
 export const metadata = {
   title: pageTitle('Learn'),
-  description: 'Learn how this demo works, how AI connects to live civic data through MCP, and what shapes the quality of AI responses.',
+  description: 'Learn how this site works, how AI connects to live civic data through MCP, and what shapes the quality of AI responses.',
 };
 
 const GITHUB_SKILL_URL = 'https://github.com/npstorey/civic-ai-tools/tree/main/packages/civic-typed-router/src/civic';
-const GITHUB_STREAMING_BASE = 'https://github.com/npstorey/civic-ai-tools-website/blob/08dfa4c/src/lib/streaming.ts';
 
 // The page's sections: each id and h2 written once, read by the section and by
 // the jump list (UX-1 P7: nine h2s, so the page has one). The ids are linked
@@ -27,16 +29,18 @@ const SECTIONS = {
   learnMore: { id: 'learn-more', heading: 'Learn More' },
 } as const;
 
-export default function LearnPage() {
+export default async function LearnPage() {
+  // P10-11: the sources sentence, read from this instance's statement when the page renders (at build: the page is
+  // static), never typed.
+  const statement = await buildFlowsStatement();
   return (
     <Page
       width="reading"
       title="What You Just Saw"
       lede={
         <>
-          This demo runs the same question through the same AI model twice &mdash; once
-          with only its training knowledge, once with live access to open data
-          portals through a protocol called MCP (Model Context Protocol).
+          The home page asks one AI model the same question twice. Once it answers from its training alone; once it
+          reads live public data through MCP, the Model Context Protocol.
         </>
       }
     >
@@ -156,13 +160,13 @@ export default function LearnPage() {
         </p>
         <p style={prose}>
           Context windows are finite, which is why the AI must be selective about what data it
-          requests. This is visible in the step-by-step progression users see in the demo: the AI
+          requests. This is visible in the step-by-step progression users see on this site: the AI
           searches for datasets, examines their structure, then constructs targeted queries rather
           than trying to retrieve everything at once.
         </p>
 
         <div style={calloutBox}>
-          In the demo results, expand &ldquo;How was the AI guided?&rdquo; to see the specific
+          In this site&apos;s results, expand &ldquo;How was the AI guided?&rdquo; to see the specific
           instructions and domain knowledge that shaped the AI&apos;s approach to your question.
         </div>
       </section>
@@ -183,20 +187,12 @@ export default function LearnPage() {
           retrieves articles <em>about</em> data, MCP lets the AI query databases
           directly &mdash; running the same kind of structured queries a data analyst would write.
         </p>
+        {/* P10-32 (C1 = A), with P10-11 read from the statement; its last sentence only where it lists two or more. */}
         <p style={prose}>
-          When you ask a question in the demo, the AI searches a catalog of civic datasets, examines
-          their structure, then constructs targeted queries &mdash; all through a series of tool calls
-          that flow between the AI, the MCP server, and the underlying data portals. The demo
-          connects to two MCP servers: the{' '}
-          <a href="https://github.com/npstorey/socrata-mcp-server" target="_blank" rel="noopener noreferrer">
-            Socrata MCP server
-          </a>
-          {' '}for open data portals in New York, Chicago, and San Francisco, and Google&apos;s{' '}
-          <a href="https://docs.datacommons.org/mcp/" target="_blank" rel="noopener noreferrer">
-            Data Commons MCP server
-          </a>
-          {' '}for US Census / ACS demographic and economic statistics. Tool calls are routed by name,
-          so a single response can combine city service data with federal statistical data.
+          When you ask a question here, the AI searches catalogs of public datasets, examines their structure, then
+          runs targeted queries. Each step is a tool call from the AI to a data source, which reads the data behind it.{' '}
+          {sourcesSentence(statement.sources)}
+          {statement.sources.length >= 2 ? ' Tool calls are routed by name, so one answer can combine data from more than one source.' : null}
         </p>
 
         <Link
@@ -220,86 +216,22 @@ export default function LearnPage() {
       <section id={SECTIONS.systemPrompt.id} style={sectionSpacing}>
         <h2 style={sectionHeading}>{SECTIONS.systemPrompt.heading}</h2>
 
+        {/* P10-33 (C1 = A; top change 6): the instructions without their excerpts; the rule in its third sentence is in
+            the instructions the link opens (criterion 16). */}
         <p style={prose}>
-          Every AI response is shaped by instructions most users never see.
-          In this demo, the AI receives a detailed &ldquo;skill prompt&rdquo; that provides
-          domain knowledge and behavioral rules. Here are the key components
-          and why each part matters.
+          Every AI answer is shaped by instructions most readers never see. Before your question, the AI here is given
+          knowledge about datasets and a set of rules. One of the rules: report only what the data tools return, and
+          never invent data.
         </p>
 
-        <div style={{ display: 'flex', flexDirection: 'column', gap: '24px', marginBottom: '24px' }}>
-          {/* Category 1: Known datasets */}
-          <SkillCategory
-            title="Known datasets and fields"
-            explanation={
-              'The AI is pre-loaded with identifiers for common civic datasets so it doesn\'t have to discover them from scratch. This mirrors how a human analyst builds institutional knowledge over time.'
-            }
-            excerpt={`## NYC KEY DATASETS (data.cityofnewyork.us)
-| Dataset | ID | Key Fields |
-|---------|-----|------------|
-| 311 Service Requests | erm2-nwe9 | complaint_type, borough, created_date |
-| Restaurant Inspections | 43nn-pn8j | boro, grade, inspection_date |
-| Housing Violations | wvxf-dwi5 | boro, violationid, inspectiondate |
-| Budget Data | d52a-yn36 | agency_name, budget_amount, fiscal_year |
-| Payroll Data | k397-673e | agency_name, title_description, base_salary |
-
-## CHICAGO KEY DATASETS (data.cityofchicago.org)
-| 311 Service Requests | v6vf-nfxy | sr_type, created_date, community_area |
-
-## SF KEY DATASETS (data.sf.gov)
-| 311 Cases | vw6y-z8j6 | requested_datetime, service_name, analysis_neighborhood |`}
-          />
-
-          {/* Category 2: Query syntax */}
-          <SkillCategory
-            title="Query syntax guidance"
-            explanation={
-              "Socrata's query language (SoQL) has quirks that differ from standard SQL \u2014 date functions, text search operators, pagination limits. The AI is taught these so it doesn't write queries that fail."
-            }
-            excerpt={`## SoQL PATTERNS
-- Aggregation: "select": "complaint_type, COUNT(*) as count",
-  "group": "complaint_type", "order": "count DESC"
-- Date filter: "where": "created_date >= '2024-01-01'"
-- Text search: "where": "complaint_type ILIKE '%noise%'"
-
-## SoQL DATE FUNCTIONS (NOT standard SQL!)
-- date_trunc_ym(date_field)  \u2192 Year-month truncation
-- date_extract_y(date_field) \u2192 Extract year
-- date_extract_m(date_field) \u2192 Extract month
-- IMPORTANT: Do NOT use DATE_TRUNC(), EXTRACT(), MONTH(), YEAR()`}
-          />
-
-          {/* Category 3: Anti-hallucination */}
-          <SkillCategory
-            title="Anti-hallucination rules"
-            explanation="The AI is explicitly instructed to never fabricate data and to cite dataset identifiers for every claim. This is the most important instruction in the entire prompt."
-            excerpt={`## CRITICAL REQUIREMENTS
-- NEVER hallucinate data - only report what tool calls actually return
-- ALWAYS discover columns first with SELECT * LIMIT 1
-  before querying unfamiliar datasets
-- Show the queries you used
-- Field names are CASE-SENSITIVE`}
-          />
-
-          {/* Category 4: Workflow */}
-          <SkillCategory
-            title="Workflow guidance"
-            explanation="The AI is told to follow a progression: search the catalog first, then examine metadata, then construct queries. This structured approach mirrors how a careful analyst works."
-            excerpt={`## WORKFLOW
-1. Use type="catalog" to find datasets, OR use known dataset IDs
-2. Use type="query" with "select": "*", "limit": 1 to discover columns
-3. Use type="query" with proper filters based on actual column names`}
-          />
-        </div>
-
         <div style={calloutBox}>
-          You can see a summary of these instructions directly in the demo results &mdash; look
-          for the &ldquo;How was the AI guided?&rdquo; section below each MCP response.
+          You can see a summary of these instructions under each answer that used data tools. Look for the
+          &ldquo;How was the AI guided?&rdquo; section.
         </div>
 
         <p style={{ fontSize: '14px', marginTop: '12px' }}>
           <a href={GITHUB_SKILL_URL} target="_blank" rel="noopener noreferrer">
-            View the complete system prompt &rarr;
+            Read the full instructions
           </a>
         </p>
       </section>
@@ -323,7 +255,7 @@ export default function LearnPage() {
           <NarrationLayer
             title="What's happening"
             functionName="formatToolProgress"
-            githubLines="#L585-L623"
+            githubLines={STREAMING_SOURCE_LINES.formatToolProgress}
             description='Translates the raw tool call into an action description.'
             example={{
               raw: 'socrata__get_data({ type: "catalog", query: "restaurant inspections", portal: "data.cityofnewyork.us" })',
@@ -333,7 +265,7 @@ export default function LearnPage() {
           <NarrationLayer
             title="What was found"
             functionName="formatToolResult"
-            githubLines="#L950-L993"
+            githubLines={STREAMING_SOURCE_LINES.formatToolResult}
             description="Summarizes the data returned by each tool call."
             example={{
               raw: '{ results: [...], count: 5 }',
@@ -343,7 +275,7 @@ export default function LearnPage() {
           <NarrationLayer
             title="Why this step"
             functionName="generateToolReason"
-            githubLines="#L1000-L1035"
+            githubLines={STREAMING_SOURCE_LINES.generateToolReason}
             description='Explains the purpose of the step in the overall workflow.'
             example={{
               raw: '(the same catalog call)',
@@ -364,7 +296,7 @@ export default function LearnPage() {
         </p>
 
         <div style={calloutBox}>
-          In the demo, click &ldquo;How is this narration generated?&rdquo; near the step
+          On this site, click &ldquo;How is this narration generated?&rdquo; near the step
           summary to see this explanation in context.
         </div>
       </section>
@@ -381,34 +313,6 @@ export default function LearnPage() {
         </p>
 
         <div style={{ display: 'flex', flexDirection: 'column', gap: '24px' }}>
-          {/* Model Selection */}
-          <div style={card}>
-            <h3 style={{ fontSize: '18px', marginBottom: '12px' }}>Model Selection</h3>
-            <p style={{ fontSize: '15px', color: 'var(--text-secondary)', marginBottom: '12px' }}>
-              Different AI models have different strengths. When choosing a model, consider:
-            </p>
-            <ul
-              style={{
-                paddingLeft: '20px',
-                margin: 0,
-                display: 'flex',
-                flexDirection: 'column',
-                gap: '6px',
-                fontSize: '15px',
-                color: 'var(--text-secondary)',
-              }}
-            >
-              <li><strong>Speed vs. quality</strong> &mdash; Faster models may sacrifice accuracy</li>
-              <li><strong>Cost</strong> &mdash; Premium models cost more per query</li>
-              <li><strong>Reasoning ability</strong> &mdash; Complex queries need capable models</li>
-              <li><strong>Tool calling</strong> &mdash; Not all models reliably use external tools</li>
-              <li><strong>Ethical considerations</strong> &mdash; AI model providers have different approaches to data privacy, environmental impact, and labor practices. Consider these factors alongside performance when choosing a model.</li>
-            </ul>
-            <p style={{ fontSize: '14px', color: 'var(--text-muted)', marginTop: '12px', fontStyle: 'italic' }}>
-              This demo lets you compare different models on the same query.
-            </p>
-          </div>
-
           {/* Orchestration Environment */}
           <div style={card}>
             <h3 style={{ fontSize: '18px', marginBottom: '12px' }}>Orchestration Environment</h3>
@@ -426,9 +330,9 @@ export default function LearnPage() {
                 </thead>
                 <tbody style={{ color: 'var(--text-secondary)' }}>
                   <tr style={{ borderBottom: '1px solid var(--border-color)' }}>
-                    <td style={{ padding: '8px 12px' }}>Browser (this demo)</td>
-                    <td style={{ padding: '8px 12px' }}>Quick queries, exploration</td>
-                    <td style={{ padding: '8px 12px' }}>Rate limits, simple queries only</td>
+                    <td style={{ padding: '8px 12px' }}>Browser (this site)</td>
+                    <td style={{ padding: '8px 12px' }}>Quick questions, exploration</td>
+                    <td style={{ padding: '8px 12px' }}>A daily question limit</td>
                   </tr>
                   <tr style={{ borderBottom: '1px solid var(--border-color)' }}>
                     <td style={{ padding: '8px 12px' }}>IDE (Cursor)</td>
@@ -450,7 +354,7 @@ export default function LearnPage() {
             <h3 style={{ fontSize: '18px', marginBottom: '12px' }}>Context Management</h3>
             <p style={{ fontSize: '15px', color: 'var(--text-secondary)', margin: 0 }}>
               LLMs have a finite context window. System prompts, conversation history, tool results,
-              and the response itself all compete for that space. This demo uses a fresh context for
+              and the response itself all compete for that space. This site uses a fresh context for
               each query, maximizing room for reasoning. In longer sessions (Claude Code, Cursor),
               older context is automatically summarized to free space &mdash; which is one reason why the same
               query can produce different results in different environments.
@@ -466,19 +370,19 @@ export default function LearnPage() {
         <h2 style={sectionHeading}>{SECTIONS.modelSelection.heading}</h2>
 
         <p style={prose}>
-          In October 2026 we ran nine AI models on 14 of the civic data questions first used in
-          March, and scored every answer against a rubric and against figures read directly from
-          the data portals. Three of the four models that led that run are the Claude models
-          below. In November 2026 we ran two of them again on 15 questions, beside three
-          open-weight models, and added the open-weight model that came closest to them on answer
-          quality. The demo offers all four:
+          In October 2026 we ran nine AI models on 14 of the civic data questions first used in March. We scored every
+          answer against a rubric. For the 11 questions that need data, we also checked the main answer against figures
+          read directly from the portals. Three of the four models that led that run are the Claude models below. In
+          November 2026 we ran two of them again on 15 questions, beside three open-weight models. We added the
+          open-weight model that came closest to them on answer quality. The November run did not check answers against
+          figures from the portals. This site offers the four models below:
         </p>
 
         <div style={{ display: 'flex', flexDirection: 'column', gap: '16px', marginBottom: '24px' }}>
           <div style={card}>
             <h3 style={{ fontSize: '16px', marginBottom: '6px' }}>Claude Haiku 5.5 (recommended)</h3>
             <p style={{ fontSize: '15px', color: 'var(--text-secondary)', margin: 0, lineHeight: '1.6' }}>
-              The model the demo starts on. In the October 2026 run it got the main answer right on 8
+              The model this site starts on. In the October 2026 run it got the main answer right on 8
               of 11 questions, and partly right on the other three, at about half a cent a question in
               that run: under a tenth of what Sonnet 5.5 and Opus 5.5 cost. It was also the fastest of
               those three, with a median of 15 seconds.
@@ -488,9 +392,8 @@ export default function LearnPage() {
           <div style={card}>
             <h3 style={{ fontSize: '16px', marginBottom: '6px' }}>Claude Sonnet 5.5 (balanced)</h3>
             <p style={{ fontSize: '15px', color: 'var(--text-secondary)', margin: 0, lineHeight: '1.6' }}>
-              Stronger analysis at moderate cost: in the October 2026 run, the main answer right on 9
-              of 11 questions, with careful caveats, at about 11 cents a question and a median of 21
-              seconds.
+              Stronger analysis at moderate cost. In the October 2026 run it got the main answer right on 9 of 11
+              questions. It cost about 11 cents a question and took a median of 21 seconds.
             </p>
           </div>
 
@@ -513,8 +416,8 @@ export default function LearnPage() {
               seconds.
             </p>
             <p style={{ fontSize: '15px', color: 'var(--text-secondary)', margin: '0 0 8px', lineHeight: '1.6' }}>
-              The demo reaches it through OpenRouter, which passes each question to one of several
-              companies that run the model. The demo lets only three of those companies answer its
+              This site reaches it through OpenRouter, which passes each question to one of several
+              companies that run the model. This site lets only three of those companies answer its
               questions: Cohere, GMICloud and Xiaomi. OpenRouter picks among the three for each
               question, and if none of them can take it, the question fails rather than going to
               another company.
@@ -545,10 +448,9 @@ export default function LearnPage() {
         </div>
 
         <p style={prose}>
-          When an author publishes an analysis they had kept private, a second model first reviews the
-          analysis against a fixed checklist: Claude Sonnet 5.5, or Claude Opus 5.5 when Sonnet 5.5
-          wrote the analysis. Analyses published earlier with GPT-4o or GPT-5.4 keep those model
-          names.
+          When an author publishes an analysis they had kept private, a second model first reviews it against a fixed
+          checklist. The reviewer is the first model on this site&apos;s list of reviewers that did not write the
+          analysis. Earlier analyses keep the model names recorded with them.
         </p>
 
         <p style={{ fontSize: '14px', color: 'var(--text-muted)' }}>
@@ -586,14 +488,8 @@ export default function LearnPage() {
         <h2 style={sectionHeading}>{SECTIONS.aiLimitations.heading}</h2>
 
         <p style={prose}>
-          Even with live data access, AI responses can contain errors. This is inherent
-          to how large language models work &mdash; they generate text that <em>sounds</em> right,
-          which sometimes means it <em>isn&apos;t</em> right. In AI research, this is
-          called <strong>hallucination</strong>: the model produces plausible but incorrect information.
-        </p>
-
-        <p style={prose}>
-          With civic data queries, common failure patterns include:
+          Even with live data access, AI answers can contain errors. With civic data questions, common failure patterns
+          include:
         </p>
         <ul
           style={{
@@ -654,7 +550,7 @@ export default function LearnPage() {
         <h2 style={sectionHeading}>{SECTIONS.tryIt.heading}</h2>
 
         <p style={prose}>
-          Try these queries in the demo to see different capabilities:
+          Try these queries on the home page to see different capabilities:
         </p>
 
         <div
@@ -711,117 +607,11 @@ export default function LearnPage() {
           ))}
         </div>
 
-        {/* Set up locally */}
-        <h3 style={{ fontSize: '18px', marginBottom: '12px' }}>Set Up Locally</h3>
-        <p style={{ ...prose, marginBottom: '24px' }}>
-          This demo has rate limits. For unlimited access and complex multi-step analysis,
-          set up MCP locally:
+        {/* P10-19 (site Q3 = P): the setup's one home is /project. */}
+        <p style={prose}>
+          To run these tools on your own computer, see <Link href="/project#run-it-yourself">Run it yourself</Link> on
+          the project page.
         </p>
-
-        {/* Claude Desktop config */}
-        <div
-          style={{
-            border: '1px solid var(--border-color)',
-            borderRadius: '4px',
-            padding: '24px',
-            marginBottom: '24px',
-          }}
-        >
-          <h4 style={{ fontSize: '18px', marginBottom: '8px' }}>Claude Desktop</h4>
-          <p style={{ fontSize: '14px', color: 'var(--text-secondary)', marginBottom: '8px' }}>
-            The server is published on npm as{' '}
-            <a href="https://www.npmjs.com/package/socrata-mcp-server" target="_blank" rel="noopener noreferrer">
-              socrata-mcp-server
-            </a>{' '}
-            (version 0.9.2, October 2026) and needs Node.js 22 or newer. Add this to your Claude
-            Desktop MCP configuration (Settings &rarr; Developer &rarr; Edit Config):
-          </p>
-          <pre style={{
-            ...excerptBlock,
-            margin: '0 0 12px 0',
-          }}>{`{
-  "mcpServers": {
-    "socrata": {
-      "command": "npx",
-      "args": ["-y", "socrata-mcp-server", "--stdio"],
-      "env": {
-        "DATA_PORTAL_URL": "https://data.cityofnewyork.us"
-      }
-    }
-  }
-}`}</pre>
-          <p style={{ fontSize: '13px', color: 'var(--text-muted)', margin: 0 }}>
-            <code style={{ fontSize: '12px' }}>DATA_PORTAL_URL</code> is optional: it is the portal a
-            request uses when it names none. Without it, the server refuses every request that
-            does not name a portal.
-            After saving, restart Claude Desktop. To run the server from source instead, see its{' '}
-            <a href="https://github.com/npstorey/socrata-mcp-server#quick-start" target="_blank" rel="noopener noreferrer">
-              README
-            </a>.
-          </p>
-        </div>
-
-        <div
-          style={{
-            display: 'grid',
-            gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))',
-            gap: '16px',
-            marginBottom: '32px',
-          }}
-        >
-          {[
-            { title: 'Claude Code', desc: 'claude mcp add socrata -e DATA_PORTAL_URL=https://data.cityofnewyork.us -- npx -y socrata-mcp-server --stdio' },
-            { title: 'Cursor', desc: 'Add the same "socrata" entry to .cursor/mcp.json' },
-            { title: 'Other tools', desc: 'Any MCP-compatible client works' },
-          ].map((item, idx) => (
-            <div
-              key={idx}
-              style={{
-                border: '1px solid var(--border-color)',
-                borderRadius: '4px',
-                padding: '16px',
-              }}
-            >
-              <h4 style={{ fontSize: '18px', marginBottom: '8px' }}>{item.title}</h4>
-              <p style={{ fontSize: '14px', color: 'var(--text-muted)', margin: 0 }}>
-                {item.desc}
-              </p>
-            </div>
-          ))}
-        </div>
-
-        <p style={{ ...prose, fontSize: '14px', color: 'var(--text-muted)', marginBottom: '24px' }}>
-          <strong>Note:</strong> ChatGPT does not currently support MCP natively.
-          For the full MCP experience, use{' '}
-          <a href="https://claude.ai/download" target="_blank" rel="noopener noreferrer">Claude Desktop</a>,{' '}
-          <a href="https://claude.ai/code" target="_blank" rel="noopener noreferrer">Claude Code</a>, or{' '}
-          <a href="https://cursor.com" target="_blank" rel="noopener noreferrer">Cursor</a>.
-          See the{' '}
-          <a href="https://modelcontextprotocol.io" target="_blank" rel="noopener noreferrer">MCP docs</a>{' '}
-          for the full list of compatible clients.
-        </p>
-
-        <div
-          style={{
-            backgroundColor: 'rgba(112, 186, 255, 0.15)',
-            borderRadius: '4px',
-            padding: '24px',
-          }}
-        >
-          <h3 style={{ fontSize: '18px', marginBottom: '12px' }}>Get Started</h3>
-          <p style={{ fontSize: '16px', color: 'var(--text-secondary)', marginBottom: '16px' }}>
-            Check out the civic-ai-tools repository for setup instructions and documentation.
-          </p>
-          <a
-            href="https://github.com/npstorey/civic-ai-tools"
-            target="_blank"
-            rel="noopener noreferrer"
-            className="ui-button ui-button-primary"
-            style={{ textDecoration: 'none' }}
-          >
-            View on GitHub
-          </a>
-        </div>
       </section>
 
       {/* ============================================================
@@ -875,7 +665,7 @@ export default function LearnPage() {
 
         <div style={{ paddingTop: '32px', borderTop: '1px solid var(--border-color)' }}>
           <Link href="/" style={{ display: 'inline-flex', alignItems: 'center', gap: '8px' }}>
-            &larr; Back to demo
+            &larr; Ask a question
           </Link>
         </div>
       </section>
@@ -886,26 +676,6 @@ export default function LearnPage() {
 /* ================================================================
    Helper components (server components — no 'use client' needed)
    ================================================================ */
-
-function SkillCategory({
-  title,
-  explanation,
-  excerpt,
-}: {
-  title: string;
-  explanation: string;
-  excerpt: string;
-}) {
-  return (
-    <div>
-      <h3 style={{ fontSize: '16px', marginBottom: '6px' }}>{title}</h3>
-      <p style={{ fontSize: '15px', color: 'var(--text-secondary)', margin: '0 0 4px 0', lineHeight: '1.6' }}>
-        {explanation}
-      </p>
-      <pre style={excerptBlock}>{excerpt}</pre>
-    </div>
-  );
-}
 
 function NarrationLayer({
   title,
@@ -925,7 +695,7 @@ function NarrationLayer({
       <div style={{ display: 'flex', alignItems: 'baseline', gap: '8px', marginBottom: '6px' }}>
         <span style={{ fontSize: '15px', fontWeight: 600 }}>{title}</span>
         <a
-          href={`${GITHUB_STREAMING_BASE}${githubLines}`}
+          href={`${STREAMING_SOURCE_BASE}${githubLines}`}
           target="_blank"
           rel="noopener noreferrer"
           style={{ fontFamily: 'monospace', fontSize: '13px', color: 'var(--accent)' }}

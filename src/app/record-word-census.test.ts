@@ -132,6 +132,8 @@ const ALLOWLIST: readonly Allowed[] = [
 
   // The P9 frame's width name (UX-2 P5, the record frame): a value, never rendered.
   { file: 'src/app/(app)/evidence/page.tsx', rows: 'UX-2 P5 (`<Page width="record">`)', reason: 'code value', text: 'record', count: 1 },
+  // The /records lede as ruled (UX-2 P10-48, C1 = A): "records" is a verb there, as AnswerView's below.
+  { file: 'src/app/(app)/evidence/page.tsx', rows: 'UX-2 P10-48 (C1 = A)', reason: 'ruled copy', text: 'Published analyses of civic data, made with AI assistance. Each one records its queries, data sources and model, and says where something was not recorded. Anyone can check that an analysis is unchanged.', count: 1 },
   { file: 'src/app/(app)/evidence/[slug]/page.tsx', rows: 'UX-2 P5 (`<Page width="record">`)', reason: 'code value', text: 'record', count: 1 },
   { file: 'src/app/(app)/dashboard/page.tsx', rows: 'UX-2 P4a (`<Page width="record">`; relay 46, R1)', reason: 'code value', text: 'record', count: 1 },
 

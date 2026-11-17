@@ -28,6 +28,39 @@ import { useEffect, useState } from 'react';
  * Post-hydration only — the fetch runs in an effect, so the server-
  * rendered document is byte-identical with or without the probe.
  */
+/**
+ * ONE REQUEST PER URL IN FLIGHT (UX-2 P6 + P10, criterion 25; 0d item 1). The
+ * Header and a directory row read the same app host's status on one page; they
+ * share the request in flight for that URL rather than each asking. The shared
+ * request carries its own 4-second timeout and is never aborted by one caller's
+ * unmount; a caller that unmounted ignores its answer. Once it settles it is
+ * forgotten, so a later mount asks again, as each mount did before.
+ */
+const inFlight = new Map<string, Promise<boolean>>();
+
+function probeOnce(statusUrl: string): Promise<boolean> {
+  const pending = inFlight.get(statusUrl);
+  if (pending) return pending;
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), 4000);
+  const request = fetch(statusUrl, {
+    method: 'GET',
+    mode: 'cors',
+    credentials: 'include',
+    cache: 'no-store',
+    signal: controller.signal,
+  })
+    .then((res) => (res.ok ? res.json() : null))
+    .then((body: unknown) => body !== null && typeof body === 'object' && (body as { signedIn?: unknown }).signedIn === true)
+    .catch(() => false) // Silent: keep the signed-out affordance.
+    .finally(() => {
+      clearTimeout(timer);
+      inFlight.delete(statusUrl);
+    });
+  inFlight.set(statusUrl, request);
+  return request;
+}
+
 export function useCrossHostSession(
   statusUrl: string | null,
   enabled: boolean,
@@ -43,32 +76,11 @@ export function useCrossHostSession(
     }
 
     let cancelled = false;
-    const controller = new AbortController();
-    const timer = window.setTimeout(() => controller.abort(), 4000);
-
-    fetch(statusUrl, {
-      method: 'GET',
-      mode: 'cors',
-      credentials: 'include',
-      cache: 'no-store',
-      signal: controller.signal,
-    })
-      .then((res) => (res.ok ? res.json() : null))
-      .then((body: unknown) => {
-        if (cancelled || body === null || typeof body !== 'object') return;
-        if ((body as { signedIn?: unknown }).signedIn === true) {
-          setSignedIn(true);
-        }
-      })
-      .catch(() => {
-        // Silent: keep the signed-out affordance.
-      })
-      .finally(() => window.clearTimeout(timer));
-
+    void probeOnce(statusUrl).then((answer) => {
+      if (!cancelled && answer) setSignedIn(true);
+    });
     return () => {
       cancelled = true;
-      controller.abort();
-      window.clearTimeout(timer);
     };
   }, [statusUrl, enabled]);
 

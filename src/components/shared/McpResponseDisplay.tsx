@@ -432,7 +432,7 @@ export default function McpResponseDisplay({
         lineHeight: '1.5',
       }}
     >
-      Analysis may be incomplete. This demo has token and tool-call limits that can cut short complex queries. For the full analysis with no limits,{' '}
+      Analysis may be incomplete. This site has token and tool-call limits that can cut short complex queries. For the full analysis with no limits,{' '}
       <a
         href="https://github.com/npstorey/civic-ai-tools"
         target="_blank"

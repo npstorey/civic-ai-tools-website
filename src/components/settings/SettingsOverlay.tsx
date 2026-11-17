@@ -32,7 +32,7 @@
  * instance (new constants; `KEPT_*` stay the privacy page's), the privacy link.
  */
 
-import { useRef, useState } from 'react';
+import { useEffect, useRef, useState, useSyncExternalStore } from 'react';
 import { useRouter } from 'next/navigation';
 import { Dialog } from '@/components/ui/Dialog';
 import { Tabs } from '@/components/ui/Tabs';
@@ -46,6 +46,7 @@ import { readerSourceName, sourceRowLines } from '@/lib/sources/source-name';
 import { matchingSources } from '@/lib/sources/source-search';
 import { useHostLinks } from '@/components/HostLinksProvider';
 import { HARNESS_SENTENCE, WHY_THESE_MODELS } from '@/components/composer/copy';
+import { readAddressSource } from '@/components/SourceLanding';
 
 export interface SettingsOverlayProps {
   mount?: 'intercepted' | 'page';
@@ -71,6 +72,9 @@ function dateInWords(value: string): string {
 const PARA = { margin: '0 0 10px' } as const;
 const MUTED = { margin: '0 0 10px', color: 'var(--text-secondary)' } as const;
 
+const noSubscription = () => () => {};
+const noAddress = () => null;
+
 function DataSources() {
   const consent = useSourceConsent();
   const status = consent.status;
@@ -87,6 +91,20 @@ function DataSources() {
   const searchable = sources.map((source) => ({ sourceId: source.sourceId, name: readerSourceName(source), what: sourceRowLines(source).what, source }));
   const shown = matchingSources(searchable, query);
   const lead = inForce ? '' : panelLeadBeforeConsent({ on: count('on'), askFirst: count('ask-first'), off: count('off') });
+  // "Ask with this source" lands here as `/settings?source=<id>` (UX-2 P6 + P10, item 7; 0d item 9). The list marks the
+  // row it was opened for (`data-target-source`) and brings that row into view inside the dialog's own scroller; focus
+  // stays where the Dialog puts it (Close). An id this instance does not list marks nothing.
+  const addressSource = useSyncExternalStore(noSubscription, readAddressSource, noAddress);
+  const targetSource = addressSource !== null && ids.includes(addressSource) ? addressSource : null;
+  const listRef = useRef<HTMLUListElement>(null);
+  const broughtIntoView = useRef<string | null>(null);
+  useEffect(() => {
+    if (targetSource === null || broughtIntoView.current === targetSource) return;
+    const row = listRef.current?.querySelector(`li[data-source="${CSS.escape(targetSource)}"]`);
+    if (!row) return;
+    broughtIntoView.current = targetSource;
+    row.scrollIntoView({ block: 'nearest' });
+  }, [targetSource, shown.length]);
 
   return (
     <div style={{ fontSize: '14px', lineHeight: 1.6, color: 'var(--text-primary)' }}>
@@ -117,7 +135,7 @@ function DataSources() {
         </p>
       )}
       {shown.length === 0 && searchable.length > 0 && <p style={MUTED}>{SETTINGS_TEXT.noMatch}</p>}
-      <ul style={{ listStyle: 'none', margin: '0 0 10px', padding: 0, fontSize: '13px', color: 'var(--text-secondary)' }}>
+      <ul ref={listRef} data-target-source={targetSource ?? undefined} style={{ listStyle: 'none', margin: '0 0 10px', padding: 0, fontSize: '13px', color: 'var(--text-secondary)' }}>
         {shown.map(({ source, name }) => {
           const control: SourceStateControlProps = {
             sourceId: source.sourceId,

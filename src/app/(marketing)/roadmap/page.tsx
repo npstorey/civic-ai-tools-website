@@ -60,18 +60,19 @@ export default async function RoadmapPage() {
         .
       </p>
 
+      {/* The routing strip's cards point at the reference project's own hub
+          docs — content that belongs with the reference project's roadmap,
+          not with an instance's. It sits above the document (UX-2 P10, top
+          change 9, site Q6 = A) and renders with the document or with the
+          could-not-be-loaded stub alike; making its cards configurable is a
+          roadmap-change issue (see the component header, website#94). */}
+      <AudienceRoutingStrip />
+
       {result.ok && result.markdown ? (
         <RoadmapBody markdown={result.markdown} sourceUrl={source.rawUrl} />
       ) : (
         <RoadmapStub source={source} />
       )}
-
-      {/* The routing strip's cards point at the reference project's own hub
-          docs — content that belongs with the reference project's roadmap,
-          not with an instance's. It renders only alongside a rendered
-          roadmap; making its cards configurable is a roadmap-change issue
-          (see the component header, website#94). */}
-      <AudienceRoutingStrip />
     </RoadmapShell>
   );
 }

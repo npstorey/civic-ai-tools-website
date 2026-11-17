@@ -1,60 +1,15 @@
+import Link from 'next/link';
 import { TYPED_STANDARDS_URL } from '@/lib/site-config';
 import ContactCallToAction from '@/components/ContactCallToAction';
 
-// Legend statuses shared with the Typed Standards architecture docs
-// (end-state-vision.md) and typedstandards.org: exactly these three labels.
-type LegendStatus = 'built' | 'designed' | 'upcoming';
-
-const LEGEND_META: Record<LegendStatus, { label: string; color: string }> = {
-  built: { label: 'Built', color: 'var(--success)' },
-  designed: { label: 'Designed', color: 'var(--caution)' },
-  upcoming: { label: 'Upcoming', color: 'var(--text-muted)' },
-};
-
-function LegendLabel({ status }: { status: LegendStatus }) {
-  const { label, color } = LEGEND_META[status];
-  return (
-    <span
-      style={{
-        display: 'inline-flex',
-        alignItems: 'center',
-        gap: '5px',
-        fontSize: '13px',
-        fontWeight: 600,
-        color: 'var(--text-secondary)',
-        whiteSpace: 'nowrap',
-      }}
-    >
-      <span
-        aria-hidden="true"
-        style={{
-          width: '8px',
-          height: '8px',
-          borderRadius: '50%',
-          backgroundColor: color,
-          display: 'inline-block',
-        }}
-      />
-      {label}
-    </span>
-  );
-}
-
-const eyebrow: React.CSSProperties = {
-  fontSize: '13px',
-  fontWeight: 600,
-  letterSpacing: '0.08em',
-  textTransform: 'uppercase',
-  color: 'var(--text-muted)',
-  marginBottom: '12px',
-};
-
-const subHeading: React.CSSProperties = {
-  fontSize: '20px',
-  fontWeight: 600,
-  marginBottom: '16px',
-  marginTop: 0,
-};
+/**
+ * The home page below the question box: one screen that links out (UX-2 P10; home Q1 = B, outline B; the words of
+ * C1 = A and D-17 = A, byte for byte). In order: the headline (P10-3), the claim's limit directly under it (P10-4),
+ * three reader cards each ending in one link (P10-5 to P10-7; D-17's targets), the band's foot with two buttons
+ * (P10-8) and the contact button alone (P10-9). What the band carried before moved: the three-layer stack into
+ * `/project`'s "Three pillars", "What you can use" to `/project`, "Where the line is today" to the hub's ROADMAP.md,
+ * and "What another city could reuse" into pillar 2's sentence (P10-12, P10-13).
+ */
 
 const bodyText: React.CSSProperties = {
   fontSize: '15px',
@@ -70,6 +25,30 @@ const cardLabel: React.CSSProperties = {
   marginBottom: '8px',
 };
 
+const cardLink: React.CSSProperties = { margin: '10px 0 0 0', fontSize: '14px', fontWeight: 500 };
+
+/** The three reader cards: who, what this site gives them, and where to go next. */
+const CARDS: Array<{ label: string; body: string; link: string; href: string }> = [
+  {
+    label: 'If you set policy',
+    body: 'Each published analysis lists its datasets, queries and model, and is signed so anyone can check it is unchanged.',
+    link: 'See published analyses',
+    href: '/records',
+  },
+  {
+    label: 'If you own a data function',
+    body: 'This site shows AI answering from public data, with citations, sign-in and a record of every query. It is all open source.',
+    link: 'What a city could run',
+    href: '/project#three-pillars',
+  },
+  {
+    label: 'If you analyze data',
+    body: 'Ask a question against live public data and see every query the AI runs. Download the answer as a notebook, or sign in to publish it as a signed analysis.',
+    link: 'Watch it in action',
+    href: '/explore',
+  },
+];
+
 export default function PositioningBand() {
   return (
     <section
@@ -82,8 +61,6 @@ export default function PositioningBand() {
       }}
     >
       <div className="max-w-6xl mx-auto px-6" style={{ padding: '56px 24px' }}>
-        {/* Headline */}
-        <p style={eyebrow}>Beyond the demo</p>
         <h2
           id="positioning-heading"
           style={{
@@ -91,7 +68,7 @@ export default function PositioningBand() {
             lineHeight: '140%',
             maxWidth: '820px',
             marginTop: 0,
-            marginBottom: '40px',
+            marginBottom: '12px',
             fontWeight: 600,
           }}
         >
@@ -102,245 +79,49 @@ export default function PositioningBand() {
           &mdash; an open protocol for independent verification of AI-generated
           answers.
         </h2>
+        <p style={{ ...bodyText, maxWidth: '820px', marginBottom: '40px' }}>
+          A signed analysis shows how an answer was produced. It does not claim the answer is correct.
+        </p>
 
-        {/* Layered stack: protocol → software → city implementations */}
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-6" style={{ marginBottom: '48px' }}>
-          <div>
-            <p style={cardLabel}>1. Protocol</p>
-            <p style={bodyText}>
-              <a href={TYPED_STANDARDS_URL} target="_blank" rel="noopener noreferrer">
-                Typed Standards
-              </a>{' '}
-              defines how an AI-generated answer is published as a signed
-              record &mdash; so anyone can check what data was used, how, and by
-              which model, without trusting the site that published it.
-            </p>
-          </div>
-          <div>
-            <p style={cardLabel}>2. Open-source software</p>
-            <p style={bodyText}>
-              The working parts: this website, the data connectors through
-              which AI mediates open-data portals for people, and the shared
-              verification library used by both this site and the independent
-              verifier. All open source.
-            </p>
-          </div>
-          <div>
-            <p style={cardLabel}>3. City implementations</p>
-            <p style={bodyText}>
-              This site is the first: a reference implementation running
-              against public data portals for New York, Chicago, San Francisco,
-              Los Angeles, and Seattle. The same stack is what another city
-              would pick up and run against its own portals.
-            </p>
-          </div>
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-6" style={{ marginBottom: '40px' }}>
+          {CARDS.map((card) => (
+            <div key={card.label}>
+              <p style={cardLabel}>{card.label}</p>
+              <p style={bodyText}>{card.body}</p>
+              <p style={cardLink}>
+                <Link href={card.href}>{card.link}</Link>
+              </p>
+            </div>
+          ))}
         </div>
 
-        {/* What's new (A3, site refresh 2026-10). Dated in its heading: it
-            names releases, so it goes stale and says when it was true. Every
-            item is the open-source project's, not this instance's, so it
-            holds on any deployment built from this repository (#305). */}
-        <div style={{ marginBottom: '48px' }}>
-          <h3 style={subHeading}>What you can use today (October 2026)</h3>
-          <ul
-            style={{
-              listStyle: 'none',
-              padding: 0,
-              margin: 0,
-              display: 'flex',
-              flexDirection: 'column',
-              gap: '10px',
-            }}
+        {/* The band's foot: the two buttons that were "Go deeper"'s (home Q3 = A, P10-8), and the contact button. */}
+        <div
+          style={{
+            display: 'flex',
+            flexWrap: 'wrap',
+            alignItems: 'center',
+            gap: '12px',
+            borderTop: '1px solid var(--border-color)',
+            paddingTop: '24px',
+          }}
+        >
+          <Link
+            href="/project#run-it-yourself"
+            className="ui-button ui-button-secondary"
+            style={{ textDecoration: 'none', fontSize: '14px', padding: '10px 24px', whiteSpace: 'nowrap' }}
           >
-            <li style={bodyText}>
-              <strong style={{ color: 'var(--text-primary)' }}>A command line.</strong>{' '}
-              <code>npm install -g @typedstandards/cli</code> signs, views and verifies records
-              from a terminal.
-            </li>
-            <li style={bodyText}>
-              <strong style={{ color: 'var(--text-primary)' }}>Python and notebooks.</strong>{' '}
-              <code>pip install typedstandards</code> signs a record from Python or a Jupyter
-              notebook and publishes it to a GitHub Pages site.
-            </li>
-            <li style={bodyText}>
-              <strong style={{ color: 'var(--text-primary)' }}>Your own host.</strong>{' '}
-              <code>@typedstandards/host-core</code> serves signed records from a static site, and{' '}
-              <a href="https://host-template.typedstandards.org" target="_blank" rel="noopener noreferrer">
-                a template
-              </a>{' '}
-              does it on GitHub Pages.
-            </li>
-            <li style={bodyText}>
-              <strong style={{ color: 'var(--text-primary)' }}>A live example.</strong>{' '}
-              <a href="https://core-satellite.typedstandards.org" target="_blank" rel="noopener noreferrer">
-                core-satellite.typedstandards.org
-              </a>{' '}
-              maps how the standard relates to public projects; each relation is a signed record.
-            </li>
-            <li style={bodyText}>
-              <strong style={{ color: 'var(--text-primary)' }}>An independent check.</strong>{' '}
-              <a href={`${TYPED_STANDARDS_URL}/verify`} target="_blank" rel="noopener noreferrer">
-                The verifier
-              </a>{' '}
-              checks any record package without relying on the site that published it.
-            </li>
-            <li style={bodyText}>
-              <strong style={{ color: 'var(--text-primary)' }}>Your own data connector.</strong>{' '}
-              <code>npx -y socrata-mcp-server --stdio</code> runs the open-source Socrata server on your
-              machine, so an MCP client such as Claude Desktop can query any Socrata open-data portal.
-            </li>
-          </ul>
-        </div>
-
-        {/* Three readers */}
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-6" style={{ marginBottom: '48px' }}>
-          <div>
-            <p style={cardLabel}>If you set policy</p>
-            <p style={bodyText}>
-              AI-assisted answers about public data should come with receipts.
-              Every analysis published here permanently records which datasets
-              were used, what was asked of them, and which model did the work
-              &mdash; and the analysis is signed, so a third party can confirm it
-              hasn&apos;t been altered. The analysis shows how an answer was
-              produced; it does not claim the answer is correct.
-            </p>
-          </div>
-          <div>
-            <p style={cardLabel}>If you own a data function</p>
-            <p style={bodyText}>
-              This is a working example of putting AI in front of your data on
-              your terms: AI mediates public data for residents and staff, with
-              citations, provenance capture, logging, and sign-in &mdash; while
-              your analysts stay in the loop. Every piece is open source and
-              portable to your portals.
-            </p>
-          </div>
-          <div>
-            <p style={cardLabel}>If you analyze data</p>
-            <p style={bodyText}>
-              Ask a real question against live portal data and watch the work:
-              every query the AI issues is visible as actual SoQL, exportable
-              as a Jupyter notebook you can re-run yourself, and publishable as
-              a signed analysis others can verify without taking your
-              word for it.
-            </p>
-          </div>
-        </div>
-
-        {/* Boundaries: where the line is today */}
-        <div style={{ marginBottom: '48px' }}>
-          <h3 style={subHeading}>Where the line is today</h3>
-          <p style={{ ...bodyText, marginBottom: '16px' }}>
-            <LegendLabel status="built" />{' '}
-            <span style={{ fontSize: '14px' }}>&mdash; running on this site today</span>
-            <span style={{ margin: '0 10px', color: 'var(--text-muted)' }}>&middot;</span>
-            <LegendLabel status="designed" />{' '}
-            <span style={{ fontSize: '14px' }}>&mdash; specified, not yet running</span>
-            <span style={{ margin: '0 10px', color: 'var(--text-muted)' }}>&middot;</span>
-            <LegendLabel status="upcoming" />{' '}
-            <span style={{ fontSize: '14px' }}>&mdash; planned direction</span>
-          </p>
-          <ul
-            style={{
-              listStyle: 'none',
-              padding: 0,
-              margin: 0,
-              display: 'flex',
-              flexDirection: 'column',
-              gap: '14px',
-            }}
+            Run it yourself
+          </Link>
+          <Link
+            href="/learn"
+            className="ui-button ui-button-secondary"
+            style={{ textDecoration: 'none', fontSize: '14px', padding: '10px 24px', whiteSpace: 'nowrap' }}
           >
-            <li style={bodyText}>
-              <strong style={{ color: 'var(--text-primary)' }}>
-                Prototype vs. production.
-              </strong>{' '}
-              This site is a working prototype <LegendLabel status="built" />
-              {' '}&mdash; real data, real signatures, demo-scale limits. A
-              production deployment customized to one city&apos;s portals,
-              policies, and scale is the next step{' '}
-              <LegendLabel status="upcoming" />.
-            </li>
-            <li style={bodyText}>
-              <strong style={{ color: 'var(--text-primary)' }}>
-                Open data vs. restricted data.
-              </strong>{' '}
-              Everything here runs against open, public data portals{' '}
-              <LegendLabel status="built" />. Extending the same verification pattern to
-              access-controlled internal data is a planned direction{' '}
-              <LegendLabel status="upcoming" />.
-            </li>
-            <li style={bodyText}>
-              <strong style={{ color: 'var(--text-primary)' }}>
-                Retrieval vs. analysis.
-              </strong>{' '}
-              The AI here both retrieves records with citations and runs
-              multi-step analysis, published as signed records{' '}
-              <LegendLabel status="built" />. Extracting typed, machine-checkable claims
-              from an analysis is specified but not yet running{' '}
-              <LegendLabel status="designed" />.
-            </li>
-            <li style={bodyText}>
-              <strong style={{ color: 'var(--text-primary)' }}>
-                AI-generated vs. human-validated.
-              </strong>{' '}
-              Everything the AI produces is permanently labeled AI-generated,
-              and human review attaches as its own signed attestation{' '}
-              <LegendLabel status="built" />. AI-generated work is never silently promoted
-              to human-validated.
-            </li>
-          </ul>
+            Learn how it works
+          </Link>
+          <ContactCallToAction buttonOnly />
         </div>
-
-        {/* Trust & transferability */}
-        <div style={{ marginBottom: '40px' }}>
-          <h3 style={subHeading}>What another city could reuse</h3>
-          <ul
-            style={{
-              listStyle: 'none',
-              padding: 0,
-              margin: '0 0 16px 0',
-              display: 'flex',
-              flexDirection: 'column',
-              gap: '10px',
-            }}
-          >
-            <li style={bodyText}>
-              <strong style={{ color: 'var(--text-primary)' }}>Citations</strong>{' '}
-              &mdash; answers name the datasets they draw on, linked back to
-              the source portal.
-            </li>
-            <li style={bodyText}>
-              <strong style={{ color: 'var(--text-primary)' }}>Provenance</strong>{' '}
-              &mdash; the full trail (model, data sources, every query,
-              timestamps) travels with each published analysis.
-            </li>
-            <li style={bodyText}>
-              <strong style={{ color: 'var(--text-primary)' }}>Access controls</strong>{' '}
-              &mdash; sign-in and per-user limits, so usage is accountable.
-            </li>
-            <li style={bodyText}>
-              <strong style={{ color: 'var(--text-primary)' }}>Logging</strong>{' '}
-              &mdash; every tool call is captured as a replayable trace &mdash;
-              see the <a href="/explore">Explore page</a>.
-            </li>
-            <li style={bodyText}>
-              <strong style={{ color: 'var(--text-primary)' }}>Human-in-the-loop</strong>{' '}
-              &mdash; publishing is a deliberate human action, and human review
-              is recorded as its own signed attestation.
-            </li>
-          </ul>
-          <p style={bodyText}>
-            All of it is open source: the protocol, the software, and the
-            safeguards are built to be run by another city against its own data
-            portals.
-          </p>
-        </div>
-
-        {/* Express interest: the shared contact call to action (UX-1 G0-2 (i)). */}
-        <ContactCallToAction
-          style={{ borderTop: '1px solid var(--border-color)', paddingTop: '24px' }}
-          textStyle={bodyText}
-        />
       </div>
     </section>
   );

@@ -17,9 +17,9 @@ export default function EvidenceIndexPage() {
       title="Analysis"
       lede={
         <>
-          Published analyses of civic data, made with AI assistance.
-          Each analysis includes a full provenance chain — the exact queries, data sources,
-          and model outputs — so findings can be independently verified.
+          {/* P10-48 (C1 = A). */}
+          Published analyses of civic data, made with AI assistance. Each one records its queries, data sources and
+          model, and says where something was not recorded. Anyone can check that an analysis is unchanged.
         </>
       }
     >

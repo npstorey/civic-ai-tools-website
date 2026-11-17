@@ -29,6 +29,7 @@ import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import path from 'node:path';
 import { execFileSync } from 'node:child_process';
+import ts from 'typescript';
 import { pathToFileURL } from 'node:url';
 import type { ComponentType, ReactElement } from 'react';
 import {
@@ -352,4 +353,52 @@ test('criterion 3 (PQ8 = (a)): every platform, transport and Commercial badge re
     if (ratio < 4.5) readings.push(`${label} ${ratio.toFixed(2)}:1`);
   }
   assert.deepEqual(readings, [], 'badges under 4.5:1');
+});
+
+// --- Criterion 7: the guards ------------------------------------------------------------------------------------
+
+
+/** Every JSX element with `target="_blank"` in a file, and its `rel`, read with the TypeScript compiler. */
+function blankTargets(file: string, source = fs.readFileSync(file, 'utf8')): Array<{ line: number; rel: string | null }> {
+  const sf = ts.createSourceFile(file, source, ts.ScriptTarget.Latest, true, ts.ScriptKind.TSX);
+  const out: Array<{ line: number; rel: string | null }> = [];
+  const visit = (node: ts.Node) => {
+    if (ts.isJsxOpeningElement(node) || ts.isJsxSelfClosingElement(node)) {
+      const attrs = node.attributes.properties.filter(ts.isJsxAttribute);
+      const value = (name: string) => {
+        const a = attrs.find((x) => x.name.getText(sf) === name);
+        return a?.initializer && ts.isStringLiteral(a.initializer) ? a.initializer.text : a ? a.initializer?.getText(sf) ?? '' : null;
+      };
+      if (value('target') === '_blank') out.push({ line: sf.getLineAndCharacterOfPosition(node.getStart(sf)).line + 1, rel: value('rel') });
+    }
+    ts.forEachChild(node, visit);
+  };
+  visit(sf);
+  return out;
+}
+
+test('criterion 7 (guard): every target="_blank" link in the two directory components keeps a rel holding noopener', () => {
+  const missing: string[] = [];
+  let seen = 0;
+  for (const f of ['DirectoryClient.tsx', 'PortalDirectoryClient.tsx']) {
+    for (const { line, rel } of blankTargets(path.join(SRC, 'components', f))) {
+      seen += 1;
+      if (!/\bnoopener\b/.test(rel ?? '')) missing.push(`${f}:${line}`);
+    }
+  }
+  assert.ok(seen >= 8, `premise: the two files hold their outbound links (${seen})`);
+  assert.deepEqual(missing, []);
+});
+
+test('criterion 7 (guard, its instrument): the scan reads a missing rel as missing', () => {
+  const decoy = 'const a = <><a href="x" target="_blank" rel="noopener noreferrer">x</a><a href="y" target="_blank">y</a></>;';
+  assert.deepEqual(blankTargets('decoy.tsx', decoy).map((t) => /noopener/.test(t.rel ?? '')), [true, false]);
+});
+
+test('criterion 7 (guard): the portal table keeps its overflowX: auto wrapper', async () => {
+  const s = await directory({}, 'tab=portals');
+  const table = s.elements().filter((el) => el.type === 'table');
+  assert.equal(table.length, 1, `tables on the portals tab: ${table.length}`);
+  const wrapper = s.elements().find((el) => childrenOf(el).includes(table[0]));
+  assert.equal(styleOf(wrapper!).overflowX, 'auto', 'the table\'s wrapper does not scroll sideways');
 });

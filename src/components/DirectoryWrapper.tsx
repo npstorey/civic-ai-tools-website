@@ -1,20 +1,23 @@
 'use client';
 
 import { useSearchParams, useRouter } from 'next/navigation';
-import DirectoryClient from './DirectoryClient';
+import DirectoryClient, { type RowActionTargets } from './DirectoryClient';
 import PortalDirectoryClient from './PortalDirectoryClient';
 import type { McpServerEntry } from '@/lib/mcp/directory-data';
 import type { PortalEntry, PortalCounts } from '@/lib/mcp/portal-data';
 import type { DirectorySourceNote } from '@/lib/content-source';
 import { prose } from '@/styles/page-styles';
-import type { CSSProperties } from 'react';
+import { Tabs } from '@/components/ui/Tabs';
 
 export default function DirectoryWrapper({
   servers,
   portals,
   portalCounts,
   sourceNote = null,
-}: {
+  offeredSourceIds,
+  sessionProbe,
+  askHref,
+}: RowActionTargets & {
   servers: McpServerEntry[];
   portals: PortalEntry[];
   portalCounts: PortalCounts;
@@ -31,26 +34,14 @@ export default function DirectoryWrapper({
     router.replace(tab === 'portals' ? '/directory?tab=portals' : '/directory', { scroll: false });
   };
 
-  const tabStyle = (isActive: boolean): CSSProperties => ({
-    padding: '12px 24px',
-    fontSize: '15px',
-    fontWeight: isActive ? 600 : 400,
-    color: isActive ? 'var(--text-primary)' : 'var(--text-muted)',
-    border: 'none',
-    borderBottom: isActive ? '2px solid var(--accent)' : '2px solid transparent',
-    marginBottom: '-2px',
-    background: 'none',
-    cursor: 'pointer',
-    fontFamily: 'inherit',
-  });
-
   return (
     <div style={{ maxWidth: '1200px', margin: '0 auto', padding: '48px 24px' }}>
       {/* Page title */}
       <div style={{ marginBottom: '32px' }}>
         <h1 style={{ marginBottom: '12px' }}>Directory</h1>
         <p style={{ ...prose, marginBottom: 0 }}>
-          Browse {servers.length}+ MCP servers and {portalCounts.total.toLocaleString()} open data
+          {/* D-12 (DIR = A): the list's own count; the tab beside it states the same number. */}
+          Browse {servers.length} MCP servers and {portalCounts.total.toLocaleString()} open data
           portals for civic data.
         </p>
         {sourceNote && (
@@ -73,27 +64,30 @@ export default function DirectoryWrapper({
         )}
       </div>
 
-      {/* Tab bar */}
-      <div
-        style={{
-          display: 'flex',
-          borderBottom: '2px solid var(--border-color)',
-          marginBottom: '32px',
-        }}
-      >
-        <button onClick={() => switchTab('servers')} style={tabStyle(activeTab === 'servers')}>
-          MCP Servers ({servers.length})
-        </button>
-        <button onClick={() => switchTab('portals')} style={tabStyle(activeTab === 'portals')}>
-          Data Portals ({portalCounts.total.toLocaleString()})
-        </button>
+      {/* The two tabs on the site's Tabs (P8; UX-2 P6 item 1); the selection stays the address's \`?tab=\`. */}
+      <div style={{ marginBottom: '32px' }}>
+        <Tabs
+          label="Directory"
+          tabs={[
+            { id: 'servers', label: `MCP Servers (${servers.length})` },
+            { id: 'portals', label: `Data Portals (${portalCounts.total.toLocaleString()})` },
+          ]}
+          selectedId={activeTab}
+          onSelect={(id) => switchTab(id === 'portals' ? 'portals' : 'servers')}
+        />
       </div>
 
       {/* Tab content */}
       {activeTab === 'portals' ? (
         <PortalDirectoryClient portals={portals} />
       ) : (
-        <DirectoryClient servers={servers} portalCounts={portalCounts} />
+        <DirectoryClient
+          servers={servers}
+          portalCounts={portalCounts}
+          offeredSourceIds={offeredSourceIds}
+          sessionProbe={sessionProbe}
+          askHref={askHref}
+        />
       )}
     </div>
   );

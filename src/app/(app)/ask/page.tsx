@@ -9,6 +9,7 @@ import {
   shouldAutoSignIn,
 } from '@/lib/sign-in-intent';
 import QuerySurface from '@/components/shared/QuerySurface';
+import SourceLanding from '@/components/SourceLanding';
 import AskSignInPanel from './AskSignInPanel';
 import { pageTitle } from '@/lib/brand-config';
 import { hasPublishedEvidence } from '@/lib/db/creator-evidence';
@@ -146,8 +147,11 @@ export default async function AskPage({ searchParams }: AskPageProps) {
   }
 
   return (
-    // The h1 handed to the surface apart from the lede and the note, which give way at the first send (UX-2 P3b-1
-    // leg H, A1 = A); the note returns on the next visit, until the first publish.
+    <>
+    {/* "Ask with this source" lands here signed in, with `?source=` (UX-2 P6 + P10, item 7). */}
+    <SourceLanding />
+    {/* The h1 handed to the surface apart from the lede and the note, which give way at the first send (UX-2 P3b-1
+        leg H, A1 = A); the note returns on the next visit, until the first publish. */}
     <QuerySurface
       presentation="answer-first"
       defaultMode="notebook"
@@ -192,5 +196,6 @@ export default async function AskPage({ searchParams }: AskPageProps) {
         </div>
       )}
     </QuerySurface>
+    </>
   );
 }

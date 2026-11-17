@@ -1,29 +1,30 @@
 'use client';
 
 import { useState } from 'react';
+import { useHostLinks } from '@/components/HostLinksProvider';
+import { streamingSourceLink, type NarrationFunction } from '@/lib/streaming-source-links';
 
-const GITHUB_BASE = 'https://github.com/npstorey/civic-ai-tools-website/blob/main/src/lib/streaming.ts';
-
-const SOURCE_FUNCTIONS = [
+// The three functions' source, at the commit permalink `/learn` uses (UX-2 P6 + P10, item 27; 0d item 7).
+const SOURCE_FUNCTIONS: Array<{ name: NarrationFunction; description: string }> = [
   {
     name: 'formatToolProgress',
-    lines: '#L43-L71',
     description: 'Generates action descriptions like "Searching for restaurant inspection datasets"',
   },
   {
     name: 'formatToolResult',
-    lines: '#L319-L343',
     description: 'Summarizes results like "Found 5 datasets" or "Retrieved 100 rows"',
   },
   {
     name: 'generateToolReason',
-    lines: '#L346-L370',
     description: 'Explains purpose like "Finding available datasets before querying"',
   },
 ];
 
 export default function NarrationExplainer() {
   const [isExpanded, setIsExpanded] = useState(false);
+  // `/learn` is a marketing path: on a split topology it lives on the marketing host, and an instance with no marketing
+  // surface shows no link (item 26; as `McpResponseDisplay`'s `/learn` links).
+  const { marketingOrigin } = useHostLinks();
 
   return (
     <div style={{ marginTop: '4px' }}>
@@ -65,7 +66,7 @@ export default function NarrationExplainer() {
             {SOURCE_FUNCTIONS.map((fn) => (
               <li key={fn.name}>
                 <a
-                  href={`${GITHUB_BASE}${fn.lines}`}
+                  href={streamingSourceLink(fn.name)}
                   target="_blank"
                   rel="noopener noreferrer"
                   style={{ fontFamily: 'monospace', color: 'var(--accent)', textDecoration: 'underline' }}
@@ -82,12 +83,14 @@ export default function NarrationExplainer() {
             but the presentation is a design choice.
           </p>
 
-          <a
-            href="/learn#narration"
-            style={{ fontSize: '12px', color: 'var(--accent)', textDecoration: 'underline' }}
-          >
-            Learn more about how the demo works &rarr;
-          </a>
+          {marketingOrigin !== null && (
+            <a
+              href={`${marketingOrigin}/learn#narration`}
+              style={{ fontSize: '12px', color: 'var(--accent)', textDecoration: 'underline' }}
+            >
+              Learn more about how this site works &rarr;
+            </a>
+          )}
         </div>
       )}
     </div>
