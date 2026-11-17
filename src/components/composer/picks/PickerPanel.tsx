@@ -117,6 +117,12 @@ export default function PickerPanel({ docked }: { docked: boolean }) {
   }, []);
 
   const statement = consent.statement;
+  // A later refresh whose `/api/flows` read failed (after a refused route, or a save) leaves no statement to list the
+  // sources by or to word a hit by (S3-B F fix round 1, F-6): the panel closes, as a failed load of its code closes it
+  // (`load-picker.ts`), and the option stays disabled until a read succeeds (`HarnessMenu.tsx`).
+  useEffect(() => {
+    if (statement === null) closePicker();
+  }, [statement]);
   const ids = statement?.sources.map((s) => s.sourceId) ?? [];
   const states = panelStates(consent, ids);
   const inForce = consent.status?.inForce === true;

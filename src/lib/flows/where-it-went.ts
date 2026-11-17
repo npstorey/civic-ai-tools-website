@@ -119,6 +119,10 @@ export const NOT_RECORDED = 'not recorded';
 
 const LOAD_OPERATION = 'load_source';
 
+/** The rule a picked run lists by, as its record's `considered.rule` states it (`READER_PICKED_RULE.id`,
+ *  `src/lib/mcp/routing-mode.ts`, which this pure module does not import; `where-it-went.test.ts` holds the two equal). */
+const READER_PICKED = 'reader-picked';
+
 type Contact =
   | { kind: 'call'; source: string | undefined; failureKind: string | undefined; pack?: string }
   | { kind: 'load'; alias: string | undefined; outcome: string };
@@ -138,6 +142,13 @@ interface CoreInput {
   executed: boolean;
   side: Side;
   statement: WhereStatement;
+  /**
+   * Whether a stated `not-selected` is a source the reader did not pick (S3-B W1, B8; S3-B F, the cold read's S1). On
+   * a run of this site's routes, always: their reasons keep the router's `not-selected` only on a picked run
+   * (`recordReasons`). On a record, only when its composition block's `considered.rule` is `reader-picked`: the
+   * publish contract admits `not-selected` from any producer's trace, where it need not mean a pick.
+   */
+  notSelectedIsUnpicked: boolean;
 }
 
 const nameOf = sourceReaderName;
@@ -185,7 +196,7 @@ function sourceRecipients(side: Side, sourceId: string, base?: string): WhereRec
 }
 
 /** A source's reason for not being reached (§2): its last load first, then its stated reason. */
-function whyNotSentFor(offered: OfferedSource, lastLoad: string | undefined): string | null {
+function whyNotSentFor(offered: OfferedSource, lastLoad: string | undefined, notSelectedIsUnpicked: boolean): string | null {
   const R = WHERE_IT_WENT_REASONS;
   switch (lastLoad) {
     case 'loaded':
@@ -211,8 +222,10 @@ function whyNotSentFor(offered: OfferedSource, lastLoad: string | undefined): st
       return R.notSetUp;
     case 'not-selected':
       // S3-B W1 (B8, S11): on a run whose sources the reader picked, an allowed source the reader did not pick. Every
-      // other run maps the router's `not-selected` to `reader-off` or `not-consented` before it reaches here.
-      return R.notPicked;
+      // other run of this site's routes maps the router's `not-selected` to `reader-off` or `not-consented` before it
+      // reaches here. On a record, only where it says its sources were picked (`notSelectedIsUnpicked`); elsewhere a
+      // reason with no words, as below.
+      return notSelectedIsUnpicked ? R.notPicked : null;
     default:
       // A reason with no words.
       return null;
@@ -297,7 +310,7 @@ function build(input: CoreInput, countedUnder: typeof PACK_CALL_COUNTED_UNDER = 
   const notReached: WhereNotReachedRow[] = [];
   for (const offered of input.sourcesOffered) {
     if (calls.has(offered.sourceId) || reachedByPack.has(offered.sourceId)) continue;
-    const whyNotSent = whyNotSentFor(offered, lastLoad.get(offered.sourceId));
+    const whyNotSent = whyNotSentFor(offered, lastLoad.get(offered.sourceId), input.notSelectedIsUnpicked);
     if (whyNotSent !== null) notReached.push({ sourceId: offered.sourceId, name: nameOf(offered.sourceId, offered.alias), whyNotSent });
   }
 
@@ -349,7 +362,7 @@ export function whereItWentFromSpans(input: {
   executed?: boolean;
 }): WhereItWentModel {
   const read = readSpans(input.spans);
-  return build({ ...read, sourcesOffered: input.sourcesOffered, executed: input.executed === true, ...runSide(input.statement) });
+  return build({ ...read, sourcesOffered: input.sourcesOffered, executed: input.executed === true, ...runSide(input.statement), notSelectedIsUnpicked: true });
 }
 
 // --- Reading tool-call records ------------------------------------------------------------
@@ -385,7 +398,7 @@ export function whereItWentFromCalls(input: {
   );
   return build({
     contacts, model: input.model, service: input.service, sourcesOffered: input.sourcesOffered,
-    executed: input.executed === true, ...runSide(input.statement),
+    executed: input.executed === true, ...runSide(input.statement), notSelectedIsUnpicked: true,
   });
 }
 
@@ -459,6 +472,7 @@ export function whereItWentFromPackage(pkg: unknown, served: FlowsStatement | nu
       executed,
       side: matched && served ? { kind: 'statement', statement: served } : { kind: 'record', servers: serversOf(record, spans) },
       statement,
+      notSelectedIsUnpicked: asRecord(composition?.considered)?.rule === READER_PICKED,
     }),
     chooser: chooserFromPackage(record),
   };

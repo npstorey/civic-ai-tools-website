@@ -11,7 +11,7 @@
  * WHAT IT NEEDS TO KNOW. With no space the search reads the configuration only for the one-portal lock: a Socrata pack
  * fixed to another portal is never a hit (G0-6 = A). The browser gets the lock from what the root layout already
  * renders, `DefaultPortalProvider`'s two values, which the server resolves with the two functions
- * `readMcpEnvFromProcess()` reads (`isPortalLocked()`, `getDefaultPortal()`); `reader-search-lock.test.ts` holds the two
+ * `readMcpEnvFromProcess()` reads (`isPortalLocked()`, `getDefaultPortal()`); `reader-search.test.ts` holds the two
  * equal on every row of the environment matrix. No other part of the configuration reaches the browser (it holds a
  * key). Which hits this site has set up is the flows statement's, which the page already reads.
  *

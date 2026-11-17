@@ -1104,7 +1104,8 @@ export async function runToolLoop(options: ToolLoopOptions): Promise<ToolLoopRes
        * carrying exactly what harness 0.14.0 reads (`tool.search_query`, `tool.search_outcome`, and on `searched`
        * `tool.search_hits`), and none of `error`, `mcp.source`, `mcp.server.id`, `mcp.alias`, `mcp.pack_id` or
        * `tool.upstream_name`: it ends here, before the line that tags a source's call. A query that is not a string,
-       * or arguments that did not parse, are searched and recorded as `''`; `tool.arguments` keeps them as sent.
+       * or arguments that did not parse, are searched and recorded as `''`. `tool.arguments` keeps a query that is
+       * not a string as sent, and records `{}` for arguments that did not parse.
        */
       if (searchStep && name === searchStep.toolName) {
         const query = !argumentsMalformed && typeof args.query === 'string' ? args.query : '';
