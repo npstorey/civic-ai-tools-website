@@ -103,9 +103,28 @@ function DataSources() {
   const addressSource = useSyncExternalStore(noSubscription, readAddressSource, noAddress);
   const targetSource = addressSource !== null && ids.includes(addressSource) ? addressSource : null;
   const targetName = searchable.find((s) => s.sourceId === targetSource)?.name ?? null;
+  // Fix round 4 (#729): the landing ends when its target does. An overlay rendered again at an address with no source (or
+  // another one) takes back what the landing set on its row: the attribute, `tabindex` and `aria-label`, and a focus not
+  // yet given; focus the row holds goes to the dialog's first enabled button (Close), where a no-source open puts it.
+  // `broughtIntoView` is reset with it, so a later landing on the same source marks and focuses the row again. One
+  // effect does both, so the order React runs a component's effects in cannot clear a landing just made.
   const broughtIntoView = useRef<string | null>(null);
+  const landing = useRef<{ row: HTMLElement; cancelFocus: () => void } | null>(null);
   useEffect(() => {
-    if (targetSource === null || broughtIntoView.current === targetSource || typeof document === 'undefined') return;
+    if (typeof document === 'undefined') return;
+    const landed = landing.current;
+    if (landed !== null && broughtIntoView.current !== targetSource) {
+      landing.current = null;
+      broughtIntoView.current = null;
+      landed.cancelFocus();
+      if (document.activeElement === landed.row) {
+        landed.row.closest<HTMLElement>('[role="dialog"]')?.querySelector<HTMLElement>('button:not([disabled])')?.focus();
+      }
+      landed.row.removeAttribute('data-landing-target');
+      landed.row.removeAttribute('tabindex');
+      landed.row.removeAttribute('aria-label');
+    }
+    if (targetSource === null || broughtIntoView.current === targetSource) return;
     // A quoted attribute value: only a backslash and a double quote need escaping (the id is one the statement lists).
     const id = targetSource.replace(/["\\]/g, '\\$&');
     const row = document.querySelector<HTMLElement>(`ul[data-target-source="${id}"] > li[data-source="${id}"]`);
@@ -116,8 +135,15 @@ function DataSources() {
     row.tabIndex = -1;
     if (targetName !== null) row.setAttribute('aria-label', targetName);
     const focusRow = () => row.focus({ preventScroll: true });
-    if (typeof requestAnimationFrame === 'function') requestAnimationFrame(focusRow);
-    else setTimeout(focusRow, 0);
+    let cancelFocus: () => void;
+    if (typeof requestAnimationFrame === 'function') {
+      const frame = requestAnimationFrame(focusRow);
+      cancelFocus = () => cancelAnimationFrame(frame);
+    } else {
+      const timer = setTimeout(focusRow, 0);
+      cancelFocus = () => clearTimeout(timer);
+    }
+    landing.current = { row, cancelFocus };
   }, [targetSource, targetName, shown.length]);
 
   return (
