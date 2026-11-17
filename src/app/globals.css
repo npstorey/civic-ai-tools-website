@@ -1667,6 +1667,13 @@ footer a:visited {
   flex: 0 1 auto;
 }
 
+/* Fix round 1 (#729, seat 6936790257 item 1): a filter's open panel keeps the 280 px cap of the dropdown it replaced.
+   Menu's panel is up to 60vh and is capped to the room only for a menu with a group, so a filter opened mid-screen ran
+   past the window. */
+.directory-filter .ui-menu-panel {
+  max-height: min(60vh, 280px);
+}
+
 @media (min-width: 640px) {
   .directory-filter-toggle > .ui-disclosure {
     border-top: none;

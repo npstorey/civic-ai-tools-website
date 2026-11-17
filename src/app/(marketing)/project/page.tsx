@@ -295,7 +295,7 @@ export default async function ProjectPage() {
               }}
             >
               <h3 style={{ fontSize: '18px', marginBottom: '8px' }}>{item.title}</h3>
-              <p style={{ fontSize: '14px', color: 'var(--text-muted)', margin: 0 }}>
+              <p style={{ fontSize: '14px', color: 'var(--text-muted)', margin: 0, overflowWrap: 'anywhere' }}>
                 {item.desc}
               </p>
             </div>
