@@ -37,6 +37,14 @@ const TABLE: Array<[label: string, sql: string, sent: boolean]> = [
   ['a doubled quote inside a literal', "SELECT 'it''s' AS v", true],
   ['a backslash not before a quote, one statement under both readings', "SELECT 'a\\b' AS v", true],
   ['a trailing semicolon and a comment', 'SELECT 1; -- done', true],
+  // Fix round 2 (F7), driven on PostgreSQL 16.15 by the ORCH: a carriage return ends a `--` comment, and a `$` after a
+  // number or a parameter starts a dollar quote rather than continuing a word.
+  ['a carriage return ends a trailing line comment, then a second statement', 'SELECT 1 -- x\r; CREATE TABLE hit_r01()', false],
+  ['a carriage return ends a leading line comment, then a statement that is not SELECT', '-- c\rCREATE TABLE hit_r02 AS (\nSELECT 1)', false],
+  ['a dollar quote directly after a number', "SELECT 1$$ ' $$; CREATE TABLE hit_n01(); --'", false],
+  ['a tagged dollar quote directly after a number', "SELECT 1$a$ ' $a$; CREATE TABLE hit_n02(); --'", false],
+  ['a dollar quote directly after a decimal', "SELECT 1.5$$ ' $$; CREATE TABLE hit_n03(); --'", false],
+  ['a dollar quote directly after a parameter', "SELECT $1$$ ' $$; CREATE TABLE hit_n04(); --'", false],
 ];
 
 test('fix round 1 (F1): the statement check reads PostgreSQL\'s quoting forms and sends only one statement under every reading', () => {

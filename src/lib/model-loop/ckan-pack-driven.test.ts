@@ -269,6 +269,9 @@ const SQL_HIDDEN = [
   "SELECT '\\''; DROP TABLE x; --'",
   "SELECT $$ ' $$; DROP TABLE x; --'",
   "SELECT $a$ ' $a$; DROP TABLE x; --'",
+  // Fix round 2 (F7): a carriage return ends a `--` comment in PostgreSQL 16.15, in the body and in a leading comment.
+  'SELECT 1 -- x\r; CREATE TABLE hit_r01()',
+  '-- c\rCREATE TABLE hit_r02 AS (\nSELECT 1)',
 ];
 const A15_HIDDEN: Run[] = [];
 for (const [i, sql] of SQL_HIDDEN.entries()) A15_HIDDEN.push(await run({}, [[call(`h${i}`, exposed('ckan_datastore_search_sql'), { server_url: PORTAL, sql })]]));
