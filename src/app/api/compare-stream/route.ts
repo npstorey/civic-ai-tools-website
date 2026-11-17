@@ -13,7 +13,7 @@ import { checkRateLimit, getMissingRateLimitSecretError, incrementRateLimit, isR
 import { headers } from 'next/headers';
 import { encodeSSE, errorLogFacts, panelsForRun, startSseKeepAlive, streamErrorPayload, type StreamErrorCode, type PanelType, type StreamEvent } from '@/lib/streaming';
 import { getGenAiSystem, getMissingModelCredentialError, ModelConfigurationError } from '@/lib/model-client';
-import { whereItWentFromCalls } from '@/lib/flows/where-it-went';
+import { packOfDispatchTarget, whereItWentFromCalls } from '@/lib/flows/where-it-went';
 import { resolveModelIdentity, ModelNotOfferedError } from '@/lib/model-resolver';
 import type { ModelIdentity } from '@/lib/model-catalog';
 import { configuredMcpServers, dispatchTargetOf, getMissingMcpRoutingError, readMcpEnvFromProcess, routedSourceId, skillRoutingTraceAttributes } from '@/lib/mcp/registry';
@@ -432,6 +432,8 @@ Be honest if you don't have access to current or real-time data.`;
               flows: whereItWentFromCalls({
                 toolCalls: result.tools_called ?? [],
                 resolveSource: resolveToolSource,
+                // F8 (CKAN-1 P3): a call's pack from the same dispatch decision the loop core made for it.
+                resolvePack: (name: string) => packOfDispatchTarget(inLoop ? inLoop.dispatchTarget(name) : dispatchTargetOf(name, configured, selection)),
                 sourcesOffered: recordReasons(composition.sourcesOffered),
                 statement: consent.statement,
                 model: model.declared,

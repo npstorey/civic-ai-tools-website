@@ -48,7 +48,7 @@ import { recipientWhere, roleLabel } from '../sources/source-name.ts';
 import { WHERE_IT_WENT_REASONS } from '../sources/copy.ts';
 import { SEARCH_OPERATION } from './search-words.ts';
 import { NOTEBOOK_EXTENSION_KEY, readNotebookProvenanceOfNotebook } from '../notebook-author/notebook-provenance-reading.ts';
-import { CIVIC_MANIFEST } from '@typedstandards/civic-typed-router';
+import { CIVIC_MANIFEST, civicRouter } from '@typedstandards/civic-typed-router';
 import { aliasOf, attributesOf, chooserFromPackage, NOT_RECEIVED, sourceReaderName, spansOfTrace, type SourceChooser } from './source-chooser.ts';
 
 // --- The model ------------------------------------------------------------------------
@@ -250,9 +250,17 @@ function packSourceOfId(packId: string | undefined): string | undefined {
   return packId === undefined ? undefined : CIVIC_MANIFEST.find((entry) => entry.base !== undefined && entry.id === packId)?.sourceId;
 }
 
-/** The pack whose tool `name` is (`<pack alias>__<tool>`), by `sourceId`, or `undefined`. */
-function packSourceOfToolName(name: string): string | undefined {
-  return CIVIC_MANIFEST.find((entry) => entry.base !== undefined && name.startsWith(`${entry.alias}__`) && entry.toolNames.includes(name.slice(entry.alias.length + 2)))?.sourceId;
+/**
+ * The pack a call's dispatch target belongs to, by `sourceId`, or `undefined` when the target is no pack's (or there
+ * is none). The target is the exposed name the dispatch sends the call to under the run's configuration and selection
+ * (`dispatchTargetOf`, `../mcp/registry.ts`; in loop, the routing's own `dispatchTarget`): the same decision the loop
+ * core reads for `mcp.pack_id`. A tool name is never split to find it (fix round 2, F8): a bare upstream name the
+ * selection resolves to a pack is that pack's call.
+ */
+export function packOfDispatchTarget(target: string | undefined): string | undefined {
+  if (target === undefined) return undefined;
+  const resolved = civicRouter.dispatchMap.get(target);
+  return resolved?.base !== undefined ? resolved.sourceId : undefined;
 }
 
 function build(input: CoreInput, countedUnder: typeof PACK_CALL_COUNTED_UNDER = PACK_CALL_COUNTED_UNDER): WhereItWentModel {
@@ -381,6 +389,11 @@ export interface WhereToolCall {
 export function whereItWentFromCalls(input: {
   toolCalls: readonly WhereToolCall[];
   resolveSource: (name: string) => string | undefined;
+  /**
+   * The pack a call belongs to, by `sourceId`, from the decision the loop core made for it (fix round 2, F8): the
+   * routes pass `packOfDispatchTarget` over the run's dispatch target. Absent, no call is read as a pack's.
+   */
+  resolvePack?: (name: string) => string | undefined;
   sourcesOffered: readonly OfferedSource[];
   statement?: FlowsStatement | null;
   model: string;
@@ -392,7 +405,7 @@ export function whereItWentFromCalls(input: {
     call.operationType === LOAD_OPERATION
       ? { kind: 'load', alias: text(call.args?.alias), outcome: call.loadOutcome ?? '' }
       : (() => {
-        const pack = packSourceOfToolName(call.name);
+        const pack = input.resolvePack?.(call.name);
         return { kind: 'call' as const, source: input.resolveSource(call.name), failureKind: call.failed ? call.failureKind ?? 'unknown' : undefined, ...(pack !== undefined ? { pack } : {}) };
       })(),
   );

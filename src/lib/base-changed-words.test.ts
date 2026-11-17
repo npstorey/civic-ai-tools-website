@@ -21,7 +21,7 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { FAILURE_REASON, TOOL_FAILURE_KINDS, renderFetchToolCell } from './notebook-author/tool-to-cell.ts';
 import { describeQueryOutcome } from './evidence/query-step.ts';
-import { whereItWentFromCalls } from './flows/where-it-went.ts';
+import { packOfDispatchTarget, whereItWentFromCalls } from './flows/where-it-went.ts';
 
 const REASONS = FAILURE_REASON as Record<string, string>;
 const BASE_CHANGED =
@@ -70,6 +70,8 @@ test('NOT_RECEIVED holds base_changed: a pack call not sent does not count as a 
       { name: 'nyc_record__get_data', args: { dataset_id: 'dg92-zbpx' }, failed: true, failureKind },
     ] as never,
     resolveSource: () => 'socrata',
+    // F8: the pack from the dispatch decision; an exposed name is its own target.
+    resolvePack: (name: string) => packOfDispatchTarget(name),
     sourcesOffered: [{ sourceId: 'socrata', alias: 'socrata', reason: 'configured' }, { sourceId: 'nyc-record', alias: 'nyc_record', reason: 'configured' }],
     model: 'fake/model',
     service: 'fixture service',
