@@ -54,14 +54,14 @@ const FULL: McpRegistryEnv = {
 const CALLS = [
   { id: 'a', name: 'data_commons__search_indicators', args: { query: 'median household income' } },
   { id: 'b', name: 'data_commons__get_observations', args: { variable_dcid: 'Median_Income_Household', place_dcid: 'geoId/2507000' } },
-  { id: 'c', name: 'boston__ckan__search_datasets', args: { query: '311 potholes' } },
-  { id: 'd', name: 'boston__ckan__query_data', args: { resource_id: 'r-1', filters: { type: 'pothole' } } },
+  { id: 'c', name: 'boston_opencontext__ckan__search_datasets', args: { query: '311 potholes' } },
+  { id: 'd', name: 'boston_opencontext__ckan__query_data', args: { resource_id: 'r-1', filters: { type: 'pothole' } } },
 ];
 const SOURCE_OF: Record<string, string> = {
   data_commons__search_indicators: 'data-commons',
   data_commons__get_observations: 'data-commons',
-  boston__ckan__search_datasets: 'boston-opencontext',
-  boston__ckan__query_data: 'boston-opencontext',
+  boston_opencontext__ckan__search_datasets: 'boston-opencontext',
+  boston_opencontext__ckan__query_data: 'boston-opencontext',
 };
 
 function stubClient(): OpenAI {

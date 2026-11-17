@@ -242,7 +242,7 @@ async function twoPauses(choice: 'Allow' | "Don't allow", beside?: (page: Surfac
   const stream = streams[0];
   assert.ok(stream, 'premise: the page started a run');
   stream.push({ type: 'progress', panel: 'withMcp', message: 'Reading your question...', phase: 'analyze' });
-  stream.push(loadStart('boston', 'Boston OpenContext', 1));
+  stream.push(loadStart('boston_opencontext', 'Boston OpenContext', 1));
   stream.push(pauseLine(A, KEY_A, 'Boston OpenContext'));
   await settle(...all);
   assert.ok(cardsFor(page, A).length > 0, `premise: the page shows A's card: ${summary(page)}`);
@@ -323,7 +323,7 @@ test('item 2 (e): when the route answers Allow with moved: false, the card says 
   await ask(page);
   const stream = streams[0];
   assert.ok(stream, 'premise: the page started a run');
-  stream.push(loadStart('boston', 'Boston OpenContext', 1));
+  stream.push(loadStart('boston_opencontext', 'Boston OpenContext', 1));
   stream.push(pauseLine(A, KEY_A, 'Boston OpenContext'));
   await settle(page);
   await page.click(promptButton(page, 'Allow', 'Boston OpenContext'));

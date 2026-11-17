@@ -175,7 +175,7 @@ test('the other two Socrata tools and the Data Commons tools go out under their 
 
 test('an unconfigured source refuses both spellings with McpConfigurationError, naming the variable, before any request', async () => {
   const before = socrataRequests.length + dataCommonsRequests.length;
-  for (const name of ['boston__ckan__query_data', 'ckan__query_data']) {
+  for (const name of ['boston_opencontext__ckan__query_data', 'ckan__query_data']) {
     let caught: unknown;
     try {
       await callMcpTool(name, { resource_id: 'x' });

@@ -50,7 +50,7 @@ const PACKAGE = {
         spans: [
           { name: 'analysis', spanId: 'root', attributes: [] },
           loadSpan('socrata', 'loaded', 's1'),
-          loadSpan('boston', 'loaded', 's2'),
+          loadSpan('boston_opencontext', 'loaded', 's2'),
           loadSpan('data_commons', 'declined', 's3'),
         ],
       }],
@@ -61,7 +61,7 @@ const PACKAGE = {
       sourcesOffered: [
         { sourceId: 'socrata', alias: 'socrata', reason: 'selected' },
         { sourceId: 'data-commons', alias: 'data_commons', reason: 'not-consented' },
-        { sourceId: 'boston-opencontext', alias: 'boston', reason: 'not-consented' },
+        { sourceId: 'boston-opencontext', alias: 'boston_opencontext', reason: 'not-consented' },
       ],
     },
   },

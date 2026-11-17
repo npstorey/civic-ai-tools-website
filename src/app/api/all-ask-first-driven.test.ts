@@ -196,8 +196,8 @@ function turnFor(body: Json): Call[] | null {
   const tools = ((body.tools ?? []) as Array<{ function: { name: string } }>).map((t) => t.function.name);
   if (tools.length === 0) return null;
   const assistantTurns = ((body.messages ?? []) as Array<{ role?: string }>).filter((m) => m.role === 'assistant').length;
-  if (assistantTurns === 0 && tools.includes('load_source')) return [call('call-load-boston', 'load_source', { alias: 'boston' })];
-  if (assistantTurns === 1 && tools.includes('boston__ckan__query_data')) return [call('call-boston', 'boston__ckan__query_data', { resource_id: 'r-1', limit: 1 })];
+  if (assistantTurns === 0 && tools.includes('load_source')) return [call('call-load-boston', 'load_source', { alias: 'boston_opencontext' })];
+  if (assistantTurns === 1 && tools.includes('boston_opencontext__ckan__query_data')) return [call('call-boston', 'boston_opencontext__ckan__query_data', { resource_id: 'r-1', limit: 1 })];
   return null;
 }
 

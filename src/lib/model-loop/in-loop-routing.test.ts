@@ -165,7 +165,7 @@ test('criterion 3: the first in-loop request carries the directory and one tool,
   // One tool, `load_source`, its enum the directory's aliases in manifest order.
   assert.deepEqual(toolNames(first), ['load_source']);
   const tool = (first.tools as ToolSchema[])[0];
-  assert.deepEqual(tool.function.parameters?.properties?.alias?.enum, ['socrata', 'data_commons', 'boston', 'nyc_record']);
+  assert.deepEqual(tool.function.parameters?.properties?.alias?.enum, ['socrata', 'data_commons', 'boston_opencontext', 'nyc_record']);
 
   // The system prompt is the router's directory over the directory set, byte for byte.
   const system = systemOf(first);
@@ -215,7 +215,7 @@ test('criterion 3: once the gate is enforced, the directory is configured ∩ (O
   assert.deepEqual(
     directorySet(configured, { enforced: true, states: { socrata: 'on', 'data-commons': 'off', 'boston-opencontext': 'ask-first', 'nyc-charter': 'on' } })
       .map((d) => [d.sourceId, d.alias, d.state]),
-    [['socrata', 'socrata', 'on'], ['boston-opencontext', 'boston', 'ask-first'], ['nyc-record', 'nyc_record', 'ask-first']],
+    [['socrata', 'socrata', 'on'], ['boston-opencontext', 'boston_opencontext', 'ask-first'], ['nyc-record', 'nyc_record', 'ask-first']],
   );
 });
 
@@ -272,7 +272,7 @@ const LOAD_RUN_SCRIPT = [
   {
     toolCalls: [
       { id: 'get-socrata', name: 'socrata__get_data', args: { type: 'query', dataset_id: 'aaaa-1111', limit: 1 } },
-      { id: 'query-boston', name: 'boston__ckan__query_data', args: { resource_id: 'r-1', limit: 1 } },
+      { id: 'query-boston', name: 'boston_opencontext__ckan__query_data', args: { resource_id: 'r-1', limit: 1 } },
       { id: 'load-charter', name: 'load_source', args: { alias: 'nyc_charter' } },
       { id: 'load-brace', name: 'load_source', args: { alias: '{"alias":"socrata"}' } },
     ],
@@ -301,7 +301,7 @@ test('criterion 4: after a load, the next request\'s tools are load_source and t
   assert.equal(JSON.stringify(loadRun.requests[1].tools), JSON.stringify(expectedTools(['socrata'])));
   assert.equal(JSON.stringify(loadRun.requests[3].tools), JSON.stringify(expectedTools(['socrata', 'data-commons'])));
   assert.equal(JSON.stringify(loadRun.requests[4].tools), JSON.stringify(loadRun.requests[3].tools));
-  assert.ok(!toolNames(loadRun.requests[4]).some((n) => n.startsWith('boston__')), 'a tool of an unloaded source was offered');
+  assert.ok(!toolNames(loadRun.requests[4]).some((n) => n.startsWith('boston_opencontext__')), 'a tool of an unloaded source was offered');
   assert.deepEqual(loadRun.session.loaded(), ['socrata', 'data-commons']);
 });
 
@@ -330,7 +330,7 @@ test('criterion 4: no load\'s tool message contains a brace, and each is one lin
 });
 
 test('criterion 4: a tool of a source in the directory that is not loaded is refused not_offered, with R6\'s reader copy and R8\'s model variant', () => {
-  const boston = loadRun.result.toolCalls.find((c) => c.name === 'boston__ckan__query_data');
+  const boston = loadRun.result.toolCalls.find((c) => c.name === 'boston_opencontext__ckan__query_data');
   assert.equal(boston?.failed, true);
   assert.equal(boston?.failureKind, 'not_offered');
   const message = toolMessages(loadRun.requests[2]).find((m) => m.tool_call_id === 'query-boston')?.content;
@@ -350,7 +350,7 @@ test('criterion 4: each load is a tool call at its position, with its outcome; l
     [
       ['load_source', 'load_source', 'loaded'],
       ['socrata__get_data', 'query', null],
-      ['boston__ckan__query_data', 'query', null],
+      ['boston_opencontext__ckan__query_data', 'query', null],
       ['load_source', 'load_source', 'not-offered'],
       ['load_source', 'load_source', 'not-offered'],
       ['load_source', 'load_source', 'loaded'],
@@ -377,7 +377,7 @@ test('criterion 4: an Ask-first source is declined, its span says so, and nothin
   const session = await createInLoopRouting({ configured, directory, searchable: directory, rule: DIRECTORY_SET_RULE, selection: ['socrata'], now: NOW });
   const mcpFrom = MCP_REQUESTS.length;
   const run = await drive(session, [
-    { toolCalls: [{ id: 'load-boston', name: 'load_source', args: { alias: 'boston' } }] },
+    { toolCalls: [{ id: 'load-boston', name: 'load_source', args: { alias: 'boston_opencontext' } }] },
     { content: 'Boston could not be checked for this question.' },
   ]);
   const text = toolMessages(run.requests[1]).find((m) => m.tool_call_id === 'load-boston')?.content ?? '';

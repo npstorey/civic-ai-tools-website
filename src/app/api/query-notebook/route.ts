@@ -27,7 +27,7 @@ import { callMcpTool, startRunServerReads, withReportedKeys } from '@/lib/mcp/cl
 import { configuredMcpServers, dispatchTargetOf, getMissingMcpRoutingError, readMcpEnvFromProcess, routedSourceId } from '@/lib/mcp/registry';
 import { getDefaultModel, resolveModel, ModelNotOfferedError } from '@/lib/model-resolver';
 import { ModelConfigurationError, getGenAiSystem, getMissingModelCredentialError, getModelApiKind } from '@/lib/model-client';
-import { whereItWentFromCalls, type WhereItWentModel } from '@/lib/flows/where-it-went';
+import { packOfDispatchTarget, whereItWentFromCalls, type WhereItWentModel } from '@/lib/flows/where-it-went';
 import { modelAccessPhrase, modelIdentity, type ModelIdentity } from '@/lib/model-catalog';
 import { composeSystemPrompt, withPortalLockGuidance } from '@/lib/mcp/socrata-skill';
 import type { SourceSelection } from '@typedstandards/civic-typed-router';
@@ -524,6 +524,8 @@ export async function POST(request: NextRequest) {
       const flows = whereItWentFromCalls({
         toolCalls: phaseAResult.tools_called ?? [],
         resolveSource: resolveToolSource,
+        // F8 (CKAN-1 P3): a call's pack from the same dispatch decision the loop core made for it.
+        resolvePack: (name: string) => packOfDispatchTarget(inLoop ? inLoop.dispatchTarget(name) : dispatchTargetOf(name, configured, selection)),
         sourcesOffered: recordReasons(composition.sourcesOffered),
         statement: consent.statement,
         model: model.declared,

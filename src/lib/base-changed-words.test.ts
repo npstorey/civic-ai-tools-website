@@ -21,7 +21,7 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { FAILURE_REASON, TOOL_FAILURE_KINDS, renderFetchToolCell } from './notebook-author/tool-to-cell.ts';
 import { describeQueryOutcome } from './evidence/query-step.ts';
-import { whereItWentFromCalls } from './flows/where-it-went.ts';
+import { packOfDispatchTarget, whereItWentFromCalls } from './flows/where-it-went.ts';
 
 const REASONS = FAILURE_REASON as Record<string, string>;
 const BASE_CHANGED =
@@ -70,11 +70,18 @@ test('NOT_RECEIVED holds base_changed: a pack call not sent does not count as a 
       { name: 'nyc_record__get_data', args: { dataset_id: 'dg92-zbpx' }, failed: true, failureKind },
     ] as never,
     resolveSource: () => 'socrata',
+    // F8: the pack from the dispatch decision; an exposed name is its own target.
+    resolvePack: (name: string) => packOfDispatchTarget(name),
     sourcesOffered: [{ sourceId: 'socrata', alias: 'socrata', reason: 'configured' }, { sourceId: 'nyc-record', alias: 'nyc_record', reason: 'configured' }],
     model: 'fake/model',
     service: 'fixture service',
   });
-  const calls = (failureKind: string) => (run(failureKind).reached.find((row) => row.kind === 'source' && row.sourceId === 'socrata') as { calls?: number } | undefined)?.calls;
-  assert.equal(calls('base_changed'), 1, 'the unsent pack call was counted as received by its base');
-  assert.equal(calls('unknown'), 2, 'decoy: a call that failed as unknown was sent, and counts');
+  // CKAN-1 P3 fix round 1, F6: a pack's call counts under the pack (`PACK_CALL_COUNTED_UNDER`, default `pack`), with the
+  // base whose server answered it; the base's own count holds its own calls. The property kept: an unsent pack call
+  // counts nowhere, and a call that failed as unknown was sent and counts.
+  const calls = (failureKind: string, sourceId: string) => (run(failureKind).reached.find((row) => row.kind === 'source' && row.sourceId === sourceId) as { calls?: number } | undefined)?.calls;
+  assert.equal(calls('base_changed', 'socrata'), 1, 'the unsent pack call was counted as received by its base');
+  assert.equal(calls('base_changed', 'nyc-record'), undefined, 'the unsent pack call was counted as received by its pack');
+  assert.equal(calls('unknown', 'nyc-record'), 1, 'decoy: a call that failed as unknown was sent, and counts');
+  assert.equal(calls('unknown', 'socrata'), 1, 'decoy: the base\'s own count holds its own call only');
 });

@@ -279,7 +279,7 @@ const allowRun = await (async () => {
   try {
     return await drive({
       states: { socrata: 'on', 'data-commons': 'off', 'boston-opencontext': 'ask-first' },
-      script: [load('load-boston', 'boston'), { toolCalls: [{ id: 'q-boston', name: 'boston__ckan__query_data', args: { resource_id: 'r-1', limit: 1 } }] }, ANSWER],
+      script: [load('load-boston', 'boston_opencontext'), { toolCalls: [{ id: 'q-boston', name: 'boston_opencontext__ckan__query_data', args: { resource_id: 'r-1', limit: 1 } }] }, ANSWER],
       decide: [{ afterMs: 50_000, decision: 'allow' }],
       toolTimeoutMs: 20,
     });
@@ -331,7 +331,7 @@ test('criterion 1: the hold polls every 500 ms, and resolves loaded on allow; th
   const reads = d.kv.calls.filter((c) => c.op === 'get' && c.key.startsWith('consent-decision:'));
   // 50 s at 500 ms: a hundred reads, the last one the decision.
   assert.equal(reads.length, 100, `the hold read the store ${reads.length} times`);
-  assert.ok(toolNames(d.requests[1]).some((n) => n.startsWith('boston__')), 'after Allow the next request carries none of the source\'s tools');
+  assert.ok(toolNames(d.requests[1]).some((n) => n.startsWith('boston_opencontext__')), 'after Allow the next request carries none of the source\'s tools');
   assert.deepEqual(loadSpans(d.trace).map((s) => s['tool.load_outcome']), ['loaded']);
 });
 
@@ -388,7 +388,7 @@ test('criterion 1 and 5: no decision in 60 s resolves no-answer, with its own te
 test('criterion 1: a second load of the same source does not hold again and repeats the first outcome', async () => {
   const d = await drive({
     states: { socrata: 'on', 'data-commons': 'off', 'boston-opencontext': 'ask-first' },
-    script: [load('load-1', 'boston'), load('load-2', 'boston'), ANSWER],
+    script: [load('load-1', 'boston_opencontext'), load('load-2', 'boston_opencontext'), ANSWER],
     decide: [{ afterMs: 1_000, decision: 'not-now' }],
   });
   assert.equal(d.pauses.length, 1, `the run paused ${d.pauses.length} times for one source`);
@@ -399,7 +399,7 @@ test('criterion 1: a second load of the same source does not hold again and repe
 test('criterion 1: a run\'s holds stop at 120 s in all: a hold after 90 s lasts 30 s', async () => {
   const d = await drive({
     states: ALL_ASK_FIRST,
-    script: [load('l1', 'socrata'), load('l2', 'data_commons'), load('l3', 'boston'), ANSWER],
+    script: [load('l1', 'socrata'), load('l2', 'data_commons'), load('l3', 'boston_opencontext'), ANSWER],
     decide: [null, { afterMs: 30_000, decision: 'not-now' }, null],
   });
   assert.deepEqual(outcomes(d), ['no-answer', 'declined', 'no-answer']);
@@ -413,7 +413,7 @@ test('criterion 1: a run\'s holds stop at 120 s in all: a hold after 90 s lasts 
 test('criterion 1: once a run\'s holds reach 120 s, a further Ask-first load is no-answer with no hold and no entry', async () => {
   const d = await drive({
     states: ALL_ASK_FIRST,
-    script: [load('l1', 'socrata'), load('l2', 'data_commons'), load('l3', 'boston'), ANSWER],
+    script: [load('l1', 'socrata'), load('l2', 'data_commons'), load('l3', 'boston_opencontext'), ANSWER],
   });
   assert.deepEqual(outcomes(d), ['no-answer', 'no-answer', 'no-answer']);
   assert.equal(d.kv.decisionKeys().length, 2, 'the third load wrote an entry after the budget was spent');
@@ -426,7 +426,7 @@ test('criterion 1: a failed poll read ends the hold as no-answer', async () => {
   let reads = 0;
   const d = await drive({
     states: { socrata: 'on', 'data-commons': 'off', 'boston-opencontext': 'ask-first' },
-    script: [load('load-boston', 'boston'), ANSWER],
+    script: [load('load-boston', 'boston_opencontext'), ANSWER],
     kvSetup: (kv) => {
       const get = kv.get.bind(kv);
       kv.get = async (key: string) => {
@@ -443,7 +443,7 @@ test('criterion 1: a failed poll read ends the hold as no-answer', async () => {
 test('criterion 1 [D]: under a dbId the entry also holds the reader code, HMAC-SHA256 under the pause\'s own label', async () => {
   const d = await drive({
     states: { socrata: 'on', 'data-commons': 'off', 'boston-opencontext': 'ask-first' },
-    script: [load('load-boston', 'boston'), ANSWER],
+    script: [load('load-boston', 'boston_opencontext'), ANSWER],
     dbId: '11111111-1111-4111-8111-111111111111',
   });
   const first = d.kv.calls.find((c) => c.op === 'set');
@@ -461,7 +461,7 @@ test('criterion 1 [D]: under a dbId the entry also holds the reader code, HMAC-S
 test('criterion 4: with the pair unset there is no store: holds false, no-answer at once, no entry, no wait', async () => {
   const d = await drive({
     states: { socrata: 'on', 'data-commons': 'off', 'boston-opencontext': 'ask-first' },
-    script: [load('load-boston', 'boston'), ANSWER],
+    script: [load('load-boston', 'boston_opencontext'), ANSWER],
     store: 'none',
   });
   assert.equal(need().decisionStoreFromEnv(), null, 'with the pair unset the store is not null');
@@ -471,13 +471,13 @@ test('criterion 4: with the pair unset there is no store: holds false, no-answer
   assert.equal(Object.hasOwn(d.pauses[0], 'key'), false, 'a pause with no store carries a key');
   assert.deepEqual(d.pauses[0].source, statement.sources.find((s) => s.sourceId === 'boston-opencontext'));
   assert.equal(d.kv.calls.length, 0);
-  assert.equal(toolMessage(d.requests[1], 'load-boston'), routingMode.LOAD_RESULT_TEXT.noAnswer('boston'));
+  assert.equal(toolMessage(d.requests[1], 'load-boston'), routingMode.LOAD_RESULT_TEXT.noAnswer('boston_opencontext'));
 });
 
 test('criterion 4 [A]: a store whose write throws gives the same no-answer with holds false, never unavailable', async () => {
   const d = await drive({
     states: { socrata: 'on', 'data-commons': 'off', 'boston-opencontext': 'ask-first' },
-    script: [load('load-boston', 'boston'), ANSWER],
+    script: [load('load-boston', 'boston_opencontext'), ANSWER],
     kvSetup: (kv) => { kv.failSet = true; },
   });
   assert.deepEqual(outcomes(d), ['no-answer']);
@@ -490,7 +490,7 @@ test('criterion 4 [A]: a store whose read throws mid-hold gives no-answer, never
   let reads = 0;
   const d = await drive({
     states: { socrata: 'on', 'data-commons': 'off', 'boston-opencontext': 'ask-first' },
-    script: [load('load-boston', 'boston'), ANSWER],
+    script: [load('load-boston', 'boston_opencontext'), ANSWER],
     kvSetup: (kv) => {
       const get = kv.get.bind(kv);
       kv.get = async (key: string) => { reads += 1; if (reads >= 5) throw new Error('down'); return get(key); };
@@ -515,7 +515,7 @@ test('R9 P1 (note 1): a pause that holds carries entryExpiresAt, 600 s after the
 test('R9 P1 (note 1): a pause that does not hold carries no entryExpiresAt', async () => {
   const d = await drive({
     states: { socrata: 'on', 'data-commons': 'off', 'boston-opencontext': 'ask-first' },
-    script: [load('load-boston', 'boston'), ANSWER],
+    script: [load('load-boston', 'boston_opencontext'), ANSWER],
     store: 'none',
   });
   assert.equal(d.pauses[0]?.holds, false, 'premise: the pause holds');
@@ -525,7 +525,7 @@ test('R9 P1 (note 1): a pause that does not hold carries no entryExpiresAt', asy
 test('R9 P1 (#668, note 3): a hold whose reader\'s stream is gone ends no-answer at the next poll; the entry, its expiry and the load span are as they were', async () => {
   const d = await drive({
     states: { socrata: 'on', 'data-commons': 'off', 'boston-opencontext': 'ask-first' },
-    script: [load('load-boston', 'boston'), ANSWER],
+    script: [load('load-boston', 'boston_opencontext'), ANSWER],
     goneAfterMs: 5_000,
   });
   assert.equal(d.pauses.length, 1, 'premise: the run paused');

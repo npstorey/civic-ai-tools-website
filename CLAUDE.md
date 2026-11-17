@@ -34,7 +34,7 @@ remote) — don't design an owner-run leg around the assumption that it doesn't.
 | `npm run typecheck` | no output, exit 0 — **run after `npm run build`** (tsconfig includes `.next/types`, which the build emits) |
 | `npm run lint` | `0 errors` — a small, moving baseline of warnings is expected; **zero errors** is the gate |
 | `npm run check:compose-env` | `RESULT: PASS — every variable this profile reads can reach the container.` |
-| `npm run check:standalone` | `[standalone-assets] OK — 3 runtime-read asset(s) present and byte-identical` — needs a standalone build first; `npm run build:standalone` does both |
+| `npm run check:standalone` | `[standalone-assets] OK — 4 runtime-read asset(s) present and byte-identical` — needs a standalone build first; `npm run build:standalone` does both |
 | `npm run dev` | dev server on localhost:3000 |
 
 CI (`.github/workflows/ci.yml`) has three jobs. `build / test / lint / typecheck` runs the first five

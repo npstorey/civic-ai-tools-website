@@ -90,7 +90,7 @@ const TOOL_DEFINITIONS = [
   {
     type: 'function',
     function: {
-      name: 'boston__ckan__query_data',
+      name: 'boston_opencontext__ckan__query_data',
       description: 'Query a Boston CKAN resource.',
       parameters: { type: 'object', properties: { resource_id: { type: 'string' } }, required: ['resource_id'] },
     },
@@ -124,7 +124,7 @@ function runAttributes(assertedDate: string): Record<string, string> {
 const WINDOW_2025 = "issue_date between '2025-01-01T00:00:00' and '2025-12-31T23:59:59'";
 const CALLS = [
   { id: 'a', name: 'socrata__get_data', args: { type: 'query', portal: 'data.cityofnewyork.us', dataset_id: 'pvqr-7yc4', where: WINDOW_2025, select: 'count(*)' } },
-  { id: 'b', name: 'boston__ckan__query_data', args: { resource_id: 'r-311', filters: { type: 'pothole' } } },
+  { id: 'b', name: 'boston_opencontext__ckan__query_data', args: { resource_id: 'r-311', filters: { type: 'pothole' } } },
 ];
 
 function stubClient(calls: typeof CALLS): OpenAI {

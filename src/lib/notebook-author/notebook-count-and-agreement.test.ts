@@ -746,6 +746,15 @@ const ARG_SHAPES: Record<string, Array<Record<string, unknown>>> = {
   list_hearing_transcripts: [{ year: 2025 }],
   get_hearing_transcript: [{ filename: 'hearing.txt' }],
   get_updates: [{ from: '2026-01-01', to: '2026-01-31', type: 'processed' }, { from: '2026-01-01', to: '2026-01-31', type: 'published' }],
+  // Router 0.11.0's Boston pack over the CKAN server (CKAN-1 P3), likewise for the agreement only, one shape each
+  // from its schema's required arguments (`server_url` the pack's one portal). How each reads in either notebook is
+  // stage G's (criterion A17).
+  ckan_package_search: [{ server_url: 'https://data.boston.gov', q: 'potholes' }],
+  ckan_find_relevant_datasets: [{ server_url: 'https://data.boston.gov', query: 'potholes' }],
+  ckan_package_show: [{ server_url: 'https://data.boston.gov', id: '311-service-requests' }],
+  ckan_list_resources: [{ server_url: 'https://data.boston.gov', id: '311-service-requests' }],
+  ckan_datastore_search: [{ server_url: 'https://data.boston.gov', resource_id: 'abc-123' }],
+  ckan_datastore_search_sql: [{ server_url: 'https://data.boston.gov', sql: 'SELECT count(*) FROM "abc-123"' }],
 };
 
 function registryToolNames(): string[] {

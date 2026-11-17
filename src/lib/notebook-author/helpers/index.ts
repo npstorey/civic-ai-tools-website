@@ -2,7 +2,7 @@
  * Helper-function source loader for executed notebooks.
  *
  * Per ADR-0005 §3, civic-data helper functions (fetch_socrata,
- * fetch_data_commons, fetch_opencontext) are embedded inline in cell-3 of
+ * fetch_data_commons, fetch_opencontext, fetch_ckan) are embedded inline in cell-3 of
  * every executed notebook. The Python source files in this directory are
  * the source-of-truth; this loader reads them at startup and exposes the
  * raw text so the LLM prompt template (../prompt.ts) can interpolate the
@@ -15,12 +15,14 @@ import { upstreamToolName } from '../../mcp/operation-types.ts';
 
 const HELPERS_DIR = path.dirname(fileURLToPath(import.meta.url));
 
-export type HelperId = 'fetch_socrata' | 'fetch_data_commons' | 'fetch_opencontext';
+export type HelperId = 'fetch_socrata' | 'fetch_data_commons' | 'fetch_opencontext' | 'fetch_ckan';
 
 const FILE_BY_ID: Record<HelperId, string> = {
   fetch_socrata: 'fetch_socrata.py',
   fetch_data_commons: 'fetch_data_commons.py',
   fetch_opencontext: 'fetch_opencontext.py',
+  // CKAN-1 P3: a CKAN pack's datastore calls, against the server_url each call named.
+  fetch_ckan: 'fetch_ckan.py',
 };
 
 function readHelperSource(id: HelperId): string {
@@ -39,7 +41,7 @@ export function getHelperSource(id: HelperId): string {
 
 /** Return Python source for every helper concatenated, in canonical order. */
 export function getAllHelperSources(): string {
-  const order: HelperId[] = ['fetch_socrata', 'fetch_data_commons', 'fetch_opencontext'];
+  const order: HelperId[] = ['fetch_socrata', 'fetch_data_commons', 'fetch_opencontext', 'fetch_ckan'];
   return order.map(id => getHelperSource(id)).join('\n\n');
 }
 
@@ -47,7 +49,7 @@ export function getAllHelperSources(): string {
  * Map an MCP tool name, in either spelling, to the helper it implies. Used by
  * the prompt template to pick the minimal helper subset for the notebook
  * based on which MCP tools the LLM actually called during Phase A discovery.
- * Read by the upstream name (#599 W3): `boston__ckan__query_data` and
+ * Read by the upstream name (#599 W3): `boston_opencontext__ckan__query_data` and
  * `ckan__query_data` imply the same helper.
  */
 export function helperForToolName(calledName: string): HelperId | null {
@@ -55,15 +57,16 @@ export function helperForToolName(calledName: string): HelperId | null {
   if (toolName === 'get_data') return 'fetch_socrata';
   if (toolName === 'search_indicators' || toolName === 'get_observations') return 'fetch_data_commons';
   if (toolName.startsWith('ckan__')) return 'fetch_opencontext';
+  if (toolName === 'ckan_datastore_search' || toolName === 'ckan_datastore_search_sql') return 'fetch_ckan';
   return null;
 }
 
 /**
  * Given a list of MCP tool names called during Phase A, return the deduped
- * helper-id list in canonical order, or all three helpers if none mapped
- * (defensive: an empty list means the notebook will have an unused-helpers
- * cell, which is harmless; we never want to ship a notebook missing a
- * helper it actually needs).
+ * helper-id list in canonical order, or `fetch_socrata` alone if none mapped
+ * (defensive: an empty list would leave the helper cell empty; one helper the
+ * notebook does not use is harmless, and we never want to ship a notebook
+ * missing a helper it actually needs).
  */
 export function helpersForToolNames(toolNames: readonly string[]): HelperId[] {
   const set = new Set<HelperId>();
@@ -74,6 +77,6 @@ export function helpersForToolNames(toolNames: readonly string[]): HelperId[] {
   if (set.size === 0) {
     return ['fetch_socrata'];
   }
-  const order: HelperId[] = ['fetch_socrata', 'fetch_data_commons', 'fetch_opencontext'];
+  const order: HelperId[] = ['fetch_socrata', 'fetch_data_commons', 'fetch_opencontext', 'fetch_ckan'];
   return order.filter(id => set.has(id));
 }

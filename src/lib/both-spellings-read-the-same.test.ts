@@ -48,14 +48,14 @@ const ALIAS: Record<string, string> = {
   fetch: 'socrata__fetch',
   search_indicators: 'data_commons__search_indicators',
   get_observations: 'data_commons__get_observations',
-  ckan__search_datasets: 'boston__ckan__search_datasets',
-  ckan__get_dataset: 'boston__ckan__get_dataset',
-  ckan__get_schema: 'boston__ckan__get_schema',
-  ckan__query_data: 'boston__ckan__query_data',
-  ckan__aggregate_data: 'boston__ckan__aggregate_data',
-  ckan__execute_sql: 'boston__ckan__execute_sql',
+  ckan__search_datasets: 'boston_opencontext__ckan__search_datasets',
+  ckan__get_dataset: 'boston_opencontext__ckan__get_dataset',
+  ckan__get_schema: 'boston_opencontext__ckan__get_schema',
+  ckan__query_data: 'boston_opencontext__ckan__query_data',
+  ckan__aggregate_data: 'boston_opencontext__ckan__aggregate_data',
+  ckan__execute_sql: 'boston_opencontext__ckan__execute_sql',
 };
-const ALIAS_PREFIX = /(socrata|data_commons|boston)__/;
+const ALIAS_PREFIX = /(socrata|data_commons|boston_opencontext|boston)__/;
 const PORTAL = 'data.cityofnewyork.us';
 
 /** One call per tool, each with arguments that reach its name-keyed branch. */
@@ -131,7 +131,7 @@ test('the helper a tool implies is the same for either spelling', () => {
   for (const [bare, exposed] of Object.entries(ALIAS)) {
     assert.equal(helperForToolName(exposed), helperForToolName(bare), exposed);
   }
-  assert.equal(helperForToolName('boston__ckan__query_data'), 'fetch_opencontext');
+  assert.equal(helperForToolName('boston_opencontext__ckan__query_data'), 'fetch_opencontext');
 });
 
 // --- The formatters ---------------------------------------------------------------------

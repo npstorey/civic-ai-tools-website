@@ -120,7 +120,7 @@ const KEY = 'feedface0123456789abcdef4b1d2c3e';
 const statement = await buildFlowsStatement();
 const BOSTON = statement.sources.find((s: { sourceId: string }) => s.sourceId === 'boston-opencontext');
 const PAUSE = { key: KEY, source: BOSTON, outbound: [], links: statement.links, expiresAt: new Date(Date.now() + 60_000).toISOString(), holds: true };
-const LOAD_START = { message: 'Loading the Boston OpenContext source', phase: 'tool_start', iteration: 1, args: { alias: 'boston' }, toolName: 'load_source', operationType: 'load_source' };
+const LOAD_START = { message: 'Loading the Boston OpenContext source', phase: 'tool_start', iteration: 1, args: { alias: 'boston_opencontext' }, toolName: 'load_source', operationType: 'load_source' };
 const PAUSE_LINE = 'Waiting for your answer about Boston OpenContext, which is set to Ask first';
 
 let streams: Held[] = [];

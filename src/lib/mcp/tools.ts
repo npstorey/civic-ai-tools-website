@@ -12,7 +12,7 @@ import { readMcpEnvFromProcess, type McpRegistryEnv } from './registry.ts';
 //
 // THE ALIASED VIEW (#599 W3, ADR-0032). Every tool is offered as `<alias>__<upstream
 // name>`: `socrata__get_data`, `data_commons__search_indicators`,
-// `boston__ckan__search_datasets`. Every description and parameter description
+// `boston_opencontext__ckan__search_datasets`. Every description and parameter description
 // names a tool the same way. The client calls each server by its own name
 // (`routeToolCall` in `./registry.ts`). The view is the package's own
 // `aliased*` output, and `unaliasText` with the package's dispatch map undoes it

@@ -175,7 +175,7 @@ function turnFor(body: Record<string, unknown>): Call[] | null {
   if (assistantTurns === 2) {
     return [
       call('call-dc', 'data_commons__search_indicators', { query: 'permits' }),
-      call('call-boston', 'boston__ckan__query_data', { resource_id: 'r-1', limit: 1 }),
+      call('call-boston', 'boston_opencontext__ckan__query_data', { resource_id: 'r-1', limit: 1 }),
     ];
   }
   return null;
@@ -441,8 +441,13 @@ function autoBytes(): string {
   delete root['analysis.flows_statement'];
   return normal(JSON.stringify({ requests: AUTO_STREAM.requests.map((r) => r.raw), root }));
 }
-/** Measured at `15a52942` (the base, which has no picks) by this function. */
-const AUTO_BYTES_SHA256 = 'fe0b75f29d4d53e8a32802baa9a7abe4fbec01223445ce6c09ee7dc73820f3c3';
+/** Measured at `15a52942` (the base, which has no picks) by this function: `fe0b75f29d4d53e8a32802baa9a7abe4fbec01223445ce6c09ee7dc73820f3c3`.
+ *  CKAN-1 P3 (router 0.11.0): re-measured at stage L, where these bytes moved, diffed through files against the
+ *  base `71b43b0` with nothing else changed, by exactly the bump's named facts: Boston OpenContext's alias
+ *  (`boston_opencontext`, in a tool name and its `sourcesOffered` row), the CKAN server's and the Boston pack's two
+ *  not-configured rows, the router's version (component and routing), the inventory reference (version 4,
+ *  `2026-11-13.1`, nine entries) and the two hashes over it (the definition and the routing configuration). */
+const AUTO_BYTES_SHA256 = 'd6228e33ded147143e2120cf976cf6f733ceede550c78baca505a11e3f545e7f';
 
 test('W1-1 pin (decoy): an Auto run\'s request and record bytes do not move', () => {
   assert.equal(sha(autoBytes()), AUTO_BYTES_SHA256);
@@ -454,9 +459,10 @@ for (const d of [PICKED_STREAM, PICKED_NOTEBOOK, PICKED_COMPARE]) {
   test(`W1-2 (${d.name}): no request lists or offers an Off, unconfigured, unknown or unpicked source, and no call reaches one`, () => {
     for (const r of toolRequests(d)) {
       const names = toolNames(r);
-      assert.ok(!names.some((n) => /^(data_commons|boston|nyc_charter)__/.test(n)), `${d.name}: a request offers ${names.join(', ')}`);
+      // CKAN-1 P3 (router 0.11.0): Boston OpenContext's alias is `boston_opencontext`; `boston` is the Boston pack's.
+      assert.ok(!names.some((n) => /^(data_commons|boston_opencontext|boston|nyc_charter)__/.test(n)), `${d.name}: a request offers ${names.join(', ')}`);
       const choices = loadEnum(r) ?? [];
-      for (const alias of ['data_commons', 'boston', 'nyc_charter']) assert.ok(!choices.includes(alias), `${d.name}: ${alias} is in a load_source enum`);
+      for (const alias of ['data_commons', 'boston_opencontext', 'boston', 'nyc_charter']) assert.ok(!choices.includes(alias), `${d.name}: ${alias} is in a load_source enum`);
     }
     assert.deepEqual(contacted(d), ['socrata'], `${d.name}: the run contacted ${contacted(d).join(', ')}`);
   });
@@ -481,6 +487,9 @@ test('W1-2: the record states not-selected for the allowed source not picked, re
       'nyc-checkbook': 'not-configured',
       'nyc-record': 'not-consented',
       'nys-legislation': 'not-configured',
+      // Router 0.11.0 (CKAN-1 P3): `CKAN_MCP_URL` unset.
+      'ckan-server': 'not-configured',
+      'boston-ckan': 'not-configured',
     }, d.name);
   }
 });
@@ -596,7 +605,7 @@ test('W1-7: the packaged record names no unknown source, and states reader-picke
 
 test('W1-7: the analysis page names the reader\'s choice in revision 5\'s reader-picked words, not directory-set\'s sentence', () => {
   const text = chooserLines(chooserFromPackage(packaged().pkg)).map((line) => line.text).join('\n');
-  assert.ok(text.includes('The model was shown 2 of the 7 sources'), text);
+  assert.ok(text.includes('The model was shown 2 of the 9 sources'), text);
   assert.ok(text.includes('The person who asked this question picked those sources. A picked source was left out if it was turned off, or not set up on the site that ran this question.'), text);
   assert.ok(!text.includes('Those were the sources set up on the site'), text);
   assert.ok(!text.includes('which this site has no words for'), text);

@@ -220,7 +220,7 @@ let run = 0;
 const nextKey = () => `1e55${String(++run).padStart(4, '0')}0123456789abcdef01234567`;
 const pauseOf = (key: string, holdMs = 60_000) => ({ key, source: BOSTON, outbound: [], links: statement.links, expiresAt: new Date(Date.now() + holdMs).toISOString(), entryExpiresAt: new Date(Date.now() + 600_000).toISOString(), holds: true });
 const PAUSE_LINE = 'Waiting for your answer about Boston OpenContext, which is set to Ask first';
-const LOAD_START = { message: 'Loading the Boston OpenContext source', phase: 'tool_start', iteration: 1, args: { alias: 'boston' }, toolName: 'load_source', operationType: 'load_source' };
+const LOAD_START = { message: 'Loading the Boston OpenContext source', phase: 'tool_start', iteration: 1, args: { alias: 'boston_opencontext' }, toolName: 'load_source', operationType: 'load_source' };
 const LOAD_DONE = { message: 'Loaded the Boston OpenContext source', phase: 'tool_complete', iteration: 1, duration_ms: 3000, toolName: 'load_source', operationType: 'load_source' };
 const QUESTION = 'How many service requests did Boston record in 2025?';
 

@@ -47,7 +47,7 @@
  */
 import { createHash } from 'node:crypto';
 import canonicalize from 'canonicalize';
-import { CIVIC_MANIFEST, type HostingVariant, type LoggingPosture } from '@typedstandards/civic-typed-router';
+import { CIVIC_MANIFEST, CKAN_SERVER_SOURCE_ID, type HostingVariant, type LoggingPosture } from '@typedstandards/civic-typed-router';
 import type { AnalyticsConfig, AnalyticsService } from '../analytics.tsx';
 import { buildProviders, normalizeIssuer, OIDC_PROVIDER_ID } from '../auth-providers.ts';
 import { toSignInOptions } from '../auth-provider-options.ts';
@@ -247,20 +247,52 @@ const EXECUTOR_SANDBOX_MEASURED = [
 ];
 
 /**
+ * The portal operator's lines for a CKAN source (router 0.11.0, CKAN-1 P3,
+ * A-C1): the CKAN server and the Boston pack over it, whose requests reach
+ * the City of Boston's portal, Analyze Boston. Every line in one place, so the
+ * ruled words are one edit. DRAFT, form (i): the City's line, as the City's
+ * statement reads (the same statement Boston OpenContext's manifest entry
+ * cites). The owner rules form (i) or form (iii), which adds a second line
+ * for the portal's platform vendor here (`CKAN_PORTAL_VENDOR_LINE`, not built).
+ * A second CKAN pack over another portal needs its own lines (S6).
+ */
+export const CKAN_PORTAL_OPERATOR_LINES: readonly FlowsKeptBy[] = [
+  {
+    holder: 'City of Boston',
+    keeps: 'metadata',
+    retention: "Under the City's records retention schedule; the statement gives no period for server logs.",
+    statementUrl: 'https://www.boston.gov/government/cabinets/innovation-and-technology/terms-use-and-privacy-policy-city-boston-digital',
+    readOn: '2026-11-16',
+  },
+  // CKAN_PORTAL_VENDOR_LINE: the place for form (iii)'s second line, the portal's platform vendor, if the owner rules it.
+];
+
+/** The sources whose portal is a CKAN portal: the CKAN server and every pack over it. */
+const CKAN_SOURCE_IDS: ReadonlySet<string> = new Set(
+  CIVIC_MANIFEST.filter((entry) => entry.sourceId === CKAN_SERVER_SOURCE_ID || entry.base === CKAN_SERVER_SOURCE_ID).map((entry) => entry.sourceId),
+);
+
+/** Socrata's portal operator: the platform's vendor, for every source whose portal is a Socrata portal. */
+const SOCRATA_PORTAL_OPERATOR: FlowsKeptBy = {
+  holder: 'Tyler Technologies',
+  keeps: 'not-stated',
+  statementUrl: TYLER_PRIVACY,
+  readOn: FLOWS_READ_DATE,
+  basis: ["its privacy statement gives a retention rule for personal information and says nothing about what it keeps of a portal's data requests"],
+};
+
+/**
  * The postures of the log holders the manifest names by role
  * (`statedBy: 'instance'`, ADR-0036): the manifest is the same for every
- * instance and cannot name them, so this instance states each.
+ * instance and cannot name them, so this instance states each, per source
+ * (CKAN-1 P3): one line or more. The portal operator is the portal's: Tyler
+ * Technologies for a Socrata portal, the CKAN portal's own lines for a CKAN
+ * source.
  */
-export const INSTANCE_ROLE_POSTURES: Readonly<Record<string, (host: string | undefined) => FlowsKeptBy>> = {
-  'server-operator': (host) => ({ holder: host ? `the operator of ${host}` : "the server's operator", keeps: 'operator-states' }),
-  'portal-operator': () => ({
-    holder: 'Tyler Technologies',
-    keeps: 'not-stated',
-    statementUrl: TYLER_PRIVACY,
-    readOn: FLOWS_READ_DATE,
-    basis: ["its privacy statement gives a retention rule for personal information and says nothing about what it keeps of a portal's data requests"],
-  }),
-  'sandbox-platform': () => sandboxPlatform(HOSTED_SANDBOX_MEASURED, VERCEL_SANDBOX_SNAPSHOTS, SANDBOX_SNAPSHOTS_READ_DATE),
+export const INSTANCE_ROLE_POSTURES: Readonly<Record<string, (host: string | undefined, sourceId: string) => readonly FlowsKeptBy[]>> = {
+  'server-operator': (host) => [{ holder: host ? `the operator of ${host}` : "the server's operator", keeps: 'operator-states' }],
+  'portal-operator': (_host, sourceId) => (CKAN_SOURCE_IDS.has(sourceId) ? CKAN_PORTAL_OPERATOR_LINES : [SOCRATA_PORTAL_OPERATOR]),
+  'sandbox-platform': () => [sandboxPlatform(HOSTED_SANDBOX_MEASURED, VERCEL_SANDBOX_SNAPSHOTS, SANDBOX_SNAPSHOTS_READ_DATE)],
 };
 
 /** What a source's server receives. */
@@ -268,19 +300,19 @@ const SOURCE_RECEIVES = 'the searches and queries the AI model writes to answer 
 
 // --- Building ------------------------------------------------------------------------
 
-function keptByFor(logging: readonly LoggingPosture[], host: string | undefined): FlowsKeptBy[] {
-  const lines = logging.map((posture): FlowsKeptBy => {
+function keptByFor(logging: readonly LoggingPosture[], host: string | undefined, sourceId: string): FlowsKeptBy[] {
+  const lines = logging.flatMap((posture): FlowsKeptBy[] => {
     if (posture.statedBy === 'manifest') {
-      return {
+      return [{
         holder: posture.holder,
         keeps: posture.keeps,
         ...(posture.retention ? { retention: posture.retention } : {}),
         statementUrl: posture.statementUrl,
         readOn: posture.readOn,
-      };
+      }];
     }
     const stated = INSTANCE_ROLE_POSTURES[posture.role];
-    return stated ? stated(host) : { holder: posture.role, keeps: 'not-read' };
+    return stated ? stated(host, sourceId).map((line) => ({ ...line })) : [{ holder: posture.role, keeps: 'not-read' }];
   });
   return lines.length > 0 ? lines : [{ holder: 'not stated', keeps: 'not-read' }];
 }
@@ -308,15 +340,15 @@ function sourceRows(configured: McpRegistryEnv): FlowsSource[] {
     const sandboxLogging = outbound.length > 0 ? variant.logging.filter((posture) => posture.statedBy === 'instance') : variant.logging;
     const recipient: FlowsRecipient =
       variant.kind === 'npm-package'
-        ? { id: `source:${entry.sourceId}`, key: held('sandbox-platform'), role: 'sandbox-platform', runsAt: 'instance-sandbox', receives: SOURCE_RECEIVES, keptBy: keptByFor(sandboxLogging, undefined) }
-        : { id: `source:${entry.sourceId}`, key: 'MCP servers', role: 'source', ...(host ? { host } : { runsAt: variant.runsAt }), receives: SOURCE_RECEIVES, keptBy: keptByFor(variant.logging, host) };
+        ? { id: `source:${entry.sourceId}`, key: held('sandbox-platform'), role: 'sandbox-platform', runsAt: 'instance-sandbox', receives: SOURCE_RECEIVES, keptBy: keptByFor(sandboxLogging, undefined, entry.sourceId) }
+        : { id: `source:${entry.sourceId}`, key: 'MCP servers', role: 'source', ...(host ? { host } : { runsAt: variant.runsAt }), receives: SOURCE_RECEIVES, keptBy: keptByFor(variant.logging, host, entry.sourceId) };
     const upstream: FlowsRecipient[] = outbound.map((outboundHost) => ({
       id: `source:${entry.sourceId}:${outboundHost}`,
       key: upstreamKey,
       role: 'source',
       host: outboundHost,
       receives: upstreamReceives,
-      keptBy: keptByFor(variant.logging.filter((posture) => posture.statedBy === 'manifest'), undefined),
+      keptBy: keptByFor(variant.logging.filter((posture) => posture.statedBy === 'manifest'), undefined, entry.sourceId),
     }));
     const summary: FlowsSourceVariant = {
       variant: variant.variant,

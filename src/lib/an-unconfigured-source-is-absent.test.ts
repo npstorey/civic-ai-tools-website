@@ -369,7 +369,7 @@ test('(1) the routing registry holds no boston-opencontext server and no ckan__ 
   assert.ok(REGISTRY.servers['data-commons'], 'premise: the registry was built');
   assert.equal(REGISTRY.servers['boston-opencontext'], undefined, 'the registry built a Boston server with the variable unset');
   // `includes`, not `startsWith`: since #599 W3 the index is keyed by exposed
-  // names (`boston__ckan__…`), which a prefix test would pass vacuously.
+  // names (`boston_opencontext__ckan__…`), which a prefix test would pass vacuously.
   const ckan = Object.keys(REGISTRY.toolIndex).filter((name) => name.includes('ckan__'));
   assert.deepEqual(ckan, [], 'toolIndex routes ckan__ tools with the variable unset');
 });

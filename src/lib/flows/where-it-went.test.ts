@@ -367,7 +367,7 @@ const REFUSED_UNKNOWN: Run = {
 };
 /** The kind decides, whatever the span's source says: `not_offered` and `not_configured` are not received. */
 const REFUSED_NAMED: Run = {
-  steps: [llm, call('nyc_charter__search', 'nyc-charter', 'not_offered'), call('boston__ckan__search', 'boston-opencontext', 'not_configured'), llm, call('socrata__get_data', 'socrata'), llm],
+  steps: [llm, call('nyc_charter__search', 'nyc-charter', 'not_offered'), call('boston_opencontext__ckan__search', 'boston-opencontext', 'not_configured'), llm, call('socrata__get_data', 'socrata'), llm],
   sourcesOffered: [R.socrata, R.dcOff, R.bostonUnset, R.charterAsk],
   statement: RUN_STATEMENT,
 };
@@ -387,7 +387,7 @@ const IN_LOOP_RUN: Run = {
     llm,
     load('socrata', 'loaded'),
     load('data_commons', 'loaded'),
-    load('boston', 'loaded'),
+    load('boston_opencontext', 'loaded'),
     load('nyc_charter', 'unavailable'),
     load('fixture_declined', 'no-answer'),
     load('fixture_declined', 'declined'),
@@ -418,7 +418,7 @@ const STATED_RUN: Run = {
 const F = { socrata: offered('socrata', 'selected'), dc: offered('data-commons', 'selected'), boston: offered('boston-opencontext', 'selected') };
 /** Calls that failed in ways the request may have arrived: each source counts as reached. */
 const FAILED_RUN: Run = {
-  steps: [llm, call('socrata__get_data', 'socrata', 'unavailable'), call('data_commons__get_observations', 'data-commons', 'timeout'), call('boston__ckan__search', 'boston-opencontext', 'unknown'), llm],
+  steps: [llm, call('socrata__get_data', 'socrata', 'unavailable'), call('data_commons__get_observations', 'data-commons', 'timeout'), call('boston_opencontext__ckan__search', 'boston-opencontext', 'unknown'), llm],
   sourcesOffered: [F.socrata, F.dc, F.boston],
   statement: RUN_STATEMENT,
 };

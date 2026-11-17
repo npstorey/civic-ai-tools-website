@@ -31,7 +31,7 @@
 
 import crypto from 'crypto';
 import { buildProvenanceGraph, type ProvGraph } from './provenance.ts';
-import { appToolSourceResolver, buildDataSources, type DataSourceEntry } from './data-sources.ts';
+import { appToolSourceResolver, buildDataSources, dataSourceRegistry, type DataSourceEntry } from './data-sources.ts';
 import { getActiveKeyId, type SignerIdentity } from './signing.ts';
 import { isBlobRef, parseBlobRef, type BlobRef } from './blob-ref.ts';
 import { deriveOperationType } from '../mcp/operation-types.ts';
@@ -54,6 +54,7 @@ import {
 } from '@typedstandards/civic-typed-harness';
 import {
   configuredAddressForSource,
+  MCP_SOURCE_ADDRESS_FIELD,
   configuredMcpServers,
   readMcpEnvFromProcess,
 } from '../mcp/registry.ts';
@@ -422,7 +423,12 @@ export function sourceRegistryForPolicy(policy: ServerAddressPolicy): CivicSourc
   if (policy === 'reference') return reference;
   const configured = policy === 'configured' ? readMcpEnvFromProcess() : undefined;
   const registry: CivicSourceRegistry = {};
-  for (const [sourceId, info] of Object.entries(reference)) {
+  // An addressed source the harness's reference registry does not name (router 0.11.0, CKAN-1 P3: the hosted CKAN
+  // server), after the reference's, with this instance's vocabulary (`dataSourceRegistry`), so its agent carries the
+  // address the instance routes it to, as the reference's addressed sources' do.
+  const instance = dataSourceRegistry();
+  const addressed = Object.keys(MCP_SOURCE_ADDRESS_FIELD).filter((id) => !Object.hasOwn(reference, id) && Object.hasOwn(instance, id));
+  for (const [sourceId, info] of [...Object.entries(reference), ...addressed.map((id) => [id, instance[id]] as const)]) {
     const { serverUrl: _referenceAddress, ...vocabulary } = info;
     void _referenceAddress;
     const address = configured ? configuredAddressForSource(configured, sourceId) : undefined;

@@ -73,14 +73,16 @@ const NO_BOSTON: Env = { socrataUrl: FULL.socrataUrl, dataCommonsUrl: FULL.dataC
 /** Every source on, router 0.3.0's hosted one included (#617 P3). FULL leaves
  *  NYC_CHARTER_HOSTING unset, so there Charter's five tools are withheld and
  *  its `sourcesOffered` row is `not-configured`: the moves the anchor names. */
-const ALL_ON: Env = { ...FULL, nycCharterHosting: 'sandbox', nycCheckbookHosting: 'sandbox', nysLegislationHosting: 'sandbox' };
+const ALL_ON: Env = { ...FULL, nycCharterHosting: 'sandbox', nycCheckbookHosting: 'sandbox', nysLegislationHosting: 'sandbox', ckanUrl: 'http://127.0.0.1:9/ckan' };
 /** The hosted sources' rows with their switches unset: Charter's (#617 P3),
  *  then router 0.6.0's three (R8 W3), each not-configured with or without a
  *  selection. ALL_ON above switches all four on. */
 /** S2-B: since router 0.8.0 NYC City Record is a pack over Socrata, configured wherever Socrata is: its row sits
  *  among the hosted rows in manifest order, `configured`, or `selected`/`not-selected` under a selection. */
-const HOSTED_ROWS = (record: 'configured' | 'selected' | 'not-selected') => ['nyc-charter:nyc_charter:not-configured', 'nyc-checkbook:nyc_checkbook:not-configured', `nyc-record:nyc_record:${record}`, 'nys-legislation:nys_legislation:not-configured'];
-const HOSTED_PREFIXES = ['nyc_charter__', 'nyc_checkbook__', 'nys_legislation__'];
+const HOSTED_ROWS = (record: 'configured' | 'selected' | 'not-selected') => ['nyc-charter:nyc_charter:not-configured', 'nyc-checkbook:nyc_checkbook:not-configured', `nyc-record:nyc_record:${record}`, 'nys-legislation:nys_legislation:not-configured', 'ckan-server:ckan:not-configured', 'boston-ckan:boston:not-configured'];
+/** Router 0.11.0: the CKAN server and its Boston pack, offered only when `CKAN_MCP_URL` is set (`ckanUrl`); FULL
+ *  leaves it unset, so the pack's six `boston__` tools are withheld beside the hosted sources'. ALL_ON sets it. */
+const HOSTED_PREFIXES = ['nyc_charter__', 'nyc_checkbook__', 'nys_legislation__', 'boston__'];
 
 const ALL_TOOLS = tools.mcpToolsFor(undefined);
 const names = (list: ChatCompletionTool[]) => list.map((t) => (t as { function: { name: string } }).function.name);
@@ -91,7 +93,7 @@ console.warn = () => {};
 console.log = () => {};
 
 test('premise: with every source configured and no selection, all four sources are offered', () => {
-  assert.deepEqual(prefixes(offeredMcpTools(ALL_TOOLS, FULL)), ['socrata', 'data_commons', 'boston', 'nyc_record']);
+  assert.deepEqual(prefixes(offeredMcpTools(ALL_TOOLS, FULL)), ['socrata', 'data_commons', 'boston_opencontext', 'nyc_record']);
 });
 
 test('the default selection is no selection: the same array object, byte for byte what was offered before', () => {
@@ -108,7 +110,7 @@ test('the default selection is no selection: the same array object, byte for byt
 
 test('an explicit selection narrows the offered tools to the sources it names', () => {
   assert.deepEqual(prefixes(offeredMcpTools(ALL_TOOLS, FULL, ['socrata'])), ['socrata']);
-  assert.deepEqual(prefixes(offeredMcpTools(ALL_TOOLS, FULL, ['data-commons', 'boston-opencontext'])), ['data_commons', 'boston']);
+  assert.deepEqual(prefixes(offeredMcpTools(ALL_TOOLS, FULL, ['data-commons', 'boston-opencontext'])), ['data_commons', 'boston_opencontext']);
   assert.deepEqual(offeredMcpTools(ALL_TOOLS, FULL, []), []);
 });
 
@@ -126,13 +128,13 @@ test('an unknown id in a selection is ignored, not refused', () => {
 
 test('an explicit selection narrows the prompt\'s sources: no tool of an unselected source is named', async () => {
   const all = await buildSystemPrompt(PORTAL, FULL);
-  for (const prefix of ['socrata__', 'data_commons__', 'boston__']) assert.ok(all.includes(prefix), `premise: the full prompt names ${prefix}`);
+  for (const prefix of ['socrata__', 'data_commons__', 'boston_opencontext__']) assert.ok(all.includes(prefix), `premise: the full prompt names ${prefix}`);
   const socrataOnly = await buildSystemPrompt(PORTAL, FULL, ['socrata']);
   assert.ok(socrataOnly.includes('socrata__'));
   assert.ok(!socrataOnly.includes('data_commons__'), 'the prompt still names Data Commons tools');
-  assert.ok(!socrataOnly.includes('boston__'), 'the prompt still names Boston tools');
+  assert.ok(!socrataOnly.includes('boston_opencontext__'), 'the prompt still names Boston tools');
   const dataCommonsOnly = await buildSystemPrompt(PORTAL, FULL, ['data-commons']);
-  assert.ok(dataCommonsOnly.includes('data_commons__') && !dataCommonsOnly.includes('socrata__') && !dataCommonsOnly.includes('boston__'));
+  assert.ok(dataCommonsOnly.includes('data_commons__') && !dataCommonsOnly.includes('socrata__') && !dataCommonsOnly.includes('boston_opencontext__'));
 });
 
 test('the lock section names only the selected sources beside the locked one', () => {
@@ -149,10 +151,10 @@ test('the record states selected / not-selected with a selection, configured wit
   // Each list ends with the hosted sources' rows: not-configured with their
   // switches unset, with or without a selection (the named moves, #617 P3 and
   // R8 W3).
-  assert.deepEqual(await reasons(FULL), ['socrata:socrata:configured', 'data-commons:data_commons:configured', 'boston-opencontext:boston:configured', ...HOSTED_ROWS('configured')]);
-  assert.deepEqual(await reasons(NO_BOSTON), ['socrata:socrata:configured', 'data-commons:data_commons:configured', 'boston-opencontext:boston:not-configured', ...HOSTED_ROWS('configured')]);
-  assert.deepEqual(await reasons(FULL, ['socrata', 'no-such-source']), ['socrata:socrata:selected', 'data-commons:data_commons:not-selected', 'boston-opencontext:boston:not-selected', ...HOSTED_ROWS('not-selected')]);
-  assert.deepEqual(await reasons(NO_BOSTON, ['boston-opencontext', 'nyc-charter']), ['socrata:socrata:not-selected', 'data-commons:data_commons:not-selected', 'boston-opencontext:boston:not-configured', ...HOSTED_ROWS('not-selected')]);
+  assert.deepEqual(await reasons(FULL), ['socrata:socrata:configured', 'data-commons:data_commons:configured', 'boston-opencontext:boston_opencontext:configured', ...HOSTED_ROWS('configured')]);
+  assert.deepEqual(await reasons(NO_BOSTON), ['socrata:socrata:configured', 'data-commons:data_commons:configured', 'boston-opencontext:boston_opencontext:not-configured', ...HOSTED_ROWS('configured')]);
+  assert.deepEqual(await reasons(FULL, ['socrata', 'no-such-source']), ['socrata:socrata:selected', 'data-commons:data_commons:not-selected', 'boston-opencontext:boston_opencontext:not-selected', ...HOSTED_ROWS('not-selected')]);
+  assert.deepEqual(await reasons(NO_BOSTON, ['boston-opencontext', 'nyc-charter']), ['socrata:socrata:not-selected', 'data-commons:data_commons:not-selected', 'boston-opencontext:boston_opencontext:not-configured', ...HOSTED_ROWS('not-selected')]);
 });
 
 test('composeSystemPrompt states the date the prompt carries, its components, and the prompt buildSystemPrompt returns', async () => {
