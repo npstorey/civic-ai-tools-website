@@ -15,7 +15,7 @@
  */
 import { useCallback, useRef, useState } from 'react';
 import { connectSSE } from '@/lib/sse-client';
-import { classifyStreamError, friendlyStreamError, notebookExecutionErrorMessage, reasonWithoutIdentifier, type ConsentPausePayload } from '@/lib/streaming';
+import { classifyStreamError, friendlyStreamError, notebookExecutionErrorMessage, reasonWithoutIdentifier, type ConsentPausePayload, type StreamErrorKind } from '@/lib/streaming';
 import { reportConsentPause, reportConsentRefusal } from '@/components/sources/useSourceConsent';
 import type { Notebook } from '@/lib/notebook-author';
 import type { NotebookPhase } from '@/components/notebook/NotebookProgress';
@@ -119,6 +119,12 @@ export interface NotebookStreamState {
    * name it; absent reads as null.
    */
   errorTraceback?: { text: string; correlationId: string } | null;
+  /**
+   * UX-2 P6 + P10 fix round 2, A5 (b) (OA-942): the kind of `error`, as `classifyStreamError` reads it, so the block
+   * can tell the site's own daily limit (`rate_limit`) from every other failure. Null with no error; optional, as
+   * `errorTraceback` is, for a state built by hand.
+   */
+  errorKind?: StreamErrorKind | null;
   /** R6 W4: where the question went, from the `complete` phase's `flows`; absent until then. */
   flows?: WhereItWentModel;
 }
@@ -149,6 +155,7 @@ const INITIAL_STATE: NotebookStreamState = {
   isLoading: false,
   error: null,
   errorTraceback: null,
+  errorKind: null,
 };
 
 interface RawNotebookEvent {
@@ -364,20 +371,19 @@ export function useNotebookStream() {
           const errorTraceback = code === 'notebook_execution' && correlationId && typeof traceback === 'string' && traceback !== ''
             ? { text: traceback, correlationId }
             : null;
+          const failure = { message: (raw.message as string | undefined) || 'Notebook generation failed', code: raw.code };
           const message = code === 'notebook_execution' && correlationId
             ? notebookExecutionErrorMessage(raw.exitCode as number | undefined, correlationId)
             // Pass the carried kind alongside the text: since #154 the Phase A
             // failure path puts a classified `code` on the event, and the message
             // is already reader-facing copy. Without the code, prefixed copy
             // would be re-classified from prose and flatten to the generic line.
-            : friendlyStreamError({
-                message: (raw.message as string | undefined) || 'Notebook generation failed',
-                code: raw.code,
-              });
+            : friendlyStreamError(failure);
           setState((prev) => ({
             ...prev,
             error: message,
             errorTraceback,
+            errorKind: classifyStreamError(failure),
             // Nothing keeps running once the run has failed.
             steps: closeStepsOnError(prev.steps ?? NO_STEPS),
             isLoading: false,
@@ -416,7 +422,7 @@ export function useNotebookStream() {
       }
       // friendlyStreamError maps SSEError 429, MCP timeout/down, and connection
       // drops to calm copy — the raw error/server text never reaches the UI.
-      setState((prev) => ({ ...prev, error: friendlyStreamError(err), isLoading: false, completedAt: Date.now() }));
+      setState((prev) => ({ ...prev, error: friendlyStreamError(err), errorKind: classifyStreamError(err), isLoading: false, completedAt: Date.now() }));
     }
   }, []);
 

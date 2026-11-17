@@ -1674,6 +1674,17 @@ footer a:visited {
   max-height: min(60vh, 280px);
 }
 
+/* Fix round 2, A3 (b) (#729, OA-942): the Settings row "Ask with this source" landed on carries the mark the directory
+   gives that source's card (DirectoryClient's server card: an accent border, the accent at 3%). The overlay sets the
+   attribute before it scrolls the row into view. The row's own padding and top border are inline (SourceRow), so these
+   two take `!important`; the vertical padding stays the row's 8px. */
+ul[data-target-source] > li[data-landing-target] {
+  border: 1px solid var(--accent) !important;
+  border-radius: 4px;
+  background-color: rgba(var(--accent-rgb), 0.03);
+  padding: 8px !important;
+}
+
 @media (min-width: 640px) {
   .directory-filter-toggle > .ui-disclosure {
     border-top: none;

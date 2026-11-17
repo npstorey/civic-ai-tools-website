@@ -92,19 +92,33 @@ function DataSources() {
   const shown = matchingSources(searchable, query);
   const lead = inForce ? '' : panelLeadBeforeConsent({ on: count('on'), askFirst: count('ask-first'), off: count('off') });
   // "Ask with this source" lands here as `/settings?source=<id>` (UX-2 P6 + P10, item 7; 0d item 9). The list marks the
-  // row it was opened for (`data-target-source`) and brings that row into view inside the dialog's own scroller; focus
-  // stays where the Dialog puts it (Close). An id this instance does not list marks nothing.
+  // row it was opened for (`data-target-source`) and brings that row into view inside the dialog's own scroller. An id
+  // this instance does not list marks nothing, and focus stays where the Dialog puts it (Close).
+  // Fix round 2, A3 (b) (OA-942): the row itself carries the mark the directory gives that source's card
+  // (`data-landing-target`, its border and tint in globals.css), set BEFORE the scroll so the scroll counts it, and takes
+  // focus, named by the source's reader name (the row's own first line), so no radio holds focus and an arrow key changes
+  // no setting. SourceRow is not changed: the overlay marks and focuses the row it rendered, found inside its own marked
+  // list. The Dialog focuses Close in the same commit (a parent's effect runs after its child's), so the row takes focus
+  // a frame later, without scrolling again.
   const addressSource = useSyncExternalStore(noSubscription, readAddressSource, noAddress);
   const targetSource = addressSource !== null && ids.includes(addressSource) ? addressSource : null;
-  const listRef = useRef<HTMLUListElement>(null);
+  const targetName = searchable.find((s) => s.sourceId === targetSource)?.name ?? null;
   const broughtIntoView = useRef<string | null>(null);
   useEffect(() => {
-    if (targetSource === null || broughtIntoView.current === targetSource) return;
-    const row = listRef.current?.querySelector(`li[data-source="${CSS.escape(targetSource)}"]`);
+    if (targetSource === null || broughtIntoView.current === targetSource || typeof document === 'undefined') return;
+    // A quoted attribute value: only a backslash and a double quote need escaping (the id is one the statement lists).
+    const id = targetSource.replace(/["\\]/g, '\\$&');
+    const row = document.querySelector<HTMLElement>(`ul[data-target-source="${id}"] > li[data-source="${id}"]`);
     if (!row) return;
     broughtIntoView.current = targetSource;
+    row.setAttribute('data-landing-target', '');
     row.scrollIntoView({ block: 'nearest' });
-  }, [targetSource, shown.length]);
+    row.tabIndex = -1;
+    if (targetName !== null) row.setAttribute('aria-label', targetName);
+    const focusRow = () => row.focus({ preventScroll: true });
+    if (typeof requestAnimationFrame === 'function') requestAnimationFrame(focusRow);
+    else setTimeout(focusRow, 0);
+  }, [targetSource, targetName, shown.length]);
 
   return (
     <div style={{ fontSize: '14px', lineHeight: 1.6, color: 'var(--text-primary)' }}>
@@ -135,7 +149,7 @@ function DataSources() {
         </p>
       )}
       {shown.length === 0 && searchable.length > 0 && <p style={MUTED}>{SETTINGS_TEXT.noMatch}</p>}
-      <ul ref={listRef} data-target-source={targetSource ?? undefined} style={{ listStyle: 'none', margin: '0 0 10px', padding: 0, fontSize: '13px', color: 'var(--text-secondary)' }}>
+      <ul data-target-source={targetSource ?? undefined} style={{ listStyle: 'none', margin: '0 0 10px', padding: 0, fontSize: '13px', color: 'var(--text-secondary)' }}>
         {shown.map(({ source, name }) => {
           const control: SourceStateControlProps = {
             sourceId: source.sourceId,
