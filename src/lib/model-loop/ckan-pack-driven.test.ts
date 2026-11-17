@@ -262,6 +262,16 @@ const A14_SENT = await run({}, [[
 const SQL_REFUSED = ['DELETE FROM "x"', '/* c */ drop table x', 'SELECT 1; DROP TABLE x'];
 const SQL_SENT = ['SELECT count(*) FROM "x"', 'WITH t AS (SELECT 1) SELECT * FROM t', 'SELECT * FROM "x" WHERE name = \'a;b\'', '/* c */ SELECT 1'];
 const A15 = await run({}, [[...SQL_SENT, ...SQL_REFUSED].map((sql, i) => call(`s${i}`, exposed('ckan_datastore_search_sql'), { server_url: PORTAL, sql }))]);
+/** Fix round 1 (F1): a second statement behind PostgreSQL's other quoting forms, each in a run of its own, so a request in
+ *  that run can only be its. The datastore is PostgreSQL, so the check reads PostgreSQL's lexical forms. */
+const SQL_HIDDEN = [
+  "SELECT E'\\''; DROP TABLE x; --'",
+  "SELECT '\\''; DROP TABLE x; --'",
+  "SELECT $$ ' $$; DROP TABLE x; --'",
+  "SELECT $a$ ' $a$; DROP TABLE x; --'",
+];
+const A15_HIDDEN: Run[] = [];
+for (const [i, sql] of SQL_HIDDEN.entries()) A15_HIDDEN.push(await run({}, [[call(`h${i}`, exposed('ckan_datastore_search_sql'), { server_url: PORTAL, sql })]]));
 
 const A16 = await run({}, [[
   call('r1', exposed('ckan_datastore_search'), { server_url: PORTAL, resource_id: 'abc-123', limit: 1 }),
@@ -457,6 +467,20 @@ test('A15: ckan_datastore_search_sql sends one read-only statement and refuses t
   const offered = PACK.tools.find((t) => t.type === 'function' && t.function.name === 'ckan_datastore_search_sql');
   const description = String((offered as unknown as { function: { parameters: { properties: { sql: { description: string } } } } }).function.parameters.properties.sql.description);
   assert.match(description, /begins, after any whitespace and SQL comments, with SELECT or WITH, and no second statement follows a semicolon outside a quoted literal/, 'premise: the rule the check enforces is the one the tool states');
+});
+
+test('A15 (fix round 1): a second statement behind an escaped quote or a dollar quote is refused before anything is sent', () => {
+  assert.equal(SQL_HIDDEN[0], "SELECT E'\\''; DROP TABLE x; --'", 'premise: the escape string carries a backslash before its quote');
+  const name = exposed('ckan_datastore_search_sql');
+  const filter = packFilterModule.packFilterOf(name);
+  const Statement = packFilterModule.SqlStatementRefusedError;
+  assert.ok(filter && typeof Statement === 'function', 'premise: the pack has a filter and its statement refusal a type of its own');
+  for (const [i, sql] of SQL_HIDDEN.entries()) {
+    const run = A15_HIDDEN[i];
+    assert.deepEqual(sentCalls(run), [], `${sql} was sent`);
+    assert.deepEqual(failureOf(run.calls[0]), { failed: true, failureKind: 'unknown' }, `${sql} is not recorded as the pack's refusal`);
+    assert.equal(run.told.get(`h${i}`), describeToolFailureForLlm(name, new Statement!(filter as never)), `the model is not told why ${sql} was refused`);
+  }
 });
 
 // --- A16: the record -------------------------------------------------------------------------------------------
