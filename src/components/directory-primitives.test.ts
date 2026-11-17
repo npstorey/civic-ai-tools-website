@@ -44,7 +44,7 @@ import {
   type HostElement,
   type Surface,
 } from './sources/surface-test-harness.ts';
-import { childrenOf, hasClass, within } from './ui/ui-test-helpers.ts';
+import { childrenOf, hasClass, parentOf, within } from './ui/ui-test-helpers.ts';
 
 registerSurfaceHooks({
   ...CONSENT_SURFACE_STUBS,
@@ -274,6 +274,108 @@ for (const [tab, search, labels] of [['servers', '', SERVER_FILTERS], ['portals'
     await s.click(found[0]);
     await s.settle();
     assert.equal(String(triggers(s, [labels[0]])[0].props['aria-expanded']), 'true', 'the first trigger does not read expanded once opened');
+  });
+}
+
+// --- Fix round 1, F1 (seat #729 6936790257 item 1): the filters' open panel carries a height cap of 280 px or less ---
+//
+// THE RULE. The directory's dropdown before this change capped its list at 280 px and always opened downward (`71b43b0`
+// `DirectoryClient.tsx:145-158`). `Menu`'s panel is at most 60vh tall (506 px at 844 high), and is capped to the room
+// only for a menu with a group, so with a filter's trigger mid-screen its panel ran past the window. The filters' panel
+// keeps the old cap: `.directory-filter .ui-menu-panel` in `globals.css`, at most 280 px.
+//
+// HOW IT IS READ. The first filter on each tab is opened on the harness and its panel found (`.ui-menu-panel`, inside
+// the `.directory-filter` wrapper, which is the rule's premise). Its max-height is the panel's inline one if it has one
+// (an inline style wins), else the declaration of the last `.directory-filter .ui-menu-panel` block, else the last
+// `.ui-menu-panel` block. The cap is the most that value can come to in px: a px length is itself, `min()` the least of
+// its terms, `max()` the most, `clamp()` its last; a `vh` or `%` term, or `none`, is unbounded.
+//
+// BLIND SPOTS, stated. A stylesheet read, not a cascade: a rule reaching the panel through another selector, inside a
+// media query that does not apply, or by `!important` elsewhere is read as written or not at all, and where the panel
+// lands is not read. Instrument 8's read (c), with the trigger mid-screen as well as at the page's own position, is the
+// layout check.
+
+const GLOBALS_CSS_TEXT = fs.readFileSync(path.join(SRC, 'app', 'globals.css'), 'utf8');
+/** The declarations of every innermost block in `css` whose selector list names `selector` exactly. */
+function blocksNaming(css: string, selector: string): string[] {
+  const want = selector.replace(/\s+/g, ' ').trim();
+  const out: string[] = [];
+  for (const m of css.replace(/\/\*[\s\S]*?\*\//g, '').matchAll(/([^{}]+)\{([^{}]*)\}/g)) {
+    if (m[1].split(',').map((x) => x.replace(/\s+/g, ' ').trim()).includes(want)) out.push(m[2]);
+  }
+  return out;
+}
+/** The last `max-height` declared in a block's body, or null. */
+function maxHeightIn(body: string): string | null {
+  const all = [...body.matchAll(/(?:^|;)\s*max-height\s*:\s*([^;]+)/g)];
+  return all.length ? all[all.length - 1][1].replace(/\s*!important\s*$/, '').trim() : null;
+}
+/** The terms of a CSS function's argument list, split at its top-level commas. */
+function termsOf(args: string): string[] {
+  const out: string[] = [];
+  let depth = 0;
+  let at = 0;
+  for (let i = 0; i < args.length; i += 1) {
+    if (args[i] === '(') depth += 1;
+    else if (args[i] === ')') depth -= 1;
+    else if (args[i] === ',' && depth === 0) { out.push(args.slice(at, i)); at = i + 1; }
+  }
+  out.push(args.slice(at));
+  return out.map((t) => t.trim());
+}
+/** The most a max-height value can come to, in px (Infinity when a term is not bounded in px). */
+function heightCapPx(value: string): number {
+  const v = value.trim();
+  const px = /^(\d+(?:\.\d+)?)px$/.exec(v);
+  if (px) return Number(px[1]);
+  const fn = /^(min|max|clamp)\((.*)\)$/.exec(v);
+  if (fn) {
+    const terms = termsOf(fn[2]).map(heightCapPx);
+    if (fn[1] === 'min') return Math.min(...terms);
+    if (fn[1] === 'max') return Math.max(...terms);
+    return terms[terms.length - 1];
+  }
+  return Infinity;
+}
+/** The filter panel's declared max-height in a stylesheet, by the order above (inline first). */
+function filterPanelMaxHeight(css: string, inline: string): string | null {
+  if (inline) return inline;
+  const own = blocksNaming(css, '.directory-filter .ui-menu-panel').map(maxHeightIn).filter((x): x is string => x !== null);
+  if (own.length) return own[own.length - 1];
+  const base = blocksNaming(css, '.ui-menu-panel').map(maxHeightIn).filter((x): x is string => x !== null);
+  return base.length ? base[base.length - 1] : null;
+}
+const FILTER_PANEL_CAP_PX = 280;
+
+test('fix round 1, F1 (its instrument): the cap read tells a rule that caps from one that does not (its decoy pair)', () => {
+  const panelOnly = '.ui-menu-panel { position: absolute; max-height: 60vh; overflow-y: auto; }';
+  const uncapped = filterPanelMaxHeight(panelOnly, '');
+  assert.equal(uncapped, '60vh');
+  assert.equal(heightCapPx(uncapped!), Infinity, '60vh alone must read as no cap');
+  const capped = filterPanelMaxHeight(`${panelOnly}\n.directory-filter .ui-menu-panel { max-height: min(60vh, 280px); }`, '');
+  assert.equal(capped, 'min(60vh, 280px)');
+  assert.equal(heightCapPx(capped!), 280);
+  assert.equal(heightCapPx('min(60vh, 506px)'), 506, 'a cap above 280 px reads as its own height, so the assertion can fail on it');
+  assert.equal(heightCapPx('clamp(120px, 50vh, 280px)'), 280);
+  assert.equal(filterPanelMaxHeight(panelOnly, 'min(60vh, 300px)'), 'min(60vh, 300px)', 'an inline max-height is read first');
+});
+
+for (const [tab, search, first] of [['servers', '', 'All Domains'], ['portals', 'tab=portals', 'All Platforms']] as const) {
+  test(`fix round 1, F1: on the ${tab} tab the open filter panel ("${first}") carries a height cap of at most ${FILTER_PANEL_CAP_PX} px`, async () => {
+    const s = await directory({}, search);
+    const trigger = triggers(s, [first]);
+    assert.equal(trigger.length, 1, `the "${first}" trigger: ${trigger.length}`);
+    await s.click(trigger[0]);
+    await s.settle();
+    const panels = s.elements().filter((el) => hasClass(el, 'ui-menu-panel'));
+    assert.equal(panels.length, 1, `open menu panels: ${panels.length}`);
+    const holders: HostElement[] = [];
+    for (let at = parentOf(s, panels[0]); at; at = parentOf(s, at)) holders.push(at);
+    assert.ok(holders.some((el) => hasClass(el, 'directory-filter')), 'premise: the panel sits inside a .directory-filter wrapper');
+    const declared = filterPanelMaxHeight(GLOBALS_CSS_TEXT, String(styleOf(panels[0]).maxHeight ?? ''));
+    assert.ok(declared !== null, 'no max-height reaches the filter panel');
+    const cap = heightCapPx(declared!);
+    assert.ok(cap <= FILTER_PANEL_CAP_PX, `the filter panel's max-height is "${declared}", at most ${cap} px; the cap is ${FILTER_PANEL_CAP_PX} px`);
   });
 }
 

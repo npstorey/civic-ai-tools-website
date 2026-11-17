@@ -800,6 +800,40 @@ test('UX-2 P6 + P10 criterion 10 (P10-17, P10-18; Q3 = P): /project holds the se
   ]) assert.ok(text.includes(line), `the setup section lacks: ${line}`);
 });
 
+// UX-2 P6 + P10 fix round 1, F2 (seat #729 6936790257 item 2): the set-up block's client cards break a long token.
+// The "Claude Code" card's command is one unbroken token (`DATA_PORTAL_URL=https://…`) that ran past its 213 px card
+// into the next card's text at 768, 1024 and 1280. Read from the rendered /project: each client card's text, or a card
+// element above it (the property is inherited), carries `overflow-wrap: anywhere` (or `break-word`, or
+// `word-break: break-all`) in its inline style, as react-dom/server writes it.
+// BLIND SPOTS, stated. An inline-style read: a class rule in globals.css is not read, and no box is measured. The
+// card-edge read in instrument 19's pattern (each card's text against its own card's right edge) is the layout check.
+const CLIENT_CARD_TITLES = ['Claude Code', 'Cursor', 'Other tools'];
+/** Whether an inline style breaks a long token at the box's edge. */
+function breaksLongToken(style: string | null): boolean {
+  const s = style ?? '';
+  return /(?:^|;)\s*(?:overflow-wrap|word-wrap)\s*:\s*(?:anywhere|break-word)\s*(?:;|$)/.test(s) || /(?:^|;)\s*word-break\s*:\s*break-all\s*(?:;|$)/.test(s);
+}
+
+test('UX-2 P6 + P10 fix round 1, F2 (its instrument): the style read tells a card that breaks a long token from one that does not', () => {
+  assert.equal(breaksLongToken('font-size:14px;color:var(--text-muted);margin:0;overflow-wrap:anywhere'), true);
+  assert.equal(breaksLongToken('font-size:14px;color:var(--text-muted);margin:0'), false);
+  assert.equal(breaksLongToken('font-size:14px;overflow-wrap:normal'), false);
+  assert.equal(breaksLongToken(null), false);
+});
+
+test('UX-2 P6 + P10 fix round 1, F2: each client card\'s text in /project\'s set-up block breaks a long token (overflow-wrap: anywhere)', () => {
+  const s = PAGES['/project'];
+  const section = one(s.elements().filter((el) => attr(el, 'id') === 'run-it-yourself'), '#run-it-yourself');
+  for (const title of CLIENT_CARD_TITLES) {
+    const heading = one(within(section).filter((el) => el.type === 'h3' && plain(readText(el)) === title), `h3 "${title}"`);
+    const [card, ...above] = ancestors(s, heading);
+    const text = one(childrenOf(card).filter((el) => el.type === 'p'), `the "${title}" card's text`);
+    if (title === 'Claude Code') assert.ok(plain(readText(text)).includes('DATA_PORTAL_URL=https://data.cityofnewyork.us'), 'premise: the Claude Code card holds the long token');
+    const chain = [text, card, ...above.slice(0, above.indexOf(section) + 1)];
+    assert.ok(chain.some((el) => breaksLongToken(attr(el, 'style'))), `the "${title}" card's text does not break a long token; styles: ${JSON.stringify(chain.slice(0, 2).map((el) => attr(el, 'style')))}`);
+  }
+});
+
 test('UX-2 P6 + P10 criterion 10 (P10-19, P10-20): /learn and /about keep one link each to the setup, and none of its text', () => {
   const learnText = pageText(PAGES['/learn']);
   assert.ok(learnText.includes('To run these tools on your own computer, see Run it yourself on the project page.'), '/learn lacks P10-19');
