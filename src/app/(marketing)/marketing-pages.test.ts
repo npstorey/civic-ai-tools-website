@@ -785,9 +785,20 @@ const MOVED_LIST = [
 ];
 
 test('UX-2 P6 + P10 criterion 10 (P10-15, P10-16): /project holds the moved list under its re-dated heading, five items verbatim and P10-16', () => {
-  assert.ok(headingTexts(PAGES['/project']).includes('What you can use (last checked November 2026)'), `headings: ${JSON.stringify(headingTexts(PAGES['/project']))}`);
-  const items = PAGES['/project'].elements().filter((el) => el.type === 'li').map((el) => plain(readText(el)));
+  const s = PAGES['/project'];
+  const items = s.elements().filter((el) => el.type === 'li').map((el) => plain(readText(el)));
   assert.deepEqual(MOVED_LIST.filter((line) => !items.includes(line)), [], 'moved items missing');
+  // The heading names no date (the owner's note, P6P10-1, OA-950), in the h2 and in the jump list: one constant feeds
+  // both, and each is read here from the rendered tree. Every problem is collected, so a red names all of them.
+  const problems: string[] = [];
+  const texts = headingTexts(s);
+  if (texts.filter((text) => text === 'What you can use').length !== 1) problems.push(`no one heading reads exactly "What you can use"; headings: ${JSON.stringify(texts)}`);
+  const dated = texts.filter((text) => /last checked/i.test(text));
+  if (dated.length > 0) problems.push(`headings holding "last checked": ${JSON.stringify(dated)}`);
+  const nav = one(s.elements().filter((el) => el.type === 'nav' && attr(el, 'aria-label') === 'Sections of this page'), 'jump list "Sections of this page"');
+  const entry = one(within(nav).filter((el) => el.type === 'a' && attr(el, 'href') === '#what-you-can-use'), 'jump-list link to #what-you-can-use');
+  if (plain(readText(entry)) !== 'What you can use') problems.push(`the jump list's #what-you-can-use item reads "${plain(readText(entry))}"`);
+  assert.deepEqual(problems, []);
 });
 
 test('UX-2 P6 + P10 criterion 10 (P10-17, P10-18; Q3 = P): /project holds the setup section, #run-it-yourself, the band\'s and /learn\'s target', () => {
