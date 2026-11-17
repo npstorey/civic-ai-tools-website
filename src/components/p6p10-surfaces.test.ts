@@ -38,6 +38,7 @@ import {
   mount,
   registerSurfaceHooks,
   sessions,
+  textOf,
   type HostElement,
   type Surface,
 } from './sources/surface-test-harness.ts';
@@ -102,6 +103,9 @@ const IDS: string[] = statement.sources.map((s: { sourceId: string }) => s.sourc
 const json = (body: unknown, status = 200) => new Response(JSON.stringify(body), { status, headers: { 'Content-Type': 'application/json' } });
 let refuse = false;
 let queries: string[] = [];
+/** How the notebook route answers (fix round 2, A5): the site's own limiter's 429 unless a test says otherwise. */
+const LIMIT_429 = () => json({ error: 'Rate limit exceeded' }, 429);
+let notebookAnswer: () => Response = LIMIT_429;
 function answers() {
   queries = [];
   return installFetch(ORIGIN, {
@@ -119,7 +123,7 @@ function answers() {
     '/api/query-notebook': async (request: Request) => {
       queries.push('/api/query-notebook');
       await request.text();
-      return json({ error: 'Rate limit exceeded' }, 429);
+      return notebookAnswer();
     },
   });
 }
@@ -142,6 +146,7 @@ beforeEach(() => {
   sessions.rows.clear();
   sessions.pushed.length = 0;
   refuse = false;
+  notebookAnswer = LIMIT_429;
   picksStore.resetPicksForTests();
   at('/');
 });
@@ -326,3 +331,91 @@ test('criterion 17: on /explore a 429 renders RL-1 in the live run\'s error', as
   refusalRendered(page);
 });
 
+
+// --- Fix round 2, A5 (b): the /ask Sandbox block on the daily limit's refusal (owner OA-942; seat #729 6949484128) --
+//
+// THE RULE. For the site's own daily limit's refusal (`rate_limit`), the notebook block holds RL-1 alone: no heading
+// "Couldn't generate a reproducible notebook.", no "You can switch back…" line, no Retry, and it keeps `role="alert"`.
+// Every other kind of error keeps the block as built: the heading, its message, the switch line and Retry (and the
+// notebook's traceback where it has one).
+//
+// WHAT IS DRIVEN. /ask's surface in a Sandbox session, a question sent, and the notebook route answering per case:
+// the limiter's own HTTP 429; a JSON refusal carrying each other kind's `code`, which `classifyStreamError` reads from
+// the body; and two stream `error` events (a `rate_limit` one, and a `notebook_execution` one with its traceback).
+// `consent_required` never reaches the block (the hook hands it to the consent card), and is checked as such.
+//
+// WHAT MAKES IT ABLE TO FAIL. The other 429-shaped kind, `model_rate_limited` (an upstream model's limit), must keep
+// the block: a build keyed on the status or on "rate limit" in the words fails there. Each drive checks first that a
+// block rendered at all.
+
+const { STREAM_ERROR_KINDS, friendlyStreamError } = await load('lib/streaming.ts');
+const NB_HEADING = "Couldn't generate a reproducible notebook.";
+const NB_SWITCH = 'You can switch back to Standard mode and try the same question, or retry below.';
+const sse = (events: unknown[]) => new Response(events.map((e) => `data: ${JSON.stringify(e)}\n\n`).join(''), { status: 200, headers: { 'Content-Type': 'text/event-stream' } });
+
+/** The notebook block after a Sandbox question: the one role="alert" element, with its text and its Retry buttons. */
+async function notebookBlock(answer: () => Response): Promise<{ text: string; retry: number; page: Surface } | null> {
+  SIGNED_IN();
+  answers();
+  notebookAnswer = answer;
+  await consentWith();
+  const page = await mountPage(ASK());
+  await ask(page, 'How many 311 complaints were there in Brooklyn in 2024?');
+  assert.ok(queries.includes('/api/query-notebook'), `premise: the notebook route was called (${JSON.stringify(queries)})`);
+  const alerts = page.elements().filter((el) => el.props.role === 'alert');
+  if (alerts.length === 0) return null;
+  assert.equal(alerts.length, 1, `role="alert" blocks: ${alerts.length}`);
+  return { text: textOf(alerts[0]).replace(/[‘’]/g, "'"), retry: within(alerts[0]).filter((el) => el.type === 'button' && textOf(el) === 'Retry').length, page };
+}
+
+for (const [shape, answer] of [
+  ['the limiter\'s HTTP 429', LIMIT_429],
+  ['a stream error event carrying rate_limit', () => sse([{ type: 'error', code: 'rate_limit', message: 'Rate limit exceeded' }])],
+] as const) {
+  test(`fix round 2, A5 (b): ${shape} renders RL-1 alone in the Sandbox block (no heading, no switch line, no Retry)`, async () => {
+    const block = await notebookBlock(answer);
+    assert.ok(block, 'premise: the refusal rendered a role="alert" block');
+    assert.ok(block!.text.includes(RL1) || block!.text.includes(BASE_RL), `premise: the block holds a refusal: ${block!.text}`);
+    assert.equal(block!.text, RL1, 'the block holds more than RL-1');
+    assert.ok(!block!.text.includes(NB_HEADING), 'the heading is still there');
+    assert.ok(!block!.text.includes(NB_SWITCH), 'the switch line is still there');
+    assert.equal(block!.retry, 0, 'Retry is still there');
+  });
+}
+
+/** Every kind `classifyStreamError` returns but the limit's and consent's, which have their own tests. */
+const KEPT_KINDS = (STREAM_ERROR_KINDS as readonly string[]).filter((k) => k !== 'rate_limit' && k !== 'consent_required');
+
+test('fix round 2, A5 (premise): the kinds are the fourteen, and the twelve that keep the block are listed here', () => {
+  assert.equal(STREAM_ERROR_KINDS.length, 14);
+  assert.deepEqual(KEPT_KINDS, [
+    'model_rate_limited', 'model_not_configured', 'model_auth_rejected', 'mcp_not_configured', 'mcp_timeout', 'mcp_unavailable',
+    'connection', 'notebook_execution', 'not_offered', 'no_sources_on', 'no_picks_usable', 'generic',
+  ]);
+});
+
+for (const kind of KEPT_KINDS) {
+  test(`fix round 2, A5 (b): a ${kind} refusal keeps the block: the heading, its message, the switch line and Retry`, async () => {
+    const block = await notebookBlock(() => json({ error: `fixture ${kind}`, code: kind }, 503));
+    assert.ok(block, `premise: a ${kind} refusal rendered a role="alert" block`);
+    const message = friendlyStreamError({ message: `fixture ${kind}`, code: kind }) as string;
+    assert.ok(block!.text.startsWith(NB_HEADING), `the heading is gone: ${block!.text}`);
+    assert.ok(block!.text.includes(message.replace(/[‘’]/g, "'")), `the message is gone: ${block!.text}`);
+    assert.ok(block!.text.includes(NB_SWITCH), `the switch line is gone: ${block!.text}`);
+    assert.equal(block!.retry, 1, 'Retry is gone');
+  });
+}
+
+test('fix round 2, A5 (b): a notebook_execution error event keeps the block with its traceback, the switch line and Retry', async () => {
+  const block = await notebookBlock(() => sse([{ type: 'error', code: 'notebook_execution', correlationId: 'fixture-ref', exitCode: 1, traceback: 'Traceback (fixture)' }]));
+  assert.ok(block, 'premise: the notebook failure rendered a role="alert" block');
+  assert.ok(block!.text.startsWith(NB_HEADING), `the heading is gone: ${block!.text}`);
+  assert.ok(block!.text.includes('Traceback (fixture)') && block!.text.includes('fixture-ref'), `the traceback is gone: ${block!.text}`);
+  assert.ok(block!.text.includes(NB_SWITCH), 'the switch line is gone');
+  assert.equal(block!.retry, 1, 'Retry is gone');
+});
+
+test('fix round 2, A5: consent_required renders no block (the hook hands it to the consent card), as before', async () => {
+  const block = await notebookBlock(() => json({ error: 'fixture consent', code: 'consent_required' }, 403));
+  assert.equal(block, null, `a consent refusal rendered the block: ${block?.text}`);
+});
