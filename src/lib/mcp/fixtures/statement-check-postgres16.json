@@ -1,0 +1,355 @@
+{
+ "_about": "The statement check of a CKAN pack's ckan_datastore_search_sql (src/lib/mcp/pack-filter.ts, isOneSelectOrWithStatement), held to a real server. Each row was sent as ONE simple query (psql -c) to PostgreSQL 16.15 (postgres:16-alpine, standard_conforming_strings on), with a hidden statement written as CREATE TABLE hit_<id>(). postgres: \"second\" = it ran a second statement; \"notSelect\" = it ran a statement that does not begin with SELECT or WITH; \"one\" = it ran one statement that does; \"nothing\" = it ran nothing (postgresSaid is its first line). check: what the check decides. Driven by scripts/statement-check-postgres.mjs; driven again whenever the check changes.",
+ "server": "PostgreSQL 16.15",
+ "rows": [
+  {
+   "id": "s01",
+   "label": "a plain second statement",
+   "sql": "SELECT 1; CREATE TABLE hit_s01()",
+   "postgres": "second",
+   "postgresSaid": "1",
+   "check": "refused"
+  },
+  {
+   "id": "s02",
+   "label": "a semicolon inside a literal, one statement",
+   "sql": "SELECT 'a; CREATE TABLE hit_s02()'",
+   "postgres": "one",
+   "postgresSaid": "a; CREATE TABLE hit_s02()",
+   "check": "sent"
+  },
+  {
+   "id": "s03",
+   "label": "a trailing semicolon and a comment",
+   "sql": "SELECT 1; -- done",
+   "postgres": "one",
+   "postgresSaid": "1",
+   "check": "sent"
+  },
+  {
+   "id": "s04",
+   "label": "a trailing semicolon, whitespace and a block comment",
+   "sql": "SELECT 1;  /* done */  ",
+   "postgres": "one",
+   "postgresSaid": "1",
+   "check": "sent"
+  },
+  {
+   "id": "f01",
+   "label": "a statement that begins with CREATE",
+   "sql": "CREATE TABLE hit_f01()",
+   "postgres": "notSelect",
+   "postgresSaid": "",
+   "check": "refused"
+  },
+  {
+   "id": "f02",
+   "label": "a block comment, then CREATE",
+   "sql": "/* c */ CREATE TABLE hit_f02()",
+   "postgres": "notSelect",
+   "postgresSaid": "",
+   "check": "refused"
+  },
+  {
+   "id": "f03",
+   "label": "a block comment, then SELECT",
+   "sql": "/* c */ SELECT 1",
+   "postgres": "one",
+   "postgresSaid": "1",
+   "check": "sent"
+  },
+  {
+   "id": "f04",
+   "label": "WITH",
+   "sql": "WITH t AS (SELECT 1) SELECT * FROM t",
+   "postgres": "one",
+   "postgresSaid": "1",
+   "check": "sent"
+  },
+  {
+   "id": "f05",
+   "label": "a data-modifying WITH (one statement; the ruled rule sends it)",
+   "sql": "WITH t AS (INSERT INTO sink VALUES (1) RETURNING *) SELECT * FROM t",
+   "postgres": "one",
+   "postgresSaid": "1",
+   "check": "sent",
+   "note": "the ruled rule sends it: one statement, which modified data (sink gained a row); the named limit of D3"
+  },
+  {
+   "id": "f06",
+   "label": "SELECT INTO (one statement; the ruled rule sends it)",
+   "sql": "SELECT 1 AS a INTO hit_f06",
+   "postgres": "one",
+   "postgresSaid": "",
+   "check": "sent",
+   "note": "the ruled rule sends it: one statement, SELECT INTO, which created a table; the named limit of D3"
+  },
+  {
+   "id": "f07",
+   "label": "a count",
+   "sql": "SELECT count(*) FROM sink",
+   "postgres": "one",
+   "postgresSaid": "0",
+   "check": "sent"
+  },
+  {
+   "id": "w01",
+   "label": "tab, form feed and vertical tab before SELECT, then a second statement",
+   "sql": "\t\f\u000bSELECT 1; CREATE TABLE hit_w01()",
+   "postgres": "nothing",
+   "postgresSaid": "ERROR:  syntax error at or near \"\u000b\"",
+   "check": "refused"
+  },
+  {
+   "id": "w02",
+   "label": "tab, form feed and vertical tab before SELECT",
+   "sql": "\t\f\u000bSELECT 1",
+   "postgres": "nothing",
+   "postgresSaid": "ERROR:  syntax error at or near \"\u000b\"",
+   "check": "refused"
+  },
+  {
+   "id": "w03",
+   "label": "a no-break space before SELECT",
+   "sql": " SELECT 1",
+   "postgres": "nothing",
+   "postgresSaid": "ERROR:  syntax error at or near \" SELECT\"",
+   "check": "refused"
+  },
+  {
+   "id": "r01",
+   "label": "a carriage return ends a trailing line comment, then a second statement",
+   "sql": "SELECT 1 -- x\r; CREATE TABLE hit_r01()",
+   "postgres": "second",
+   "postgresSaid": "1",
+   "check": "refused"
+  },
+  {
+   "id": "r02",
+   "label": "a carriage return ends a leading line comment, then CREATE",
+   "sql": "-- c\rCREATE TABLE hit_r02 AS (\nSELECT 1)",
+   "postgres": "notSelect",
+   "postgresSaid": "",
+   "check": "refused"
+  },
+  {
+   "id": "r03",
+   "label": "a line feed ends a trailing line comment, then a second statement",
+   "sql": "SELECT 1 -- x\n; CREATE TABLE hit_r03()",
+   "postgres": "second",
+   "postgresSaid": "1",
+   "check": "refused"
+  },
+  {
+   "id": "r04",
+   "label": "a line comment to the end, holding a semicolon",
+   "sql": "SELECT 1 -- ; CREATE TABLE hit_r04()",
+   "postgres": "one",
+   "postgresSaid": "1",
+   "check": "sent"
+  },
+  {
+   "id": "b01",
+   "label": "a nested block comment holding a semicolon",
+   "sql": "SELECT 1 /* a /* b */ ; CREATE TABLE hit_b01() */",
+   "postgres": "one",
+   "postgresSaid": "1",
+   "check": "sent"
+  },
+  {
+   "id": "b02",
+   "label": "an unterminated block comment",
+   "sql": "SELECT 1 /* a; CREATE TABLE hit_b02()",
+   "postgres": "nothing",
+   "postgresSaid": "ERROR:  unterminated /* comment at or near \"/* a; CREATE TABLE hit_b02()\"",
+   "check": "refused"
+  },
+  {
+   "id": "b03",
+   "label": "an operator that ends at a block comment, then a second statement",
+   "sql": "SELECT 1 */* c */ 2; CREATE TABLE hit_b03()",
+   "postgres": "second",
+   "postgresSaid": "2",
+   "check": "refused"
+  },
+  {
+   "id": "b04",
+   "label": "an operator that ends at a line comment",
+   "sql": "SELECT 1 +-- c\n1",
+   "postgres": "one",
+   "postgresSaid": "2",
+   "check": "sent"
+  },
+  {
+   "id": "q01",
+   "label": "a doubled quote inside a literal",
+   "sql": "SELECT 'it''s'",
+   "postgres": "one",
+   "postgresSaid": "it's",
+   "check": "sent"
+  },
+  {
+   "id": "q02",
+   "label": "a backslash not before a quote",
+   "sql": "SELECT 'a\\b'",
+   "postgres": "one",
+   "postgresSaid": "a\\b",
+   "check": "sent"
+  },
+  {
+   "id": "q03",
+   "label": "a plain literal ending in a backslash before a doubled quote, then a second statement under the escape reading",
+   "sql": "SELECT '\\''; CREATE TABLE hit_q03(); --'",
+   "postgres": "one",
+   "postgresSaid": "\\'; CREATE TABLE hit_q03(); --",
+   "check": "refused",
+   "note": "refused, not sure: PostgreSQL (standard_conforming_strings on) read one statement; the check takes the backslash-escape reading too, under which a second statement follows"
+  },
+  {
+   "id": "q04",
+   "label": "an escape string, backslash-escaped quote, then a second statement",
+   "sql": "SELECT E'\\''; CREATE TABLE hit_q04(); --'",
+   "postgres": "second",
+   "postgresSaid": "'",
+   "check": "refused"
+  },
+  {
+   "id": "q05",
+   "label": "an escape string continued on a new line, then a second statement",
+   "sql": "SELECT E'a'\n'\\''; CREATE TABLE hit_q05(); --'",
+   "postgres": "second",
+   "postgresSaid": "a'",
+   "check": "refused"
+  },
+  {
+   "id": "q06",
+   "label": "a Unicode escape string, then a second statement",
+   "sql": "SELECT U&'\\0027'; CREATE TABLE hit_q06(); --'",
+   "postgres": "second",
+   "postgresSaid": "'",
+   "check": "refused"
+  },
+  {
+   "id": "q07",
+   "label": "a quoted identifier holding a quote, then a second statement",
+   "sql": "SELECT 1 AS \"a'b\"; CREATE TABLE hit_q07(); --'",
+   "postgres": "second",
+   "postgresSaid": "1",
+   "check": "refused"
+  },
+  {
+   "id": "q08",
+   "label": "a quoted identifier with a doubled quote",
+   "sql": "SELECT 1 AS \"a\"\"b\"",
+   "postgres": "one",
+   "postgresSaid": "1",
+   "check": "sent"
+  },
+  {
+   "id": "q09",
+   "label": "an unterminated literal",
+   "sql": "SELECT 'a; CREATE TABLE hit_q09()",
+   "postgres": "nothing",
+   "postgresSaid": "ERROR:  unterminated quoted string at or near \"'a; CREATE TABLE hit_q09()\"",
+   "check": "refused"
+  },
+  {
+   "id": "q10",
+   "label": "an identifier ending in e before a literal (not an escape string)",
+   "sql": "SELECT 1 AS somee, '\\''; CREATE TABLE hit_q10(); --'",
+   "postgres": "one",
+   "postgresSaid": "1|\\'; CREATE TABLE hit_q10(); --",
+   "check": "refused",
+   "note": "refused, not sure: as q03"
+  },
+  {
+   "id": "d01",
+   "label": "a dollar quote holding a quote, then a second statement",
+   "sql": "SELECT $$ ' $$; CREATE TABLE hit_d01(); --'",
+   "postgres": "second",
+   "postgresSaid": " ' ",
+   "check": "refused"
+  },
+  {
+   "id": "d02",
+   "label": "a tagged dollar quote holding a quote, then a second statement",
+   "sql": "SELECT $a$ ' $a$; CREATE TABLE hit_d02(); --'",
+   "postgres": "second",
+   "postgresSaid": " ' ",
+   "check": "refused"
+  },
+  {
+   "id": "d03",
+   "label": "a dollar quote holding a semicolon",
+   "sql": "SELECT $$a;b$$ AS v",
+   "postgres": "one",
+   "postgresSaid": "a;b",
+   "check": "sent"
+  },
+  {
+   "id": "d04",
+   "label": "a tagged dollar quote holding a semicolon and a quote",
+   "sql": "SELECT $t$ it's; fine $t$",
+   "postgres": "one",
+   "postgresSaid": " it's; fine ",
+   "check": "sent"
+  },
+  {
+   "id": "d05",
+   "label": "an unterminated dollar quote",
+   "sql": "SELECT $$ a; CREATE TABLE hit_d05()",
+   "postgres": "nothing",
+   "postgresSaid": "ERROR:  unterminated dollar-quoted string at or near \"$$ a; CREATE TABLE hit_d05()\"",
+   "check": "refused"
+  },
+  {
+   "id": "d06",
+   "label": "a dollar quote directly after a number",
+   "sql": "SELECT 1$$ ' $$; CREATE TABLE hit_d06(); --'",
+   "postgres": "nothing",
+   "postgresSaid": "ERROR:  syntax error at or near \"$$ ' $$\"",
+   "check": "refused"
+  },
+  {
+   "id": "d07",
+   "label": "a tagged dollar quote directly after a number",
+   "sql": "SELECT 1$a$ ' $a$; CREATE TABLE hit_d07(); --'",
+   "postgres": "nothing",
+   "postgresSaid": "ERROR:  syntax error at or near \"$a$ ' $a$\"",
+   "check": "refused"
+  },
+  {
+   "id": "d08",
+   "label": "a dollar quote directly after a decimal",
+   "sql": "SELECT 1.5$$ ' $$; CREATE TABLE hit_d08(); --'",
+   "postgres": "nothing",
+   "postgresSaid": "ERROR:  syntax error at or near \"$$ ' $$\"",
+   "check": "refused"
+  },
+  {
+   "id": "d09",
+   "label": "an identifier holding dollar signs (no dollar quote)",
+   "sql": "SELECT a$$ FROM (SELECT 1 AS a$$) t",
+   "postgres": "one",
+   "postgresSaid": "1",
+   "check": "sent"
+  },
+  {
+   "id": "p01",
+   "label": "a parameter",
+   "sql": "SELECT $1",
+   "postgres": "nothing",
+   "postgresSaid": "ERROR:  there is no parameter $1",
+   "check": "sent",
+   "note": "sent: PostgreSQL ran nothing (no parameter in a simple query)"
+  },
+  {
+   "id": "p02",
+   "label": "a dollar quote directly after a parameter",
+   "sql": "SELECT $1$$ ' $$; CREATE TABLE hit_p02(); --'",
+   "postgres": "nothing",
+   "postgresSaid": "ERROR:  syntax error at or near \"$$ ' $$\"",
+   "check": "refused"
+  }
+ ]
+}

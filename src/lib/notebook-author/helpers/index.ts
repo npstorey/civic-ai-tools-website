@@ -63,10 +63,10 @@ export function helperForToolName(calledName: string): HelperId | null {
 
 /**
  * Given a list of MCP tool names called during Phase A, return the deduped
- * helper-id list in canonical order, or all three helpers if none mapped
- * (defensive: an empty list means the notebook will have an unused-helpers
- * cell, which is harmless; we never want to ship a notebook missing a
- * helper it actually needs).
+ * helper-id list in canonical order, or `fetch_socrata` alone if none mapped
+ * (defensive: an empty list would leave the helper cell empty; one helper the
+ * notebook does not use is harmless, and we never want to ship a notebook
+ * missing a helper it actually needs).
  */
 export function helpersForToolNames(toolNames: readonly string[]): HelperId[] {
   const set = new Set<HelperId>();

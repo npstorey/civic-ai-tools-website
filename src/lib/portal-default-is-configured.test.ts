@@ -373,7 +373,7 @@ const OUT_OF_SCOPE = /\.test\.(?:ts|tsx|js|jsx|mjs)$/;
 
 /**
  * ONE CAVEAT ON `documentation`, found by driving a notebook rather than by
- * reading the tree (#407). The three Python helpers under
+ * reading the tree (#407). The Python helpers under
  * `lib/notebook-author/helpers/` are embedded VERBATIM into cell 3 of every
  * executed notebook, and an executed notebook is an extension of a signed
  * record package. Text in them is therefore shipped, not developer-facing, and
@@ -381,9 +381,11 @@ const OUT_OF_SCOPE = /\.test\.(?:ts|tsx|js|jsx|mjs)$/;
  * `fetch_socrata.py` had one worked example naming a city in its `portal`
  * docstring; it rode into every instance's signed notebooks and this phase
  * replaced it with the `<portal>` placeholder the same docstring already used
- * one line above. The other two helpers keep their hostnames as
- * `server-endpoint`: those are the URLs the embedded cell actually requests,
- * so the notebook stating them is the notebook stating what it does.
+ * one line above. `fetch_data_commons.py` and `fetch_opencontext.py` keep their
+ * hostnames as `server-endpoint`: those are the URLs the embedded cell actually
+ * requests, so the notebook stating them is the notebook stating what it does.
+ * `fetch_ckan.py` (CKAN-1 P3) names no host: it requests the `server_url` each
+ * call carried.
  */
 interface Hit {
   readonly path: string;

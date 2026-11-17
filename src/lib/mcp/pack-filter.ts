@@ -201,6 +201,28 @@ export function isOneSelectOrWithStatement(sql: unknown): boolean {
 /** Whether `c` can continue an identifier, so a quote or a `$` after it is not the start of a literal. */
 const IDENTIFIER_CHAR = /[A-Za-z0-9_$\u0080-\uffff]/;
 
+/** PostgreSQL 16's whitespace (`scan.l`, `space [ \t\n\r\f]`; a vertical tab is not one there, driven): not
+ *  JavaScript's `\s`, which also holds characters PostgreSQL reads as part of a word (a no-break space). */
+const PG_SPACE = /[ \t\n\r\f]/;
+
+/** Where a `--` comment from `from` ends: at a line feed or a carriage return (`scan.l`, `newline`), else the end. */
+function lineCommentEnd(sql: string, from: number): number {
+  for (let k = from; k < sql.length; k += 1) if (sql[k] === '\n' || sql[k] === '\r') return k;
+  return sql.length;
+}
+
+/**
+ * Whether the word that ends just before `at` is an identifier, which a `$` continues (`scan.l`, `ident_cont`), and
+ * not a number or a parameter, after which PostgreSQL starts a dollar quote. The word is read back to the nearest
+ * character that is neither an identifier character nor a `.`; its last `.`-separated part decides.
+ */
+function wordBeforeIsIdentifier(sql: string, at: number): boolean {
+  let start = at;
+  while (start > 0 && (IDENTIFIER_CHAR.test(sql[start - 1]) || sql[start - 1] === '.')) start -= 1;
+  const part = sql.slice(start, at).split('.').pop() ?? '';
+  return /^[A-Za-z_\u0080-\uffff]/.test(part);
+}
+
 /**
  * One reading of `sql`: `one` when it begins (after whitespace and comments) with SELECT or WITH and holds no second
  * statement, `many` when it does not, `unsure` when a quoted form or a comment does not end. `backslashEscapes` is
@@ -211,10 +233,9 @@ function statementsIn(sql: string, backslashEscapes: boolean): 'one' | 'many' | 
   // Skips whitespace and comments from `i`; false when a block comment does not end.
   const skipSpaceAndComments = (): boolean => {
     for (;;) {
-      while (i < sql.length && /\s/.test(sql[i])) i += 1;
+      while (i < sql.length && PG_SPACE.test(sql[i])) i += 1;
       if (sql.startsWith('--', i)) {
-        const end = sql.indexOf('\n', i);
-        i = end === -1 ? sql.length : end + 1;
+        i = lineCommentEnd(sql, i);
       } else if (sql.startsWith('/*', i)) {
         if (!skipBlockComment()) return false;
       } else {
@@ -254,8 +275,7 @@ function statementsIn(sql: string, backslashEscapes: boolean): 'one' | 'many' | 
     const c = sql[i];
     const before = i > 0 ? sql[i - 1] : '';
     if (c === '-' && sql[i + 1] === '-') {
-      const end = sql.indexOf('\n', i);
-      i = end === -1 ? sql.length : end + 1;
+      i = lineCommentEnd(sql, i);
     } else if (c === '/' && sql[i + 1] === '*') {
       if (!skipBlockComment()) return 'unsure';
     } else if (c === '"') {
@@ -264,6 +284,10 @@ function statementsIn(sql: string, backslashEscapes: boolean): 'one' | 'many' | 
       // An escape string when an `E` (not part of a longer word) opens it; else a plain literal, read both ways.
       const escapeString = /[eE]/.test(before) && !IDENTIFIER_CHAR.test(i > 1 ? sql[i - 2] : '');
       if (!skipQuoted("'", escapeString || backslashEscapes)) return 'unsure';
+    } else if (c === '$' && IDENTIFIER_CHAR.test(before) && !wordBeforeIsIdentifier(sql, i)) {
+      // A `$` directly after a number or a parameter (`1$$`, `1.5$$`, `$1$$`): PostgreSQL starts a dollar quote there
+      // where this check would read a word (fix round 2, F7). Refused: the check is not sure of the reading.
+      return 'unsure';
     } else if (c === '$' && !IDENTIFIER_CHAR.test(before)) {
       // A dollar quote: `$tag$`, the tag empty or an identifier that does not start with a digit (`$1` is a parameter).
       const tag = /^\$(?:[A-Za-z_\u0080-\uffff][A-Za-z0-9_\u0080-\uffff]*)?\$/.exec(sql.slice(i));
