@@ -824,7 +824,7 @@ function renderCkanDatastoreCell(call: PhaseAToolCall, ctx: ToolCellContext): To
     const md = [
       `### Step ${ctx.dataFrameIndex}: Run a SQL statement against ${host}`,
       '',
-      'We run the read-only statement below against the CKAN DataStore of the portal the original call named.',
+      'We run the statement below against the CKAN DataStore of the portal the original call named.',
     ].join('\n');
     const code = [
       `_sql = ${JSON.stringify(sql)}`,

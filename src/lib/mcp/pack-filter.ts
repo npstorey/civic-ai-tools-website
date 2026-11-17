@@ -180,50 +180,109 @@ export class PackFilterRefusedError extends Error {
 }
 
 /**
- * The one read-only statement a CKAN pack's `ckan_datastore_search_sql` sends (ruling D3 = A), as the tool's own
- * `sql` description states it: "it begins, after any whitespace and SQL comments, with SELECT or WITH, and no second
- * statement follows a semicolon outside a quoted literal". Comments are `-- …` to the end of a line and `/* … *\/`;
- * quoted literals are `'…'` and `"…"` identifiers, each with its quote doubled inside. A semicolon followed only by
- * whitespace and comments ends the one statement; anything else after it is a second statement.
+ * Whether `sql` is the one statement a CKAN pack's `ckan_datastore_search_sql` sends (ruling D3 = A), as the tool's
+ * own `sql` description states the rule: "it begins, after any whitespace and SQL comments, with SELECT or WITH, and
+ * no second statement follows a semicolon outside a quoted literal". The check establishes that and nothing more: it
+ * does not establish that the statement only reads (a data-modifying `WITH` and `SELECT … INTO` both pass it).
+ *
+ * The datastore is PostgreSQL, so the statement is read by PostgreSQL's lexical forms (fix round 1, F1): `--` line
+ * comments; block comments, which nest; `"…"` identifiers with `""` inside; escape strings `E'…'`, in which a
+ * backslash escapes the next character; dollar quotes `$$…$$` and `$tag$…$tag$`; and plain `'…'` literals with `''`
+ * inside, read BOTH ways a server may read a backslash in them (as a plain character, and as an escape, the
+ * `standard_conforming_strings = off` reading). It is one statement only when it is one under both readings. A
+ * literal, identifier, dollar quote or comment that does not end, under either reading, is a statement the check
+ * cannot be sure of, and it is refused.
  */
-export function isOneReadOnlyStatement(sql: unknown): boolean {
+export function isOneSelectOrWithStatement(sql: unknown): boolean {
   if (typeof sql !== 'string') return false;
+  return statementsIn(sql, false) === 'one' && statementsIn(sql, true) === 'one';
+}
+
+/** Whether `c` can continue an identifier, so a quote or a `$` after it is not the start of a literal. */
+const IDENTIFIER_CHAR = /[A-Za-z0-9_$\u0080-\uffff]/;
+
+/**
+ * One reading of `sql`: `one` when it begins (after whitespace and comments) with SELECT or WITH and holds no second
+ * statement, `many` when it does not, `unsure` when a quoted form or a comment does not end. `backslashEscapes` is
+ * the reading of a backslash inside a plain `'…'` literal; inside `E'…'` a backslash always escapes.
+ */
+function statementsIn(sql: string, backslashEscapes: boolean): 'one' | 'many' | 'unsure' {
   let i = 0;
-  const skipSpaceAndComments = (): void => {
+  // Skips whitespace and comments from `i`; false when a block comment does not end.
+  const skipSpaceAndComments = (): boolean => {
     for (;;) {
       while (i < sql.length && /\s/.test(sql[i])) i += 1;
       if (sql.startsWith('--', i)) {
         const end = sql.indexOf('\n', i);
         i = end === -1 ? sql.length : end + 1;
       } else if (sql.startsWith('/*', i)) {
-        const end = sql.indexOf('*/', i + 2);
-        i = end === -1 ? sql.length : end + 2;
+        if (!skipBlockComment()) return false;
       } else {
-        return;
+        return true;
       }
     }
   };
-  skipSpaceAndComments();
-  if (!/^(select|with)\b/i.test(sql.slice(i))) return false;
-  for (; i < sql.length; i += 1) {
-    const c = sql[i];
-    if (c === "'" || c === '"') {
-      // A quoted literal or identifier: its quote doubled inside stays inside.
+  // A block comment from `i`, nested as PostgreSQL nests them; false when it does not end.
+  const skipBlockComment = (): boolean => {
+    let depth = 0;
+    while (i < sql.length) {
+      if (sql.startsWith('/*', i)) { depth += 1; i += 2; }
+      else if (sql.startsWith('*/', i)) { depth -= 1; i += 2; if (depth === 0) return true; }
+      else i += 1;
+    }
+    return false;
+  };
+  // A quoted form opened at `i` by `quote`; false when it does not end. `escapes`: a backslash escapes the next character.
+  const skipQuoted = (quote: string, escapes: boolean): boolean => {
+    i += 1;
+    while (i < sql.length) {
+      const c = sql[i];
+      if (escapes && c === '\\') { i += 2; continue; }
+      if (c === quote) {
+        if (sql[i + 1] === quote) { i += 2; continue; }
+        i += 1;
+        return true;
+      }
       i += 1;
-      while (i < sql.length && !(sql[i] === c && sql[i + 1] !== c)) i += sql[i] === c ? 2 : 1;
-    } else if (sql.startsWith('--', i)) {
+    }
+    return false;
+  };
+
+  if (!skipSpaceAndComments()) return 'unsure';
+  if (!/^(select|with)\b/i.test(sql.slice(i))) return 'many';
+  while (i < sql.length) {
+    const c = sql[i];
+    const before = i > 0 ? sql[i - 1] : '';
+    if (c === '-' && sql[i + 1] === '-') {
       const end = sql.indexOf('\n', i);
-      i = end === -1 ? sql.length : end;
-    } else if (sql.startsWith('/*', i)) {
-      const end = sql.indexOf('*/', i + 2);
       i = end === -1 ? sql.length : end + 1;
+    } else if (c === '/' && sql[i + 1] === '*') {
+      if (!skipBlockComment()) return 'unsure';
+    } else if (c === '"') {
+      if (!skipQuoted('"', false)) return 'unsure';
+    } else if (c === "'") {
+      // An escape string when an `E` (not part of a longer word) opens it; else a plain literal, read both ways.
+      const escapeString = /[eE]/.test(before) && !IDENTIFIER_CHAR.test(i > 1 ? sql[i - 2] : '');
+      if (!skipQuoted("'", escapeString || backslashEscapes)) return 'unsure';
+    } else if (c === '$' && !IDENTIFIER_CHAR.test(before)) {
+      // A dollar quote: `$tag$`, the tag empty or an identifier that does not start with a digit (`$1` is a parameter).
+      const tag = /^\$(?:[A-Za-z_\u0080-\uffff][A-Za-z0-9_\u0080-\uffff]*)?\$/.exec(sql.slice(i));
+      if (tag) {
+        const end = sql.indexOf(tag[0], i + tag[0].length);
+        if (end === -1) return 'unsure';
+        i = end + tag[0].length;
+      } else {
+        i += 1;
+      }
     } else if (c === ';') {
       i += 1;
-      skipSpaceAndComments();
-      return i >= sql.length;
+      if (!skipSpaceAndComments()) return 'unsure';
+      return i >= sql.length ? 'one' : 'many';
+    } else {
+      i += 1;
     }
   }
-  return true;
+  return 'one';
 }
 
 /** The CKAN tool whose `sql` argument the check reads. */
@@ -231,24 +290,24 @@ const CKAN_SQL_TOOL = 'ckan_datastore_search_sql';
 
 /**
  * The refusal of a CKAN pack call, before anything is sent, or `null` when it may be sent: a portal outside the
- * pack's (`PackFilterRefusedError`), then, for `ckan_datastore_search_sql`, anything but one read-only statement
- * (`SqlStatementRefusedError`). A Socrata pack's call is refused for its portal, dataset or identifier only.
+ * pack's (`PackFilterRefusedError`), then, for `ckan_datastore_search_sql`, anything but one statement beginning with
+ * SELECT or WITH (`SqlStatementRefusedError`). A Socrata pack's call is refused for its portal, dataset or identifier only.
  */
 export function packCallRefusal(upstream: string, args: Record<string, unknown>, filter: PackFilter): PackFilterRefusedError | SqlStatementRefusedError | null {
   if (packCallOutsideFilter(upstream, args, filter)) return new PackFilterRefusedError(filter);
-  if (filter.kind === 'ckan' && upstream === CKAN_SQL_TOOL && !isOneReadOnlyStatement(args.sql)) return new SqlStatementRefusedError(filter);
+  if (filter.kind === 'ckan' && upstream === CKAN_SQL_TOOL && !isOneSelectOrWithStatement(args.sql)) return new SqlStatementRefusedError(filter);
   return null;
 }
 
 /**
- * A CKAN pack's `ckan_datastore_search_sql` call whose `sql` is not one read-only statement, refused before
+ * A CKAN pack's `ckan_datastore_search_sql` call whose `sql` is not one statement beginning with SELECT or WITH, refused before
  * anything is sent (D3 = A). Its own type, so the model is told the statement was refused, not the portal
  * (`sqlStatementRefusalForLlm`, `../streaming.ts`). Recorded, as the portal's refusal is, with the kind `unknown`.
  */
 export class SqlStatementRefusedError extends Error {
   readonly filter: PackFilter;
   constructor(filter: PackFilter) {
-    super('This call carries a statement other than one read-only SELECT or WITH, so it was not sent.');
+    super('This call carries something other than one statement beginning with SELECT or WITH, so it was not sent.');
     this.name = 'SqlStatementRefusedError';
     this.filter = filter;
   }

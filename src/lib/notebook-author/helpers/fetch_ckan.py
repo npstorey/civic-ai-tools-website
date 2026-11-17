@@ -5,7 +5,7 @@ Re-runs a CKAN pack's datastore call (router 0.11.0, CKAN-1 P3) against the
 `server_url` that call carried, through the portal's own CKAN action API
 (`<server_url>/api/3/action/`). Two query modes: `datastore_search` (a
 resource's records, with optional field-equality filters) and
-`datastore_search_sql` (one read-only SELECT or WITH statement; the resource id
+`datastore_search_sql` (one SELECT or WITH statement; the resource id
 is double-quoted in the FROM clause).
 """
 import json
@@ -27,7 +27,7 @@ def fetch_ckan(
     Use ONE of two modes:
       1. Resource mode: pass `resource_id` and (optionally) `filters`, a dict
          of `{field_name: value}`. `limit` caps row count.
-      2. SQL mode: pass `sql`, one read-only SELECT or WITH statement.
+      2. SQL mode: pass `sql`, one SELECT or WITH statement.
 
     Args:
         server_url: The portal's address, as the original call named it.

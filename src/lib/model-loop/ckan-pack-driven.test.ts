@@ -443,9 +443,9 @@ test('A14: a pack call naming another portal is refused before any request and r
 // --- A15: the SELECT-only check ---------------------------------------------------------------------------------
 
 
-test('A15: ckan_datastore_search_sql sends one read-only statement and refuses the rest before they are sent, as its own sql description states', () => {
+test('A15: ckan_datastore_search_sql sends one statement beginning with SELECT or WITH and refuses the rest before they are sent, as its own sql description states', () => {
   const sentSql = sentCalls(A15).map((s) => s.args?.sql);
-  assert.deepEqual(sentSql, SQL_SENT, `the read-only statements were not sent: ${JSON.stringify(A15.calls.map(failureOf))}`);
+  assert.deepEqual(sentSql, SQL_SENT, `the statements that begin with SELECT or WITH were not sent: ${JSON.stringify(A15.calls.map(failureOf))}`);
   for (const sql of SQL_REFUSED) {
     const record = A15.calls.find((c) => c.args.sql === sql);
     assert.ok(record, `premise: the call with ${sql} is recorded`);

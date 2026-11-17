@@ -988,17 +988,18 @@ export function packFilterRefusalForLlm(filter: Pick<PackFilter, 'source' | 'por
 
 /**
  * What the model is told when the loop core did not send a CKAN pack's
- * `ckan_datastore_search_sql` call because its `sql` is not one read-only
+ * `ckan_datastore_search_sql` call because its `sql` is not one statement
+ * beginning with SELECT or WITH
  * statement (CKAN-1 P3, D3 = A): the statement's twin of
  * `packFilterRefusalForLlm`, recognised by its own type so the model is not told
  * a portal was wrong when a statement was. The rule is the tool's own `sql`
- * description's, word for word, and `isOneReadOnlyStatement` (`./mcp/pack-filter.ts`)
+ * description's, word for word, and `isOneSelectOrWithStatement` (`./mcp/pack-filter.ts`)
  * enforces it. The call was never sent.
  */
 export function sqlStatementRefusalForLlm(filter: Pick<PackFilter, 'source'>): string {
   const { source } = filter;
   return (
-    `${TOOL_FAILURE_PREAMBLE} This tool belongs to ${source}, which sends one read-only statement only: it begins, after any whitespace and SQL comments, with SELECT or WITH, and no second statement follows a semicolon outside a quoted literal. This request's sql was not one such statement, so it was not sent.` +
+    `${TOOL_FAILURE_PREAMBLE} This tool belongs to ${source}, which sends one statement only: it begins, after any whitespace and SQL comments, with SELECT or WITH, and no second statement follows a semicolon outside a quoted literal. This request's sql was not one such statement, so it was not sent.` +
     ` If the question can be answered by one SELECT or WITH statement, make the request again with that statement;` +
     ` if it cannot, tell the user in plain language that the query could not be run, and do not include any raw error text, status codes, server names, or system details.`
   );

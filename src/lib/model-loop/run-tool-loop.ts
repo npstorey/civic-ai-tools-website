@@ -1234,7 +1234,7 @@ export async function runToolLoop(options: ToolLoopOptions): Promise<ToolLoopRes
       // dataset or identifier outside its pack's fixed values is refused
       // before anything is sent, and recorded like any other rejected call.
       // CKAN-1 P3: a CKAN pack's call is refused for its portal (the lowercase hostname) and, for its SQL tool, for
-      // anything but one read-only statement (D3 = A), each with its own type (`packCallRefusal`).
+      // anything but one statement beginning with SELECT or WITH (D3 = A), each with its own type (`packCallRefusal`).
       const packRefusal = pack && !argumentsMalformed ? packCallRefusal(upstreamToolName(name), args, pack) : null;
 
       const operationType = deriveOperationType(name, args);
