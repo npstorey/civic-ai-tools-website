@@ -532,6 +532,16 @@ test('A16: a pack call\'s span states the base\'s source and the pack\'s id, and
   assertPackCallRecorded(packageOf(A16.trace, A16.calls).pkg);
 });
 
+test('F6 (fix round 1): "Where this question went" reads the A16 record\'s answered pack call as reaching Analyze Boston, answered by the CKAN server', async () => {
+  const { whereItWentFromPackage } = await import('../flows/where-it-went.ts');
+  const model = whereItWentFromPackage(packageOf(A16.trace, A16.calls).pkg, null)!;
+  const notReached = Object.fromEntries(model.notReached.map((r) => [r.sourceId, r.whyNotSent]));
+  assert.equal(notReached[PACK.sourceId], undefined, `Analyze Boston reads as not used: ${notReached[PACK.sourceId]}`);
+  const pack = (model.reached as Array<{ kind: string; sourceId?: string; answeredBy?: { sourceId: string } }>).find((r) => r.kind === 'source' && r.sourceId === PACK.sourceId);
+  assert.equal(pack?.answeredBy?.sourceId, BASE.sourceId, 'the pack\'s row does not carry the base whose server answered');
+  assert.ok(notReached.socrata !== undefined, 'premise: a source the run did not use still reads not used');
+});
+
 test('A16 decoy: a trace whose pack call writes the pack\'s id as mcp.source fails A16\'s record assertions by name', () => {
   const trace = JSON.parse(JSON.stringify(A16.trace)) as { resourceSpans: Array<{ scopeSpans: Array<{ spans: Span[] }> }> };
   let rewritten = 0;
