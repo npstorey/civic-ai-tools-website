@@ -66,7 +66,7 @@
  * `analysis.considered`), its two sentences follow the in-loop sentence on the
  * first line. A value that is not well formed reads as absent: no count.
  */
-import { CIVIC_MANIFEST, RETIRED_PACKS } from '@typedstandards/civic-typed-router';
+import { CIVIC_MANIFEST, RETIRED_PACKS, retiredPack } from '@typedstandards/civic-typed-router';
 import routerPackage from '@typedstandards/civic-typed-router/package.json' with { type: 'json' };
 import { readerSourceName } from '../sources/source-name.ts';
 import { CHOOSER_REASONS, ECHO_LIMIT, SOURCE_CHOOSER_CARD, SOURCE_CHOOSER_CONSIDERED, SOURCE_CHOOSER_PACK, SOURCE_CHOOSER_TEXT } from '../sources/copy.ts';
@@ -149,10 +149,15 @@ const LOAD_END_REASON: Readonly<Record<string, string>> = {
   unavailable: CHOOSER_REASONS.unavailable,
 };
 
-/** A source's reader name, by id; for an id the manifest lacks, the alias the record names, else the id. */
+/**
+ * A source's reader name, by id; for an id the manifest lacks, a retired pack's name (router 0.12.0's `retiredPack`;
+ * CKAN-2-WEB P1, G9: a record made under router 0.11.0 names Analyze Boston, `boston-ckan`), else the alias the record
+ * names, else the id.
+ */
 export function sourceReaderName(sourceId: string, alias: string | undefined): string {
   const entry = CIVIC_MANIFEST.find((e) => e.sourceId === sourceId);
-  return entry ? readerSourceName({ sourceId, displayName: entry.displayName }) : alias ?? sourceId;
+  if (entry) return readerSourceName({ sourceId, displayName: entry.displayName });
+  return retiredPack(sourceId)?.displayName ?? alias ?? sourceId;
 }
 
 /**
