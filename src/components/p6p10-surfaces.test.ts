@@ -26,6 +26,7 @@
 import { afterEach, beforeEach, test } from 'node:test';
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
+import * as nodeModule from 'node:module';
 import path from 'node:path';
 import { pathToFileURL } from 'node:url';
 import ts from 'typescript';
@@ -462,4 +463,50 @@ test('#790 item 11: /explore\'s live error carries role="alert", around the refu
   const boxes = boxesReading(page, RL1);
   assert.equal(boxes.length, 1, `premise: one box reads the refusal: ${JSON.stringify(boxes)}`);
   assert.deepEqual(boxes, [{ type: 'div', role: 'alert' }]);
+});
+
+// --- UX-2-FIX P2 fix round 1, F1 (#790; addendum p2-fix1.md): Close on Settings' page mount leaves Settings -----------
+//
+// THE DEFECT. On the page mount (`/settings?source=<id>` loaded directly), Close pushes `/`. The home page then renders
+// while the address still holds `/settings?source=<id>` (the router writes `/` in an insertion effect of the same
+// commit), so `SourceLanding` read the old source and pushed `/settings?source=<id>` again: Close never closed. Measured
+// in Chrome on a local `next start` and by the ORCH on production (planning temp/ux2-fix/p2-prod/).
+//
+// THE SHAPE DRIVEN. The page beneath holds the consent store loaded, as on the site. `SourceLanding` is mounted while
+// the address double reads `/settings?source=socrata`, beside a stand-in for the router's history write: a component
+// rendered before it whose insertion effect sets the address (the harness runs effects in render order). The control
+// is the same drive with the history write leaving `?source=socrata` in the address: it must land, so the drive can.
+
+async function landingAfterHistoryWrite(committed: [string, string]): Promise<string[]> {
+  ANON();
+  answers();
+  await consentWith();
+  const { useSourceConsent } = await load('components/sources/useSourceConsent.ts');
+  function PageBeneath() {
+    useSourceConsent();
+    return null;
+  }
+  await mountPage(h(PageBeneath));
+  sessions.pushed.length = 0;
+  at('/settings', '?source=socrata');
+  // The harness's own hook runtime: a test file's `react` is React itself, whose hooks the harness does not run.
+  const RUNTIME = 'file:///civic-w3-surface-stub/react.mjs';
+  (nodeModule as unknown as { registerHooks(hooks: { resolve(s: string, c: unknown, n: (s: string, c?: unknown) => unknown): unknown }): void }).registerHooks({
+    resolve: (specifier, context, nextResolve) => (specifier === RUNTIME ? { url: RUNTIME, format: 'module', shortCircuit: true } : nextResolve(specifier, context)),
+  });
+  const runtime = (await import(RUNTIME)) as typeof import('react');
+  function RouterHistoryWrite() {
+    runtime.useInsertionEffect(() => { at(committed[0], committed[1]); }, []);
+    return null;
+  }
+  await mountPage(runtime.createElement(runtime.Fragment, null, runtime.createElement(RouterHistoryWrite), h(SourceLanding)));
+  return settingsPushes();
+}
+
+test('fix round 1, F1 (control): the stand-in drive lands when the committed address still names the source', async () => {
+  assert.deepEqual(await landingAfterHistoryWrite(['/', '?source=socrata']), [SETTINGS('socrata')]);
+});
+
+test('fix round 1, F1: Close on the page mount pushes `/`, and the home page rendered before that commit does not land again', async () => {
+  assert.equal((await landingAfterHistoryWrite(['/', ''])).length, 0, `pushes to /settings: ${JSON.stringify(settingsPushes())}`);
 });
