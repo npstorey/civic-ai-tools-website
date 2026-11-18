@@ -1,8 +1,8 @@
 'use client';
 
-import { useCallback, useEffect, useId, useLayoutEffect, useRef, useState, type KeyboardEvent, type ReactNode } from 'react';
+import { useCallback, useEffect, useId, useLayoutEffect, useRef, useState, type CSSProperties, type KeyboardEvent, type ReactNode } from 'react';
 import Link from 'next/link';
-import { horizontalShift } from './menu-placement';
+import { horizontalShift, verticalPlacement } from './menu-placement';
 
 /**
  * P2 · Menu (UX-1 P0; design §2 P2). A trigger and a panel for "choose one
@@ -39,11 +39,12 @@ import { horizontalShift } from './menu-placement';
  *     place (a click, Enter or Space); the arrow keys walk its children with
  *     the rest. Every group closes when the menu closes.
  *
- * Placement is decided once, at open: the upward flip, and, for a menu with a
- * group, a cap on the panel's height at the room on the side it opens (the
- * room above measured to the sticky site header's bottom edge), so a group
- * opened later scrolls inside the panel rather than past the window (UX-2
- * P3b-2, fix 2). A menu with no group carries no cap.
+ * Placement is decided once, at open (`verticalPlacement`): the upward flip,
+ * and a cap on the panel's height at the room on the side it opens (the room
+ * above measured to the sticky site header's bottom edge), so a group opened
+ * later scrolls inside the panel rather than past the window (UX-2 P3b-2,
+ * fix 2), and a long menu with no group stays inside its room too (#790
+ * item 8). The cap is handed to the stylesheet as `--ui-menu-cap`.
  *
  * Every word is the caller's; the caret is a decorative glyph.
  */
@@ -126,10 +127,6 @@ const TRIGGER_CLASS: Record<MenuTriggerSize, string> = {
 };
 
 const ENABLED_ITEM_SELECTOR = '[role="menuitem"]:not([aria-disabled="true"]),[role="menuitemradio"]:not([aria-disabled="true"])';
-/** The panel's tallest estimate before it renders, for the flip decision: 60vh or the items. */
-const ITEM_HEIGHT_ESTIMATE = 40;
-/** The least a capped panel is given, so a cramped window still shows a few rows (fix 2). */
-const MIN_CAP = 120;
 
 function present(node: ReactNode): boolean {
   return node !== undefined && node !== null && node !== false && node !== '';
@@ -154,7 +151,11 @@ export function Menu({
   const [above, setAbove] = useState(false);
   /** The group open inline, by its id (UX-2 P3b-2); none when the menu closes. */
   const [expanded, setExpanded] = useState<string | null>(null);
-  /** The panel's height cap, set at open for a menu with a group (fix 2); null for every other menu. */
+  /**
+   * The panel's height cap in px, set at open for every menu (fix 2; #790 item 8), null before the first open. It
+   * reaches the panel as `--ui-menu-cap`, never as an inline `max-height`, which would override the stylesheet's own
+   * caps (the directory's filters keep 280 px); the stylesheet takes the least of its cap and this one.
+   */
   const [cap, setCap] = useState<number | null>(null);
   const isOpen = open ?? ownOpen;
   const baseId = useId();
@@ -212,17 +213,10 @@ export function Menu({
   const openFromTrigger = () => {
     const button = triggerRef.current;
     if (button && typeof window !== 'undefined') {
-      const rect = button.getBoundingClientRect();
-      const below = window.innerHeight - rect.bottom;
-      const wanted = Math.min(window.innerHeight * 0.6, items.length * ITEM_HEIGHT_ESTIMATE + 16);
-      const up = below < wanted && rect.top > below;
-      setAbove(up);
-      if (items.some((item) => item.children !== undefined && item.children.length > 0)) {
-        // The room on the chosen side, less the panel's 4 px offset and an 8 px margin; above, to the sticky header.
-        const header = document.querySelector('header')?.getBoundingClientRect().bottom ?? 0;
-        const room = up ? rect.top - Math.max(0, header) - 12 : below - 12;
-        setCap(Math.max(MIN_CAP, Math.floor(room)));
-      }
+      const header = document.querySelector('header')?.getBoundingClientRect().bottom ?? 0;
+      const placed = verticalPlacement(button.getBoundingClientRect(), window.innerHeight, header, items.length);
+      setAbove(placed.above);
+      setCap(placed.cap);
     }
     setOpen(true);
   };
@@ -399,7 +393,7 @@ export function Menu({
           role="menu"
           aria-labelledby={triggerId}
           className={panelClass}
-          style={cap === null ? undefined : { maxHeight: `min(60vh, ${cap}px)` }}
+          style={cap === null ? undefined : ({ '--ui-menu-cap': `${cap}px` } as CSSProperties)}
           onKeyDown={onPanelKeyDown}
         >
           {items.flatMap((item) => renderItem(item, false))}

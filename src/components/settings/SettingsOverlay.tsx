@@ -125,6 +125,10 @@ function DataSources() {
       landed.row.removeAttribute('aria-label');
     }
     if (targetSource === null || broughtIntoView.current === targetSource) return;
+    // #790 item 3: a reopened overlay renders first while the page's address still holds the source of an earlier
+    // landing; the router writes `/settings` into the address in the same commit, before this effect runs. So the
+    // landing reads the address again here and lands only when it still names the source the render read.
+    if (readAddressSource() !== targetSource) return;
     // A quoted attribute value: only a backslash and a double quote need escaping (the id is one the statement lists).
     const id = targetSource.replace(/["\\]/g, '\\$&');
     const row = document.querySelector<HTMLElement>(`ul[data-target-source="${id}"] > li[data-source="${id}"]`);

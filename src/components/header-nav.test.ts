@@ -789,3 +789,44 @@ test('UX-2 P4b criterion 2: the drawer carries "Settings" signed in, and not sig
   }
   assert.deepEqual(read, { in: 1, out: 0 }, `the drawer's "Settings" links, signed in and out: ${JSON.stringify(read)}`);
 });
+
+// --- UX-2-FIX P2, item 1 (#790): Ask follows the cross-host session probe ----------------------------
+//
+// THE RULE. On a split topology with no local session, the Header cannot tell from its own cookies whether the reader
+// is signed in on the app host, so Ask links `/`. The cross-host probe (`useCrossHostSession`, which the sign-in
+// control and the directory's row action already read) answers that: when it finds a session on the app host, Ask
+// links `askHref`, the app origin's `/ask`. Pending, failed, or finding none, Ask links `/` as before.
+//
+// WHAT MAKES IT ABLE TO FAIL. Each case checks first that the probe was sent, so a Header that never asked reads red as
+// a premise, not green. The pending case holds its answer until the read is made, and is released before the next case
+// so the shared request in flight is not reused.
+
+test('#790 item 1: split topology, no local session: Ask links askHref when the probe finds a session on the app host; `/` while pending, after a failure, or when it finds none', async () => {
+  const env = CONFIGS.split.env;
+  const askHref = resolveAskHref(env);
+  assert.equal(askHref, `https://${APP_HOST}/ask`, 'premise: askHref is the app origin\'s /ask');
+  let release: (response: Response) => void = () => {};
+  const cases: Array<[string, () => Promise<Response> | Response]> = [
+    ['a session on the app host', () => Response.json({ signedIn: true })],
+    ['no session on the app host', () => Response.json({ signedIn: false })],
+    ['the probe failed', () => Promise.reject(new TypeError('fixture network failure'))],
+    ['the probe pending', () => new Promise<Response>((resolve) => { release = resolve; })],
+  ];
+  const read: Record<string, { probed: boolean; ask: string[] }> = {};
+  for (const [name, answer] of cases) {
+    setSession('out');
+    const fetched = installFetch(PAGE_ORIGIN, { '/api/session-status': answer });
+    const s = await mount(h(Header, headerProps(env)));
+    const ask = s.elements().filter((el) => el.type === 'a' && norm(readText(el)) === 'Ask').map((el) => String(el.props.href));
+    read[name] = { probed: fetched.sent.some((r) => r.path === '/api/session-status'), ask: [...new Set(ask)] };
+    s.unmount();
+    release(Response.json({ signedIn: false }));
+    await new Promise((resolve) => setTimeout(resolve, 10));
+  }
+  assert.deepEqual(read, {
+    'a session on the app host': { probed: true, ask: [askHref] },
+    'no session on the app host': { probed: true, ask: ['/'] },
+    'the probe failed': { probed: true, ask: ['/'] },
+    'the probe pending': { probed: true, ask: ['/'] },
+  }, `Ask's href by probe answer: ${JSON.stringify(read, null, 1)}`);
+});

@@ -310,6 +310,7 @@ export default function QuerySurface({
               seat, #729 6838758130). */}
           {streaming.error && (
             <div
+              role="alert"
               style={{
                 marginBottom: '32px',
                 padding: '16px 24px',

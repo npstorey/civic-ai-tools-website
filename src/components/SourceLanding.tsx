@@ -37,6 +37,11 @@ export default function SourceLanding(): null {
   const landed = useRef(false);
   useEffect(() => {
     if (!offered || source === null || landed.current) return;
+    // #790 (P2 fix round 1, F1): a page rendered during a client navigation reads the address before the router has
+    // written the new one (it does so in an insertion effect of the same commit, before this effect runs). Closing
+    // Settings' page mount pushes `/`, and the home page first rendered at `/settings?source=<id>`, so it landed again
+    // and Close never closed. Land only when the committed address still names the source the render read.
+    if (readAddressSource() !== source) return;
     landed.current = true;
     router.push(`${SETTINGS_HREF}?source=${encodeURIComponent(source)}`);
   }, [offered, source, router]);

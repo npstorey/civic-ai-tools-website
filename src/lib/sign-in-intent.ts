@@ -61,3 +61,39 @@ export function shouldAutoSignIn(opts: {
 }): boolean {
   return opts.hasIntent && opts.signedOut && opts.optionCount === 1;
 }
+
+// A sign-in started on `/ask?source=<id>` returns to `/ask?source=<id>` (UX-2-FIX P2, #790 item 2).
+//
+// "Ask with this source" lands a signed-out reader on `/ask?source=<id>`, where the page renders the sign-in panel;
+// signed in, the same address opens Settings at that source's row (`SourceLanding`). So a sign-in started there keeps
+// the source: the panel's `callbackUrl` carries it, and a Header sign-in link clicked there carries it to the panel it
+// opens. With no source, or an empty one, nothing changes: the `callbackUrl` is `/ask`, and the link opens the panel as
+// before.
+
+/** Where a sign-in on `/ask` returns. Always a same-origin path under `/ask`: the source is URL-encoded into the query. */
+export function askCallbackUrl(source: string | string[] | undefined): string {
+  const value = Array.isArray(source) ? source[0] : source;
+  if (value === undefined || value.trim() === '') return '/ask';
+  return `/ask?source=${encodeURIComponent(value)}`;
+}
+
+/**
+ * A sign-in link's `href` as clicked on `pageHref`: when the page is `/ask` with a non-empty `source` and the link
+ * opens `/ask` (the panel, on this host or the app host) without one, the same address with the page's `source` added;
+ * otherwise `href` unchanged.
+ */
+export function carryAskSource(href: string, pageHref: string): string {
+  let page: URL;
+  let target: URL;
+  try {
+    page = new URL(pageHref);
+    target = new URL(href, page);
+  } catch {
+    return href;
+  }
+  const source = page.searchParams.get('source');
+  if (page.pathname !== '/ask' || source === null || source.trim() === '') return href;
+  if (target.pathname !== '/ask' || target.searchParams.has('source')) return href;
+  target.searchParams.set('source', source);
+  return target.href;
+}

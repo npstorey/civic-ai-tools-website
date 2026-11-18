@@ -17,6 +17,7 @@ import type { SessionAffordanceTarget } from '@/lib/allowed-origins';
 import { Menu, type MenuItem } from '@/components/ui/Menu';
 import { Sheet } from '@/components/ui/Sheet';
 import { SETTINGS_HREF } from '@/lib/sources/copy';
+import { carryAskSource } from '@/lib/sign-in-intent';
 
 const NAV_LINK_STYLE: React.CSSProperties = {
   color: 'var(--text-secondary)',
@@ -45,6 +46,17 @@ const DRAWER_GROUP_LABEL_STYLE: React.CSSProperties = {
 };
 
 const ARROW_STYLE: React.CSSProperties = { fontSize: '11px', marginLeft: '4px', color: 'var(--text-muted)' };
+
+/**
+ * A sign-in link clicked on `/ask?source=<id>` carries the source to the panel it opens, so the sign-in that panel
+ * starts returns to `/ask?source=<id>` (#790 item 2). The link's `href` is changed as the click is handled, before the
+ * browser follows it, so the markup is the same on every page and render; anywhere else it is left as rendered.
+ */
+function carrySourceOnClick(event: React.MouseEvent<HTMLAnchorElement>): void {
+  const anchor = event.currentTarget;
+  const next = carryAskSource(anchor.href, window.location.href);
+  if (next !== anchor.href) anchor.href = next;
+}
 
 interface NavLink {
   id: string;
@@ -108,8 +120,9 @@ function renderLink(entry: Extract<NavEntry, { kind: 'link' }>, style: React.CSS
  * - `askHref` (UX-1 P3a; was `AppChrome`'s, #210) — `resolveAskHref`: `/ask`,
  *   or the app origin's `/ask` on a split-host deployment, because `/ask` is
  *   app-private and this header renders on the marketing host too. Signed
- *   out on a split-host deployment, Ask links `/` instead: the header cannot
- *   tell which host it is on, and `/` is right on both — the marketing host
+ *   out on a split-host deployment, Ask links `/` instead (unless the
+ *   cross-host probe finds a session on the app host, #790 item 1): the
+ *   header cannot tell which host it is on, and `/` is right on both — the marketing host
  *   serves its own query surface there, and the app host sends `/` to
  *   `/ask` (`APP_ROOT_ACTION`, src/lib/host-routing.ts).
  * - `publicSiteHref` (UX-1 P3a; was `AppChrome`'s exit link) —
@@ -200,8 +213,11 @@ export default function Header({
   const signInAffordance = resolveSignInAffordance(signInOptions);
 
   // A non-empty marketing origin means a split-host deployment. Signed out
-  // there, Ask is `/` (see `askHref` above).
-  const askLink = !session && marketingOrigin ? '/' : askHref;
+  // there, Ask is `/` (see `askHref` above), unless the cross-host probe
+  // found a session on the app host (#790 item 1): then Ask is `askHref`, as
+  // the directory's row action already reads it. Pending, failed or finding
+  // none, the probe reads `false` and Ask stays `/`.
+  const askLink = !session && marketingOrigin && !crossHostSignedIn ? '/' : askHref;
   // The page being shown (UX-2 P3b-1, #728 line 13), read from the path, never from a link's href: signed out on a
   // split topology Ask links to `/`, and the home page is not Ask's page.
   const pathname = usePathname();
@@ -380,6 +396,7 @@ export default function Header({
                inactive label is hidden but keeps contributing its width. */
             <a
               href={crossHostSignedIn ? sessionProbe.openAppHref : signInHref}
+              onClick={carrySourceOnClick}
               className="ui-button ui-button-primary"
               style={{
                 padding: '8px 16px',
@@ -416,6 +433,7 @@ export default function Header({
                providers the instance actually configured. */
             <a
               href={signInHref}
+              onClick={carrySourceOnClick}
               className="ui-button ui-button-primary"
               style={{ padding: '8px 16px', fontSize: '14px', textDecoration: 'none' }}
             >
@@ -432,6 +450,7 @@ export default function Header({
           ) : signInAffordance.kind === 'panel' ? (
             <a
               href={signInAffordance.href}
+              onClick={carrySourceOnClick}
               className="ui-button ui-button-primary"
               style={{ padding: '8px 16px', fontSize: '14px', textDecoration: 'none' }}
             >
