@@ -48,7 +48,7 @@ import { recipientWhere, roleLabel } from '../sources/source-name.ts';
 import { WHERE_IT_WENT_REASONS } from '../sources/copy.ts';
 import { SEARCH_OPERATION } from './search-words.ts';
 import { NOTEBOOK_EXTENSION_KEY, readNotebookProvenanceOfNotebook } from '../notebook-author/notebook-provenance-reading.ts';
-import { CIVIC_MANIFEST, civicRouter } from '@typedstandards/civic-typed-router';
+import { CIVIC_MANIFEST, civicRouter, retiredPack } from '@typedstandards/civic-typed-router';
 import { aliasOf, attributesOf, chooserFromPackage, NOT_RECEIVED, sourceReaderName, spansOfTrace, type SourceChooser } from './source-chooser.ts';
 
 // --- The model ------------------------------------------------------------------------
@@ -245,9 +245,14 @@ function whyNotSentFor(offered: OfferedSource, lastLoad: string | undefined, not
  */
 export const PACK_CALL_COUNTED_UNDER: 'pack' | 'base' | 'both' = 'pack';
 
-/** The pack a manifest id names (`mcp.pack_id`), by `sourceId`, or `undefined` for an id the manifest lacks. */
+/**
+ * The pack a manifest id names (`mcp.pack_id`), by `sourceId`, or `undefined` for an id no pack has. A pack a router
+ * release retired is read from the router's `retiredPack` (CKAN-2-WEB P1, W7): a record made while Analyze Boston was
+ * offered names it `boston-ckan@https://data.boston.gov`, which no manifest holds since router 0.12.0.
+ */
 function packSourceOfId(packId: string | undefined): string | undefined {
-  return packId === undefined ? undefined : CIVIC_MANIFEST.find((entry) => entry.base !== undefined && entry.id === packId)?.sourceId;
+  if (packId === undefined) return undefined;
+  return CIVIC_MANIFEST.find((entry) => entry.base !== undefined && entry.id === packId)?.sourceId ?? retiredPack(packId)?.sourceId;
 }
 
 /**

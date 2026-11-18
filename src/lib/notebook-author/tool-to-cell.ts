@@ -11,7 +11,7 @@
  */
 import type { NotebookCell } from './cells.ts';
 import { codeCell, markdownCell } from './cells.ts';
-import { CIVIC_MANIFEST } from '@typedstandards/civic-typed-router';
+import { CIVIC_MANIFEST, RETIRED_PACKS } from '@typedstandards/civic-typed-router';
 import { upstreamToolName } from '../mcp/operation-types.ts';
 import { FIND_SOURCE_WORDS } from '../sources/copy.ts';
 import { SEARCH_OPERATION, searchNotebookLine, searchQueryOf } from '../flows/search-words.ts';
@@ -1308,7 +1308,8 @@ function loadNoteLines(loads: readonly PhaseAToolCall[]): string[] {
   ];
   for (const load of loads) {
     const alias = typeof load.args.alias === 'string' ? load.args.alias : undefined;
-    const known = alias !== undefined && CIVIC_MANIFEST.some((entry) => entry.alias === alias);
+    // A retired pack's alias (CKAN-2-WEB P1, W12) named a source of the directory when the record was made.
+    const known = alias !== undefined && (CIVIC_MANIFEST.some((entry) => entry.alias === alias) || RETIRED_PACKS.some((pack) => pack.alias === alias));
     if (!known) {
       lines.push('- a request that named no source of the directory: nothing loaded');
       continue;

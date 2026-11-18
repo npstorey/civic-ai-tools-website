@@ -42,6 +42,7 @@ import {
   type SourceSelection,
 } from '@typedstandards/civic-typed-router';
 import { AmbiguousToolNameError } from './tool-name-refusal.ts';
+import { oldExposedNameServer } from './operation-types.ts';
 import { getDefaultPortal, isPortalLocked } from '../site-config.ts';
 
 export { AmbiguousToolNameError } from './tool-name-refusal.ts';
@@ -646,6 +647,16 @@ function isRoutable(registry: McpRegistry, sourceId: string): boolean {
  * reads routability only to choose the refusal.
  */
 function resolveToolCall(registry: McpRegistry, toolName: string, map: DispatchMap): ToolCallResolution {
+  // An old or retired exposed name (CKAN-2-WEB P1, W11; D7 = A): Boston OpenContext's tools under its alias before
+  // router 0.11.0, or the retired Analyze Boston pack's. No source has the name now, so it is never routed: refused
+  // `not-configured` naming the variable of the source whose server would answer it while that variable is unset,
+  // else `not-offered`. Read only when the map does not hold the name.
+  const oldServer = map.has(toolName) ? undefined : oldExposedNameServer(toolName);
+  if (oldServer !== undefined) {
+    if (isRoutable(registry, oldServer)) return { ok: false, refusal: 'not-offered' };
+    const variable = CIVIC_MANIFEST.find((entry) => entry.sourceId === oldServer)?.configuration.addressVariable;
+    return variable ? { ok: false, refusal: 'not-configured', variable } : { ok: false, refusal: 'unknown' };
+  }
   const resolution = resolveCalledName(map, registry.offeredSources, toolName);
   if (resolution.ok) {
     const sourceId = Object.hasOwn(registry.toolIndex, resolution.exposedName)
