@@ -62,9 +62,15 @@ import { SIGN_IN_INTENT_PARAM } from '@/lib/sign-in-intent';
 export default function AskSignInPanel({
   options,
   autoSignIn = false,
+  callbackUrl = '/ask',
 }: {
   options: SignInOption[];
   autoSignIn?: boolean;
+  /**
+   * Where the sign-in returns (#790 item 2): `/ask`, or `/ask?source=<id>` when the page was opened for a source, so
+   * the signed-in page lands at it. Built by the server page (`askCallbackUrl`), a same-origin path.
+   */
+  callbackUrl?: string;
 }) {
   const [autoSigningIn, setAutoSigningIn] = useState(autoSignIn);
   const firedRef = useRef(false);
@@ -82,8 +88,8 @@ export default function AskSignInPanel({
       window.history.replaceState(null, '', `${url.pathname}${url.search}${url.hash}`);
     }
 
-    signIn(option.id, { callbackUrl: '/ask' }).catch(() => setAutoSigningIn(false));
-  }, [autoSignIn, options]);
+    signIn(option.id, { callbackUrl }).catch(() => setAutoSigningIn(false));
+  }, [autoSignIn, options, callbackUrl]);
 
   if (autoSigningIn && options.length > 0) {
     return (
@@ -124,7 +130,7 @@ export default function AskSignInPanel({
             {options.map((option) => (
               <button
                 key={option.id}
-                onClick={() => signIn(option.id, { callbackUrl: '/ask' })}
+                onClick={() => signIn(option.id, { callbackUrl })}
                 className="ui-button ui-button-primary"
                 style={{ padding: '10px 18px', fontSize: '14px' }}
               >

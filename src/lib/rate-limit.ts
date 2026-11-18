@@ -168,11 +168,13 @@ function getRateLimitKey(identifier: string): string {
   return `rate:${segment}:${date}`;
 }
 
+/**
+ * When the count resets: the UTC midnight after today's UTC date, the date the key carries (`getToday()`), on a host
+ * in any time zone (#790 U1; it used to be the host's local midnight, which is that time only on a UTC host).
+ */
 function getResetTime(): string {
-  const tomorrow = new Date();
-  tomorrow.setDate(tomorrow.getDate() + 1);
-  tomorrow.setHours(0, 0, 0, 0);
-  return tomorrow.toISOString();
+  const now = new Date();
+  return new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate() + 1)).toISOString();
 }
 
 export interface RateLimitInfo {

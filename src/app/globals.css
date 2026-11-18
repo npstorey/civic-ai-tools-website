@@ -714,7 +714,10 @@ footer a:visited {
   z-index: 20;
   min-width: 220px;
   max-width: 360px;
-  max-height: 60vh;
+  /* #790 item 8: `--ui-menu-cap` is the room on the side the panel opens into, set by Menu at open (to the sticky
+     header's bottom above, the window's bottom below). A rule with its own cap takes the least of the two (the
+     directory's filters, below). */
+  max-height: min(60vh, var(--ui-menu-cap, 60vh));
   overflow-y: auto;
   padding: 4px 0;
   background-color: var(--white);
@@ -1671,7 +1674,7 @@ footer a:visited {
    Menu's panel is up to 60vh and is capped to the room only for a menu with a group, so a filter opened mid-screen ran
    past the window. */
 .directory-filter .ui-menu-panel {
-  max-height: min(60vh, 280px);
+  max-height: min(60vh, 280px, var(--ui-menu-cap, 280px));
 }
 
 /* Fix round 2, A3 (b) (#729, OA-942): the Settings row "Ask with this source" landed on carries the mark the directory

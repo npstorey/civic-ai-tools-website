@@ -105,12 +105,17 @@ export default function NotebookOutput({ state, prompt, model, portal, onRetry }
             display: 'flex',
             flexDirection: 'column',
             gap: '8px',
+            // #790 item 10: the block takes its container's width, up to 600 px, rather than its content's: a
+            // traceback line longer than a narrow screen scrolls inside the <pre> below instead of widening the block
+            // and the page (413 px at 390 before).
+            width: '100%',
+            boxSizing: 'border-box',
             maxWidth: '600px',
             margin: '0 auto',
           }}
         >
           {!limitRefusal && <strong>Couldn&apos;t generate a reproducible notebook.</strong>}
-          <span style={{ fontSize: '13px' }}>{state.error}</span>
+          <span style={{ fontSize: '13px', overflowWrap: 'anywhere' }}>{state.error}</span>
           {/* #516: the notebook's own traceback, the reader's detail, under
               the message and with its reference. Sent only for a notebook's
               own failure, with its credentials removed (see the hook). */}

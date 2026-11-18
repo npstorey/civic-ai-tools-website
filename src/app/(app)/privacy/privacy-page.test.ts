@@ -577,6 +577,11 @@ const CHOICE_PARAMS = new Set([
   'tab', 'domain', 'level', 'transport', 'official', 'platform', 'sort', 'country', 'govLevel', 'ownerType', 'page', 'pageSize',
   // `/ask`: the sign-in intent flag another host sets (`SIGN_IN_INTENT_PARAM`).
   'signin',
+  // `/` and `/ask`: the source a directory row's "Ask with this source" opens Settings at (a source id from the
+  // directory's own control, never typed). Read since UX-2 P6 + P10 by `SourceLanding` through
+  // `new URLSearchParams(window.location.search)`, which the scan below does not see; seen since #790 item 2, whose
+  // sign-in callback and Header links read it through `searchParams`.
+  'source',
   // `/dev/notebook-preview`: a development page that 404s in production.
   'state',
 ]);

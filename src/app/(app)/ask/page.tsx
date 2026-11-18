@@ -5,6 +5,7 @@ import { buildProviders } from '@/lib/auth-providers';
 import { toSignInOptions } from '@/lib/auth-provider-options';
 import {
   SIGN_IN_INTENT_PARAM,
+  askCallbackUrl,
   readSignInIntent,
   shouldAutoSignIn,
 } from '@/lib/sign-in-intent';
@@ -122,7 +123,8 @@ export default async function AskPage({ searchParams }: AskPageProps) {
           get an answer built from live public data, and publish it as a
           signed analysis anyone can verify independently.
         </p>
-        <AskSignInPanel options={options} autoSignIn={autoSignIn} />
+        {/* #790 item 2: a sign-in started at `?source=<id>` returns to it, so the signed-in page lands at that source. */}
+        <AskSignInPanel options={options} autoSignIn={autoSignIn} callbackUrl={askCallbackUrl(params.source)} />
       </div>
     );
   }

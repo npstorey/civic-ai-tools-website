@@ -572,7 +572,7 @@ export default function TraceControls({
 
           {/* Error display */}
           {liveStatus === 'error' && liveError && (
-            <div style={{
+            <div role="alert" style={{
               padding: '10px 14px',
               background: 'rgba(236, 19, 30, 0.06)',
               border: '1px solid rgba(236, 19, 30, 0.2)',

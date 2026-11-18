@@ -90,9 +90,9 @@ test('#790 item 8: the cap is floored at MIN_CAP in a cramped window', () => {
   assert.deepEqual(verticalPlacement({ top: 100, bottom: 140 }, 260, HEADER, 30), { above: false, cap: MIN_CAP });
 });
 
-test('#790 item 8 (guard): a menu with a group is capped as before', () => {
-  assert.deepEqual(verticalPlacement({ top: 600, bottom: 640 }, VH, HEADER, 30, true), { above: true, cap: 600 - HEADER - 12 });
-  assert.deepEqual(verticalPlacement({ top: 100, bottom: 140 }, VH, HEADER, 3, true), { above: false, cap: VH - 140 - 12 });
+test('#790 item 8 (guard): the cap is the one a menu with a group had before (fix 2), for every menu', () => {
+  assert.deepEqual(verticalPlacement({ top: 600, bottom: 640 }, VH, HEADER, 30), { above: true, cap: 600 - HEADER - 12 });
+  assert.deepEqual(verticalPlacement({ top: 100, bottom: 140 }, VH, HEADER, 3), { above: false, cap: VH - 140 - 12 });
 });
 
 /** The declarations (name -> value) of every rule naming `selector` exactly, comments removed. */

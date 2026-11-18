@@ -1,6 +1,6 @@
 'use client';
 
-import { useCallback, useEffect, useId, useLayoutEffect, useRef, useState, type KeyboardEvent, type ReactNode } from 'react';
+import { useCallback, useEffect, useId, useLayoutEffect, useRef, useState, type CSSProperties, type KeyboardEvent, type ReactNode } from 'react';
 import Link from 'next/link';
 import { horizontalShift, verticalPlacement } from './menu-placement';
 
@@ -39,11 +39,12 @@ import { horizontalShift, verticalPlacement } from './menu-placement';
  *     place (a click, Enter or Space); the arrow keys walk its children with
  *     the rest. Every group closes when the menu closes.
  *
- * Placement is decided once, at open: the upward flip, and, for a menu with a
- * group, a cap on the panel's height at the room on the side it opens (the
- * room above measured to the sticky site header's bottom edge), so a group
- * opened later scrolls inside the panel rather than past the window (UX-2
- * P3b-2, fix 2). A menu with no group carries no cap.
+ * Placement is decided once, at open (`verticalPlacement`): the upward flip,
+ * and a cap on the panel's height at the room on the side it opens (the room
+ * above measured to the sticky site header's bottom edge), so a group opened
+ * later scrolls inside the panel rather than past the window (UX-2 P3b-2,
+ * fix 2), and a long menu with no group stays inside its room too (#790
+ * item 8). The cap is handed to the stylesheet as `--ui-menu-cap`.
  *
  * Every word is the caller's; the caret is a decorative glyph.
  */
@@ -150,7 +151,11 @@ export function Menu({
   const [above, setAbove] = useState(false);
   /** The group open inline, by its id (UX-2 P3b-2); none when the menu closes. */
   const [expanded, setExpanded] = useState<string | null>(null);
-  /** The panel's height cap, set at open for a menu with a group (fix 2); null for every other menu. */
+  /**
+   * The panel's height cap in px, set at open for every menu (fix 2; #790 item 8), null before the first open. It
+   * reaches the panel as `--ui-menu-cap`, never as an inline `max-height`, which would override the stylesheet's own
+   * caps (the directory's filters keep 280 px); the stylesheet takes the least of its cap and this one.
+   */
   const [cap, setCap] = useState<number | null>(null);
   const isOpen = open ?? ownOpen;
   const baseId = useId();
@@ -209,10 +214,9 @@ export function Menu({
     const button = triggerRef.current;
     if (button && typeof window !== 'undefined') {
       const header = document.querySelector('header')?.getBoundingClientRect().bottom ?? 0;
-      const grouped = items.some((item) => item.children !== undefined && item.children.length > 0);
-      const placed = verticalPlacement(button.getBoundingClientRect(), window.innerHeight, header, items.length, grouped);
+      const placed = verticalPlacement(button.getBoundingClientRect(), window.innerHeight, header, items.length);
       setAbove(placed.above);
-      if (placed.cap !== null) setCap(placed.cap);
+      setCap(placed.cap);
     }
     setOpen(true);
   };
@@ -389,7 +393,7 @@ export function Menu({
           role="menu"
           aria-labelledby={triggerId}
           className={panelClass}
-          style={cap === null ? undefined : { maxHeight: `min(60vh, ${cap}px)` }}
+          style={cap === null ? undefined : ({ '--ui-menu-cap': `${cap}px` } as CSSProperties)}
           onKeyDown={onPanelKeyDown}
         >
           {items.flatMap((item) => renderItem(item, false))}
