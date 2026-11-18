@@ -310,7 +310,26 @@ function statementsIn(sql: string, backslashEscapes: boolean): 'one' | 'many' | 
 }
 
 /** The CKAN tool whose `sql` argument the check reads. */
-const CKAN_SQL_TOOL = 'ckan_datastore_search_sql';
+export const CKAN_SQL_TOOL = 'ckan_datastore_search_sql';
+
+/** The name the model is told a refused statement's source by: the CKAN server's, as a reader reads it. */
+const CKAN_SERVER_NAME = (() => {
+  const entry = CIVIC_MANIFEST.find((candidate) => candidate.sourceId === 'ckan-server');
+  return readerSourceName({ sourceId: 'ckan-server', displayName: entry?.displayName });
+})();
+
+/**
+ * The refusal of a call to a server's own tool, before anything is sent, or `null` when it may be sent (CKAN-2-WEB
+ * P1, W3): since router 0.12.0 `ckan_datastore_search_sql` is the hosted CKAN server's own tool, offered as
+ * `ckan__ckan_datastore_search_sql` with no pack, and its `sql` must be one statement beginning with SELECT or WITH
+ * (`isOneSelectOrWithStatement`), the rule its `sql` description states. Keyed on the UPSTREAM name, so either
+ * spelling is checked; no other manifest source declares the name. The check's named limit stands (website issue
+ * 789 item 4): it does not establish that a statement only reads.
+ */
+export function serverCallRefusal(upstream: string, args: Record<string, unknown>): SqlStatementRefusedError | null {
+  if (upstream === CKAN_SQL_TOOL && !isOneSelectOrWithStatement(args.sql)) return new SqlStatementRefusedError({ source: CKAN_SERVER_NAME });
+  return null;
+}
 
 /**
  * The refusal of a CKAN pack call, before anything is sent, or `null` when it may be sent: a portal outside the
@@ -329,8 +348,8 @@ export function packCallRefusal(upstream: string, args: Record<string, unknown>,
  * (`sqlStatementRefusalForLlm`, `../streaming.ts`). Recorded, as the portal's refusal is, with the kind `unknown`.
  */
 export class SqlStatementRefusedError extends Error {
-  readonly filter: PackFilter;
-  constructor(filter: PackFilter) {
+  readonly filter: Pick<PackFilter, 'source'>;
+  constructor(filter: Pick<PackFilter, 'source'>) {
     super('This call carries something other than one statement beginning with SELECT or WITH, so it was not sent.');
     this.name = 'SqlStatementRefusedError';
     this.filter = filter;

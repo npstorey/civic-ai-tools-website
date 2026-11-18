@@ -56,7 +56,7 @@ import { hash as traceHash } from '../evidence/trace.ts';
 import { deriveOperationType, isTool, toolSpanNames, upstreamToolName } from '../mcp/operation-types.ts';
 import type { ToolFailureKind } from '../notebook-author/tool-to-cell.ts';
 import { PortalLockedCallError, portalOutsideLock } from '../portal-lock.ts';
-import { injectPackFilter, packCallRefusal, packFilterOf } from '../mcp/pack-filter.ts';
+import { injectPackFilter, packCallRefusal, packFilterOf, serverCallRefusal } from '../mcp/pack-filter.ts';
 import { BaseChangedError, createBaseCheck, type BaseCheck, type BaseReader } from '../mcp/base-check.ts';
 
 /** The base check's read: the client's `tools/list` read, loaded when a pack call first needs it. */
@@ -1237,6 +1237,11 @@ export async function runToolLoop(options: ToolLoopOptions): Promise<ToolLoopRes
       // CKAN-1 P3: a CKAN pack's call is refused for its portal (the lowercase hostname) and, for its SQL tool, for
       // anything but one statement beginning with SELECT or WITH (D3 = A), each with its own type (`packCallRefusal`).
       const packRefusal = pack && !argumentsMalformed ? packCallRefusal(upstreamToolName(name), args, pack) : null;
+      // A server's own tool (CKAN-2-WEB P1, W3): since router 0.12.0 the hosted CKAN server's
+      // `ckan_datastore_search_sql` is offered with no pack, and a call whose `sql` is not one statement beginning with
+      // SELECT or WITH is refused before anything is sent (`serverCallRefusal`), recorded like any other rejected call.
+      // Read only for a call the dispatch sends somewhere (`target`), so a name it refuses keeps that refusal.
+      const statementRefusal = target !== undefined && !argumentsMalformed ? serverCallRefusal(upstreamToolName(name), args) : null;
 
       const operationType = deriveOperationType(name, args);
       const reason = generateToolReason(args, name);
@@ -1286,6 +1291,7 @@ export async function runToolLoop(options: ToolLoopOptions): Promise<ToolLoopRes
         if (argumentsMalformed) throw malformedToolArgumentsError();
         if (lockRefusal) throw lockRefusal;
         if (packRefusal) throw packRefusal;
+        if (statementRefusal) throw statementRefusal;
         // The base check (S2-B P3R): a pack's call is sent only after its base
         // matched a pin, read at most once per five minutes in this run. Inside
         // the timed region, so a refused call's span is timed to its refusal.

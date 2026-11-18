@@ -29,6 +29,7 @@ import {
   DATA_COMMONS_TOOL_NAMES,
   exposedToolName,
   CKAN_SERVER_SOURCE_ID,
+  CKAN_TOOL_NAMES,
   readMcpEnv,
   resolveCalledName,
   SOCRATA_TOOL_NAMES,
@@ -225,6 +226,7 @@ const loggedMissingKeys = new Set<string>();
 const SOCRATA_TOOLS = [...SOCRATA_TOOL_NAMES];
 const DATA_COMMONS_TOOLS = [...DATA_COMMONS_TOOL_NAMES];
 const BOSTON_OPENCONTEXT_TOOLS = [...BOSTON_OPENCONTEXT_TOOL_NAMES];
+const CKAN_TOOLS = [...CKAN_TOOL_NAMES];
 
 /**
  * Sources a run is offered only when the instance configures them, each with
@@ -367,16 +369,16 @@ export function buildMcpRegistry(env: McpRegistryEnv, selection?: SourceSelectio
         }
       : {}),
     // The hosted CKAN server (router 0.11.0, CKAN-1 P3), optional: present only
-    // when `CKAN_MCP_URL` is set. It declares no tools of its own (ruling D7 =
-    // D); its packs' tools are indexed to it below, as City Record's are to
-    // Socrata's, so a pack's call goes to this server.
+    // when `CKAN_MCP_URL` is set. Since router 0.12.0 (CKAN-2, D2 = B) it routes
+    // seven tools of its own (`CKAN_TOOL_NAMES`, offered as `ckan__<name>`),
+    // each naming its portal in `server_url`; no pack is over it.
     ...(env.ckanUrl
       ? {
           [CKAN_SERVER_SOURCE_ID]: {
             sourceId: CKAN_SERVER_SOURCE_ID,
             label: 'CKAN MCP Server',
             endpointUrl: normalizeMcpEndpoint(env.ckanUrl),
-            tools: [],
+            tools: CKAN_TOOLS,
             ...manifestIdentity(CKAN_SERVER_SOURCE_ID),
           },
         }
