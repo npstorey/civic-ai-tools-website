@@ -49,7 +49,7 @@
         {
           "id": "consent-3",
           "trace": "const:src/lib/sources/copy.ts#PRIVACY_CONSENT_SECTIONS",
-          "text": "For each recipient, we state what it says it keeps, and for how long when it gives a time. Where it says so on a page, we give that page and the date we read it. If a provider says nothing, we write \"not stated.\" Nobody, including this site, can check a hosted service's logging from outside. That is why there is another option. You can also run this whole system on your own computer, with your own model and data sources."
+          "text": "For each recipient, we state what it says it keeps, and for how long when it gives a time. Where it says so on a page, we give that page and the date we read it. If a provider says nothing, we write \"not stated.\" If we have not read a recipient's page, we write \"not read.\" Nobody, including this site, can check a hosted service's logging from outside. That is why there is another option. You can also run this whole system on your own computer, with your own model and data sources."
         },
         {
           "id": "consent-guide",
@@ -282,7 +282,7 @@
         {
           "id": "consent-3",
           "trace": "const:src/lib/sources/copy.ts#PRIVACY_CONSENT_SECTIONS",
-          "text": "For each recipient, we state what it says it keeps, and for how long when it gives a time. Where it says so on a page, we give that page and the date we read it. If a provider says nothing, we write \"not stated.\" Nobody, including this site, can check a hosted service's logging from outside. That is why there is another option. You can also run this whole system on your own computer, with your own model and data sources."
+          "text": "For each recipient, we state what it says it keeps, and for how long when it gives a time. Where it says so on a page, we give that page and the date we read it. If a provider says nothing, we write \"not stated.\" If we have not read a recipient's page, we write \"not read.\" Nobody, including this site, can check a hosted service's logging from outside. That is why there is another option. You can also run this whole system on your own computer, with your own model and data sources."
         },
         {
           "id": "consent-guide",

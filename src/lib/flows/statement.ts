@@ -247,24 +247,16 @@ const EXECUTOR_SANDBOX_MEASURED = [
 ];
 
 /**
- * The portal operator's lines for a CKAN source (router 0.11.0, CKAN-1 P3,
- * A-C1): the CKAN server and the Boston pack over it, whose requests reach
- * the City of Boston's portal, Analyze Boston. Every line in one place, so the
- * ruled words are one edit. DRAFT, form (i): the City's line, as the City's
- * statement reads (the same statement Boston OpenContext's manifest entry
- * cites). The owner rules form (i) or form (iii), which adds a second line
- * for the portal's platform vendor here (`CKAN_PORTAL_VENDOR_LINE`, not built).
- * A second CKAN pack over another portal needs its own lines (S6).
+ * The portal operator's lines for the CKAN source (CKAN-2-WEB P2, the owner's
+ * M4 = A, OA-1043; G0's D6: one line for every portal). The CKAN server reads
+ * any portal on its operator's list, and the record names the portal each call
+ * named, so the line names the operator of each portal a call names. This site
+ * has not read each portal's statement, so it says "not read", a word the
+ * privacy page defines (`PRIVACY_CONSENT_SECTIONS`). Router 0.11.0's draft line,
+ * the City of Boston for the retired Analyze Boston pack's one portal, is gone.
  */
 export const CKAN_PORTAL_OPERATOR_LINES: readonly FlowsKeptBy[] = [
-  {
-    holder: 'City of Boston',
-    keeps: 'metadata',
-    retention: "Under the City's records retention schedule; the statement gives no period for server logs.",
-    statementUrl: 'https://www.boston.gov/government/cabinets/innovation-and-technology/terms-use-and-privacy-policy-city-boston-digital',
-    readOn: '2026-11-16',
-  },
-  // CKAN_PORTAL_VENDOR_LINE: the place for form (iii)'s second line, the portal's platform vendor, if the owner rules it.
+  { holder: 'the operator of each portal a call names (the record names each portal by its address)', keeps: 'not-read' },
 ];
 
 /** The sources whose portal is a CKAN portal: the CKAN server (router 0.12.0 retired the pack over it, CKAN-2-WEB P1). */

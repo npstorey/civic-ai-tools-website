@@ -49,7 +49,7 @@ test('N8: preflight\'s CKAN_MCP_URL comment and purpose say what router 0.12.0 o
 test('N8: the statement-check fixture\'s _about calls the tool the CKAN server\'s own', () => {
   const about = (JSON.parse(read('src/lib/mcp/fixtures/statement-check-postgres16.json')) as { _about: string })._about;
   assert.ok(about.startsWith("The statement check of the CKAN server's own ckan_datastore_search_sql, offered as ckan__ckan_datastore_search_sql (src/lib/mcp/pack-filter.ts, isOneSelectOrWithStatement), held to a real server."), `_about: ${about.slice(0, 200)}`);
-  assert.ok(!about.includes('pack'), '_about still names a pack');
+  assert.ok(!/CKAN pack|pack's/.test(about), '_about still names a pack');
 });
 
 const row = () => {

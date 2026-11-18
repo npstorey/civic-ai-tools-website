@@ -55,7 +55,7 @@ import {
 } from '../../lib/evidence/query-step.ts';
 import { describeSkillDisclosure } from '../../lib/evidence/skill-disclosure.ts';
 import { earlierSystemPromptHashes } from '../../lib/evidence/prompt-hashes.ts';
-import { formatDataSourcesSummary } from '../../lib/evidence/data-sources.ts';
+import { dataSourcesLine } from '../../lib/evidence/data-sources-line.ts';
 import { upstreamToolName } from '../../lib/mcp/operation-types.ts';
 import { formatModelName, estimateCostUsd } from '../../lib/models.ts';
 import {
@@ -291,7 +291,8 @@ export function adaptRecord(input: RecordAdapterInput): AnswerViewModel {
   const envMcpHosts = mcpServerHosts(env?.mcpServers);
   const cost = estimateCostUsd(pkg.cost.model, pkg.cost.promptTokens || 0, pkg.cost.completionTokens || 0);
   const skillHash = pkg.skillMetadata?.systemPromptHash;
-  const dataSourcesSummary = formatDataSourcesSummary(pkg.dataSources);
+  // "Data sources used" (CKAN-2-WEB P2, M6 = A): this site's line, a pack by its name and portal, CKAN by its portals.
+  const dataSourcesSummary = dataSourcesLine(pkg.dataSources, pkg.trace);
   const blobFields: string[] = [];
   if (input.resolution?.outputIsBlob) blobFields.push('output');
   if (input.resolution?.skillTextIsBlob) blobFields.push('skill text');

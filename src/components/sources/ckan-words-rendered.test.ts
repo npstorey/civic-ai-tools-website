@@ -235,7 +235,8 @@ test('criterion 3 (M4 A): /api/flows serves CKAN\'s new holder, not-read, and no
     { holder: `the operator of ${CKAN_HOST}`, keeps: 'operator-states' },
     { holder: 'the operator of each portal a call names (the record names each portal by its address)', keeps: 'not-read' },
   ]);
-  assert.ok(!JSON.stringify(served).includes(BASE_HOLDER), `the served statement names the ${BASE_HOLDER}`);
+  // Boston OpenContext, set in this file, names the City of Boston as its own holder; CKAN's row must not.
+  assert.ok(!JSON.stringify(ckan).includes(BASE_HOLDER), `the served CKAN row names the ${BASE_HOLDER}`);
 });
 
 test('premise: the privacy page mounted under this configuration has every source row', () => {

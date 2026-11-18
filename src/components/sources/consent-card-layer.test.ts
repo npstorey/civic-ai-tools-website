@@ -251,22 +251,26 @@ const sha = (value: unknown) => createHash('sha256').update(typeof value === 'st
  * S2-B P3R re-captured `statement` and `hash` by the same computation (the seat's ruling 11): router 0.9.0 names
  * NYC City Record's source `NYC City Record` (its manifest `displayName`), the one change in the statement's bytes;
  * each base `version` and the privacy page are unchanged.
+ * CKAN-2-WEB P2 re-captured the two `privacy` values and the consent sections' hash by the same computation: the
+ * owner's M4 = A (OA-1043) adds one sentence to "What recipients keep", the definition of "not read"; with only that
+ * sentence reverted, the base values return. Neither configuration sets `CKAN_MCP_URL`, so the statement, its
+ * version and its hash are unchanged.
  */
 const BASE: Record<'six' | 'three', { statement: string; version: string; hash: string; privacy: string }> = {
   six: {
     statement: 'ad7aca3dd4fa6c871565ea3e07d13b75532bf105f1149e4d6d85a6dba0cc6486',
     version: '2489d0dda25a79b3286c380379c6d2c8202e66a77fe5b4f493f558a7ce190f9c',
     hash: '1ee9511a279f58b523082c0dfb3c83125a9a6056929147496f3bb3e5c12e20bc',
-    privacy: 'd02b95b4be497772af64eb12c80a20b94b8cb16642de8295fa5aeeff0484422c',
+    privacy: 'efdfbf803ffb28ed170fbaa4aa94f3405ab697f002198797ebf9d36830cba397',
   },
   three: {
     statement: 'b7bab42b2422402ed60b49f3113ce2177677cf53b85be2c941e05abdf9c88fff',
     version: 'ce0f4f09dff9d9d998a00cca59b12ee92486752ce9d94ed1eb310eae01c69325',
     hash: 'cfc7839f4e4064989e5ab43f4fc4b3830a72e7ea2e4af56102f7304b066a38c8',
-    privacy: '7ab08f254f4e46510caa0ef44329bdd152a058b589612a9eb1d836c2c8e6a227',
+    privacy: 'e16f1588789c388998c3f3a4471e314d62966b79ba016437ce87c52841a33591',
   },
 };
-const BASE_PRIVACY_CONSENT_SECTIONS = '7a5ef839e4dc3ea1d4bad48c51ac0a3ffaaf37ddc902b8b102f10d4c05f2b698';
+const BASE_PRIVACY_CONSENT_SECTIONS = 'c40c5d73a1b852bf4de78631a2edaa7ba02967259f23e52b6e9d4f99f5543ab3';
 
 for (const config of ['six', 'three'] as const) {
   test(`criterion 2 (${config} sources): the flows statement, its base version and hash, and the privacy page's statements are the base's, byte for byte`, async () => {

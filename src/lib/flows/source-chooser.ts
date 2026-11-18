@@ -259,19 +259,25 @@ function loadsOfSpans(spans: readonly unknown[]): ChooserLoad[] {
   return loads;
 }
 
+/**
+ * Whether a call span's attributes state a pack id (`mcp.pack_id`) and the call was sent: the pack credit's one rule.
+ * A load is not a call; a call refused before any request (`NOT_RECEIVED`) was not sent, so it credits no pack. A
+ * record's "Data sources used" line reads the same rule (`../evidence/data-sources-line.ts`, CKAN-2-WEB P2).
+ */
+export function isSentPackCall(attrs: ReadonlyMap<string, unknown>): boolean {
+  if (text(attrs.get('tool.name')) === undefined || text(attrs.get('mcp.pack_id')) === undefined || attrs.get('tool.operation_type') === 'load_source') return false;
+  const failureKind = text(attrs.get('error.kind'));
+  return !(failureKind !== undefined && NOT_RECEIVED.has(failureKind));
+}
+
 /** The call spans that state a pack id (`mcp.pack_id`) and were sent, in order. */
 function packCallsOfSpans(spans: readonly unknown[]): ChooserPackCall[] {
   const calls: ChooserPackCall[] = [];
   for (const span of spans) {
     if (asRecord(span)?.name !== 'mcp_tool_call') continue;
     const attrs = attributesOf(span);
-    const toolName = text(attrs.get('tool.name'));
-    const packId = text(attrs.get('mcp.pack_id'));
-    if (toolName === undefined || packId === undefined || attrs.get('tool.operation_type') === 'load_source') continue;
-    // A call refused before any request was not sent, so it credits no pack.
-    const failureKind = text(attrs.get('error.kind'));
-    if (failureKind !== undefined && NOT_RECEIVED.has(failureKind)) continue;
-    calls.push({ toolName, packId, source: text(attrs.get('mcp.source')), alias: text(attrs.get('mcp.alias')) });
+    if (!isSentPackCall(attrs)) continue;
+    calls.push({ toolName: attrs.get('tool.name') as string, packId: attrs.get('mcp.pack_id') as string, source: text(attrs.get('mcp.source')), alias: text(attrs.get('mcp.alias')) });
   }
   return calls;
 }
