@@ -3,6 +3,7 @@
 import { useState, useEffect, useRef } from 'react';
 import Link from 'next/link';
 import McpResponseDisplay from '@/components/shared/McpResponseDisplay';
+import { useHostLinks } from '@/components/HostLinksProvider';
 import type { ProgressLogEntry, ProgressGroup, ToolCall } from '@/hooks/useStreamingComparison';
 
 const TIMEOUT_MESSAGES = [
@@ -47,6 +48,7 @@ export default function LiveResponsePanel({
   completionCta,
   onAbort,
 }: LiveResponsePanelProps) {
+  const { marketingOrigin } = useHostLinks();
   const [timeoutMessage, setTimeoutMessage] = useState<string | null>(null);
   const [isProminent, setIsProminent] = useState(false);
   // Stamped by the isRunning effect before the interval ever reads it;
@@ -213,10 +215,16 @@ export default function LiveResponsePanel({
                 <Link href="/" style={{ color: 'var(--text-muted)', textDecoration: 'underline', textUnderlineOffset: '2px' }}>
                   Try a simpler question
                 </Link>
-                <span style={{ margin: '0 6px' }}>&middot;</span>
-                <a href="https://github.com/npstorey/civic-ai-tools" target="_blank" rel="noopener noreferrer" style={{ color: 'var(--text-muted)', textDecoration: 'underline', textUnderlineOffset: '2px' }}>
-                  Run locally (no limits)
-                </a>
+                {/* UX-2-FIX P3, D13 = A (13.3): /project's setup section, through the host links; still a new tab, as
+                    the line above says "Don't close this tab". No marketing pages, no link. */}
+                {marketingOrigin !== null && (
+                  <>
+                    <span style={{ margin: '0 6px' }}>&middot;</span>
+                    <a href={`${marketingOrigin}/project#run-it-yourself`} target="_blank" rel="noopener noreferrer" style={{ color: 'var(--text-muted)', textDecoration: 'underline', textUnderlineOffset: '2px' }}>
+                      Run it yourself
+                    </a>
+                  </>
+                )}
               </div>
             </>
           ) : (

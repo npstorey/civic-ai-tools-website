@@ -1160,3 +1160,70 @@ test(`HF criterion 3, the guard shown able to fail, /ask Sandbox: on a notebook 
   const why = statusRowSaysSandbox(page);
   assert.ok(why !== null && why.includes(UNSTATED_STATUS), `the guard's check passed a status row with no sandbox line: ${String(why)}`);
 });
+
+// --- UX-2-FIX P3 (#790): H1 = A and H3 = B, the home page's first screen ------------------------------------------
+// Before the first question the block from the headline to the sign-in line sits in a first-screen wrapper (at least
+// the window's height less the sticky header's, `100svh`) with the link down to the band at its foot, reading H3's
+// ruled words. From the first send that starts a run (the dock) the link is gone and the wrapper leaves the layout
+// (`display: contents`), so the page after a question is the run layout it is today. The band lands below the sticky
+// header (`scrollMarginTop`). Where the block sits is the browser instrument's read (contract p3.md criterion 2).
+// WHAT MAKES IT ABLE TO FAIL. At the base no link and no wrapper render, and the band carries no scroll margin.
+
+const H3_LINK = 'What is this site? ↓';
+const homeLinks = (surface: Surface): HostElement[] => surface.elements().filter((el) => el.type === 'a' && textOf(el) === H3_LINK);
+const inlineStyle = (el: HostElement): Record<string, unknown> => (el.props.style ?? {}) as Record<string, unknown>;
+const firstScreens = (surface: Surface): HostElement[] => surface.elements().filter((el) => String(inlineStyle(el).minHeight ?? '').includes('100svh'));
+
+test('UX-2-FIX P3 H1 + H3, the home page signed out: before a question one link reads "What is this site? ↓" to #positioning, at the foot of a first-screen wrapper around the composer; from the first send there is no link and the wrapper is display: contents', async () => {
+  ANON();
+  answers();
+  await consentWith();
+  const page = await mountPage(HOME());
+  assert.deepEqual(homeLinks(page).map((a) => a.props.href), ['#positioning'], 'before a question, the link');
+  const screens = firstScreens(page);
+  assert.equal(screens.length, 1, `before a question, first-screen wrappers: ${screens.length}`);
+  assert.ok(within(screens[0]).includes(composerOf(page)), 'the first-screen wrapper does not hold the composer');
+  assert.ok(within(screens[0]).includes(homeLinks(page)[0]), 'the link is not inside the first-screen wrapper');
+
+  await askFromBox(page, 'Q-p3-h1: how many 311 noise complaints were there in Brooklyn?');
+  assert.equal(isDocked(page), true, 'premise: the first send docked the composer');
+  assert.equal(homeLinks(page).length, 0, 'after a question, the link still renders');
+  assert.equal(firstScreens(page).length, 0, 'after a question, an element still carries the 100svh height');
+  const around = page.elements().filter((el) => el.type === 'div' && within(el).includes(composerOf(page)) && within(el).includes(resultsBlock(page, 'Results')));
+  assert.ok(around.length >= 1, 'premise: the wrapper is still in the tree around the surface (the surface did not remount)');
+  assert.deepEqual(around.map((el) => inlineStyle(el)), around.map(() => ({ display: 'contents' })), 'after a question, a wrapper around the surface still takes part in the layout');
+  await finishComparison(page);
+  assert.equal(homeLinks(page).length, 0, 'after the answer, the link renders again');
+});
+
+// UX-2-FIX P3 fix round 1 (#790 S17; the owner's P3-1 step 1): the link was below the window on the deployed preview.
+// Measured there (planning temp/ux2-fix/p3-measure/fix1/preview-6cd072c.json): the root layout's RunningUnsignedBanner
+// sits in the flow between the header and <main> (56 px at 1280 x 700), and the first screen subtracted the header
+// alone, so it ended that far below the window. The fix measures the first screen from the wrapper's own top
+// (`--home-first-screen-top`, set on mount and on resize) and anchors the link: a sticky holder keeps it inside the
+// window when the first screen is taller than it. Where the link lands is the browser instrument's read; this row
+// holds the shape. WHAT MAKES IT ABLE TO FAIL: on 6cd072c the height reads only `--header-height` and the link is
+// absolutely positioned.
+test('UX-2-FIX P3 fix round 1 (F3b): the first screen is measured from the wrapper\'s own top, and the link is anchored by a sticky holder at its foot', async () => {
+  ANON();
+  answers();
+  const page = await mountPage(HOME());
+  const screens = firstScreens(page);
+  assert.equal(screens.length, 1, `first-screen wrappers: ${screens.length}`);
+  assert.match(String(inlineStyle(screens[0]).minHeight), /^calc\(100svh - var\(--home-first-screen-top, var\(--header-height, 72px\)\)\)$/, 'the first screen does not subtract its own measured top');
+  const link = homeLinks(page)[0];
+  assert.ok(link, 'premise: the link renders before a question');
+  const holder = parentOf(page, link);
+  assert.ok(holder, 'premise: the link has a holder');
+  assert.equal(inlineStyle(holder!).position, 'sticky', 'the link\'s holder is not sticky');
+  assert.equal(inlineStyle(holder!).bottom, '16px', 'the link\'s holder is not anchored 16 px above the window\'s foot');
+});
+
+test('UX-2-FIX P3 H3: the band the link points at keeps its id and lands below the sticky header (scroll-margin-top)', async () => {
+  ANON();
+  answers();
+  const page = await mountPage(HOME());
+  const bands = page.elements().filter((el) => el.props.id === 'positioning');
+  assert.equal(bands.length, 1, `elements with id="positioning": ${bands.length}`);
+  assert.equal(inlineStyle(bands[0]).scrollMarginTop, 'var(--header-height, 72px)');
+});

@@ -74,6 +74,8 @@ function PlatformBadge({ platform }: { platform: string }) {
         // PQ8 = (a): the neutral pair, as the server cards' platform badges.
         color: 'var(--text-secondary)',
         backgroundColor: 'var(--card-background)',
+        // UX-2-FIX P3, D6 = A: an edge, so the chip stays visible on a hovered row, whose fill is the chip's own.
+        border: '1px solid var(--border-color)',
         whiteSpace: 'nowrap',
       }}
     >
