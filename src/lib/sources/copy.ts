@@ -378,10 +378,10 @@ export const SOURCE_DESCRIPTIONS: Readonly<Record<string, SourceDescription>> = 
     publisher: 'BetaNYC',
     link: 'https://github.com/BetaNYC/nys-openlegislation-mcp',
   },
-  // Router 0.11.0 (CKAN-1 P3, hub #314). DRAFT after two research checks: both `what` lines are replaced by the
-  // owner's ruled words before merge.
+  // Router 0.11.0 (CKAN-1 P3, hub #314). The `what` line is the owner's ruled words (OA-1043, M1 and M2), pinned by
+  // `./ckan-description-line.test.ts`. Phase 2 of CKAN-2-WEB adds M1's third sentence and M3's sentence.
   'ckan-server': {
-    what: 'an open-source platform for open-data portals. Many governments publish their data on CKAN portals. This source has no data of its own. Each CKAN portal this site reads is a separate source, with its own setting.',
+    what: 'an open-source platform for open-data portals. Many governments publish their data on CKAN portals.',
     publisher: 'onData',
     link: 'https://github.com/npstorey/ckan-mcp-server',
   },
