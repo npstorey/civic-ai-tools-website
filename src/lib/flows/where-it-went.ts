@@ -248,7 +248,7 @@ export const PACK_CALL_COUNTED_UNDER: 'pack' | 'base' | 'both' = 'pack';
 /**
  * The pack a manifest id names (`mcp.pack_id`), by `sourceId`, or `undefined` for an id no pack has. A pack a router
  * release retired is read from the router's `retiredPack` (CKAN-2-WEB P1, W7): a record made while Analyze Boston was
- * offered names it `boston-ckan@https://data.boston.gov`, which no manifest holds since router 0.12.0.
+ * offered names it by that pack's inventory id (`boston-ckan@` and its portal), which no manifest holds since router 0.12.0.
  */
 function packSourceOfId(packId: string | undefined): string | undefined {
   if (packId === undefined) return undefined;

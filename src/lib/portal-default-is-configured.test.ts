@@ -221,8 +221,8 @@ const EXCEPTIONS: readonly Exception[] = [
   {
     path: 'src/lib/sources/copy.ts',
     classification: 'server-endpoint',
-    hits: 3,
-    why: "Boston OpenContext's what-line on the Sources rows (R6 PL, ruling D1 = A) names the domain that server fronts, so a reader knows whose data it is; it is reader text, and no run reads it. Since router 0.11.0 (CKAN-1 P3) two more, on the Analyze Boston pack's row: its what-line names the one portal the pack reads, and its link is that portal, the address in the pack's inventory id (pinned by source-name.test.ts). Reader text; no run reads it.",
+    hits: 1,
+    why: "Boston OpenContext's what-line on the Sources rows (R6 PL, ruling D1 = A) names the domain that server fronts, so a reader knows whose data it is; it is reader text, and no run reads it. (Router 0.11.0's Analyze Boston row, two more, left with the pack: CKAN-2-WEB P1.)",
   },
   {
     path: 'src/lib/notebook-author/helpers/fetch_data_commons.py',
@@ -350,19 +350,27 @@ const EXCEPTIONS: readonly Exception[] = [
     hits: 13,
     why: "The one portal the NYC City Record pack reads (its City Record Online dataset, dg92-zbpx), fixed by the pack's filter and named in its header comments, its query recipes, the filter, its inventory id and, since router 0.9.0, its `api` member; the pack's, every instance's the same, never a portal a run chooses or inherits.",
   },
-  // Router 0.11.0 (CKAN-1 P2, hub #314): Analyze Boston, a pack over the hosted CKAN server, fixes its one portal in
-  // its filter, its tools' `server_url` enum and its inventory id, and names it in its guidance and its words.
+  // Router 0.12.0 (CKAN-2 P2, hub #329; CKAN-2-WEB P1, W13): the hosted CKAN server offers seven tools of its own,
+  // each call naming its portal in `server_url`, and the Analyze Boston pack is retired (`boston-ckan.js` is gone).
+  // The server's guidance and words name Boston's portal as the one to name for a Boston question; the retired pack's
+  // row keeps the one portal it read.
   {
-    path: 'node_modules/@typedstandards/civic-typed-router/dist/civic/boston-ckan.js',
-    classification: 'server-endpoint',
-    hits: 10,
-    why: "The one portal the Analyze Boston pack reads, every instance's the same: in two header comments, its guidance (four hits: the portal it reads, the data it holds, the citation), its inventory id, its filter (`server_url`), its `api` host and a doc comment. Never a portal a run chooses or inherits: a call naming another is refused.",
+    path: 'node_modules/@typedstandards/civic-typed-router/dist/civic/ckan.js',
+    classification: 'reference-table',
+    hits: 3,
+    why: "Boston's CKAN portal as the CKAN guidance names it (`CKAN_GUIDANCE`, from the hub's docs/skills/ckan.md): as the example of a portal's base URL, as the portal for Boston questions, and in the doc comment saying so. A portal the model is told to name for a question about Boston, a choice and not a default: every call names its own `server_url`, and nothing inherits this one.",
   },
   {
     path: 'node_modules/@typedstandards/civic-typed-router/dist/civic/ckan-words.js',
+    classification: 'reference-table',
+    hits: 2,
+    why: "The CKAN server's words: its description names Boston's portal (\"Boston's portal, Analyze Boston, is data.boston.gov\"), and the preamble's Boston rule (`CKAN_BOSTON_RULE`) routes a Boston question to it with that `server_url`. A choice for a question about Boston, never a portal a run chooses or inherits without naming it.",
+  },
+  {
+    path: 'node_modules/@typedstandards/civic-typed-router/dist/civic/retired.js',
     classification: 'server-endpoint',
-    hits: 3,
-    why: "The Analyze Boston pack's words: its description, freshness line and their citation naming the portal its data lives on (data.boston.gov), as nyc-record.js's rows name City Record's.",
+    hits: 2,
+    why: "The retired Analyze Boston pack's row (`RETIRED_PACKS`): its inventory id and the one portal it read, frozen so a record made while it was offered still names it. Never a portal a run chooses or inherits: no run is offered the pack.",
   },
 ];
 

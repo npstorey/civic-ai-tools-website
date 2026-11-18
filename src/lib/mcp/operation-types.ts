@@ -56,14 +56,14 @@ export const LEGACY_TOOL_ALIASES: Readonly<Record<string, { sourceId: string; to
 };
 
 /**
- * The tools each pack a router release retired offered under its alias, by the pack's inventory `id`, frozen as the
+ * The tools each pack a router release retired offered under its alias, by the pack's `sourceId`, frozen as the
  * last release that offered it stated them (CKAN-2-WEB P1). Router 0.11.0's Analyze Boston (`boston`) offered six of
  * the CKAN server's tools: the six `CKAN_TOOL_NAMES` begins with, `ckan_status_show` not among them (router 0.12.0's
  * own words: "the six a CKAN pack called through 0.11.0, then `ckan_status_show`"). A record made then names them
  * `boston__ckan_package_search` and the rest, which no manifest maps since 0.12.0.
  */
 const RETIRED_PACK_TOOLS: Readonly<Record<string, readonly string[]>> = {
-  'boston-ckan@https://data.boston.gov': [
+  'boston-ckan': [
     'ckan_package_search',
     'ckan_find_relevant_datasets',
     'ckan_package_show',
@@ -91,7 +91,7 @@ function oldExposedName(toolName: string): OldExposedName | undefined {
   const upstream = toolName.slice(at + 2);
   const legacy = LEGACY_TOOL_ALIASES[alias];
   if (legacy !== undefined && legacy.tools.includes(upstream)) return { sourceId: legacy.sourceId, serverSourceId: legacy.sourceId, upstream };
-  const pack = RETIRED_PACKS.find((candidate) => candidate.alias === alias && (RETIRED_PACK_TOOLS[candidate.id] ?? []).includes(upstream));
+  const pack = RETIRED_PACKS.find((candidate) => candidate.alias === alias && (RETIRED_PACK_TOOLS[candidate.sourceId] ?? []).includes(upstream));
   return pack !== undefined ? { sourceId: pack.sourceId, serverSourceId: pack.base, upstream } : undefined;
 }
 
