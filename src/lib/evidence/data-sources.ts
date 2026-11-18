@@ -30,8 +30,7 @@
 // because replay derives the `get_data`-addressable catalogue types from it,
 // and `readerFacingSourceNames` keeps it as its default.
 
-import { CIVIC_MANIFEST, CKAN_SERVER_SOURCE_ID } from '@typedstandards/civic-typed-router';
-import { packFilters } from '../mcp/pack-filter.ts';
+import { CIVIC_MANIFEST, CKAN_SERVER_SOURCE_ID, RETIRED_PACKS } from '@typedstandards/civic-typed-router';
 import { sourceIdForToolName } from '../mcp/operation-types.ts';
 import { hostedServerPurl, npmPackageVariants } from '../mcp/registry.ts';
 import { RETIRED_HOSTED_SERVERS } from '../mcp/retired-sources.ts';
@@ -97,26 +96,31 @@ export function dataSourceRegistry(runMcpServers?: readonly DatHereMcpServer[]):
       aggregatePortalUrl: recorded ? recorded : hostedServerPurl(hosting),
     };
   }
-  // The hosted CKAN server and its packs (router 0.11.0, CKAN-1 P3, A16): an
-  // AGGREGATE entry, `catalogType` `ckan`, whose `portalUrl` is the one portal
-  // its pack reads, as the pack's filter fixes it (C5: one static value per
-  // source in harness 0.14.0, so a second pack over the same server is S6's). A
-  // pack's calls are attributed to the server (`mcp.source`), so the server's
-  // entry is the one a run mints; the pack's own entry names it for display.
-  for (const entry of CIVIC_MANIFEST) {
-    if (entry.base !== CKAN_SERVER_SOURCE_ID) continue;
-    const portal = packFilters().get(entry.sourceId)?.portal;
-    if (portal === undefined) continue;
-    const server = CIVIC_MANIFEST.find((candidate) => candidate.sourceId === CKAN_SERVER_SOURCE_ID);
-    for (const source of [server, entry]) {
-      if (!source || Object.hasOwn(registry, source.sourceId)) continue;
-      registry[source.sourceId] = {
-        displayName: source.displayName.replace(/ MCP Server$/, ''),
-        agentTitle: `${source.sourceId} MCP Server`,
-        catalogType: 'ckan',
-        aggregatePortalUrl: portal,
-      };
-    }
+  // The hosted CKAN server (router 0.12.0; CKAN-2-WEB P1, W4, D1 = A, F1 = (a)): a PER-PORTAL entry,
+  // `catalogType` `ckan`, naming `portalArgument` `server_url` (harness 0.15.0). A run mints one `dataSources`
+  // entry per portal its accepted calls named, in first-seen order, `portalUrl` that portal as the call named
+  // it, with no `datasetId`; a rejected call mints none. No static portal: the server reads any portal its
+  // operator lists, and the record names the portal each call named, not where the server sent it.
+  const ckanServer = CIVIC_MANIFEST.find((candidate) => candidate.sourceId === CKAN_SERVER_SOURCE_ID);
+  if (ckanServer && !Object.hasOwn(registry, ckanServer.sourceId)) {
+    registry[ckanServer.sourceId] = {
+      displayName: ckanServer.displayName.replace(/ MCP Server$/, ''),
+      agentTitle: `${ckanServer.sourceId} MCP Server`,
+      catalogType: 'ckan',
+      portalArgument: 'server_url',
+    };
+  }
+  // A pack a router release retired (router 0.12.0's `RETIRED_PACKS`: Analyze Boston) keeps the entry it had, so
+  // a record made while it was offered still names it, as a retired hosted server's does below. A run since the
+  // retirement attributes no call to it, so the entry mints nothing new.
+  for (const pack of RETIRED_PACKS) {
+    if (Object.hasOwn(registry, pack.sourceId)) continue;
+    registry[pack.sourceId] = {
+      displayName: pack.displayName,
+      agentTitle: `${pack.sourceId} MCP Server`,
+      catalogType: 'ckan',
+      aggregatePortalUrl: pack.portal,
+    };
   }
   for (const [sourceId, retired] of Object.entries(RETIRED_HOSTED_SERVERS)) {
     if (Object.hasOwn(registry, sourceId)) continue;
