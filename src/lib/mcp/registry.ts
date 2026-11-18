@@ -29,6 +29,7 @@ import {
   DATA_COMMONS_TOOL_NAMES,
   exposedToolName,
   CKAN_SERVER_SOURCE_ID,
+  CKAN_TOOL_NAMES,
   readMcpEnv,
   resolveCalledName,
   SOCRATA_TOOL_NAMES,
@@ -41,6 +42,7 @@ import {
   type SourceSelection,
 } from '@typedstandards/civic-typed-router';
 import { AmbiguousToolNameError } from './tool-name-refusal.ts';
+import { oldExposedNameServer } from './operation-types.ts';
 import { getDefaultPortal, isPortalLocked } from '../site-config.ts';
 
 export { AmbiguousToolNameError } from './tool-name-refusal.ts';
@@ -225,6 +227,7 @@ const loggedMissingKeys = new Set<string>();
 const SOCRATA_TOOLS = [...SOCRATA_TOOL_NAMES];
 const DATA_COMMONS_TOOLS = [...DATA_COMMONS_TOOL_NAMES];
 const BOSTON_OPENCONTEXT_TOOLS = [...BOSTON_OPENCONTEXT_TOOL_NAMES];
+const CKAN_TOOLS = [...CKAN_TOOL_NAMES];
 
 /**
  * Sources a run is offered only when the instance configures them, each with
@@ -367,16 +370,16 @@ export function buildMcpRegistry(env: McpRegistryEnv, selection?: SourceSelectio
         }
       : {}),
     // The hosted CKAN server (router 0.11.0, CKAN-1 P3), optional: present only
-    // when `CKAN_MCP_URL` is set. It declares no tools of its own (ruling D7 =
-    // D); its packs' tools are indexed to it below, as City Record's are to
-    // Socrata's, so a pack's call goes to this server.
+    // when `CKAN_MCP_URL` is set. Since router 0.12.0 (CKAN-2, D2 = B) it routes
+    // seven tools of its own (`CKAN_TOOL_NAMES`, offered as `ckan__<name>`),
+    // each naming its portal in `server_url`; no pack is over it.
     ...(env.ckanUrl
       ? {
           [CKAN_SERVER_SOURCE_ID]: {
             sourceId: CKAN_SERVER_SOURCE_ID,
             label: 'CKAN MCP Server',
             endpointUrl: normalizeMcpEndpoint(env.ckanUrl),
-            tools: [],
+            tools: CKAN_TOOLS,
             ...manifestIdentity(CKAN_SERVER_SOURCE_ID),
           },
         }
@@ -644,6 +647,16 @@ function isRoutable(registry: McpRegistry, sourceId: string): boolean {
  * reads routability only to choose the refusal.
  */
 function resolveToolCall(registry: McpRegistry, toolName: string, map: DispatchMap): ToolCallResolution {
+  // An old or retired exposed name (CKAN-2-WEB P1, W11; D7 = A): Boston OpenContext's tools under its alias before
+  // router 0.11.0, or the retired Analyze Boston pack's. No source has the name now, so it is never routed: refused
+  // `not-configured` naming the variable of the source whose server would answer it while that variable is unset,
+  // else `not-offered`. Read only when the map does not hold the name.
+  const oldServer = map.has(toolName) ? undefined : oldExposedNameServer(toolName);
+  if (oldServer !== undefined) {
+    if (isRoutable(registry, oldServer)) return { ok: false, refusal: 'not-offered' };
+    const variable = CIVIC_MANIFEST.find((entry) => entry.sourceId === oldServer)?.configuration.addressVariable;
+    return variable ? { ok: false, refusal: 'not-configured', variable } : { ok: false, refusal: 'unknown' };
+  }
   const resolution = resolveCalledName(map, registry.offeredSources, toolName);
   if (resolution.ok) {
     const sourceId = Object.hasOwn(registry.toolIndex, resolution.exposedName)
@@ -822,8 +835,8 @@ export function readMcpEnvFromProcess(): McpRegistryEnv {
     DATA_COMMONS_MCP_URL: process.env.DATA_COMMONS_MCP_URL,
     DATA_COMMONS_API_KEY: process.env.DATA_COMMONS_API_KEY,
     BOSTON_OPENCONTEXT_MCP_URL: process.env.BOSTON_OPENCONTEXT_MCP_URL,
-    // The hosted CKAN server (router 0.11.0, CKAN-1 P3): its address offers it
-    // and the packs over it (Analyze Boston), each optional.
+    // The hosted CKAN server (router 0.11.0, CKAN-1 P3; its own tools since
+    // 0.12.0): its address offers it, optional.
     CKAN_MCP_URL: process.env.CKAN_MCP_URL,
     // The switches that offer the hosted sources (#617 D7; router 0.6.0, R8
     // W3): only `sandbox` turns one on; none names an address. NYC City

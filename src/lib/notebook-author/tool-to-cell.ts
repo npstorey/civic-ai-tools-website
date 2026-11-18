@@ -11,7 +11,7 @@
  */
 import type { NotebookCell } from './cells.ts';
 import { codeCell, markdownCell } from './cells.ts';
-import { CIVIC_MANIFEST } from '@typedstandards/civic-typed-router';
+import { CIVIC_MANIFEST, RETIRED_PACKS } from '@typedstandards/civic-typed-router';
 import { upstreamToolName } from '../mcp/operation-types.ts';
 import { FIND_SOURCE_WORDS } from '../sources/copy.ts';
 import { SEARCH_OPERATION, searchNotebookLine, searchQueryOf } from '../flows/search-words.ts';
@@ -809,11 +809,16 @@ function renderOpenContextQueryCell(
 }
 
 /**
- * A CKAN pack's datastore call (router 0.11.0, CKAN-1 P3, A17), re-run against
- * the `server_url` the call carried, never a portal this file fixes: the pack's
- * check sent the call only for its own portal, and a record states the value as
- * the call named it. `fetch_ckan` (`./helpers/fetch_ckan.py`) reads the portal's
- * own CKAN action API.
+ * The hosted CKAN server's datastore call (router 0.12.0, `ckan__ckan_datastore_search` and
+ * `ckan__ckan_datastore_search_sql`; CKAN-2-WEB P1, W10), re-run against the `server_url` the call carried, never a
+ * portal this file fixes: a record states the value as the call named it. `fetch_ckan` (`./helpers/fetch_ckan.py`)
+ * reads the portal's own CKAN action API.
+ *
+ * A `datastore_search` cell re-runs the call with every argument it carried, as the server sends them (the fork's
+ * `src/tools/datastore.ts` at `pin`): `resource_id`, `q`, `filters`, `limit`, `offset`, `fields`, `sort` and
+ * `distinct`. An absent `limit` is the server's default, 100 (the helper's own default is the same), and `limit: 0`
+ * stays 0. `response_format` is not passed: it chooses only how the server writes the same records for the model (a
+ * markdown table or compact JSON), and the portal's action takes no such parameter.
  */
 function renderCkanDatastoreCell(call: PhaseAToolCall, ctx: ToolCellContext): ToolCellOutput {
   const dfVar = `df${ctx.dataFrameIndex}`;
@@ -838,8 +843,7 @@ function renderCkanDatastoreCell(call: PhaseAToolCall, ctx: ToolCellContext): To
     };
   }
   const resourceId = String(call.args.resource_id ?? '');
-  const filters = call.args.filters as Record<string, unknown> | undefined;
-  const limit = (call.args.limit as number | undefined) ?? 1000;
+  const carried = (key: string) => call.args[key] !== undefined && call.args[key] !== null;
   const md = [
     `### Step ${ctx.dataFrameIndex}: Query a CKAN resource on ${host}`,
     '',
@@ -847,8 +851,13 @@ function renderCkanDatastoreCell(call: PhaseAToolCall, ctx: ToolCellContext): To
     call.resultSummary ? `Original execution returned ${call.resultSummary.rows} rows.` : '',
   ].filter(Boolean).join('\n');
   const codeLines = [`${dfVar} = fetch_ckan(`, `    ${JSON.stringify(serverUrl)},`, `    resource_id=${JSON.stringify(resourceId)},`];
-  if (filters && Object.keys(filters).length > 0) codeLines.push(`    filters=${pyRepr(filters, '    ')},`);
-  codeLines.push(`    limit=${limit},`);
+  if (carried('q')) codeLines.push(`    q=${pyRepr(call.args.q, '    ')},`);
+  if (carried('filters')) codeLines.push(`    filters=${pyRepr(call.args.filters, '    ')},`);
+  // The server's default when the call names none (`limit` 100); 0 is a value the call carried, and stays.
+  codeLines.push(`    limit=${pyRepr(carried('limit') ? call.args.limit : CKAN_DATASTORE_DEFAULT_LIMIT, '    ')},`);
+  for (const key of ['offset', 'fields', 'sort', 'distinct'] as const) {
+    if (carried(key)) codeLines.push(`    ${key}=${pyRepr(call.args[key], '    ')},`);
+  }
   codeLines.push(')');
   return {
     cells: [markdownCell(md), codeCell(guardedFetch(dfVar, `Step ${ctx.dataFrameIndex}`, codeLines.join('\n')))],
@@ -857,6 +866,20 @@ function renderCkanDatastoreCell(call: PhaseAToolCall, ctx: ToolCellContext): To
     citation: { id: resourceId, label: `${host}: ${resourceId}`, url: `${serverUrl.replace(/\/+$/, '')}/api/3/action/datastore_search?resource_id=${encodeURIComponent(resourceId)}` },
   };
 }
+
+/**
+ * The hosted CKAN server's `limit` when a `ckan_datastore_search` call names none: its schema's default, read from
+ * the router's copy of the server's schema (100 at the fork's `pin`), so this file holds no copy of it.
+ */
+const CKAN_DATASTORE_DEFAULT_LIMIT: number = (() => {
+  const tool = CIVIC_MANIFEST.find((entry) => entry.sourceId === 'ckan-server')?.tools
+    .find((candidate) => candidate.type === 'function' && candidate.function.name === 'ckan_datastore_search');
+  const limit = tool?.type === 'function'
+    ? (tool.function.parameters as { properties?: { limit?: { default?: unknown } } } | undefined)?.properties?.limit?.default
+    : undefined;
+  if (typeof limit !== 'number') throw new Error('the CKAN server\'s ckan_datastore_search schema states no default limit');
+  return limit;
+})();
 
 /** The host of a portal address, for a heading; the address itself when it has none. */
 function hostLabel(address: string): string {
@@ -1188,7 +1211,7 @@ export function renderFetchToolCell(
   // Boston OpenContext.
   if (call.name === 'ckan__execute_sql') return renderOpenContextSqlCell(call, ctx);
   if (call.name === 'ckan__query_data') return renderOpenContextQueryCell(call, ctx);
-  // A CKAN pack (CKAN-1 P3, A17).
+  // The hosted CKAN server's two datastore tools (router 0.12.0; CKAN-2-WEB P1, W10).
   if (call.name === 'ckan_datastore_search' || call.name === 'ckan_datastore_search_sql') return renderCkanDatastoreCell(call, ctx);
   // `fetch` and `ckan__aggregate_data`: steps with no cell that could re-run them.
   return renderNotRerunnableStepCell(call);
@@ -1285,7 +1308,8 @@ function loadNoteLines(loads: readonly PhaseAToolCall[]): string[] {
   ];
   for (const load of loads) {
     const alias = typeof load.args.alias === 'string' ? load.args.alias : undefined;
-    const known = alias !== undefined && CIVIC_MANIFEST.some((entry) => entry.alias === alias);
+    // A retired pack's alias (CKAN-2-WEB P1, W12) named a source of the directory when the record was made.
+    const known = alias !== undefined && (CIVIC_MANIFEST.some((entry) => entry.alias === alias) || RETIRED_PACKS.some((pack) => pack.alias === alias));
     if (!known) {
       lines.push('- a request that named no source of the directory: nothing loaded');
       continue;

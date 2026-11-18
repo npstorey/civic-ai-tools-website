@@ -18,6 +18,11 @@
 // OpenContext names: a replay that translated them would send `tools/call`s the recorder sees, and record names the
 // record did not state.
 //
+// CKAN-2-WEB P1 (router 0.12.0): the pack is retired, and the CKAN server offers seven tools of its own under the
+// alias `ckan`. The two replays are the server On and Off. OpenContext's bare names begin `ckan__`, the server's
+// alias and separator, so a reading that split the name would send `ckan__search_datasets` to the server: the
+// recorder must still see nothing, with the server On.
+//
 // Run with: npm test
 
 import { test } from 'node:test';
@@ -54,8 +59,12 @@ const RECORD = JSON.parse(fs.readFileSync(path.join(path.dirname(fileURLToPath(i
   extensions?: Record<string, unknown>;
 };
 const RECORD_CALLS = RECORD.queries.map((q, i) => ({ id: `b8-${i + 1}`, name: q.tool, args: q.arguments }));
-const PACK = CIVIC_MANIFEST.find((entry) => entry.sourceId === 'boston-ckan')!;
+/** The CKAN server's seven, as the model is offered them (router 0.12.0). */
+const PACK = CIVIC_MANIFEST.find((entry) => entry.sourceId === 'ckan-server')!;
 const PACK_TOOLS = PACK.toolNames.map((tool) => `${PACK.alias}__${tool}`);
+/** Boston OpenContext's tools, by either spelling the model could be offered them. */
+const OPENCONTEXT = CIVIC_MANIFEST.find((entry) => entry.sourceId === 'boston-opencontext')!;
+const OPENCONTEXT_TOOLS = new Set([...OPENCONTEXT.toolNames, ...OPENCONTEXT.toolNames.map((tool) => `${OPENCONTEXT.alias}__${tool}`)]);
 
 /** One replay of the record under `replayerSelection`. */
 async function replay(replayerSelection: string[]) {
@@ -81,14 +90,15 @@ async function replay(replayerSelection: string[]) {
   }
 }
 
-test('A19: the pre-238 Boston record replays with no OpenContext tool, each of its five calls refused not_configured naming BOSTON_OPENCONTEXT_MCP_URL, nothing sent to the hosted server, no call translated; the pack is offered with it On and not with it Off', async () => {
+test('A19: the pre-238 Boston record replays with no OpenContext tool, each of its five calls refused not_configured naming BOSTON_OPENCONTEXT_MCP_URL, nothing sent to the hosted server, no call translated; the CKAN server\'s seven are offered with it On and not with it Off', async () => {
   assert.deepEqual(RECORD_CALLS.map((c) => c.name), ['ckan__search_datasets', 'ckan__get_schema', 'ckan__get_dataset', 'ckan__get_schema', 'ckan__aggregate_data'], 'premise: the record\'s five calls, by their bare OpenContext names');
-  const on = await replay(['socrata', 'data-commons', 'ckan-server', 'boston-ckan']);
-  const off = await replay(['socrata', 'data-commons', 'ckan-server']);
-  assert.deepEqual(on.offered.filter((n) => PACK_TOOLS.includes(n)), PACK_TOOLS, 'with the pack On the replay is not offered the pack\'s tools');
-  assert.deepEqual(off.offered.filter((n) => PACK_TOOLS.includes(n)), [], 'with the pack Off the replay is offered the pack\'s tools');
-  for (const [label, run] of [['pack On', on], ['pack Off', off]] as const) {
-    assert.deepEqual(run.offered.filter((n) => n.startsWith('boston_opencontext__') || n.startsWith('ckan__')), [], `${label}: an OpenContext tool is offered`);
+  const on = await replay(['socrata', 'data-commons', 'ckan-server']);
+  const off = await replay(['socrata', 'data-commons']);
+  assert.equal(PACK_TOOLS.length, 7, 'premise: the CKAN server offers seven tools');
+  assert.deepEqual(on.offered.filter((n) => PACK_TOOLS.includes(n)), PACK_TOOLS, 'with the server On the replay is not offered its tools');
+  assert.deepEqual(off.offered.filter((n) => PACK_TOOLS.includes(n)), [], 'with the server Off the replay is offered its tools');
+  for (const [label, run] of [['server On', on], ['server Off', off]] as const) {
+    assert.deepEqual(run.offered.filter((n) => OPENCONTEXT_TOOLS.has(n)), [], `${label}: an OpenContext tool is offered`);
     assert.deepEqual(run.result.toolCalls.map((c) => c.name), RECORD_CALLS.map((c) => c.name), `${label}: a call was translated`);
     assert.deepEqual(run.result.toolCalls.map((c) => c.failureKind), Array(5).fill('not_configured'), `${label}: a replayed call is not refused not_configured`);
     for (const told of run.told) assert.ok(told.includes('BOSTON_OPENCONTEXT_MCP_URL'), `${label}: the model's text does not name BOSTON_OPENCONTEXT_MCP_URL:\n${told}`);

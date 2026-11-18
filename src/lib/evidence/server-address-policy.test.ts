@@ -193,9 +193,10 @@ test('the registries: vocabulary kept on every branch; the reference branch is r
   const configured = configuredAway(() => sourceRegistryForPolicy('configured'));
   // CKAN-1 P3: the hosted CKAN server, which the harness's registry does not name, follows the reference's sources,
   // with this instance's vocabulary; unconfigured here (CKAN_MCP_URL unset), it carries no address on either branch.
+  // Since CKAN-2-WEB P1 (W4, harness 0.15.0) its entry is per-portal (`portalArgument`), with no static portal.
   assert.deepEqual(Object.keys(unknown), [...Object.keys(CIVIC_SOURCE_REGISTRY), 'ckan-server']);
   assert.deepEqual(Object.keys(configured), [...Object.keys(CIVIC_SOURCE_REGISTRY), 'ckan-server']);
-  assert.deepEqual(unknown['ckan-server'], { displayName: 'CKAN', agentTitle: 'ckan-server MCP Server', catalogType: 'ckan', aggregatePortalUrl: 'https://data.boston.gov' });
+  assert.deepEqual(unknown['ckan-server'], { displayName: 'CKAN', agentTitle: 'ckan-server MCP Server', catalogType: 'ckan', portalArgument: 'server_url' });
   assert.equal(configured['ckan-server'].serverUrl, undefined);
   for (const [id, info] of Object.entries(CIVIC_SOURCE_REGISTRY)) {
     const { serverUrl: _reference, ...vocabulary } = info;

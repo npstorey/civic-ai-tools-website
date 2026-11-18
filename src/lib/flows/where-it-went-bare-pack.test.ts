@@ -4,9 +4,13 @@
 //
 // WHAT IS DRIVEN. `whereItWentFromCalls` as `/api/compare-stream` feeds it on an all-sources run: each call's source
 // by `routedSourceId` under the run's configuration and selection, and its pack by the dispatch target under the same
-// (`resolvePack`, the same decision). Two packs: NYC City Record's bare `get_data` with only the pack offered, and the
-// Boston pack's bare `ckan_datastore_search` with only the pack offered. The hosted CKAN server's address is a fake
-// `.example.test` one; nothing is sent.
+// (`resolvePack`, the same decision): NYC City Record's bare `get_data` with only the pack offered. The hosted CKAN
+// server's address is a fake `.example.test` one; nothing is sent.
+//
+// CKAN-2-WEB P1: router 0.12.0 retired the Boston pack, so its bare-name case is retired here; the rule is City
+// Record's case's. W7 takes its place: a record made while the pack was offered names it by `mcp.pack_id`
+// (`boston-ckan@https://data.boston.gov`), and "Where this question went" still reads that call as the pack's,
+// through the router's `retiredPack`, answered by the CKAN server.
 //
 // SHAPED TO FAIL. The called names carry no alias, so a reading that splits the name finds no pack and counts the
 // call under the base; a source the run did not call (Data Commons) must still read not used.
@@ -52,15 +56,6 @@ const cases = [
       { sourceId: 'nyc-record', alias: 'nyc_record', reason: 'selected' },
     ],
   },
-  {
-    pack: 'boston-ckan', base: 'ckan-server', name: 'ckan_datastore_search', args: { server_url: 'https://data.boston.gov', resource_id: 'r-1' },
-    selection: ['boston-ckan'],
-    offered: [
-      { sourceId: 'data-commons', alias: 'data_commons', reason: 'reader-off' },
-      { sourceId: 'ckan-server', alias: 'ckan', reason: 'reader-off' },
-      { sourceId: 'boston-ckan', alias: 'boston', reason: 'selected' },
-    ],
-  },
 ];
 
 for (const c of cases) {
@@ -74,3 +69,44 @@ for (const c of cases) {
     assert.equal(Object.fromEntries(flows.notReached.map((r) => [r.sourceId, r.whyNotSent]))['data-commons'], WHERE_IT_WENT_REASONS.off, 'a source the run did not call no longer reads not used');
   });
 }
+
+/** A call span as a record made under router 0.11.0 states a pack's call: attributed to the base, the pack named. */
+const span = (attrs: Record<string, string>) => ({
+  name: 'mcp_tool_call',
+  parentSpanId: 'root',
+  attributes: Object.entries(attrs).map(([key, value]) => ({ key, value: { stringValue: value } })),
+});
+
+test('W7: a record\'s call whose mcp.pack_id is boston-ckan@https://data.boston.gov reads as the retired pack\'s, answered by ckan-server', () => {
+  const model = whereItWent.whereItWentFromSpans({
+    spans: [span({ 'tool.name': 'boston__ckan_datastore_search', 'tool.operation_type': 'query', 'mcp.source': 'ckan-server', 'mcp.pack_id': 'boston-ckan@https://data.boston.gov' })],
+    sourcesOffered: [
+      { sourceId: 'socrata', alias: 'socrata', reason: 'selected' },
+      { sourceId: 'ckan-server', alias: 'ckan', reason: 'selected' },
+      { sourceId: 'boston-ckan', alias: 'boston', reason: 'selected' },
+    ],
+  });
+  const reached = model.reached as Row[];
+  const pack = reached.find((r) => r.kind === 'source' && r.sourceId === 'boston-ckan');
+  assert.deepEqual(pack && { calls: pack.calls, answeredBy: pack.answeredBy?.sourceId }, { calls: 1, answeredBy: 'ckan-server' }, `the pack's call is not read as the pack's: ${JSON.stringify(reached)}`);
+  assert.equal(Object.fromEntries(model.notReached.map((r) => [r.sourceId, r.whyNotSent]))['boston-ckan'], undefined, 'the retired pack reads as not used');
+});
+
+test('G9: a record made under router 0.11.0 names the retired pack by its name, Analyze Boston, where it reached it and where it did not', () => {
+  const offered = [
+    { sourceId: 'socrata', alias: 'socrata', reason: 'selected' },
+    { sourceId: 'ckan-server', alias: 'ckan', reason: 'not-configured' },
+    { sourceId: 'boston-ckan', alias: 'boston', reason: 'not-configured' },
+  ];
+  // Not reached: every record made since website 5e180d9 states the pack's row not-configured.
+  const notUsed = whereItWent.whereItWentFromSpans({ spans: [span({ 'tool.name': 'socrata__get_data', 'tool.operation_type': 'query', 'mcp.source': 'socrata' })], sourcesOffered: offered });
+  const row = (notUsed.notReached as Array<{ sourceId: string; name?: string }>).find((r) => r.sourceId === 'boston-ckan');
+  assert.equal(row?.name, 'Analyze Boston', `the retired pack's row is not named Analyze Boston: ${JSON.stringify(row)}`);
+  // Reached: a call whose span names the pack (W7's shape).
+  const reached = whereItWent.whereItWentFromSpans({
+    spans: [span({ 'tool.name': 'boston__ckan_datastore_search', 'tool.operation_type': 'query', 'mcp.source': 'ckan-server', 'mcp.pack_id': 'boston-ckan@https://data.boston.gov' })],
+    sourcesOffered: offered.map((r) => ({ ...r, reason: 'selected' })),
+  });
+  const pack = (reached.reached as Array<Row & { name?: string }>).find((r) => r.kind === 'source' && r.sourceId === 'boston-ckan');
+  assert.equal(pack?.name, 'Analyze Boston', `the reached pack is not named Analyze Boston: ${JSON.stringify(pack)}`);
+});

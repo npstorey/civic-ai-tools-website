@@ -10,7 +10,7 @@
 // packager records as `'unknown'`; that is a real answer for a tool whose
 // operation is not knowable from its name, and `fetch` below is one.
 
-import { CIVIC_MANIFEST, civicRouter } from '@typedstandards/civic-typed-router';
+import { CIVIC_MANIFEST, civicRouter, RETIRED_PACKS } from '@typedstandards/civic-typed-router';
 
 // --- Both spellings (#599 W3) -------------------------------------------------
 //
@@ -55,13 +55,59 @@ export const LEGACY_TOOL_ALIASES: Readonly<Record<string, { sourceId: string; to
   },
 };
 
-/** The upstream name a legacy exposed name (`<old alias>__<upstream>`) stands for, or `undefined`. */
-function legacyUpstreamToolName(toolName: string): string | undefined {
+/**
+ * The tools each pack a router release retired offered under its alias, by the pack's `sourceId`, frozen as the
+ * last release that offered it stated them (CKAN-2-WEB P1). Router 0.11.0's Analyze Boston (`boston`) offered six of
+ * the CKAN server's tools: the six `CKAN_TOOL_NAMES` begins with, `ckan_status_show` not among them (router 0.12.0's
+ * own words: "the six a CKAN pack called through 0.11.0, then `ckan_status_show`"). A record made then names them
+ * `boston__ckan_package_search` and the rest, which no manifest maps since 0.12.0.
+ */
+const RETIRED_PACK_TOOLS: Readonly<Record<string, readonly string[]>> = {
+  'boston-ckan': [
+    'ckan_package_search',
+    'ckan_find_relevant_datasets',
+    'ckan_package_show',
+    'ckan_list_resources',
+    'ckan_datastore_search',
+    'ckan_datastore_search_sql',
+  ],
+};
+
+/** An old exposed name's reading: the source it named then, the source whose configuration would route its tool
+ *  now, and its upstream name. */
+interface OldExposedName {
+  /** The source a record made then attributes the name to (`sourceIdForToolName`). */
+  sourceId: string;
+  /** The source whose server answers the tool: OpenContext for its old alias, the base for a retired pack. */
+  serverSourceId: string;
+  upstream: string;
+}
+
+/** A name under an old alias (`LEGACY_TOOL_ALIASES`) or a retired pack's (`RETIRED_PACKS`), read, or `undefined`. */
+function oldExposedName(toolName: string): OldExposedName | undefined {
   const at = toolName.indexOf('__');
   if (at <= 0) return undefined;
-  const legacy = LEGACY_TOOL_ALIASES[toolName.slice(0, at)];
+  const alias = toolName.slice(0, at);
   const upstream = toolName.slice(at + 2);
-  return legacy !== undefined && legacy.tools.includes(upstream) ? upstream : undefined;
+  const legacy = LEGACY_TOOL_ALIASES[alias];
+  if (legacy !== undefined && legacy.tools.includes(upstream)) return { sourceId: legacy.sourceId, serverSourceId: legacy.sourceId, upstream };
+  const pack = RETIRED_PACKS.find((candidate) => candidate.alias === alias && (RETIRED_PACK_TOOLS[candidate.sourceId] ?? []).includes(upstream));
+  return pack !== undefined ? { sourceId: pack.sourceId, serverSourceId: pack.base, upstream } : undefined;
+}
+
+/** The upstream name a legacy exposed name (`<old alias>__<upstream>`) stands for, or `undefined`. */
+function legacyUpstreamToolName(toolName: string): string | undefined {
+  return oldExposedName(toolName)?.upstream;
+}
+
+/**
+ * The source whose server would answer a call under an old exposed name, by `sourceId`, or `undefined` for any other
+ * name (CKAN-2-WEB P1, W11): Boston OpenContext's tools under its alias before router 0.11.0 (`boston__ckan__…`), and
+ * the retired Analyze Boston pack's (`boston__ckan_…`), whose calls went to the CKAN server. No manifest entry holds
+ * `boston` since router 0.12.0 (D7 = A), so the dispatch reads the name here, never through the live map.
+ */
+export function oldExposedNameServer(toolName: string): string | undefined {
+  return civicRouter.upstreamToolName(toolName) === toolName ? oldExposedName(toolName)?.serverSourceId : undefined;
 }
 
 /** Whether `toolName`, in either spelling, is the civic tool `upstream`. */
@@ -139,9 +185,11 @@ const TOOL_OPERATION_TYPES: Record<string, string> = {
   ckan__query_data: 'query',
   ckan__execute_sql: 'query',
   ckan__aggregate_data: 'query',
-  // The Boston pack's six over the hosted CKAN server (router 0.11.0, CKAN-1 P3,
-  // A17): two find datasets, two read a dataset's description and its
-  // resources, and the two datastore tools read records.
+  // The hosted CKAN server's six data tools (router 0.11.0's Boston pack's six,
+  // CKAN-1 P3, A17; the server's own since router 0.12.0): two find datasets,
+  // two read a dataset's description and its resources, and the two datastore
+  // tools read records. Its seventh, `ckan_status_show`, is left untyped: it
+  // reads no dataset (`operation-types.test.ts` states the reading).
   ckan_package_search: 'search',
   ckan_find_relevant_datasets: 'search',
   ckan_package_show: 'metadata',
@@ -233,7 +281,7 @@ export function sourceIdForToolName(toolName: string): string | undefined {
   // An exposed name resolves by the dispatch map; a bare name by the
   // package's index, as before W3 (#599 W3: both spellings answer the same);
   // a legacy exposed name by the source it named then (CKAN-1 P3, A-C6).
-  const legacy = legacyUpstreamToolName(toolName);
-  if (legacy !== undefined && civicRouter.upstreamToolName(toolName) === toolName) return LEGACY_TOOL_ALIASES[toolName.slice(0, toolName.indexOf('__'))].sourceId;
+  const old = oldExposedName(toolName);
+  if (old !== undefined && civicRouter.upstreamToolName(toolName) === toolName) return old.sourceId;
   return civicRouter.sourceForAliasedName(toolName)?.sourceId ?? civicRouter.sourceIdForToolName(toolName);
 }

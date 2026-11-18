@@ -182,7 +182,10 @@ test('premise: the three sources are configured and the switch is unset', () => 
   // Socrata pack move nothing an unlocked composition with no search states; only the version below moves.
   // CKAN-1 P3 (hub #314): router 0.11.0. With `CKAN_MCP_URL` unset its two entries are offered nowhere; the alias
   // rename and the two not-configured rows below are what moves.
-  assert.equal(ROUTER_VERSION, '0.11.0', 'premise: the installed router is the pin this criterion is for');
+  // CKAN-2-WEB P1 (hub #329): router 0.12.0. With `CKAN_MCP_URL` unset the CKAN server is offered nowhere, and every
+  // prompt and offered-tools array is 0.11.0's (its CHANGELOG); the retired pack's not-configured row leaves the
+  // record's offered set, and the router component states 0.12.0. Those two are what moves.
+  assert.equal(ROUTER_VERSION, '0.12.0', 'premise: the installed router is the pin this criterion is for');
   for (const [key, text] of Object.entries(withoutPackText)) {
     assert.ok(text.includes('boston_opencontext__ckan__'), `premise: ${key} names Boston OpenContext's tools under the new alias`);
     assert.ok(!text.includes('boston__'), `premise: ${key} names a tool under the old alias, or the pack's`);
@@ -208,9 +211,9 @@ test('criterion P: the composition moves exactly the two named facts', async () 
     // Router 0.8.0 (S2-B): NYC City Record, a pack over Socrata, is configured wherever Socrata is.
     { sourceId: 'nyc-record', alias: 'nyc_record', reason: 'configured' },
     { sourceId: 'nys-legislation', alias: 'nys_legislation', reason: 'not-configured' },
-    // Router 0.11.0 (CKAN-1 P3): the CKAN server and its Boston pack, `CKAN_MCP_URL` unset.
+    // Router 0.11.0 (CKAN-1 P3): the CKAN server and its Boston pack, `CKAN_MCP_URL` unset. Router 0.12.0
+    // (CKAN-2-WEB P1) retired the pack: its row (`boston-ckan`, alias `boston`, not-configured) is gone.
     { sourceId: 'ckan-server', alias: 'ckan', reason: 'not-configured' },
-    { sourceId: 'boston-ckan', alias: 'boston', reason: 'not-configured' },
   ].map((row) => (row.sourceId === 'boston-opencontext' ? { ...row, alias: 'boston_opencontext' } : row)));
   const base = AT_BASE.components;
   // S2-B: the three sources' components are as at the base; City Record's pack, offered since router 0.8.0, adds its
@@ -237,5 +240,5 @@ test('criterion P: the composition moves exactly the two named facts', async () 
   assert.equal(observed.components.length, base.length + 1);
   assert.equal((observed.components[3] as { id: string }).id, 'nyc-record@https://data.cityofnewyork.us/d/dg92-zbpx');
   assert.deepEqual(base.at(-1), { id: '@typedstandards/civic-typed-router', version: '0.2.0' });
-  assert.deepEqual(observed.components.at(-1), { id: '@typedstandards/civic-typed-router', version: '0.11.0' });
+  assert.deepEqual(observed.components.at(-1), { id: '@typedstandards/civic-typed-router', version: '0.12.0' });
 });

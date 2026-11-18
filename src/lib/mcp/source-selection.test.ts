@@ -79,10 +79,12 @@ const ALL_ON: Env = { ...FULL, nycCharterHosting: 'sandbox', nycCheckbookHosting
  *  selection. ALL_ON above switches all four on. */
 /** S2-B: since router 0.8.0 NYC City Record is a pack over Socrata, configured wherever Socrata is: its row sits
  *  among the hosted rows in manifest order, `configured`, or `selected`/`not-selected` under a selection. */
-const HOSTED_ROWS = (record: 'configured' | 'selected' | 'not-selected') => ['nyc-charter:nyc_charter:not-configured', 'nyc-checkbook:nyc_checkbook:not-configured', `nyc-record:nyc_record:${record}`, 'nys-legislation:nys_legislation:not-configured', 'ckan-server:ckan:not-configured', 'boston-ckan:boston:not-configured'];
+const HOSTED_ROWS = (record: 'configured' | 'selected' | 'not-selected') => ['nyc-charter:nyc_charter:not-configured', 'nyc-checkbook:nyc_checkbook:not-configured', `nyc-record:nyc_record:${record}`, 'nys-legislation:nys_legislation:not-configured', 'ckan-server:ckan:not-configured'];
 /** Router 0.11.0: the CKAN server and its Boston pack, offered only when `CKAN_MCP_URL` is set (`ckanUrl`); FULL
- *  leaves it unset, so the pack's six `boston__` tools are withheld beside the hosted sources'. ALL_ON sets it. */
-const HOSTED_PREFIXES = ['nyc_charter__', 'nyc_checkbook__', 'nys_legislation__', 'boston__'];
+ *  leaves it unset, so the pack's six `boston__` tools are withheld beside the hosted sources'. ALL_ON sets it.
+ *  Router 0.12.0 (CKAN-2-WEB P1): the pack is retired, its row with it, and the CKAN server's own seven `ckan__`
+ *  tools are withheld in its place. */
+const HOSTED_PREFIXES = ['nyc_charter__', 'nyc_checkbook__', 'nys_legislation__', 'ckan__'];
 
 const ALL_TOOLS = tools.mcpToolsFor(undefined);
 const names = (list: ChatCompletionTool[]) => list.map((t) => (t as { function: { name: string } }).function.name);

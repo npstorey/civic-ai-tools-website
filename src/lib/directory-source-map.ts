@@ -7,9 +7,9 @@
  * `nyc-record-mcp`, the retired package's entry: the router's carry-over note). Every value is a manifest `sourceId`
  * at the router this codebase pins; `directory-source-map.test.ts` holds the table to that and to the index.
  *
- * NOT HERE, stated: `ckan-server` and `boston-ckan` (CKAN-1's P3) are manifest `sourceId`s from router 0.11.0, and no
- * entry maps to either. The hosted CKAN server's entry (`ckan-mcp-server`) and its badge are hub #329's to add
- * (OA-941 = A: `CKAN_MCP_URL` is unset). `boston-core-mcp` is another maintainer's server and maps to nothing.
+ * NOT HERE, stated: `ckan-server` (CKAN-1's P3) is a manifest `sourceId` from router 0.11.0, and no entry maps to it;
+ * `boston-ckan`, the pack over it, was retired by router 0.12.0. The hosted CKAN server's entry (`ckan-mcp-server`)
+ * and its badge are hub #329's to add (OA-941 = A: `CKAN_MCP_URL` is unset). `boston-core-mcp` is another maintainer's server and maps to nothing.
  */
 
 /** Directory entry id → the `sourceId` of the source that entry is. */

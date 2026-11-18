@@ -420,7 +420,8 @@ test('W2-7: the packaged record verifies at the pinned verify-core 0.15.4', asyn
 
 test('W2-7: the analysis page states the search in revision 5\'s words, names the test rule as written, and not directory-set\'s sentence', () => {
   const text = chooserLines(chooserFromPackage(packaged().pkg)).map((line) => line.text).join('\n');
-  assert.ok(text.includes('The model was first shown 2 of the 9 sources'), text);
+  // Router 0.12.0 (CKAN-2-WEB P1): the inventory holds eight entries (the Boston pack retired), so the count is of 8.
+  assert.ok(text.includes('The model was first shown 2 of the 8 sources'), text);
   assert.ok(text.includes('They were chosen by a rule recorded as test-listed-subset, version 1, which this site has no words for.'), text);
   assert.ok(!text.includes('Those were the sources set up on the site'), text);
   assert.ok(text.includes(`The model searched for sources, using the words: “${Q1}”. The search returned 4 sources. They are listed in the search's order, its best match first: NYC City Record; Data Commons; Socrata; NYS Open Legislation. The site that ran this question did the search itself. It did not send the search to any source.`), text);

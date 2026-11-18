@@ -2,7 +2,19 @@
 // that carries the signed-surface fixes named below (Wave N9 #384, family F2,
 // C4; Wave N10 #409, criterion 6; Wave N12 #470, criteria 7-9; sprint R2 #599
 // W4; sprint R6 #632 W2; sprint R8 #644 W1; sprint R10 civic-ai-tools#289 P5;
-// sprint S2-B, npstorey/civic-ai-tools#309; S2-B P3R, the same issue; S3-B W2, npstorey/civic-ai-tools#318).
+// sprint S2-B, npstorey/civic-ai-tools#309; S2-B P3R, the same issue; S3-B W2, npstorey/civic-ai-tools#318;
+// CKAN-2-WEB P1, npstorey/civic-ai-tools#329).
+//
+// WHAT THE PIN PROTECTS, PART ELEVEN — 0.15.0, and why the range moved to it (CKAN-2-WEB P1, W4; ruling D1 = A and
+// F1 = (a) on npstorey/civic-ai-tools#329; its CHANGELOG entry of 2026-11-18, read before the move). One thing this
+// instance now relies on: a registry entry naming `portalArgument` is per-portal. `buildDataSources` mints one entry
+// per distinct portal its accepted calls named, in first-seen order, `portalUrl` the portal as the call named it (a
+// URL parser's spelling, one trailing slash removed), with no `datasetId`; a rejected call mints none. This instance's
+// `ckan-server` entry names `server_url` (`./data-sources.ts`). Below 0.15.0 the field does not exist and the entry
+// is an aggregate with one static portal. Driven through this repository's packager in
+// `src/lib/model-loop/ckan-server-driven.test.ts` (W4). 0.15.0 keeps produce-core `^0.9.0`, so the core floors stay;
+// a registry in which no entry names `portalArgument` gives 0.14.0's `dataSources[]` and graph (the CHANGELOG's own
+// statement).
 //
 // WHAT THE PIN PROTECTS, PART TEN — 0.14.0, and why the range moved to it (S3-B W2, hub ADR-0033's amendment 5;
 // its CHANGELOG entry of 2026-11-13, read before the move). Two things this instance now relies on:
@@ -333,19 +345,19 @@ const REPO_ROOT = path.join(path.dirname(fileURLToPath(import.meta.url)), '..', 
 const HARNESS = '@typedstandards/civic-typed-harness';
 const HARNESS_DIR = path.join(REPO_ROOT, 'node_modules', ...HARNESS.split('/'));
 
-/** The lowest version carrying ALL NINE sets of fixes this file names: the
+/** The lowest version carrying ALL ELEVEN sets of fixes this file names: the
  *  0.3.1 graph-builder fixes, the 0.4.0 data-source fix, the 0.5.0
  *  configured-server fixes, 0.7.0's record fields, 0.9.0's two reasons and
  *  flows-statement reference, 0.10.0's routing statement and load span, and
  *  0.11.0's subtype constant, 0.12.0's `civic:packId`, 0.13.0's reported
- *  keys and evaluator words, and 0.14.0's search span and routing
- *  configuration above. */
-const FLOOR = '0.14.0';
+ *  keys and evaluator words, 0.14.0's search span and routing
+ *  configuration, and 0.15.0's per-portal source above. */
+const FLOOR = '0.15.0';
 /** Exclusive ceiling: under semver a 0.x MINOR bump is a breaking change, so
- *  the pin admits later 0.14.x PATCHES (a fix that is still this behaviour)
- *  and refuses 0.15.0, which would be a contract this test has not read. The
- *  assertion is therefore a RANGE (`>=0.14.0 <0.15.0`) rather than equality to
- *  `0.14.0`: pinning the exact string would turn red on a patch release that
+ *  the pin admits later 0.15.x PATCHES (a fix that is still this behaviour)
+ *  and refuses 0.16.0, which would be a contract this test has not read. The
+ *  assertion is therefore a RANGE (`>=0.15.0 <0.16.0`) rather than equality to
+ *  `0.15.0`: pinning the exact string would turn red on a patch release that
  *  changed nothing this file cares about, which is a criterion that fails for
  *  the wrong reason.
  *
@@ -364,12 +376,14 @@ const FLOOR = '0.14.0';
  *  0.13.0's entry (the reported keys and the evaluator's words; no dependency
  *  change, so the core floors stay), and `>=0.13.0 <0.14.0` until S3-B W2,
  *  which read 0.14.0's entry (the search span and the routing configuration;
- *  no dependency change, so the core floors stay). Each ceiling did its
+ *  no dependency change, so the core floors stay), and `>=0.14.0 <0.15.0`
+ *  until CKAN-2-WEB P1, which read 0.15.0's entry (the per-portal source,
+ *  `portalArgument`; no dependency change, so the core floors stay). Each ceiling did its
  *  job: it held the next minor out until someone read the new contract and
  *  said what changed. Both numbers move together, in one commit, with the
  *  paragraph above rewritten — a floor raised without its ceiling would
  *  silently readmit the next unread minor. */
-const CEILING = '0.15.0';
+const CEILING = '0.16.0';
 
 type Semver = [number, number, number];
 
@@ -404,7 +418,7 @@ function readJson(file: string): Record<string, unknown> {
   return JSON.parse(fs.readFileSync(file, 'utf8')) as Record<string, unknown>;
 }
 
-test('harness pin: the INSTALLED civic-typed-harness satisfies >=0.14.0 <0.15.0 (it carries all ten sets of signed-surface fixes)', () => {
+test('harness pin: the INSTALLED civic-typed-harness satisfies >=0.15.0 <0.16.0 (it carries all eleven sets of signed-surface fixes)', () => {
   const pkgJson = path.join(HARNESS_DIR, 'package.json');
   assert.ok(fs.existsSync(pkgJson), `${HARNESS} is not installed at ${pkgJson} — run npm ci`);
 
@@ -415,6 +429,8 @@ test('harness pin: the INSTALLED civic-typed-harness satisfies >=0.14.0 <0.15.0 
   assert.ok(
     compareSemver(installed, parseSemver(FLOOR, 'floor')) >= 0,
     `installed ${HARNESS} is ${version as string}; ${FLOOR} is the first release that ` +
+      'mints one `dataSources` entry per portal a per-portal source\'s calls named (`portalArgument`; npstorey/civic-ai-tools#329, ' +
+      'CKAN-2-WEB P1, W4). 0.14.0 is the floor that ' +
       'records a search as the instance\'s own step and states the routing configuration (`find_source`, ' +
       '`routingConfiguration`; hub ADR-0033 amendment 5; npstorey/civic-ai-tools#318, S3-B W2). 0.13.0 is the floor that states what a remote server ' +
       'reported of itself (`reportedName`, `reportedVersion`; hub ADR-0033 amendment 4; npstorey/civic-ai-tools#309, P3R). ' +

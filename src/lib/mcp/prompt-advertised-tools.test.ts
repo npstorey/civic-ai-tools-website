@@ -342,11 +342,12 @@ test('#323: the extractor recognises each anchor it claims to', () => {
 
 test('#644 W1: every name the in-loop directory backticks is an alias it lists or a tool an in-loop run can call', () => {
   // Router 0.11.0: a pack's base with no tool names of its own (the CKAN server) is in no list the model reads, the
-  // directory included (its CHANGELOG); every other entry is listed. The base is held absent, so the rule is exercised.
+  // directory included (its CHANGELOG); every other entry is listed. Router 0.12.0 (CKAN-2-WEB P1) gives the CKAN
+  // server seven tools of its own and retires its pack, so no entry is such a base: the rule stays, and holds none.
   const unlistedBases = new Set(civicRouter.manifest
     .filter((entry) => entry.toolNames.length === 0 && civicRouter.manifest.some((pack) => pack.base === entry.sourceId))
     .map((entry) => entry.alias));
-  assert.deepEqual([...unlistedBases], ['ckan'], 'premise: the CKAN server is the one tool-less base');
+  assert.deepEqual([...unlistedBases], [], 'premise: since router 0.12.0 no manifest entry is a tool-less base');
   const aliases = new Set(civicRouter.manifest.map((entry) => entry.alias).filter((alias) => !unlistedBases.has(alias)));
   const callable = callableToolNames();
   const named = [...IN_LOOP_DIRECTORY.matchAll(/`([a-z][a-z0-9_]*)`/g)].map((m) => m[1]);

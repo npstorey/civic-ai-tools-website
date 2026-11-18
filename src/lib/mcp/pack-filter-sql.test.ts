@@ -1,5 +1,7 @@
-// CKAN-1 P3, fix rounds 1 and 2 (F1, F7): the statement check of a CKAN pack's `ckan_datastore_search_sql`, held to a
-// real server, not to a reading of one.
+// CKAN-1 P3, fix rounds 1 and 2 (F1, F7): the statement check of `ckan_datastore_search_sql`, held to a real server,
+// not to a reading of one. Since router 0.12.0 (CKAN-2-WEB P1, W3) the tool is the hosted CKAN server's own, offered
+// as `ckan__ckan_datastore_search_sql` with no pack, and the check is read through the server-tool path
+// (`serverCallRefusal`). `../model-loop/ckan-server-driven.test.ts` drives the same table through the loop.
 //
 // THE CHECK IS A PORT of PostgreSQL's lexical rules (`src/backend/parser/scan.l`), since the datastore is PostgreSQL:
 // whitespace (`space`, which in 16 holds no vertical tab); `--` comments, which end at a line feed or a carriage return
@@ -28,12 +30,16 @@ import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { isOneSelectOrWithStatement, packCallRefusal, packFilterOf, SqlStatementRefusedError } from './pack-filter.ts';
+import * as packFilter from './pack-filter.ts';
+import { isOneSelectOrWithStatement, SqlStatementRefusedError } from './pack-filter.ts';
+
+/** The server-tool path's refusal, read through a cast so this file type-checks before the name exists (W3's red). */
+const { serverCallRefusal } = packFilter as unknown as { serverCallRefusal?: (upstream: string, args: Record<string, unknown>) => Error | null };
 
 interface Row { id: string; label: string; sql: string; postgres: 'second' | 'notSelect' | 'one' | 'nothing'; postgresSaid: string; check: 'sent' | 'refused'; note?: string }
 const TABLE = JSON.parse(fs.readFileSync(path.join(path.dirname(fileURLToPath(import.meta.url)), 'fixtures', 'statement-check-postgres16.json'), 'utf8')) as { server: string; rows: Row[] };
 const TOOL = 'ckan_datastore_search_sql';
-const FILTER = packFilterOf(`boston__${TOOL}`);
+const PORTAL = 'https://data.boston.gov';
 
 test('the table was driven on PostgreSQL 16.15 and covers each outcome', () => {
   assert.equal(TABLE.server, 'PostgreSQL 16.15');
@@ -48,10 +54,10 @@ test('no row the check sends is one on which PostgreSQL ran a hidden statement',
   assert.deepEqual(defects.map((row) => `${row.id}: ${row.label}`), []);
 });
 
-test('each row\'s check is the table\'s, through the pack\'s refusal; a refusal of one statement is marked "refused, not sure"', () => {
-  assert.ok(FILTER, 'premise: the Boston pack has a filter');
+test('each row\'s check is the table\'s, through the server-tool path; a refusal of one statement is marked "refused, not sure"', () => {
+  assert.equal(typeof serverCallRefusal, 'function', 'the server-tool path has no statement check');
   const wrong = TABLE.rows.flatMap((row) => {
-    const refusal = packCallRefusal(TOOL, { server_url: FILTER!.portal, sql: row.sql }, FILTER!);
+    const refusal = serverCallRefusal!(TOOL, { server_url: PORTAL, sql: row.sql });
     const decided = refusal === null ? 'sent' : refusal instanceof SqlStatementRefusedError ? 'refused' : 'another refusal';
     return decided === row.check ? [] : [`${row.id}: ${row.label}: ${decided}, the table says ${row.check}`];
   });

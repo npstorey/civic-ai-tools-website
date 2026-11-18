@@ -21,9 +21,14 @@
 // derives no operation type and renders no OpenContext cell, and the OpenContext SQL cell cites `boston-ckan`, the
 // pack's `sourceId`. Site 4 states the alias as the record states it and is green at L: it names no source.
 //
-// SHAPED TO FAIL. The live manifest holds an entry for `boston` (the pack), so a reader that resolves through it
-// finds a source and names it; only a reader that reads the record's own rows names Boston OpenContext. The contrast
-// test drives a record made after the bump, which loaded `boston` as the pack, and must read Analyze Boston.
+// SHAPED TO FAIL. The live manifest held an entry for `boston` (the pack) through router 0.11.0, so a reader that
+// resolves through it found a source and named it; only a reader that reads the record's own rows names Boston
+// OpenContext. The contrast test drives a record made under router 0.11.0, which loaded `boston` as the pack, and must
+// read Analyze Boston.
+//
+// CKAN-2-WEB P1 (W12): router 0.12.0 retired the pack, and under D7 = A no manifest entry holds `boston`. The pack is
+// read from the router's `retiredPack`, and the contrast record still reads Analyze Boston: a recorded load alias reads
+// as recorded, through the record's own rows and the retired pack, never as no source.
 //
 // Run with: npm test
 
@@ -107,7 +112,8 @@ const { LOAD_STEP_LABEL } = (await import('@/lib/sources/copy')) as unknown as {
 const { CIVIC_MANIFEST } = await import('@typedstandards/civic-typed-router');
 
 const OPENCONTEXT = CIVIC_MANIFEST.find((entry) => entry.sourceId === 'boston-opencontext')!;
-const PACK = CIVIC_MANIFEST.find((entry) => entry.sourceId === 'boston-ckan')!;
+/** The Boston pack, retired by router 0.12.0 and read from its table of retired packs. */
+const PACK = (await import('@typedstandards/civic-typed-router')).retiredPack('boston-ckan')!;
 
 function attr(key: string, value: string) {
   return { key, value: { stringValue: value } };

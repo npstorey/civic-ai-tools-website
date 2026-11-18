@@ -191,6 +191,9 @@ test('#323: every tool the model can call is either typed or knowingly untyped',
     list_hearing_transcripts: "NYS Open Legislation: a year's hearing transcripts: \"catalog\" reads datasets",
     get_hearing_transcript: "NYS Open Legislation: one hearing transcript's text: \"query\" would count it in records analyzed",
     get_updates: "NYS Open Legislation: changes across its content types; its `type` argument (processed, published) names the date the feed is keyed on, not an operation, so the `args.type` pass-through is kept to get_data (R8 W3)",
+    // Router 0.12.0 (CKAN-2-WEB P1): the hosted CKAN server's seventh tool. It reads no dataset: it states whether an
+    // address answers as a CKAN portal, its version and its locale.
+    ckan_status_show: "CKAN server: whether a portal answers, its CKAN version and locale: \"metadata\" reads a dataset's columns, \"catalog\" reads datasets, \"metrics\" reads dataset statistics",
   };
 
   // Every source on, so dispatch can be asked about every exposed name.
@@ -201,12 +204,12 @@ test('#323: every tool the model can call is either typed or knowingly untyped',
     nycCharterHosting: 'sandbox',
     nycCheckbookHosting: 'sandbox',
     nysLegislationHosting: 'sandbox',
-    // Router 0.11.0 (CKAN-1 P3): the hosted CKAN server, whose Boston pack's six tools route to it.
+    // Router 0.11.0 (CKAN-1 P3): the hosted CKAN server; its own seven tools since router 0.12.0.
     ckanUrl: 'https://ckan.invalid/mcp',
   };
   const exposedNames = mcpTools.flatMap((t) => (t.type === 'function' ? [t.function.name] : []));
-  // The Boston pack's six (router 0.11.0, CKAN-1 P3) are in the loop below: premise that it reaches them.
-  assert.ok(exposedNames.filter((name) => civicRouter.dispatchMap.get(name)?.base === 'ckan-server').length === 6, 'premise: the vocabulary holds the Boston pack\'s six');
+  // The CKAN server's seven (router 0.12.0; CKAN-2-WEB P1) are in the loop below: premise that it reaches them.
+  assert.ok(exposedNames.filter((name) => civicRouter.dispatchMap.get(name)?.sourceId === 'ckan-server').length === 7, 'premise: the vocabulary holds the CKAN server\'s seven');
 
   for (const tool of mcpTools) {
     if (tool.type !== 'function') continue;
@@ -296,8 +299,10 @@ test('R8 W3 criterion 4 (b): get_updates with a type derives nothing; get_data w
 });
 
 // CKAN-1 P3 (npstorey/civic-ai-tools#314), stage R, criterion A17: a row for each of the Boston pack's six tools, in
-// both spellings. RED at stage L (`a9f092b`): none of the six derives an operation type.
-test('A17: the Boston pack\'s six tools each derive their operation type, in either spelling', () => {
+// both spellings. RED at stage L (`a9f092b`): none of the six derives an operation type. CKAN-2-WEB P1: router 0.12.0
+// retired the pack, and the six rows are the CKAN server's own tools' (`ckan__<name>`); its seventh, `ckan_status_show`,
+// derives none (the test above lists it).
+test('A17: the CKAN server\'s six data tools each derive their operation type, in either spelling, and ckan_status_show none', () => {
   const EXPECTED: Record<string, string> = {
     ckan_package_search: 'search',
     ckan_find_relevant_datasets: 'search',
@@ -306,8 +311,9 @@ test('A17: the Boston pack\'s six tools each derive their operation type, in eit
     ckan_datastore_search: 'query',
     ckan_datastore_search_sql: 'query',
   };
-  const pack = civicRouter.manifest.find((entry) => entry.sourceId === 'boston-ckan')!;
-  assert.deepEqual([...pack.toolNames].sort(), Object.keys(EXPECTED).sort(), 'premise: the pack\'s six tools are the six rows');
+  const pack = civicRouter.manifest.find((entry) => entry.sourceId === 'ckan-server')!;
+  assert.deepEqual([...pack.toolNames].sort(), [...Object.keys(EXPECTED), 'ckan_status_show'].sort(), 'premise: the server\'s seven tools are the six rows and ckan_status_show');
+  assert.equal(deriveOperationType(`${pack.alias}__ckan_status_show`, { server_url: 'https://data.boston.gov' }), undefined);
   const derived = Object.fromEntries(Object.keys(EXPECTED).flatMap((upstream) => [
     [`${pack.alias}__${upstream}`, deriveOperationType(`${pack.alias}__${upstream}`, { server_url: 'https://data.boston.gov' })],
     [upstream, deriveOperationType(upstream, { server_url: 'https://data.boston.gov' })],

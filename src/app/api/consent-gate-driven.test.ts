@@ -485,8 +485,8 @@ test('criterion 4: a stale cookie naming a removed source is ignored, and the re
   assert.ok(!offered.some((s) => s.sourceId === 'retired-source'), 'the record names a source the instance does not have');
   assert.equal(offered.find((s) => s.sourceId === 'data-commons')?.reason, 'not-consented', 'Ask first is recorded not-consented');
   // Every manifest source, router 0.6.0's three hosted entries included (R8 W3), and router 0.11.0's CKAN server and
-  // Boston pack (CKAN-1 P3).
-  assert.deepEqual(offered.map((s) => s.sourceId), ['socrata', 'data-commons', 'boston-opencontext', 'nyc-charter', 'nyc-checkbook', 'nyc-record', 'nys-legislation', 'ckan-server', 'boston-ckan']);
+  // Boston pack (CKAN-1 P3); router 0.12.0 retired the pack (CKAN-2-WEB P1), so the CKAN server is last.
+  assert.deepEqual(offered.map((s) => s.sourceId), ['socrata', 'data-commons', 'boston-opencontext', 'nyc-charter', 'nyc-checkbook', 'nyc-record', 'nys-legislation', 'ckan-server']);
 });
 
 test('criterion 4 (D12): a session carrying a dbId, with no row, is refused consent_required even with an anonymous cookie present', () => {

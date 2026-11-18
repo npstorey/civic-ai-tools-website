@@ -40,6 +40,7 @@ import {
   type CivicManifestEntry,
 } from '@typedstandards/civic-typed-router';
 import { mcpTools, mcpToolsFor, offeredMcpTools } from './tools.ts';
+import { withholdArgumentsFromTools } from './withheld-arguments.ts';
 import { deriveOperationType, sourceIdForToolName } from './operation-types.ts';
 import * as registryModule from './registry.ts';
 import {
@@ -95,9 +96,10 @@ const toolsOf = (sourceIds: readonly string[]): string[] => sourceIds.flatMap((s
 });
 const AFTER_CHARTER_THIRTY_SIX: readonly string[] = toolsOf(['nyc-checkbook', 'nyc-record', 'nys-legislation']);
 const HOSTED_THIRTY_FOUR: readonly string[] = toolsOf(['nyc-checkbook', 'nys-legislation']);
-/** Router 0.11.0 (CKAN-1 P2): the CKAN server declares no tools; its Boston pack's six join the vocabulary last, under
- *  the alias `boston` (Boston OpenContext's is `boston_opencontext` since), withheld while `CKAN_MCP_URL` is unset. */
-const PACK_SIX: readonly string[] = toolsOf(['ckan-server', 'boston-ckan']);
+/** Router 0.11.0 (CKAN-1 P2): the CKAN server declared no tools; its Boston pack's six joined the vocabulary last, under
+ *  the alias `boston` (Boston OpenContext's is `boston_opencontext` since). Router 0.12.0 (CKAN-2-WEB P1): the pack is
+ *  retired and the server's own seven join last, under `ckan`, withheld while `CKAN_MCP_URL` is unset. */
+const SERVER_SEVEN: readonly string[] = toolsOf(['ckan-server']);
 
 const FULL: McpRegistryEnv = {
   socrataUrl: 'https://socrata.invalid',
@@ -120,16 +122,20 @@ test('the tools array names every tool <alias>__<upstream>, and is the router\'s
   assert.deepEqual(names(mcpTools).slice(11, 16), [...CHARTER_FIVE]);
   assert.equal(AFTER_CHARTER_THIRTY_SIX.length, 36);
   assert.deepEqual(names(mcpTools).slice(16, 52), [...AFTER_CHARTER_THIRTY_SIX]);
-  assert.equal(PACK_SIX.length, 6);
-  assert.deepEqual(names(mcpTools).slice(52), [...PACK_SIX]);
-  assert.equal(names(mcpTools).length, 58);
-  assert.equal(JSON.stringify(mcpTools), JSON.stringify(civicRouter.aliasedMcpTools));
+  assert.equal(SERVER_SEVEN.length, 7);
+  assert.deepEqual(names(mcpTools).slice(52), [...SERVER_SEVEN]);
+  assert.equal(names(mcpTools).length, 59);
+  // The router's own aliased array, less the arguments this site withholds (CKAN-2-WEB P1, criterion 7:
+  // `check_source_portal` on `ckan__ckan_list_resources`); every other byte is the router's.
+  const withheld = (tools: unknown) => withholdArgumentsFromTools(tools as typeof mcpTools);
+  assert.notEqual(JSON.stringify(mcpTools), JSON.stringify(civicRouter.aliasedMcpTools), 'premise: the router offers an argument this site withholds');
+  assert.equal(JSON.stringify(mcpTools), JSON.stringify(withheld(civicRouter.aliasedMcpTools)));
   for (const lock of [undefined, 'data.cityofnewyork.us']) {
-    assert.equal(JSON.stringify(mcpToolsFor(lock)), JSON.stringify(civicRouter.aliasedMcpToolsFor(lock)), `lock ${lock}`);
+    assert.equal(JSON.stringify(mcpToolsFor(lock)), JSON.stringify(withheld(civicRouter.aliasedMcpToolsFor(lock))), `lock ${lock}`);
     for (const env of [FULL, NO_BOSTON, ALL_ON]) {
       assert.equal(
         JSON.stringify(offeredMcpTools(mcpToolsFor(lock), env)),
-        JSON.stringify(civicRouter.aliasedOfferedMcpTools(civicRouter.aliasedMcpToolsFor(lock), env)),
+        JSON.stringify(withheld(civicRouter.aliasedOfferedMcpTools(civicRouter.aliasedMcpToolsFor(lock), env))),
       );
     }
   }
@@ -152,10 +158,10 @@ test('the withheld tools are named as the model would have been offered them', (
   // Router 0.6.0 (R8 W3): the three new hosted sources' forty-one likewise,
   // while their switches are unset; since router 0.8.0 the two hosted ones'
   // thirty-four (City Record is a pack, offered wherever Socrata is).
-  assert.deepEqual(withheldToolNames(FULL), [...CHARTER_FIVE, ...HOSTED_THIRTY_FOUR, ...PACK_SIX]);
+  assert.deepEqual(withheldToolNames(FULL), [...CHARTER_FIVE, ...HOSTED_THIRTY_FOUR, ...SERVER_SEVEN]);
   assert.deepEqual(
     new Set(withheldToolNames(NO_BOSTON)),
-    new Set([...ELEVEN.filter(([, , source]) => source === 'boston-opencontext').map(([, exposed]) => exposed), ...CHARTER_FIVE, ...HOSTED_THIRTY_FOUR, ...PACK_SIX]),
+    new Set([...ELEVEN.filter(([, , source]) => source === 'boston-opencontext').map(([, exposed]) => exposed), ...CHARTER_FIVE, ...HOSTED_THIRTY_FOUR, ...SERVER_SEVEN]),
   );
 });
 

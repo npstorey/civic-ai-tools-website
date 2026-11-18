@@ -1,5 +1,5 @@
 // Types for streaming events
-import { civicRouter } from '@typedstandards/civic-typed-router';
+import { civicRouter, RETIRED_PACKS } from '@typedstandards/civic-typed-router';
 import { deriveOperationType, isTool, upstreamToolName } from './mcp/operation-types.ts';
 import { isSourceRefusal } from './mcp/tool-call-failure.ts';
 import { ambiguousToolNameOf } from './mcp/tool-name-refusal.ts';
@@ -1223,7 +1223,8 @@ function loadedSourceName(args: Record<string, unknown>): string | undefined {
   const alias = args.alias;
   if (typeof alias !== 'string') return undefined;
   const entry = civicRouter.manifest.find((candidate) => candidate.alias === alias);
-  return entry ? entry.displayName.replace(/ MCP Server$/, '') : undefined;
+  // A retired pack's alias reads as that pack (CKAN-2-WEB P1, W12), as `loadAliasReaderName` reads it.
+  return entry ? entry.displayName.replace(/ MCP Server$/, '') : RETIRED_PACKS.find((pack) => pack.alias === alias)?.displayName;
 }
 
 // Format tool call arguments into human-readable progress messages
