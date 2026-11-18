@@ -1688,19 +1688,25 @@ ul[data-target-source] > li[data-landing-target] {
   padding: 8px !important;
 }
 
-@media (min-width: 640px) {
-  .directory-filter-toggle > .ui-disclosure {
-    border-top: none;
-  }
-  .directory-filter-toggle > .ui-disclosure > .ui-disclosure-summary {
-    display: none;
-  }
-  .directory-filter-toggle > .ui-disclosure::details-content {
-    content-visibility: visible;
-    display: block;
-  }
-  .directory-filter-toggle > .ui-disclosure > .ui-disclosure-body {
-    margin-top: 0;
+/* The directory's filters at 640 px and up: the Disclosure's summary hidden and its closed body shown through
+   ::details-content. Gated (#791): an engine without the pseudo-element drops that rule but would keep the summary's
+   display: none, hiding the filters with no control to open them. There the whole block reads false and the toggle
+   shown below 640 px stays, top border and body gap included. directory-filter-fallback.test.ts guards the gate. */
+@supports selector(::details-content) {
+  @media (min-width: 640px) {
+    .directory-filter-toggle > .ui-disclosure {
+      border-top: none;
+    }
+    .directory-filter-toggle > .ui-disclosure > .ui-disclosure-summary {
+      display: none;
+    }
+    .directory-filter-toggle > .ui-disclosure::details-content {
+      content-visibility: visible;
+      display: block;
+    }
+    .directory-filter-toggle > .ui-disclosure > .ui-disclosure-body {
+      margin-top: 0;
+    }
   }
 }
 

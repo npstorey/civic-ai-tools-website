@@ -357,7 +357,8 @@ export default function PortalDirectoryClient({
           />
         </div>
 
-        {/* The filters (R14; 0d item 6): a Disclosure below 640 px, always shown at 640 px and up (globals.css). */}
+        {/* The filters (R14; 0d item 6): a Disclosure below 640 px, always shown at 640 px and up in a browser with
+            ::details-content; without it the Disclosure stays (globals.css, #791). */}
         <div className="directory-filter-toggle">
         <Disclosure
           summary={`${mobileFiltersOpen ? 'Hide Filters' : 'Show Filters'}${hasFilters ? ' (active)' : ''}`}
