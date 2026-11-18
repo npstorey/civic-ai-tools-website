@@ -91,3 +91,22 @@ test('W7: a record\'s call whose mcp.pack_id is boston-ckan@https://data.boston.
   assert.deepEqual(pack && { calls: pack.calls, answeredBy: pack.answeredBy?.sourceId }, { calls: 1, answeredBy: 'ckan-server' }, `the pack's call is not read as the pack's: ${JSON.stringify(reached)}`);
   assert.equal(Object.fromEntries(model.notReached.map((r) => [r.sourceId, r.whyNotSent]))['boston-ckan'], undefined, 'the retired pack reads as not used');
 });
+
+test('G9: a record made under router 0.11.0 names the retired pack by its name, Analyze Boston, where it reached it and where it did not', () => {
+  const offered = [
+    { sourceId: 'socrata', alias: 'socrata', reason: 'selected' },
+    { sourceId: 'ckan-server', alias: 'ckan', reason: 'not-configured' },
+    { sourceId: 'boston-ckan', alias: 'boston', reason: 'not-configured' },
+  ];
+  // Not reached: every record made since website 5e180d9 states the pack's row not-configured.
+  const notUsed = whereItWent.whereItWentFromSpans({ spans: [span({ 'tool.name': 'socrata__get_data', 'tool.operation_type': 'query', 'mcp.source': 'socrata' })], sourcesOffered: offered });
+  const row = (notUsed.notReached as Array<{ sourceId: string; name?: string }>).find((r) => r.sourceId === 'boston-ckan');
+  assert.equal(row?.name, 'Analyze Boston', `the retired pack's row is not named Analyze Boston: ${JSON.stringify(row)}`);
+  // Reached: a call whose span names the pack (W7's shape).
+  const reached = whereItWent.whereItWentFromSpans({
+    spans: [span({ 'tool.name': 'boston__ckan_datastore_search', 'tool.operation_type': 'query', 'mcp.source': 'ckan-server', 'mcp.pack_id': 'boston-ckan@https://data.boston.gov' })],
+    sourcesOffered: offered.map((r) => ({ ...r, reason: 'selected' })),
+  });
+  const pack = (reached.reached as Array<Row & { name?: string }>).find((r) => r.kind === 'source' && r.sourceId === 'boston-ckan');
+  assert.equal(pack?.name, 'Analyze Boston', `the reached pack is not named Analyze Boston: ${JSON.stringify(pack)}`);
+});
