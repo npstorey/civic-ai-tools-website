@@ -27,6 +27,7 @@
 import { afterEach, beforeEach, test } from 'node:test';
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
+import * as nodeModule from 'node:module';
 import path from 'node:path';
 import { pathToFileURL } from 'node:url';
 import type { ComponentType } from 'react';
@@ -301,4 +302,69 @@ test('fix round 4 (acceptance 2): after that reopen, a second landing on the sam
   if (row!.getAttribute('aria-label') !== readerSourceName(LAST)) problems.push('the row is not named by the source');
   if (doc.activeElement !== row) problems.push('focus is not on the row');
   assert.deepEqual(problems, [], `calls after the reopen: ${JSON.stringify(again)}`);
+});
+
+// --- UX-2-FIX P2, item 3 (#790): a reopened Settings does not land again ---------------------------------------------
+//
+// THE DEFECT. Land at a source, close Settings, open it again from the page's own link (no source): the list scrolled to
+// the old row (536 px at 1280, 848 at 390, the cold read's Chrome read) against 0 on a fresh open. Closing goes back to
+// the page, whose address still holds `?source=<id>`; the reopened overlay renders first while that is still the
+// address, because the router writes `/settings` into the address in an insertion effect of the same commit. So the
+// overlay's first render reads the old source, and its landing effect, which runs after the address has changed, lands.
+//
+// THE SHAPE DRIVEN. The first overlay lands and is unmounted (closed). The reopen is a NEW overlay mounted while the
+// address double still holds `?source=<the last of seven>`, beside a stand-in for the router's history write: a component
+// rendered before the overlay whose insertion effect sets the address to `/settings` with no source. The harness runs
+// effects in render order, so that write lands before the overlay's own effects, as React's insertion effects run before
+// any passive effect. Every call on the row is recorded: a reopen that lands records a scroll.
+//
+// BLIND SPOTS, stated. The router is a stand-in here; the scroll the reader sees is the phase's Chrome read, on a real
+// `next start`, on both mounts.
+
+test('#790 item 3: land, close, then reopen with no source while the old address is still showing: no row is marked and no landing runs', async () => {
+  // The page beneath the overlay reads the consent store too, so the statement stays loaded when the overlay closes
+  // (the store starts from nothing again only when its last reader leaves), as on the site.
+  const { useSourceConsent } = await load('components/sources/useSourceConsent.ts');
+  function PageBeneath() {
+    useSourceConsent();
+    return null;
+  }
+  const beneath = await mount(h(PageBeneath));
+  mounted.push(beneath);
+  const first = await overlayAt(`?source=${LAST.sourceId}`);
+  assert.ok(calls.includes(`${LAST.sourceId} scroll`), `premise: the first landing scrolled the row: ${JSON.stringify(calls)}`);
+  first.unmount();
+  mounted.splice(mounted.indexOf(first), 1);
+  calls.length = 0;
+  rows.clear();
+  doc.activeElement = CLOSE;
+
+  // The reopen: the page's address still holds the source when the overlay first renders.
+  at(`?source=${LAST.sourceId}`);
+  // The harness's own hook runtime (a test file's `react` is React itself, whose hooks the harness does not run). Its
+  // URL names no file on disk, so it is resolved to itself here and the harness's load hook serves it.
+  const RUNTIME = 'file:///civic-w3-surface-stub/react.mjs';
+  (nodeModule as unknown as { registerHooks(h: { resolve(s: string, c: unknown, n: (s: string, c?: unknown) => unknown): unknown }): void }).registerHooks({
+    resolve: (specifier, context, nextResolve) => (specifier === RUNTIME ? { url: RUNTIME, format: 'module', shortCircuit: true } : nextResolve(specifier, context)),
+  });
+  const { createElement, Fragment, useInsertionEffect } = (await import(RUNTIME)) as typeof import('react');
+  function RouterHistoryWrite({ search }: { search: string }) {
+    useInsertionEffect(() => { at(search); }, [search]);
+    return null;
+  }
+  const reopened = await mount(createElement(Fragment, null, createElement(RouterHistoryWrite, { search: '' }), createElement(SettingsOverlay, { mount: 'intercepted' })));
+  mounted.push(reopened);
+  for (let i = 0; i < 4; i += 1) {
+    await new Promise((resolve) => setTimeout(resolve, 50));
+    await reopened.settle();
+  }
+  assert.equal(location.search, '', 'premise: the router\'s history write ran');
+  const { rows: shown } = overlayList(reopened);
+  assert.equal(shown.length, 7, `premise: the reopened overlay rendered its rows (${shown.length})`);
+  const row = rows.get(LAST.sourceId);
+  assert.deepEqual({
+    landingCalls: calls.filter((c) => / (set data-landing-target|scroll|focus)/.test(c)),
+    marked: row?.getAttribute('data-landing-target') ?? null,
+    focusOnClose: doc.activeElement === CLOSE,
+  }, { landingCalls: [], marked: null, focusOnClose: true }, `calls on the reopen: ${JSON.stringify(calls)}`);
 });

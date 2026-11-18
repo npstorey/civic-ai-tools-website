@@ -419,3 +419,47 @@ test('fix round 2, A5: consent_required renders no block (the hook hands it to t
   const block = await notebookBlock(() => json({ error: 'fixture consent', code: 'consent_required' }, 403));
   assert.equal(block, null, `a consent refusal rendered the block: ${block?.text}`);
 });
+
+// --- UX-2-FIX P2, item 11 (#790): the two error boxes are announced ------------------------------------------------
+//
+// THE RULE. The home page's results box (and `/ask`'s standard run, the same `QuerySurface` box) and `/explore`'s live
+// run's error each carry `role="alert"`, as the notebook's failure block already does, with their words unchanged.
+//
+// WHAT IS DRIVEN. The same 429 drives as criterion 17 above. The box is the outermost element whose whole text is the
+// refusal's words; a drive that rendered no such element reads red as a premise.
+
+/** The outermost elements whose whole text is `words`, with their `role`. */
+function boxesReading(page: Surface, words: string): Array<{ type: string; role: unknown }> {
+  const exact = page.elements().filter((el) => textOf(el).replace(/\s+/g, ' ').trim() === words);
+  const outer = exact.filter((el) => !exact.some((other) => other !== el && within(other).includes(el)));
+  return outer.map((el) => ({ type: String(el.type), role: el.props.role }));
+}
+
+test('#790 item 11: the home page\'s error box carries role="alert", around the refusal\'s words', async () => {
+  ANON();
+  answers();
+  refuse = true;
+  await consentWith();
+  const page = await mountPage(h(Home));
+  await ask(page, 'How many 311 complaints were there in Brooklyn in 2024?');
+  assert.ok(queries.includes('/api/compare-stream'), 'premise: the question was sent');
+  const boxes = boxesReading(page, RL1);
+  assert.equal(boxes.length, 1, `premise: one box reads the refusal: ${JSON.stringify(boxes)}`);
+  assert.deepEqual(boxes, [{ type: 'div', role: 'alert' }]);
+});
+
+test('#790 item 11: /explore\'s live error carries role="alert", around the refusal\'s words', async () => {
+  ANON();
+  answers();
+  refuse = true;
+  await consentWith();
+  const page = await mountPage(h(McpFlowDiagram));
+  await page.click(page.button('Try your own'));
+  await settle(page);
+  await ask(page, 'How many 311 complaints were there in Brooklyn in 2024?');
+  await settle(page, 600);
+  assert.ok(queries.includes('/api/compare-stream'), 'premise: the live run was sent');
+  const boxes = boxesReading(page, RL1);
+  assert.equal(boxes.length, 1, `premise: one box reads the refusal: ${JSON.stringify(boxes)}`);
+  assert.deepEqual(boxes, [{ type: 'div', role: 'alert' }]);
+});

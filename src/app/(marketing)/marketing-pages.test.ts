@@ -869,6 +869,9 @@ test('UX-2 P6 + P10 criterion 10 (top change 9, site Q6 = A): /roadmap\'s audien
 // --- Criterion 11: every ruled sentence, byte for byte -------------------------------------------------------------
 
 interface WordsRow { item: string; where: () => Surface; text: string }
+// UX-2-FIX P2, A1 (#790; the cold read's finding 1): `/about`'s portal count, as the page reads it, for P10-41's end.
+const ABOUT_PORTALS = (await (await import('@/lib/mcp/portal-data')).getPortalCounts()).total.toLocaleString('en-US');
+
 const WORDS: WordsRow[] = [
   { item: 'P10-4 / D-16 (:127-128)', where: () => PAGES['/project'], text: 'A signed analysis shows how an answer was produced. It does not claim the answer is correct.' },
   { item: 'P10-10 with P10-11', where: () => PAGES['/project'], text: `Civic AI Tools is an open-source project built around that idea. Anyone can ask a plain-language question against live public data and watch every query the AI runs. Once signed in, they can publish the result as a signed analysis. ${SOURCES_SENTENCE}` },
@@ -904,6 +907,10 @@ const WORDS: WordsRow[] = [
   { item: 'P10-47 (first part)', where: () => PAGES['/about'], text: 'Civic AI Tools is part of a growing ecosystem of projects connecting AI to government data. The directory lists' },
   { item: 'P10-47 (its middle)', where: () => PAGES['/about'], text: 'connectors for civic data. Our landscape research (April 2026) also found official government connectors from' },
   { item: 'P10-47 (its end)', where: () => PAGES['/about'], text: 'pilot in which query accuracy rose from near 0% to 95% with MCP, the Model Context Protocol.' },
+  // UX-2-FIX P2, A1 (#790): the two clauses no row reached. P10-41's end is today's ruled sentence; phase 3 rules its
+  // wording (A2) and moves this row with it.
+  { item: 'P10-41 (its end; #790 A1, about/page.tsx:76)', where: () => PAGES['/about'], text: `connectors it lists and the ${ABOUT_PORTALS} portals they reach.` },
+  { item: 'P10-47 (its last sentence; #790 A1, about/page.tsx:230)', where: () => PAGES['/about'], text: 'It reports a US Digital Corps pilot in which query accuracy rose from near 0% to 95% with MCP, the Model Context Protocol.' },
   { item: 'P10-20', where: () => PAGES['/about'], text: 'To run these tools on your own computer, see Run it yourself on the project page.' },
   { item: 'D-24', where: () => PAGES['/roadmap'], text: 'This site. Try a query; publish an analysis as a signed record.' },
 ];

@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useId, useLayoutEffect, useRef, useState, type KeyboardEvent, type ReactNode } from 'react';
 import Link from 'next/link';
-import { horizontalShift } from './menu-placement';
+import { horizontalShift, verticalPlacement } from './menu-placement';
 
 /**
  * P2 · Menu (UX-1 P0; design §2 P2). A trigger and a panel for "choose one
@@ -126,10 +126,6 @@ const TRIGGER_CLASS: Record<MenuTriggerSize, string> = {
 };
 
 const ENABLED_ITEM_SELECTOR = '[role="menuitem"]:not([aria-disabled="true"]),[role="menuitemradio"]:not([aria-disabled="true"])';
-/** The panel's tallest estimate before it renders, for the flip decision: 60vh or the items. */
-const ITEM_HEIGHT_ESTIMATE = 40;
-/** The least a capped panel is given, so a cramped window still shows a few rows (fix 2). */
-const MIN_CAP = 120;
 
 function present(node: ReactNode): boolean {
   return node !== undefined && node !== null && node !== false && node !== '';
@@ -212,17 +208,11 @@ export function Menu({
   const openFromTrigger = () => {
     const button = triggerRef.current;
     if (button && typeof window !== 'undefined') {
-      const rect = button.getBoundingClientRect();
-      const below = window.innerHeight - rect.bottom;
-      const wanted = Math.min(window.innerHeight * 0.6, items.length * ITEM_HEIGHT_ESTIMATE + 16);
-      const up = below < wanted && rect.top > below;
-      setAbove(up);
-      if (items.some((item) => item.children !== undefined && item.children.length > 0)) {
-        // The room on the chosen side, less the panel's 4 px offset and an 8 px margin; above, to the sticky header.
-        const header = document.querySelector('header')?.getBoundingClientRect().bottom ?? 0;
-        const room = up ? rect.top - Math.max(0, header) - 12 : below - 12;
-        setCap(Math.max(MIN_CAP, Math.floor(room)));
-      }
+      const header = document.querySelector('header')?.getBoundingClientRect().bottom ?? 0;
+      const grouped = items.some((item) => item.children !== undefined && item.children.length > 0);
+      const placed = verticalPlacement(button.getBoundingClientRect(), window.innerHeight, header, items.length, grouped);
+      setAbove(placed.above);
+      if (placed.cap !== null) setCap(placed.cap);
     }
     setOpen(true);
   };
