@@ -101,7 +101,8 @@ const seen: Seen[] = [];
 const sessions = new Set<string>();
 
 const router = await import('@typedstandards/civic-typed-router');
-const BASE_TOOLS = (router.CKAN_PACK_BASE_TOOLS as unknown as Array<{ function: { name: string; description?: string; parameters?: unknown } }>)
+// Router 0.12.0 removed `CKAN_PACK_BASE_TOOLS` (the pack is retired); read through a cast so the bump type-checks.
+const BASE_TOOLS = ((router as unknown as Record<string, unknown>).CKAN_PACK_BASE_TOOLS as unknown as Array<{ function: { name: string; description?: string; parameters?: unknown } }>)
   .map((t) => ({ name: t.function.name, description: t.function.description, inputSchema: t.function.parameters }));
 
 const realFetch = globalThis.fetch;
