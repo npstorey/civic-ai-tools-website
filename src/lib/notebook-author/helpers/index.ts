@@ -21,7 +21,7 @@ const FILE_BY_ID: Record<HelperId, string> = {
   fetch_socrata: 'fetch_socrata.py',
   fetch_data_commons: 'fetch_data_commons.py',
   fetch_opencontext: 'fetch_opencontext.py',
-  // CKAN-1 P3: a CKAN pack's datastore calls, against the server_url each call named.
+  // The hosted CKAN server's datastore calls (router 0.12.0), against the server_url each call named.
   fetch_ckan: 'fetch_ckan.py',
 };
 
