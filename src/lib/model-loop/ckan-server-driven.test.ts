@@ -99,10 +99,10 @@ interface Seen { method: string; tool?: string; args?: Record<string, unknown> }
 const seen: Seen[] = [];
 let sessions = 0;
 /** What the stand-in answers a `tools/call` with, by upstream name; set per run where a test needs another answer. */
-let answerFor: (tool: string, args: Record<string, unknown>) => { status: number; body: Record<string, unknown> } = () => ({
-  status: 200,
-  body: { result: { content: [{ type: 'text', text: JSON.stringify({ success: true, result: { records: [{ count: 42 }], total: 1 } }) }] } },
-});
+const answerFor = (_tool: string, args: Record<string, unknown>): { status: number; body: Record<string, unknown> } =>
+  String(args.server_url ?? '').toLowerCase().includes('unlisted-w2')
+    ? { status: 200, body: { result: { content: [{ type: 'text', text: UNLISTED_WORDS }], isError: true } } }
+    : { status: 200, body: { result: { content: [{ type: 'text', text: JSON.stringify({ success: true, result: { records: [{ count: 42 }], total: 1 } }) }] } } };
 
 const stand = http.createServer(async (req, res) => {
   let raw = '';
@@ -130,6 +130,14 @@ stand.unref();
 const CKAN_HOST = `127.0.0.1:${(stand.address() as AddressInfo).port}`;
 const CKAN_URL = `http://${CKAN_HOST}/mcp`;
 const PORTAL = 'https://data.boston.gov';
+/** W4: a second portal, named in another case and with a trailing slash; the record names it as a URL parser writes it. */
+const SECOND_PORTAL = 'https://Ckan.Portal-W4.example.test/data/';
+const SECOND_PORTAL_RECORDED = 'https://ckan.portal-w4.example.test/data';
+/** W2: a portal outside the server's list, which no accepted call names. */
+const UNLISTED_PORTAL = 'https://ckan.unlisted-w2.example.test';
+/** The server's refusal of an unlisted portal, in the fork's shape at `05cd1a86` (`validateServerUrl`,
+ *  `src/utils/http.ts`; the tool answers it as `isError: true`, `src/tools/datastore.ts`). */
+const UNLISTED_WORDS = 'Domain "ckan.unlisted-w2.example.test" is not in the allowed list (CKAN_ALLOWED_DOMAINS).';
 
 const realFetch = globalThis.fetch;
 globalThis.fetch = (async (input: RequestInfo | URL, init?: RequestInit) => {
@@ -163,10 +171,13 @@ const { startScriptedModelServer } = await import('./test-harness.ts');
 const { runToolLoop } = await import('./run-tool-loop.ts');
 const { compareLoopOptions } = await import('./compare-loop.ts');
 const { _resetDefaultModelClientForTests, getModelClient } = await import('../model-client.ts');
-const { configuredMcpServers, readMcpEnvFromProcess, routedSourceId } = await import('../mcp/registry.ts');
+const { buildMcpRegistry, configuredMcpServers, readMcpEnvFromProcess, routeToolCall, routedSourceId } = await import('../mcp/registry.ts');
 const { composeSystemPrompt } = await import('../mcp/socrata-skill.ts');
-const { sqlStatementRefusalForLlm } = await import('../streaming.ts');
+const { mcpToolsFor, offeredMcpTools } = await import('../mcp/tools.ts');
+const { SOURCE_REFUSAL_FOR_LLM, sqlStatementRefusalForLlm } = await import('../streaming.ts');
 const { TraceBuilder, CIVICAITOOLS_TRACE_CONFIG } = await import('../evidence/trace.ts');
+const { buildEvidencePackage } = await import('../evidence/packager.ts');
+const { panelLeadBeforeConsent } = await load('lib/sources/copy.ts');
 
 const exposed = (upstream: string) => `${BASE.alias}__${upstream}`;
 const NOW = new Date('2026-11-18T12:00:00Z');
@@ -274,6 +285,17 @@ interface Row { id: string; label: string; sql: string; postgres: string; check:
 const TABLE = JSON.parse(fs.readFileSync(path.join(SRC, 'lib', 'mcp', 'fixtures', 'statement-check-postgres16.json'), 'utf8')) as { server: string; rows: Row[] };
 const W3_TABLE = await run({}, [TABLE.rows.map((row) => call(`t-${row.id}`, SQL_TOOL, { server_url: PORTAL, sql: row.sql }))]);
 
+/** Criterion 7: a `ckan_list_resources` call carrying `check_source_portal: true`, alone in its run. */
+const C7 = await run({}, [[call('c7', exposed('ckan_list_resources'), { server_url: PORTAL, id: '311-service-requests', check_source_portal: true })]]);
+
+/** W4 and W2: two accepted calls naming two portals, then a call naming a portal the server refuses, in one run. */
+const W4 = await run({}, [[
+  call('w4a', exposed('ckan_datastore_search'), { server_url: PORTAL, resource_id: 'w4-resource-0001', limit: 1 }),
+  call('w4b', exposed('ckan_package_search'), { server_url: SECOND_PORTAL, q: 'potholes' }),
+  call('w4c', exposed('ckan_datastore_search'), { server_url: PORTAL, resource_id: 'w4-resource-0002', limit: 1 }),
+  call('w2', exposed('ckan_package_search'), { server_url: UNLISTED_PORTAL, q: 'potholes' }),
+]]);
+
 // --- W3 (gate): the statement check on the server's own SQL tool ------------------------------------------------
 
 test('W3: one SELECT on the server\'s own ckan_datastore_search_sql, alone in its run, arrives at the stand-in exactly once, and is recorded answered', () => {
@@ -311,4 +333,139 @@ test('W3: the PostgreSQL 16 table, driven through the server-tool path in one ru
   });
   assert.deepEqual(wrong, []);
   assert.ok(TABLE.rows.some((row) => row.check === 'sent') && TABLE.rows.some((row) => row.check === 'refused'), 'premise: the table sends some rows and refuses some');
+});
+
+// --- Criterion 7: `check_source_portal` is withheld ---------------------------------------------------------------
+
+type OfferedTool = { type: string; function: { name: string; parameters?: { properties?: Record<string, unknown> } } };
+
+/** What a run the gate admits under `states` is offered, stated, composed and recorded. */
+async function offeredThroughTheGate(states: States) {
+  const decision = await decide(states);
+  const configured = readMcpEnvFromProcess();
+  const tools = offeredMcpTools(mcpToolsFor(undefined), configured, decision.selection) as unknown as OfferedTool[];
+  const composed = await composeSystemPrompt({ configured, selection: decision.selection, now: NOW });
+  const statement = decision.statement as { sources: Array<{ sourceId: string }> };
+  const sourcesOffered = decision.recordReasons(composed.sourcesOffered) as Array<{ sourceId: string; reason: string }>;
+  return { decision, configured, tools, names: tools.map((t) => t.function.name), prompt: composed.prompt as string, statement, sourcesOffered };
+}
+
+test('criterion 7: the offered ckan__ckan_list_resources schema carries no check_source_portal', async () => {
+  const run = await offeredThroughTheGate({});
+  const listResources = run.tools.find((t) => t.function.name === exposed('ckan_list_resources'));
+  assert.ok(listResources, 'premise: ckan__ckan_list_resources is offered with CKAN_MCP_URL set');
+  const properties = listResources!.function.parameters?.properties ?? {};
+  assert.ok(Object.hasOwn(properties, 'id') && Object.hasOwn(properties, 'format_filter'), 'premise: the schema keeps its other arguments');
+  assert.equal(Object.hasOwn(properties, 'check_source_portal'), false, 'the offered schema carries check_source_portal');
+});
+
+test('criterion 7: a call carrying check_source_portal: true reaches the stand-in without it, and the record\'s arguments for the call are the ones sent', () => {
+  const sent = sentCalls(C7);
+  assert.equal(sent.length, 1, `premise: the call was sent once: ${JSON.stringify(C7.calls.map(failureOf))}`);
+  assert.equal(Object.hasOwn(sent[0].args ?? {}, 'check_source_portal'), false, `the call forwards check_source_portal: ${JSON.stringify(sent[0].args)}`);
+  assert.deepEqual(sent[0].args, { server_url: PORTAL, id: '311-service-requests' }, 'the stand-in did not receive the call\'s other arguments');
+  assert.deepEqual(C7.calls[0].args, sent[0].args, 'the record\'s arguments are not the ones sent');
+  const span = C7.spans.find((sp) => sp.attributes?.some((a) => a.key === 'tool.name' && a.value?.stringValue === exposed('ckan_list_resources')));
+  const spanArgs = JSON.parse(String(span?.attributes?.find((a) => a.key === 'tool.arguments')?.value?.stringValue ?? 'null'));
+  assert.deepEqual(spanArgs, sent[0].args, 'the span\'s arguments are not the ones sent');
+});
+
+// --- W1 and W6: offered, stated and composed through the gate, and counted once ------------------------------------
+
+const CKAN_TOOLS = ((router as unknown as { CKAN_TOOL_NAMES?: readonly string[] }).CKAN_TOOL_NAMES ?? []).map(exposed);
+/** The router's CKAN block as the composer writes it: in the aliased view, which rewrites the tool names. */
+const CKAN_BLOCK = await BASE.guidance.fetchText(
+  { portal: undefined, publicationHost: '', fetchPrompt: async () => { throw new Error('fixture: no prompt'); }, fetchInstructions: async () => undefined } as never,
+  router.civicRouter.aliasedView as never,
+);
+const isCkanRow = (id: string) => id === BASE.sourceId || id.includes('ckan');
+
+test('W1: with CKAN_MCP_URL set to a stand-in, through the gate, the seven ckan__ckan_* tools are offered and no boston__ tool; the statement has one CKAN row; the composed prompt carries the router\'s CKAN block', async () => {
+  const run = await offeredThroughTheGate({});
+  assert.deepEqual(run.names.filter((n) => n.startsWith('boston__')), [], 'a boston__ tool is offered');
+  assert.equal(CKAN_TOOLS.length, 7, 'premise: the router names seven CKAN tools');
+  assert.ok(CKAN_BLOCK.length > 0 && CKAN_BLOCK.includes(SQL_TOOL), 'premise: the CKAN block names its tools in the aliased view');
+  assert.deepEqual(run.names.filter((n) => n.startsWith(`${BASE.alias}__`)), CKAN_TOOLS, 'the seven ckan__ tools are not the ones offered');
+  assert.deepEqual(run.statement.sources.map((r) => r.sourceId).filter(isCkanRow), [BASE.sourceId], 'the statement does not have exactly one CKAN row');
+  assert.ok(run.prompt.includes(CKAN_BLOCK), 'the composed prompt does not carry the router\'s CKAN block');
+  const reasons = Object.fromEntries(run.sourcesOffered.map((r) => [r.sourceId, r.reason]));
+  assert.equal(reasons[BASE.sourceId], 'selected', 'the CKAN source is not recorded selected');
+  assert.equal(Object.hasOwn(reasons, 'boston-ckan'), false, 'the record lists the retired pack');
+});
+
+test('W6: with CKAN_MCP_URL set, each count counts the CKAN source once: every count reads the statement\'s rows, and the CKAN source is one of them', async () => {
+  const run = await offeredThroughTheGate({});
+  const ids = run.statement.sources.map((r) => r.sourceId);
+  // The line under the question box (QueryForm's where-line), the panel lead (SourcesPanel, SettingsOverlay), the
+  // settings search line (`sourcesShownLine`) and the picker (`pickerRows`) each count `statement.sources`' rows.
+  assert.equal(ids.filter(isCkanRow).length, 1, 'the CKAN source is not one row');
+  assert.equal(new Set(ids).size, ids.length, 'a source is listed twice');
+  const lead = panelLeadBeforeConsent({ on: ids.length, askFirst: 0, off: 0 }) as string;
+  assert.ok(lead.length > 0, 'premise: the panel lead counts the rows');
+  assert.equal(ids.length, ids.filter((id) => !isCkanRow(id)).length + 1, 'the CKAN source adds more than one to every count');
+});
+
+test('W1 (unset): with CKAN_MCP_URL unset, no ckan__ tool, no CKAN row, no CKAN block; the record carries ckan-server not-configured and no boston-ckan row; a CKAN call anyway is refused naming CKAN_MCP_URL', async () => {
+  delete process.env.CKAN_MCP_URL;
+  try {
+    const run = await offeredThroughTheGate({});
+    assert.ok(run.names.length > 0, 'premise: the run is offered tools');
+    const rows = run.sourcesOffered.filter((r) => isCkanRow(r.sourceId)).map((r) => `${r.sourceId}:${r.reason}`);
+    assert.deepEqual(rows, [`${BASE.sourceId}:not-configured`], 'the record\'s CKAN rows are not ckan-server not-configured alone');
+    assert.deepEqual(run.names.filter((n) => n.startsWith(`${BASE.alias}__`) || n.startsWith('boston__')), []);
+    assert.deepEqual(run.statement.sources.map((r) => r.sourceId).filter(isCkanRow), []);
+    assert.ok(CKAN_BLOCK.length > 0 && !run.prompt.includes(CKAN_BLOCK), 'the composed prompt carries the CKAN block');
+    for (const name of [SQL_TOOL, 'ckan_datastore_search_sql']) {
+      assert.throws(() => routeToolCall(buildMcpRegistry(run.configured, run.decision.selection), name), (error: unknown) => error instanceof Error && error.message.includes('CKAN_MCP_URL'), name);
+    }
+  } finally {
+    process.env.CKAN_MCP_URL = CKAN_URL;
+  }
+});
+
+// --- W4 and W2: the record ----------------------------------------------------------------------------------------
+
+function packageOf(trace: unknown, calls: ToolCallRecord[]) {
+  return buildEvidencePackage({
+    trace: trace as never,
+    prompt: 'How many 311 requests were filed in Boston?',
+    output: 'There were 42.',
+    toolCalls: calls as never,
+    model: 'vendor/model-fixture-1',
+    tokenUsage: { promptTokens: 10, completionTokens: 5 },
+    promptVisibility: 'full_text',
+    title: 'Boston 311',
+    summary: 'Boston 311.',
+    type: 'content/analysis/v1',
+    captureMethod: 'chat-flow-stream',
+    contentProfile: 'datHere',
+    extensions: { 'org.civicaitools.notebook': { nbformat: 4, nbformat_minor: 5, cells: [], metadata: {} } },
+  });
+}
+
+test('W4: two accepted calls naming two portals mint two ckan entries in first-seen order, each portalUrl the portal its call named, with no datasetId; the refused call\'s portal mints nothing and appears nowhere in dataSources; every CKAN call records its server_url', () => {
+  assert.deepEqual(
+    sentCalls(W4).map((sc) => [sc.tool, sc.args?.server_url]),
+    [['ckan_datastore_search', PORTAL], ['ckan_package_search', SECOND_PORTAL], ['ckan_datastore_search', PORTAL], ['ckan_package_search', UNLISTED_PORTAL]],
+    `premise: the four calls were sent in order: ${JSON.stringify(W4.calls.map(failureOf))}`,
+  );
+  assert.deepEqual(W4.calls.map((c) => c.failed === true), [false, false, false, true], 'premise: the first three are answered and the fourth refused');
+  for (const c of W4.calls) assert.equal(typeof c.args.server_url, 'string', `${c.name} does not record its server_url`);
+  const { pkg } = packageOf(W4.trace, W4.calls);
+  const sources = (pkg.dataSources ?? []) as unknown as Array<Record<string, unknown>>;
+  assert.deepEqual(
+    sources.filter((d) => d.catalogType === 'ckan').map((d) => ({ sourceId: d.sourceId, portalUrl: d.portalUrl, datasetId: d.datasetId })),
+    [{ sourceId: BASE.sourceId, portalUrl: PORTAL, datasetId: undefined }, { sourceId: BASE.sourceId, portalUrl: SECOND_PORTAL_RECORDED, datasetId: undefined }],
+    `dataSources[] is not one ckan entry per portal named, in first-seen order: ${JSON.stringify(sources)}`,
+  );
+  assert.equal(JSON.stringify(sources).includes('unlisted-w2'), false, 'the refused call\'s portal appears in dataSources');
+});
+
+test('W2: the server\'s refusal of an unlisted portal is recorded as a rejected call, sent once; the model is told the source refused it; the server\'s words reach neither the model nor the signed package', () => {
+  const refused = W4.calls[3];
+  assert.deepEqual(failureOf(refused), { failed: true, failureKind: 'unknown' }, 'the server\'s refusal is not recorded as a rejected call');
+  assert.equal(sentCalls(W4).filter((sc) => sc.args?.server_url === UNLISTED_PORTAL).length, 1, 'the refused call was not sent exactly once');
+  assert.equal(W4.told.get('w2'), SOURCE_REFUSAL_FOR_LLM, 'the model is not told the source refused the request');
+  const { pkg } = packageOf(W4.trace, W4.calls);
+  assert.equal(JSON.stringify(pkg).includes('CKAN_ALLOWED_DOMAINS'), false, 'the server\'s words reached the signed package');
 });
