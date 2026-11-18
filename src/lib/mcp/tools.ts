@@ -1,6 +1,7 @@
 import type { ChatCompletionTool } from 'openai/resources/chat/completions';
 import { civicRouter, type SourceSelection } from '@typedstandards/civic-typed-router';
 import { readMcpEnvFromProcess, type McpRegistryEnv } from './registry.ts';
+import { withholdArgumentsFromTools } from './withheld-arguments.ts';
 
 // Unified OpenAI-style function-calling schema spanning every MCP source the
 // website talks to. The client in `./client.ts` uses the tool name to route
@@ -28,9 +29,10 @@ import { readMcpEnvFromProcess, type McpRegistryEnv } from './registry.ts';
  * offered set and the replayer's selection (`replay-loop.ts`, #632 D8), and
  * hands it over whole only for a record that states no set.
  * The client in ./client.ts routes each call to the correct MCP server by tool
- * name. The package's array itself: one object for the process's lifetime.
+ * name. The package's array, less the arguments this site withholds
+ * (`./withheld-arguments.ts`): one object for the process's lifetime.
  */
-export const mcpTools: ChatCompletionTool[] = civicRouter.aliasedMcpTools as unknown as ChatCompletionTool[];
+export const mcpTools: ChatCompletionTool[] = withholdArgumentsFromTools(civicRouter.aliasedMcpTools as unknown as ChatCompletionTool[]);
 
 /**
  * The tool schemas for a run: `mcpTools` itself when the instance is not
@@ -48,7 +50,10 @@ export const mcpTools: ChatCompletionTool[] = civicRouter.aliasedMcpTools as unk
  * (`prompt-advertised-tools.test.ts`) is the same locked or not.
  */
 export function mcpToolsFor(lockedPortal?: string): ChatCompletionTool[] {
-  return civicRouter.aliasedMcpToolsFor(lockedPortal) as unknown as ChatCompletionTool[];
+  const tools = civicRouter.aliasedMcpToolsFor(lockedPortal) as unknown as ChatCompletionTool[];
+  // The arguments this site withholds (`./withheld-arguments.ts`; CKAN-2-WEB P1, criterion 7) are removed from either
+  // set; unlocked, the router's own array is answered with `mcpTools`, so an unlocked run keeps one array.
+  return tools === (civicRouter.aliasedMcpTools as unknown) ? mcpTools : withholdArgumentsFromTools(tools);
 }
 
 /**

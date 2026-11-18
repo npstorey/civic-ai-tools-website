@@ -57,6 +57,7 @@ import { deriveOperationType, isTool, toolSpanNames, upstreamToolName } from '..
 import type { ToolFailureKind } from '../notebook-author/tool-to-cell.ts';
 import { PortalLockedCallError, portalOutsideLock } from '../portal-lock.ts';
 import { injectPackFilter, packCallRefusal, packFilterOf, serverCallRefusal } from '../mcp/pack-filter.ts';
+import { stripWithheldArguments } from '../mcp/withheld-arguments.ts';
 import { BaseChangedError, createBaseCheck, type BaseCheck, type BaseReader } from '../mcp/base-check.ts';
 
 /** The base check's read: the client's `tools/list` read, loaded when a pack call first needs it. */
@@ -1214,6 +1215,9 @@ export async function runToolLoop(options: ToolLoopOptions): Promise<ToolLoopRes
       const pack = target === undefined ? undefined : packFilterOf(target);
       const namedPack = pack ?? (target === undefined ? packFilterOf(name) : undefined);
       if (namedPack && !argumentsMalformed) injectPackFilter(upstreamToolName(name), args, namedPack);
+      // An argument this site withholds (CKAN-2-WEB P1, criterion 7: `check_source_portal`) is stripped here, above
+      // the record and the span, so the record states the arguments the source receives.
+      if (!argumentsMalformed) stripWithheldArguments(name, args);
       if (portal && !argumentsMalformed && isTool(name, 'get_data') && !args.portal) args.portal = portal;
 
       /**
