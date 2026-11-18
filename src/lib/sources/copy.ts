@@ -330,12 +330,8 @@ export interface SourceDescription {
    * (`REACH_SENTENCE.throughSocrata`); `publisher` and `link` above are then
    * those of the connector its example queries are taken from
    * (`NYC_RECORD_EXAMPLES_SENTENCE`), which this site does not run.
-   *
-   * A pack over the hosted CKAN server (router 0.11.0, CKAN-1 P3) names its base
-   * the same way (`REACH_SENTENCE.throughCkan`) and prints no examples sentence;
-   * its `publisher` is the manifest's and its `link` is printed nowhere for now.
    */
-  base?: 'socrata' | 'ckan-server';
+  base?: 'socrata';
 }
 
 /**
@@ -389,12 +385,6 @@ export const SOURCE_DESCRIPTIONS: Readonly<Record<string, SourceDescription>> = 
     publisher: 'onData',
     link: 'https://github.com/npstorey/ckan-mcp-server',
   },
-  'boston-ckan': {
-    what: "the City of Boston's open-data portal, data.boston.gov.",
-    publisher: 'Civic AI Tools',
-    link: 'https://data.boston.gov',
-    base: 'ckan-server',
-  },
 };
 
 /**
@@ -409,21 +399,7 @@ export const REACH_SENTENCE = {
   end: '.',
   /** A pack's first sentence opens so (S2-B, R1 as ruled, D1 = A); then the Socrata entry's publisher, `after`, where it runs, `end`. */
   throughSocrata: "This site reaches it through the Socrata source's MCP server, a connector that ",
-  /** A CKAN pack's first sentence opens so (CKAN-1 P3, DRAFT); then the CKAN entry's publisher, linked, `after`, where it runs, `end`. */
-  throughCkan: "This site reaches it through the CKAN source's MCP server, a connector that ",
 } as const;
-
-/**
- * The sentences a CKAN pack's row may carry after its reach sentence (CKAN-1
- * P3), each the owner's to add, so the ruled words are one edit here: that the
- * hosted server sends the model's searches and queries to the portal inside the
- * web address it requests; and who wrote the pack's guidance. `null` prints
- * nothing; each prints after the reach sentence, in this order.
- */
-export const CKAN_PACK_ROW_SENTENCES: Readonly<{ queryInAddress: string | null; guidanceAuthor: string | null }> = {
-  queryInAddress: null,
-  guidanceAuthor: null,
-};
 
 /**
  * City Record's second reach sentence (S2-B, R1 as ruled, D1 = A): `before` +

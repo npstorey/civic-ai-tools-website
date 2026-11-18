@@ -36,11 +36,6 @@ export interface PackFilter {
   datasetId?: string;
   /** The pattern a `fetch` identifier must match, when the pack's `fetch` states one. */
   idPattern?: string;
-  /**
-   * The kind of base the pack is over: `socrata` (its `get_data` fixes `portal`) or `ckan` (every tool fixes
-   * `server_url`, since router 0.11.0, CKAN-1 P3). Absent reads as `socrata`, the only kind before.
-   */
-  kind?: 'socrata' | 'ckan';
 }
 
 type Properties = Record<string, { enum?: unknown[]; pattern?: unknown }>;
@@ -55,31 +50,13 @@ function onlyValue(property: { enum?: unknown[] } | undefined): string | undefin
   return property?.enum?.length === 1 && typeof property.enum[0] === 'string' ? property.enum[0] : undefined;
 }
 
-/** The two bases whose packs this module reads, by `sourceId`. A pack over any other base stops the module at load. */
+/** The base whose packs this module reads, by `sourceId`. A pack over any other base stops the module at load. Router
+ *  0.11.0's CKAN pack, Analyze Boston, was retired by router 0.12.0 (CKAN-2-WEB P1), and its filter with it. */
 const SOCRATA_BASE = 'socrata';
-const CKAN_BASE = 'ckan-server';
-
-/**
- * A CKAN pack's filter (router 0.11.0, CKAN-1 P3): every one of its tools fixes `server_url` to one value, an
- * `enum` of one, and the filter is that value. A tool that does not, or two tools that fix different values, stop the
- * module at load.
- */
-function ckanFilter(entry: (typeof CIVIC_MANIFEST)[number]): PackFilter {
-  const values = new Set(entry.toolNames.map((tool) => onlyValue(propertiesOf(entry, tool).server_url)));
-  const [portal] = [...values];
-  if (values.size !== 1 || portal === undefined) throw new Error(`pack ${entry.sourceId}: its tools do not fix one server_url`);
-  return {
-    packId: entry.id,
-    source: readerSourceName({ sourceId: entry.sourceId, displayName: entry.displayName }),
-    portal,
-    kind: 'ckan',
-  };
-}
 
 /** Each pack's filter, by its `sourceId`, read once from the manifest. */
 const FILTERS: ReadonlyMap<string, PackFilter> = new Map(
   CIVIC_MANIFEST.filter((entry) => entry.base !== undefined).map((entry) => {
-    if (entry.base === CKAN_BASE) return [entry.sourceId, ckanFilter(entry)] as const;
     if (entry.base !== SOCRATA_BASE) throw new Error(`pack ${entry.sourceId}: no filter is read for a pack over ${entry.base}`);
     const getData = propertiesOf(entry, 'get_data');
     const fetchId = propertiesOf(entry, 'fetch').id?.pattern;
@@ -114,13 +91,9 @@ export function packFilters(): ReadonlyMap<string, PackFilter> {
   return FILTERS;
 }
 
-/** Give a pack call the pack's fixed values where it omits them: a Socrata pack's `get_data` its portal and dataset,
- *  a CKAN pack's call its `server_url`. Mutates `args`. */
+/** Give a pack call the pack's fixed values where it omits them: a Socrata pack's `get_data` its portal and dataset.
+ *  Mutates `args`. */
 export function injectPackFilter(upstream: string, args: Record<string, unknown>, filter: PackFilter): void {
-  if (filter.kind === 'ckan') {
-    if (args.server_url === undefined || args.server_url === null || args.server_url === '') args.server_url = filter.portal;
-    return;
-  }
   if (upstream !== 'get_data') return;
   if (args.portal === undefined || args.portal === null || args.portal === '') args.portal = filter.portal;
   if (filter.datasetId !== undefined && (args.dataset_id === undefined || args.dataset_id === null || args.dataset_id === '')) {
@@ -130,26 +103,8 @@ export function injectPackFilter(upstream: string, args: Record<string, unknown>
 
 const same = (value: unknown, fixed: string) => String(value).trim().toLowerCase() === fixed.toLowerCase();
 
-/**
- * The hostname of a CKAN portal address, lower-cased, as the CKAN server compares a call's portal against its
- * allowlist (the fork's `src/utils/http.ts`: the URL's hostname, lower-cased), or `undefined` for a value that is
- * no URL. A different case or a trailing slash names the same portal; another host does not.
- */
-export function portalHostname(value: unknown): string | undefined {
-  if (typeof value !== 'string') return undefined;
-  try {
-    return new URL(value.trim()).hostname.toLowerCase() || undefined;
-  } catch {
-    return undefined;
-  }
-}
-
 /** Whether a pack call names a portal, dataset or identifier outside its pack's fixed values. */
 export function packCallOutsideFilter(upstream: string, args: Record<string, unknown>, filter: PackFilter): boolean {
-  if (filter.kind === 'ckan') {
-    const host = portalHostname(args.server_url);
-    return host === undefined || host !== portalHostname(filter.portal);
-  }
   if (upstream === 'get_data') {
     for (const key of ['portal', 'domain'] as const) {
       if (args[key] !== undefined && args[key] !== null && !same(args[key], filter.portal)) return true;
@@ -180,7 +135,7 @@ export class PackFilterRefusedError extends Error {
 }
 
 /**
- * Whether `sql` is the one statement a CKAN pack's `ckan_datastore_search_sql` sends (ruling D3 = A), as the tool's
+ * Whether `sql` is the one statement the CKAN server's `ckan_datastore_search_sql` sends (ruling D3 = A), as the tool's
  * own `sql` description states the rule: "it begins, after any whitespace and SQL comments, with SELECT or WITH, and
  * no second statement follows a semicolon outside a quoted literal". The check establishes that and nothing more: it
  * does not establish that the statement only reads (a data-modifying `WITH` and `SELECT … INTO` both pass it).
@@ -332,18 +287,16 @@ export function serverCallRefusal(upstream: string, args: Record<string, unknown
 }
 
 /**
- * The refusal of a CKAN pack call, before anything is sent, or `null` when it may be sent: a portal outside the
- * pack's (`PackFilterRefusedError`), then, for `ckan_datastore_search_sql`, anything but one statement beginning with
- * SELECT or WITH (`SqlStatementRefusedError`). A Socrata pack's call is refused for its portal, dataset or identifier only.
+ * The refusal of a pack call, before anything is sent, or `null` when it may be sent: a portal, dataset or identifier
+ * outside the pack's (`PackFilterRefusedError`). The statement check is the CKAN server's own tool's since router
+ * 0.12.0 (`serverCallRefusal`), with no pack.
  */
-export function packCallRefusal(upstream: string, args: Record<string, unknown>, filter: PackFilter): PackFilterRefusedError | SqlStatementRefusedError | null {
-  if (packCallOutsideFilter(upstream, args, filter)) return new PackFilterRefusedError(filter);
-  if (filter.kind === 'ckan' && upstream === CKAN_SQL_TOOL && !isOneSelectOrWithStatement(args.sql)) return new SqlStatementRefusedError(filter);
-  return null;
+export function packCallRefusal(upstream: string, args: Record<string, unknown>, filter: PackFilter): PackFilterRefusedError | null {
+  return packCallOutsideFilter(upstream, args, filter) ? new PackFilterRefusedError(filter) : null;
 }
 
 /**
- * A CKAN pack's `ckan_datastore_search_sql` call whose `sql` is not one statement beginning with SELECT or WITH, refused before
+ * The CKAN server's `ckan_datastore_search_sql` call whose `sql` is not one statement beginning with SELECT or WITH, refused before
  * anything is sent (D3 = A). Its own type, so the model is told the statement was refused, not the portal
  * (`sqlStatementRefusalForLlm`, `../streaming.ts`). Recorded, as the portal's refusal is, with the kind `unknown`.
  */

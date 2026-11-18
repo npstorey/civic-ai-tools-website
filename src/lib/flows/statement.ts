@@ -267,10 +267,8 @@ export const CKAN_PORTAL_OPERATOR_LINES: readonly FlowsKeptBy[] = [
   // CKAN_PORTAL_VENDOR_LINE: the place for form (iii)'s second line, the portal's platform vendor, if the owner rules it.
 ];
 
-/** The sources whose portal is a CKAN portal: the CKAN server and every pack over it. */
-const CKAN_SOURCE_IDS: ReadonlySet<string> = new Set(
-  CIVIC_MANIFEST.filter((entry) => entry.sourceId === CKAN_SERVER_SOURCE_ID || entry.base === CKAN_SERVER_SOURCE_ID).map((entry) => entry.sourceId),
-);
+/** The sources whose portal is a CKAN portal: the CKAN server (router 0.12.0 retired the pack over it, CKAN-2-WEB P1). */
+const CKAN_SOURCE_IDS: ReadonlySet<string> = new Set([CKAN_SERVER_SOURCE_ID]);
 
 /** Socrata's portal operator: the platform's vendor, for every source whose portal is a Socrata portal. */
 const SOCRATA_PORTAL_OPERATOR: FlowsKeptBy = {

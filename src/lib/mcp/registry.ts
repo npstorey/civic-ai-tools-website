@@ -835,8 +835,8 @@ export function readMcpEnvFromProcess(): McpRegistryEnv {
     DATA_COMMONS_MCP_URL: process.env.DATA_COMMONS_MCP_URL,
     DATA_COMMONS_API_KEY: process.env.DATA_COMMONS_API_KEY,
     BOSTON_OPENCONTEXT_MCP_URL: process.env.BOSTON_OPENCONTEXT_MCP_URL,
-    // The hosted CKAN server (router 0.11.0, CKAN-1 P3): its address offers it
-    // and the packs over it (Analyze Boston), each optional.
+    // The hosted CKAN server (router 0.11.0, CKAN-1 P3; its own tools since
+    // 0.12.0): its address offers it, optional.
     CKAN_MCP_URL: process.env.CKAN_MCP_URL,
     // The switches that offer the hosted sources (#617 D7; router 0.6.0, R8
     // W3): only `sandbox` turns one on; none names an address. NYC City
