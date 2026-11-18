@@ -860,7 +860,7 @@ test('UX-2 P6 + P10 criterion 10 (P10-19, P10-20): /learn and /about keep one li
 
 test('UX-2 P6 + P10 criterion 10 (top change 9, site Q6 = A): /roadmap\'s audience cards sit above the document', () => {
   const texts = PAGES['/roadmap'].elements().map((el) => plain(readText(el)));
-  const strip = texts.findIndex((t) => t.startsWith('For deeper, audience-specific detail'));
+  const strip = texts.findIndex((t) => t === 'Each card links to a page for the people it names.');
   const doc = PAGES['/roadmap'].elements().findIndex((el) => el.type === 'h2');
   assert.ok(strip >= 0 && doc >= 0, `premise: the strip (${strip}) and the document's first h2 (${doc}) render`);
   assert.ok(strip < doc, 'the audience strip renders after the document');
@@ -898,7 +898,8 @@ const WORDS: WordsRow[] = [
   { item: 'P10-19', where: () => PAGES['/learn'], text: 'To run these tools on your own computer, see Run it yourself on the project page.' },
   { item: 'P10-39', where: () => PAGES['/about'], text: 'Civic AI Tools is the civic reference implementation of Typed Standards, an open protocol for independent verification of AI-generated answers. You ask a plain-language question, and the AI answers it from live public data. Once signed in, you can publish the answer as a signed analysis. A signed analysis shows how an answer was produced. It does not claim the answer is correct.' },
   { item: 'P10-40 with P10-11', where: () => PAGES['/about'], text: `${SOURCES_SENTENCE} The directory lists many more connectors for civic data. The civic-ai-tools starter project packages what you need to run the same kind of analysis on your own computer:` },
-  { item: 'P10-41 (first part)', where: () => PAGES['/about'], text: 'The Socrata connector — this project\'s connector for open-data portals on Socrata, and one of this site\'s data sources. Browse the directory to see the' },
+  // UX-2-FIX P3 (#790): P10-41's first part is read both ways, on a statement with the Socrata source and one without
+  // (D12), in the block at this file's end.
   { item: 'P10-42 (around its placeholder)', where: () => PAGES['/about'], text: 'Curated directory — a growing directory of data connectors for civic and government data, including official ones from' },
   { item: 'P10-42 (its end)', where: () => PAGES['/about'], text: 'The starter project sets up two of them. Know of one that should be listed? Get in touch.' },
   { item: 'P10-43', where: () => PAGES['/about'], text: 'This website — the reference implementation, where you can ask a question and watch the AI query live data. Signed in, you can also publish the answer. If you want to use it in teaching, get in touch.' },
@@ -907,9 +908,8 @@ const WORDS: WordsRow[] = [
   { item: 'P10-47 (first part)', where: () => PAGES['/about'], text: 'Civic AI Tools is part of a growing ecosystem of projects connecting AI to government data. The directory lists' },
   { item: 'P10-47 (its middle)', where: () => PAGES['/about'], text: 'connectors for civic data. Our landscape research (April 2026) also found official government connectors from' },
   { item: 'P10-47 (its end)', where: () => PAGES['/about'], text: 'pilot in which query accuracy rose from near 0% to 95% with MCP, the Model Context Protocol.' },
-  // UX-2-FIX P2, A1 (#790): the two clauses no row reached. P10-41's end is today's ruled sentence; phase 3 rules its
-  // wording (A2) and moves this row with it.
-  { item: 'P10-41 (its end; #790 A1, about/page.tsx:76)', where: () => PAGES['/about'], text: `connectors it lists and the ${ABOUT_PORTALS} portals they reach.` },
+  // UX-2-FIX P2, A1 (#790): the two clauses no row reached. P10-41's end moved to A2's words in UX-2-FIX P3.
+  { item: 'P10-41 (its end; #790 A2, about/page.tsx:76)', where: () => PAGES['/about'], text: `connectors and ${ABOUT_PORTALS} portals it lists.` },
   { item: 'P10-47 (its last sentence; #790 A1, about/page.tsx:230)', where: () => PAGES['/about'], text: 'It reports a US Digital Corps pilot in which query accuracy rose from near 0% to 95% with MCP, the Model Context Protocol.' },
   { item: 'P10-20', where: () => PAGES['/about'], text: 'To run these tools on your own computer, see Run it yourself on the project page.' },
   { item: 'D-24', where: () => PAGES['/roadmap'], text: 'This site. Try a query; publish an analysis as a signed record.' },
@@ -924,7 +924,7 @@ for (const row of WORDS) {
 test('UX-2 P6 + P10 criterion 11 (P10-41, P10-47): the directory\'s counts in /about\'s lines are read from the data', () => {
   const text = pageText(PAGES['/about']);
   const servers = JSON.parse(DIRECTORY_SNAPSHOT).length;
-  assert.ok(text.includes(`Browse the directory to see the ${servers} connectors it lists and the `), 'P10-41: the server count');
+  assert.ok(text.includes(`Browse the directory to see the ${servers} connectors and `), 'P10-41 (A2): the server count');
   assert.ok(text.includes(`The directory lists ${servers} connectors for civic data.`), 'P10-47: the server count');
 });
 
@@ -1048,4 +1048,66 @@ test('UX-2 P6 + P10 criterion 16 (P10-33): its third sentence\'s rule is in the 
 
 test('UX-2 P6 + P10 criterion 16 (D-15): the statement lists at least one source on an instance with none configured', () => {
   assert.ok(STATEMENT_P10.sources.length >= 1, `sources: ${STATEMENT_P10.sources.length}`);
+});
+
+// --- UX-2-FIX P3 (#790): the ruled words on /about and /roadmap (D12, A2, D14) --------------------------------------
+// Contract p3.md section 2, byte for byte. D12 is driven both ways: the page is rendered under a configuration whose
+// statement offers the Socrata source and under one whose statement does not, each read back from the statement
+// itself (`statement.sources.some((source) => source.sourceId === 'socrata')`, the page's own test).
+//
+// WHAT MAKES IT ABLE TO FAIL. At the base the clause ", and one of this site's data sources" renders on both (the
+// "without" instance is the shape that can fail), A2's sentence reads "connectors it lists and the … portals they
+// reach.", and the roadmap strip's lead and its End users link read their earlier words.
+
+async function aboutUnder(socrataUrl: string | undefined): Promise<{ surface: Surface; offers: boolean }> {
+  const saved = process.env.SOCRATA_MCP_URL;
+  if (socrataUrl === undefined) delete process.env.SOCRATA_MCP_URL;
+  else process.env.SOCRATA_MCP_URL = socrataUrl;
+  try {
+    const statement = await buildStatementP10();
+    const offers = statement.sources.some((source) => source.sourceId === 'socrata');
+    return { surface: await renderPage(about.default as PageFn), offers };
+  } finally {
+    if (saved === undefined) delete process.env.SOCRATA_MCP_URL;
+    else process.env.SOCRATA_MCP_URL = saved;
+  }
+}
+
+const ABOUT_WITH = await aboutUnder('https://socrata.fixture.test/mcp');
+const ABOUT_WITHOUT = await aboutUnder(undefined);
+const A2 = `Browse the directory to see the ${JSON.parse(DIRECTORY_SNAPSHOT).length} connectors and ${ABOUT_PORTALS} portals it lists.`;
+
+/** The `<li>` holding the "The Socrata connector" link. */
+function socrataItem(s: Surface): HostElement {
+  return one(s.elements().filter((el) => el.type === 'li' && within(el).some((a) => a.type === 'a' && plain(readText(a)) === 'The Socrata connector')), 'the Socrata connector item');
+}
+
+test('UX-2-FIX P3 D12 (premise): the two configurations give a statement with the Socrata source and one without', () => {
+  assert.equal(ABOUT_WITH.offers, true, 'the "with" configuration\'s statement does not offer socrata');
+  assert.equal(ABOUT_WITHOUT.offers, false, 'the "without" configuration\'s statement offers socrata');
+});
+
+test('UX-2-FIX P3 D12 + A2: where the statement offers the Socrata source, the item reads the ruled clause and A2\'s sentence, byte for byte', () => {
+  assert.equal(plain(readText(socrataItem(ABOUT_WITH.surface))), `The Socrata connector — this project's connector for open-data portals on Socrata, and one of this site's data sources. ${A2}`);
+});
+
+test('UX-2-FIX P3 D12 + A2: where the statement does not offer the Socrata source, the clause is not rendered', () => {
+  assert.equal(plain(readText(socrataItem(ABOUT_WITHOUT.surface))), `The Socrata connector — this project's connector for open-data portals on Socrata. ${A2}`);
+});
+
+test('UX-2-FIX P3 A2: "Browse the directory" links to /directory on both configurations', () => {
+  for (const s of [ABOUT_WITH.surface, ABOUT_WITHOUT.surface]) {
+    assert.deepEqual(within(socrataItem(s)).filter((a) => a.type === 'a' && plain(readText(a)) === 'Browse the directory').map((a) => attr(a, 'href')), ['/directory']);
+  }
+});
+
+test('UX-2-FIX P3 D14: the roadmap strip\'s lead reads its ruled words, as one paragraph', () => {
+  const leads = PAGES['/roadmap'].elements().filter((el) => el.type === 'p' && plain(readText(el)).startsWith('Each card links'));
+  assert.deepEqual(leads.map((el) => plain(readText(el))), ['Each card links to a page for the people it names.']);
+  assert.ok(!pageText(PAGES['/roadmap']).includes('adjunct doc'), 'the earlier lead is still on the page');
+});
+
+test('UX-2-FIX P3 D14: the End users card links "Ask a question →" to /', () => {
+  assert.deepEqual(linksReading(PAGES['/roadmap'], 'Ask a question →').map((a) => attr(a, 'href')), ['/']);
+  assert.equal(linksReading(PAGES['/roadmap'], 'civicaitools.org home →').length, 0, 'the earlier label is still a link');
 });

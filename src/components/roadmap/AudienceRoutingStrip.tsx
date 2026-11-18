@@ -53,7 +53,8 @@ const CARDS: AudienceCard[] = [
   {
     audience: 'End users',
     why: 'This site. Try a query; publish an analysis as a signed record.',
-    linkLabel: 'civicaitools.org home',
+    // UX-2-FIX P3, D14 = A: the label names the act, not one deployment's host.
+    linkLabel: 'Ask a question',
     href: '/',
     external: false,
   },
@@ -73,8 +74,8 @@ export default function AudienceRoutingStrip() {
           marginBottom: '20px',
         }}
       >
-        For deeper, audience-specific detail on what this roadmap means for your role, see the
-        adjunct doc linked in each card.
+        {/* UX-2-FIX P3, D14 = A. */}
+        Each card links to a page for the people it names.
       </p>
 
       <div

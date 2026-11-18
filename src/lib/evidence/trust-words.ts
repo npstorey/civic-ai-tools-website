@@ -5,8 +5,11 @@
 // All RULED (the first research check, and the second, P5_words = A). The reviews line's own forms live in
 // `review-summary.ts`, the data date's in `data-read-date.ts`.
 
-/** X5: the registry row's first signal. */
-export const MADE_BY = (modelName: string): string => `Made by AI-assisted analysis · ${modelName}`;
+/** X5's words before the model's name: the first of the registry signal's two shown lines (UX-2-FIX P3, D15). */
+export const MADE_BY_LEAD = 'Made by AI-assisted analysis';
+
+/** X5: the registry row's first signal, whole: what a screen reader reads. */
+export const MADE_BY = (modelName: string): string => `${MADE_BY_LEAD} · ${modelName}`;
 
 /** X8: a list request that failed. */
 export const LIST_LOAD_FAILED = 'The analyses could not be loaded. Reloading the page tries again.';

@@ -447,6 +447,22 @@ a:focus-visible {
   }
 }
 
+/* /explore's "Exit fullscreen" (UX-2-FIX P3, D9 = A): over the view's top right corner at 640 px and up; below 640 px
+   in the flow, at the top of the view, right-aligned, so the tab row starts below it instead of under it. */
+.explore-fullscreen-exit {
+  position: absolute;
+  top: 16px;
+  right: 24px;
+}
+
+@media (max-width: 639px) {
+  .explore-fullscreen-exit {
+    position: static;
+    align-self: flex-end;
+    flex-shrink: 0;
+  }
+}
+
 .skeleton {
   background-color: var(--skeleton-color);
   animation: skeleton-pulse 2s infinite;

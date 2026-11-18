@@ -128,12 +128,13 @@ test('#547 C3: both mounts render the same form, and /ask keeps its notebook def
   at(ask, 'defaultMode="notebook"', 'ask/page.tsx');
   // The home page passes one prop of its own (UX pass row 7: Advanced options, signed out), and since UX-2 P3b-1 leg H
   // its framing in the mount's shape (plan v3: its h1 handed over as `heading`, the wrapper's spacing as
-  // `framingStyle`); the form is the same.
+  // `framingStyle`); the form is the same. UX-2-FIX P3 (H1): `onDock`, a notice of the dock the page reads for its own
+  // layout, which changes nothing in the form.
   at(home, 'advancedOptions="hidden-signed-out"', '(marketing)/page.tsx');
   assert.deepEqual(
     [...surfaceProps('src/app/(marketing)/page.tsx')].sort(),
-    ['advancedOptions', 'framingStyle', 'heading', 'prefillFromAddress'],
-    'the home page\'s <QuerySurface> props: the signed-out menu, its framing (leg H) and the `?q=` prefill (UX-2 P3b-2, fix 7), nothing else that changes the form',
+    ['advancedOptions', 'framingStyle', 'heading', 'onDock', 'prefillFromAddress'],
+    'the home page\'s <QuerySurface> props: the signed-out menu, its framing (leg H), the `?q=` prefill (UX-2 P3b-2, fix 7) and the dock\'s notice (UX-2-FIX P3, H1), nothing else that changes the form',
   );
   const surface = read('src/components/shared/QuerySurface.tsx');
   at(surface, '<QueryForm', 'QuerySurface.tsx');
