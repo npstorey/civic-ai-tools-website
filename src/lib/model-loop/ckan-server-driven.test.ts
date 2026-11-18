@@ -469,3 +469,54 @@ test('W2: the server\'s refusal of an unlisted portal is recorded as a rejected 
   const { pkg } = packageOf(W4.trace, W4.calls);
   assert.equal(JSON.stringify(pkg).includes('CKAN_ALLOWED_DOMAINS'), false, 'the server\'s words reached the signed package');
 });
+
+// --- Carried from the retired pack's driven test (CKAN-1 P3's A-C1 and A13c), for the server's own tools -------------
+
+test('A-C1 (carried): with CKAN_MCP_URL set, the CKAN row names neither Tyler Technologies nor its statement, and the Socrata and City Record rows read as with the variable unset', async () => {
+  const set = await buildFlowsStatement();
+  const row = (set.sources as Array<{ sourceId: string }>).find((r) => r.sourceId === BASE.sourceId);
+  assert.ok(row, 'premise: the statement has the CKAN row');
+  const text = JSON.stringify(row);
+  assert.ok(!text.includes('Tyler Technologies') && !text.includes('tylertech.com'), 'the CKAN row names Tyler Technologies or links its statement');
+  delete process.env.CKAN_MCP_URL;
+  let unset: Array<{ sourceId: string }>;
+  try {
+    unset = (await buildFlowsStatement()).sources;
+  } finally {
+    process.env.CKAN_MCP_URL = CKAN_URL;
+  }
+  for (const id of ['socrata', 'nyc-record']) {
+    const withCkan = (set.sources as Array<{ sourceId: string }>).find((r) => r.sourceId === id);
+    assert.ok(withCkan && JSON.stringify(withCkan).includes('Tyler Technologies'), `premise: ${id}'s row still names the Socrata platform's operator`);
+    assert.equal(JSON.stringify(withCkan), JSON.stringify(unset.find((r) => r.sourceId === id)), `${id}'s row moved with CKAN_MCP_URL set`);
+  }
+});
+
+test('A13c (carried): with CKAN_MCP_URL set and the CKAN source Off, its call in either spelling is refused not_offered and nothing is sent; unset, the same call reads not_configured', async () => {
+  const before = seen.length;
+  const off = await decide({ [BASE.sourceId]: 'off' });
+  for (const name of [SQL_TOOL, 'ckan_datastore_search_sql']) {
+    assert.throws(() => routeToolCall(buildMcpRegistry(readMcpEnvFromProcess(), off.selection), name), (error: unknown) => (error as { code?: unknown }).code === 'not_offered', name);
+  }
+  delete process.env.CKAN_MCP_URL;
+  try {
+    const decision = await decide({});
+    for (const name of [SQL_TOOL, 'ckan_datastore_search_sql']) {
+      assert.throws(() => routeToolCall(buildMcpRegistry(readMcpEnvFromProcess(), decision.selection), name), (error: unknown) => (error as { variable?: unknown }).variable === 'CKAN_MCP_URL', name);
+    }
+  } finally {
+    process.env.CKAN_MCP_URL = CKAN_URL;
+  }
+  assert.equal(seen.length, before, 'a refused call reached the stand-in');
+});
+
+// --- W3's named limit, as the operator documentation carries it ----------------------------------------------------
+
+test('W3: docs/deploy.md\'s CKAN_MCP_URL row keeps the statement check\'s named limit, and no reader-facing copy calls the source read-only', () => {
+  const deploy = fs.readFileSync(path.join(SRC, '..', 'docs', 'deploy.md'), 'utf8');
+  const row = deploy.split('\n').find((line) => line.startsWith('| `CKAN_MCP_URL` |')) ?? '';
+  assert.ok(row.length > 0, 'premise: docs/deploy.md has the CKAN_MCP_URL row');
+  assert.match(row, /does not establish that the statement only reads/, 'the row drops the named limit');
+  const copy = fs.readFileSync(path.join(SRC, 'lib', 'sources', 'copy.ts'), 'utf8');
+  assert.doesNotMatch(copy, /read-only/i, 'reader-facing copy says read-only');
+});

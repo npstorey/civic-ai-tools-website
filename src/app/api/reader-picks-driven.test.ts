@@ -436,7 +436,9 @@ test('W1-1 decoy: the Auto runs still read directory-set 1, and their first requ
  * but the flows statement reference (whose hash covers the statement's loopback addresses).
  */
 function autoBytes(): string {
-  const normal = (text: string) => text.split(MCP_ORIGIN).join('MCP').split(MODEL_ORIGIN).join('MODEL').split(today()).join('TODAY');
+  // The inventory's version is a date (`2026-11-18.1` since router 0.12.0, CKAN-2-WEB P1): it is held apart before the
+  // run date is, so a run on the day an inventory was published normalizes the same as a run on any other day.
+  const normal = (text: string) => text.split(MCP_ORIGIN).join('MCP').split(MODEL_ORIGIN).join('MODEL').split(router.CIVIC_INVENTORY.version).join('INVENTORY_VERSION').split(today()).join('TODAY');
   const root = rootAttributes(traceOf(AUTO_STREAM));
   delete root['analysis.flows_statement'];
   return normal(JSON.stringify({ requests: AUTO_STREAM.requests.map((r) => r.raw), root }));
@@ -446,8 +448,14 @@ function autoBytes(): string {
  *  base `71b43b0` with nothing else changed, by exactly the bump's named facts: Boston OpenContext's alias
  *  (`boston_opencontext`, in a tool name and its `sourcesOffered` row), the CKAN server's and the Boston pack's two
  *  not-configured rows, the router's version (component and routing), the inventory reference (version 4,
- *  `2026-11-13.1`, nine entries) and the two hashes over it (the definition and the routing configuration). */
-const AUTO_BYTES_SHA256 = 'd6228e33ded147143e2120cf976cf6f733ceede550c78baca505a11e3f545e7f';
+ *  `2026-11-13.1`, nine entries) and the two hashes over it (the definition and the routing configuration).
+ *  CKAN-2-WEB P1 (router 0.12.0): re-measured, diffed against `6bb13276` with nothing else changed, by exactly the
+ *  bump's named facts: the retired Boston pack's not-configured `sourcesOffered` row (gone), the router's version
+ *  (component and routing, 0.11.0 to 0.12.0), the inventory reference (version 5, `2026-11-18.1`, its hash, eight
+ *  entries for nine) and the two hashes over it (the definition and the routing configuration). The inventory's
+ *  version is now held apart from the run date in `normal` (it is a date, and equal to the run date on the day it was
+ *  published), so the bytes no longer depend on the day the suite runs. */
+const AUTO_BYTES_SHA256 = '6d1bb1ef5c888afd362a517a3aaf46a9073662842fe89afe0bffa0513281c195';
 
 test('W1-1 pin (decoy): an Auto run\'s request and record bytes do not move', () => {
   assert.equal(sha(autoBytes()), AUTO_BYTES_SHA256);
@@ -487,9 +495,9 @@ test('W1-2: the record states not-selected for the allowed source not picked, re
       'nyc-checkbook': 'not-configured',
       'nyc-record': 'not-consented',
       'nys-legislation': 'not-configured',
-      // Router 0.11.0 (CKAN-1 P3): `CKAN_MCP_URL` unset.
+      // Router 0.11.0 (CKAN-1 P3): `CKAN_MCP_URL` unset. Router 0.12.0 (CKAN-2-WEB P1) retired the Boston pack, and its
+      // `boston-ckan` row with it.
       'ckan-server': 'not-configured',
-      'boston-ckan': 'not-configured',
     }, d.name);
   }
 });
@@ -605,7 +613,8 @@ test('W1-7: the packaged record names no unknown source, and states reader-picke
 
 test('W1-7: the analysis page names the reader\'s choice in revision 5\'s reader-picked words, not directory-set\'s sentence', () => {
   const text = chooserLines(chooserFromPackage(packaged().pkg)).map((line) => line.text).join('\n');
-  assert.ok(text.includes('The model was shown 2 of the 9 sources'), text);
+  // Router 0.12.0 (CKAN-2-WEB P1): the inventory holds eight entries (the Boston pack retired), so the count is of 8.
+  assert.ok(text.includes('The model was shown 2 of the 8 sources'), text);
   assert.ok(text.includes('The person who asked this question picked those sources. A picked source was left out if it was turned off, or not set up on the site that ran this question.'), text);
   assert.ok(!text.includes('Those were the sources set up on the site'), text);
   assert.ok(!text.includes('which this site has no words for'), text);

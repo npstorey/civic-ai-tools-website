@@ -185,9 +185,11 @@ const TOOL_OPERATION_TYPES: Record<string, string> = {
   ckan__query_data: 'query',
   ckan__execute_sql: 'query',
   ckan__aggregate_data: 'query',
-  // The Boston pack's six over the hosted CKAN server (router 0.11.0, CKAN-1 P3,
-  // A17): two find datasets, two read a dataset's description and its
-  // resources, and the two datastore tools read records.
+  // The hosted CKAN server's six data tools (router 0.11.0's Boston pack's six,
+  // CKAN-1 P3, A17; the server's own since router 0.12.0): two find datasets,
+  // two read a dataset's description and its resources, and the two datastore
+  // tools read records. Its seventh, `ckan_status_show`, is left untyped: it
+  // reads no dataset (`operation-types.test.ts` states the reading).
   ckan_package_search: 'search',
   ckan_find_relevant_datasets: 'search',
   ckan_package_show: 'metadata',

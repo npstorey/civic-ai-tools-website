@@ -524,10 +524,11 @@ test('criterion 5, compare-stream: the root span states routing, the definition 
   // R6 W3 (#632, contract item 10): with the gate on and every source On, the
   // record states the router's `selected` where it stated `configured` before
   // W3 — the signed-byte move the gate record names.
-  assert.deepEqual(JSON.parse(root['analysis.sources_offered'] ?? 'null').map((s: { reason: string }) => s.reason), ['selected', 'selected', 'selected', 'not-configured', 'not-configured', 'selected', 'not-configured', 'not-configured', 'not-configured']);
+  assert.deepEqual(JSON.parse(root['analysis.sources_offered'] ?? 'null').map((s: { reason: string }) => s.reason), ['selected', 'selected', 'selected', 'not-configured', 'not-configured', 'selected', 'not-configured', 'not-configured']);
   // Router 0.6.0 (R8 W3): the three new hosted sources, switches unset, are not configured; since router 0.8.0
   // (S2-B) NYC City Record, sixth in the manifest, is a pack over Socrata, configured and On, so `selected`. Router
-  // 0.11.0 (CKAN-1 P3): the CKAN server and its Boston pack, last, `CKAN_MCP_URL` unset.
+  // 0.11.0 (CKAN-1 P3): the CKAN server and its Boston pack, last, `CKAN_MCP_URL` unset. Router 0.12.0 (CKAN-2-WEB
+  // P1): the pack is retired, so its row is gone and the CKAN server is last.
   // skill.text_hash is the final prompt's.
   const skill = spans(traceOf(IN_LOOP)).find((s) => s.name === 'skill_fetch');
   assert.equal(Object.fromEntries(attrPairs(skill!))['skill.text_hash'], sha(systemText(last)));
@@ -640,7 +641,8 @@ test('R10 P1 criterion 4: adaptRecord over the packaged in-loop record shows the
   assert.deepEqual(chooserLines(model.whereItWent?.chooser), [
     // The property kept: the in-loop sentence opens the line. S2-B F9 (case 1; bundle `:70`, `:88`): the record
     // carries composition.considered, so that entry's two sentences follow it, the inventory by its id as written.
-    { text: `${T.inLoop} The model was shown 4 of the 9 sources in the source inventory civic (version ${INVENTORY_REFERENCE.version}). Those were the sources set up on the site that ran this question, less any turned off for it.` },
+    // Router 0.12.0 (CKAN-2-WEB P1): eight inventory entries, the Boston pack retired.
+    { text: `${T.inLoop} The model was shown 4 of the 8 sources in the source inventory civic (version ${INVENTORY_REFERENCE.version}). Those were the sources set up on the site that ran this question, less any turned off for it.` },
     { text: `${T.loaded}Socrata.` },
     { text: `${T.askedNotLoaded}${T.none}.` },
     // S2-B: NYC City Record, in the directory set since router 0.8.0, is never asked about either.
@@ -839,15 +841,16 @@ const EXPECTED_CONSIDERED = {
 };
 
 // CKAN-1 P3 (router 0.11.0): inventory version 4, `2026-11-13.1`, nine entries (the CKAN server and its Boston pack).
-test('S2-B W4 premise: the installed router\'s inventory is civic 2026-11-13.1, nine entries, and the drives\' directory set lists four', () => {
+// CKAN-2-WEB P1 (router 0.12.0): inventory version 5, `2026-11-18.1`, eight entries (the pack retired).
+test('S2-B W4 premise: the installed router\'s inventory is civic 2026-11-18.1, eight entries, and the drives\' directory set lists four', () => {
   assert.equal(CIVIC_INVENTORY.id, 'civic');
-  assert.equal(CIVIC_INVENTORY.version, '2026-11-13.1');
-  assert.equal(router.civicRouter.manifest.length, 9);
+  assert.equal(CIVIC_INVENTORY.version, '2026-11-18.1');
+  assert.equal(router.civicRouter.manifest.length, 8);
   assert.deepEqual(DIRECTORY_IDS, ['socrata', 'data-commons', 'boston-opencontext', 'nyc-record']);
 });
 
 for (const d of [IN_LOOP, NOTEBOOK_IN_LOOP, PACK]) {
-  test(`S2-B W4, ${d.name}: the root span states analysis.considered once: the inventory, nine entries, the four listed, directory-set version 1`, () => {
+  test(`S2-B W4, ${d.name}: the root span states analysis.considered once: the inventory, eight entries, the four listed, directory-set version 1`, () => {
     const root = spans(traceOf(d)).find((s) => !s.parentSpanId)!;
     const written = root.attributes.filter((a) => a.key === 'analysis.considered');
     assert.equal(written.length, 1, `analysis.considered is written ${written.length} times`);

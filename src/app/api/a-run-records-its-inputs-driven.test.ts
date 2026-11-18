@@ -403,9 +403,8 @@ for (const d of [COMPARE_STREAM, NOTEBOOK]) {
       { sourceId: 'nyc-record', alias: 'nyc_record', reason: 'selected' },
       { sourceId: 'nys-legislation', alias: 'nys_legislation', reason: 'not-configured' },
       // Router 0.11.0 (CKAN-1 P3): the CKAN server and its Boston pack, `CKAN_MCP_URL` unset. No component and no
-      // server entry come with them.
+      // server entry come with them. Router 0.12.0 (CKAN-2-WEB P1) retired the pack, and its row with it.
       { sourceId: 'ckan-server', alias: 'ckan', reason: 'not-configured' },
-      { sourceId: 'boston-ckan', alias: 'boston', reason: 'not-configured' },
     ]);
   });
 
