@@ -228,6 +228,36 @@ test('criterion 11, D-13: the servers tab\'s banner claims only the lists\' leng
   assert.ok(!text.includes('These MCP servers connect AI to data from'), 'the old banner is still there');
 });
 
+// --- UX-2-FIX P3 (#790): D7, D4 and D6 ------------------------------------------------------------------------------
+// D7 (contract p3.md section 2): the servers tab's subtitle drops its count. Read as the whole paragraph, so the base's
+// "4 MCP servers for civic…" (which holds the new sentence as a substring) is red. D4 and D6 (no words): the action's
+// outline and the platform chip's border, as inline styles; where they sit on a page is the browser instrument's read.
+
+const D7 = 'MCP servers for civic and public data — open data portals, census, legislation, health, geospatial, and more.';
+
+test('UX-2-FIX P3 D7: the servers tab\'s subtitle reads its ruled words, with no count', async () => {
+  const s = await directory();
+  const subtitles = s.elements().filter((el) => el.type === 'p' && textOf(el).replace(/\s+/g, ' ').trim().endsWith('geospatial, and more.'));
+  assert.deepEqual(subtitles.map((el) => textOf(el).replace(/\s+/g, ' ').trim()), [D7]);
+});
+
+test('UX-2-FIX P3 D4: "Ask with this source" carries a 1 px accent outline; the new-tab links beside it carry none', async () => {
+  const card = cardOf(await directory(), 'socrata-mcp-server');
+  const action = askLinks(card);
+  assert.equal(action.length, 1, 'premise: one action on the offered row');
+  assert.equal(String(styleOf(action[0]).border ?? ''), '1px solid var(--accent)', 'the action\'s border');
+  const newTab = linksIn(card).filter((a) => a.props.target === '_blank' && ['GitHub', 'Docs', 'npm', 'Endpoint'].includes(textOf(a)));
+  assert.ok(newTab.length >= 2, `premise: the card's new-tab links: ${newTab.map((a) => textOf(a)).join(', ')}`);
+  assert.deepEqual(newTab.map((a) => styleOf(a).border ?? null), newTab.map(() => null), 'a new-tab link carries a border');
+});
+
+test('UX-2-FIX P3 D6: every platform chip in the portal list carries a 1 px --border-color border', async () => {
+  const s = await directory({}, '?tab=portals');
+  const chips = s.elements().filter((el) => el.type === 'span' && ['Socrata', 'CKAN'].includes(textOf(el)) && childrenOf(el).length === 0);
+  assert.ok(chips.length >= 1, 'premise: the portal list renders a platform chip');
+  assert.deepEqual(chips.map((el) => String(styleOf(el).border ?? '')), chips.map(() => '1px solid var(--border-color)'));
+});
+
 // --- Criterion 2: the directory's tabs ---------------------------------------------------------------------------
 
 async function tablist(s: Surface): Promise<HostElement[]> {

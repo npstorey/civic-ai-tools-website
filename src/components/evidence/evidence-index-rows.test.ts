@@ -29,7 +29,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { CONSENT_SURFACE_STUBS, h, mount, registerSurfaceHooks, textOf, type HostElement, type Surface } from '../sources/surface-test-harness.ts';
-import { classesOf, within } from '../ui/ui-test-helpers.ts';
+import { childrenOf, classesOf, within } from '../ui/ui-test-helpers.ts';
 
 registerSurfaceHooks({ ...CONSENT_SURFACE_STUBS });
 
@@ -85,7 +85,20 @@ function answerWith(answer: (url: URL) => Promise<Response> | Response): URL[] {
 
 const rowsOf = (s: Surface) => s.elements().filter((el) => classesOf(el).includes('ui-row'));
 const signalsOf = (row: HostElement) => within(row).filter((el) => classesOf(el).includes('ui-signal'));
-const labelOf = (signal: HostElement) => textOf(within(signal).find((el) => classesOf(el).includes('ui-signal-label')) ?? signal);
+/**
+ * What a screen reader reads in a node: its text, every `aria-hidden` subtree left out (UX-2-FIX P3, D15: the signal's
+ * two visible lines are hidden from it, and its whole sentence is read from a visually hidden copy).
+ */
+function heardText(node: unknown): string {
+  if (Array.isArray(node)) return node.map(heardText).join('');
+  if (typeof node === 'string' || typeof node === 'number') return String(node);
+  if (node === null || typeof node !== 'object' || !('props' in node)) return '';
+  const props = (node as HostElement).props;
+  if (props['aria-hidden'] === true || props['aria-hidden'] === 'true') return '';
+  return heardText(props.children);
+}
+const labelElement = (signal: HostElement) => within(signal).find((el) => classesOf(el).includes('ui-signal-label')) ?? signal;
+const labelOf = (signal: HostElement) => heardText(labelElement(signal).props.children).replace(/\s+/g, ' ').trim();
 
 // --- Criterion 2 --------------------------------------------------------------------
 
@@ -138,6 +151,41 @@ test('UX-2 P5 C2: a withdrawn row carries ui-row--withdrawn, and only it', async
   const s = await mount(h(EvidenceIndex, {}));
   const withdrawn = rowsOf(s).map((row) => classesOf(row).includes('ui-row--withdrawn'));
   assert.deepEqual(withdrawn, [false, false, true]);
+  s.unmount();
+});
+
+// --- UX-2-FIX P3 (#790), D15 = A with the owner's tweak ---------------------------------------------------------------
+// The byline is the date and the author; the model is named once, in the signal, whose words (`MADE_BY`) show on two
+// lines: "Made by AI-assisted analysis", then the model's name, with no "·" at the first line's end (contract p3.md
+// section 2; the variant with it is an image for the owner, not built). A screen reader reads `MADE_BY`'s whole string.
+// WHAT MAKES IT ABLE TO FAIL. At the base the byline holds three items, the model among them, and the label is one run
+// of text with no line of its own for the model.
+
+const MADE_BY_WHOLE = `Made by AI-assisted analysis · ${MODEL_NAME}`;
+
+test('UX-2-FIX P3 D15: each row\'s byline holds two items, the date and the author; the model is not among them', async () => {
+  answerWith(() => page(ROWS));
+  const s = await mount(h(EvidenceIndex, {}));
+  const date = new Date('2026-11-01T00:00:00.000Z').toLocaleDateString('en-US', { year: 'numeric', month: 'short', day: 'numeric' });
+  for (const row of rowsOf(s)) {
+    const items = within(row).filter((el) => classesOf(el).includes('ui-row-meta-item')).map((el) => textOf(el));
+    assert.deepEqual(items, [date, 'Fixture Author']);
+  }
+  s.unmount();
+});
+
+test('UX-2-FIX P3 D15: the signal shows "Made by AI-assisted analysis" on one line and the model\'s name on the next, with no "·" at the first line\'s end; a screen reader reads MADE_BY\'s whole string', async () => {
+  answerWith(() => page(ROWS));
+  const s = await mount(h(EvidenceIndex, {}));
+  for (const row of rowsOf(s)) {
+    const signal = signalsOf(row)[0];
+    assert.equal(labelOf(signal), MADE_BY_WHOLE, 'what a screen reader reads');
+    const shown = within(labelElement(signal)).filter((el) => el.props['aria-hidden'] === 'true' || el.props['aria-hidden'] === true);
+    assert.equal(shown.length, 1, `the label's shown copy: ${shown.length} aria-hidden elements`);
+    const lines = childrenOf(shown[0]);
+    assert.deepEqual(lines.map((el) => textOf(el)), ['Made by AI-assisted analysis', MODEL_NAME], 'the two shown lines');
+    assert.deepEqual(lines.map((el) => (el.props.style as Record<string, unknown> | undefined)?.display), ['block', 'block'], 'each shown line is a block of its own');
+  }
   s.unmount();
 });
 
