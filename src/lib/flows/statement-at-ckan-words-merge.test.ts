@@ -16,8 +16,9 @@
 //     base's three back into the head's statement and the bytes are the base's, to the byte.
 //
 // WHAT MAKES IT ABLE TO FAIL. The first two are guards: they hold at the base and cannot be red there, so each was
-// shown able to fail by a mutation run (an edit to `OPERATOR_NO_TRAINING_STATEMENT`, and an edit to the 2026-11-14
-// configuration's Socrata host), run red and reverted (P2's report). The third is red at the base, at its look for the
+// shown able to fail by a mutation run (an edit to `OPERATOR_NO_TRAINING_STATEMENT`, which only production's
+// configuration reads, and an edit to the Socrata portal operator's line, which both read), run red and reverted
+// (P2's report). The third is red at the base, at its look for the
 // new holder: the base's CKAN row holds the City of Boston line. Any other change to the statement under that
 // configuration fails its byte comparison.
 //
