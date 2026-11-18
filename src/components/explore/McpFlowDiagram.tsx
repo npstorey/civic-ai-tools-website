@@ -535,15 +535,15 @@ export default function McpFlowDiagram() {
           animation: 'bpmn-fullscreen-in 300ms ease-out',
         }}
       >
-        {/* Close fullscreen — absolutely positioned to avoid taking layout space */}
+        {/* Close fullscreen — absolutely positioned to avoid taking layout space at 640 px and up; below 640 px it is in
+            the flow, at the top, right-aligned, and the tab row starts below it (UX-2-FIX P3, D9 = A; globals.css,
+            `.explore-fullscreen-exit`). */}
         <button
           onClick={() => setIsFullscreen(false)}
           title="Exit fullscreen (ESC)"
           aria-label="Exit fullscreen"
+          className="explore-fullscreen-exit"
           style={{
-            position: 'absolute',
-            top: '16px',
-            right: '24px',
             zIndex: 45,
             display: 'flex',
             alignItems: 'center',

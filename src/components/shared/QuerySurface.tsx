@@ -99,6 +99,11 @@ interface QuerySurfaceProps {
   advancedOptions?: 'always' | 'hidden-signed-out';
   /** The home page's mount: the box reads `q` from the address once (UX-2 P3b-2, 2H). Handed to `QueryForm`. */
   prefillFromAddress?: boolean;
+  /**
+   * Called at each send that starts a run, the moment the form docks (the dock is for the surface's life). The home page
+   * reads it to drop its first-screen layout from the first question (UX-2-FIX P3, H1 = A).
+   */
+  onDock?: () => void;
 }
 
 export default function QuerySurface({
@@ -109,6 +114,7 @@ export default function QuerySurface({
   defaultMode = 'standard',
   advancedOptions = 'always',
   prefillFromAddress = false,
+  onDock,
 }: QuerySurfaceProps) {
   const [queryCount, setQueryCount] = useState(0);
   const [usedModel, setUsedModel] = useState<string>('');
@@ -194,6 +200,7 @@ export default function QuerySurface({
     countQuestion();
     // Dock at send (leg H): set after the count, so a send is read against the state it was made in.
     setDocked(true);
+    onDock?.();
     setUsedModel(model);
     setLastQuery(query);
     setLastPortal(effectivePortal);

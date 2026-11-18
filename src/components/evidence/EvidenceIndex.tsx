@@ -6,7 +6,7 @@ import { Row } from '@/components/ui/Row';
 import { Signal } from '@/components/ui/Signal';
 import { formatModelName } from '@/lib/models';
 import { reviewsLine, type RecordReviews } from '@/lib/evidence/review-summary';
-import { LIST_LOAD_FAILED, MADE_BY } from '@/lib/evidence/trust-words';
+import { LIST_LOAD_FAILED, MADE_BY, MADE_BY_LEAD } from '@/lib/evidence/trust-words';
 import { DEFAULT_REGISTRY_FILTERS, RegistryFilters, type RegistryFilterState } from './RegistryFilters';
 
 // The registry (UX-2 P5; R18 C, R18b C). Each row is a P7 row stating facts,
@@ -162,11 +162,12 @@ export default function EvidenceIndex() {
                   title={r.title}
                   href={`/records/${r.slug}`}
                   summary={r.summary}
-                  meta={[dateStr, r.creatorName, modelName]}
+                  // UX-2-FIX P3, D15 = A: the byline is the date and the author; the model is named once, in the signal.
+                  meta={[dateStr, r.creatorName]}
                   withdrawn={isWithdrawn}
                   signals={
                     <>
-                      <Signal tier="neutral" label={MADE_BY(modelName)} />
+                      <Signal tier="neutral" label={<MadeByLines modelName={modelName} />} />
                       {r.reviews && <Signal tier="neutral" label={reviewsLine(r.reviews)} />}
                     </>
                   }
@@ -211,6 +212,23 @@ export default function EvidenceIndex() {
           )}
         </>
       )}
+    </>
+  );
+}
+
+/**
+ * X5's signal in two shown lines (UX-2-FIX P3, D15 = A with the owner's tweak): "Made by AI-assisted analysis", then the
+ * model's name on a line of its own. The "·" between them is not shown. A screen reader reads `MADE_BY`'s whole
+ * string, once, from a visually hidden copy; the shown lines are hidden from it.
+ */
+function MadeByLines({ modelName }: { modelName: string }) {
+  return (
+    <>
+      <span className="ui-visually-hidden">{MADE_BY(modelName)}</span>
+      <span aria-hidden="true">
+        <span style={{ display: 'block' }}>{MADE_BY_LEAD}</span>
+        <span style={{ display: 'block' }}>{modelName}</span>
+      </span>
     </>
   );
 }

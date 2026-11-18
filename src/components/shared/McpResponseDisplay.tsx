@@ -432,16 +432,24 @@ export default function McpResponseDisplay({
         lineHeight: '1.5',
       }}
     >
-      Analysis may be incomplete. This site has token and tool-call limits that can cut short complex queries. For the full analysis with no limits,{' '}
-      <a
-        href="https://github.com/npstorey/civic-ai-tools"
-        target="_blank"
-        rel="noopener noreferrer"
-        style={{ color: '#6b5900', textDecoration: 'underline', textUnderlineOffset: '2px' }}
-      >
-        run locally
-      </a>{' '}
-      with Claude Code or Cursor.
+      Analysis may be incomplete. This site has token and tool-call limits that can cut short complex queries.
+      {/* UX-2-FIX P3, D13 = A (13.1): the pointer to /project's setup section, through the host links like the banner's
+          below; an instance that serves no marketing pages renders no third sentence. A new tab, as before: the answer
+          stays on this page. */}
+      {marketingOrigin !== null && (
+        <>
+          {' '}To work without this site&apos;s limits, see{' '}
+          <a
+            href={`${marketingOrigin}/project#run-it-yourself`}
+            target="_blank"
+            rel="noopener noreferrer"
+            style={{ color: '#6b5900', textDecoration: 'underline', textUnderlineOffset: '2px' }}
+          >
+            Run it yourself
+          </a>{' '}
+          on the project page.
+        </>
+      )}
     </div>
   );
 
@@ -784,15 +792,16 @@ export default function McpResponseDisplay({
                 Continue this analysis
               </button>
             )}
-            {/* Marketing route (P4d): the app host withholds /learn, so the
-                CTA carries the marketing origin when one is configured,
-                stays exactly relative when nothing is, and is omitted on an
-                app-only instance — which has no marketing site, and where
-                a link to /learn could only 404. Same treatment the header
-                and footer marketing links got in P4c. */}
+            {/* Marketing route (P4d): the app host withholds the marketing
+                pages, so the CTA carries the marketing origin when one is
+                configured, stays exactly relative when nothing is, and is
+                omitted on an app-only instance — which has no marketing site,
+                and where the link could only 404. Same treatment the header
+                and footer marketing links got in P4c. UX-2-FIX P3, D13 = A
+                (13.2): it points at /project's setup section. */}
             {marketingOrigin !== null && (
               <a
-                href={`${marketingOrigin}/learn#try-it`}
+                href={`${marketingOrigin}/project#run-it-yourself`}
                 style={{
                   fontSize: '12px',
                   color: '#8a6d00',
@@ -800,7 +809,7 @@ export default function McpResponseDisplay({
                   textUnderlineOffset: '2px',
                 }}
               >
-                Try this locally (no limits)
+                Run it yourself
               </a>
             )}
           </div>

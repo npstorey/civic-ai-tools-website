@@ -20,6 +20,8 @@ export default async function AboutPage() {
   const [directory, portalCounts, statement] = await Promise.all([getDirectoryData(), getPortalCounts(), buildFlowsStatement()]);
   const serverCount = directory.servers.length;
   const portalCount = portalCounts.total.toLocaleString('en-US');
+  // UX-2-FIX P3, D12 = A: whether this site answers from the Socrata source, read from its own statement.
+  const offersSocrata = statement.sources.some((source) => source.sourceId === 'socrata');
 
   return (
     <Page
@@ -71,9 +73,12 @@ export default async function AboutPage() {
                 The Socrata connector
               </a>
             </strong>{' '}
-            &mdash; this project&apos;s connector for open-data portals on Socrata, and one of this site&apos;s
-            data sources. <Link href="/directory">Browse the directory</Link> to see the {serverCount} connectors it
-            lists and the {portalCount} portals they reach.
+            &mdash; this project&apos;s connector for open-data portals on Socrata
+            {/* UX-2-FIX P3, D12 = A: the clause only where this site's statement offers the Socrata source. */}
+            {offersSocrata ? <>, and one of this site&apos;s data sources</> : null}.{' '}
+            {/* UX-2-FIX P3, A2 = A: both counts are the directory's list lengths. */}
+            <Link href="/directory">Browse the directory</Link> to see the {serverCount} connectors and{' '}
+            {portalCount} portals it lists.
           </li>
           <li>
             {/* P10-42 (C1 = A). */}

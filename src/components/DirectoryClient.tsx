@@ -295,7 +295,8 @@ export default function DirectoryClient({
       {/* Subtitle + CTA */}
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '12px', marginBottom: '24px' }}>
         <p style={{ ...prose, margin: 0 }}>
-          {servers.length} MCP servers for civic and public data &mdash; open data portals, census,
+          {/* UX-2-FIX P3, D7 = A: no count here; the line under the title states it. */}
+          MCP servers for civic and public data &mdash; open data portals, census,
           legislation, health, geospatial, and more.
         </p>
         <a
@@ -684,12 +685,22 @@ function ServerCard({
 
       {/* Action links */}
       <div style={{ display: 'flex', gap: '12px', flexWrap: 'wrap', alignItems: 'baseline', marginTop: 'auto', paddingTop: '4px' }}>
-        {/* C5 = (b), X27: the one in-app action, on this site's own sources only. */}
+        {/* C5 = (b), X27: the one in-app action, on this site's own sources only. UX-2-FIX P3, D4 = A: set apart from
+            the new-tab links beside it by its look, a small outlined button-shaped link. */}
         {siteSource && (
           <Link
             href={actionHref(siteSource)}
             className="directory-row-action"
-            style={{ fontSize: '12px', fontWeight: 600, color: 'var(--accent)', textDecoration: 'none' }}
+            style={{
+              display: 'inline-block',
+              fontSize: '12px',
+              fontWeight: 600,
+              color: 'var(--accent)',
+              textDecoration: 'none',
+              border: '1px solid var(--accent)',
+              borderRadius: '4px',
+              padding: '4px 10px',
+            }}
           >
             Ask with this source
           </Link>

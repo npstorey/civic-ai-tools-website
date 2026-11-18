@@ -58,6 +58,8 @@ export default function PositioningBand() {
         borderTop: '1px solid var(--border-color)',
         backgroundColor: 'var(--card-background)',
         marginTop: '48px',
+        // The home page's "What is this site? ↓" lands here: below the sticky header, not under it (UX-2-FIX P3, H1).
+        scrollMarginTop: 'var(--header-height, 72px)',
       }}
     >
       <div className="max-w-6xl mx-auto px-6" style={{ padding: '56px 24px' }}>
