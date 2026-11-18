@@ -331,8 +331,9 @@ export default function DirectoryClient({
           />
         </div>
 
-        {/* The filters (R14; 0d item 6): below 640 px a Disclosure, "Show Filters" / "Hide Filters"; at 640 px and up
-            its summary is hidden and the filters always show (globals.css, \`.directory-filter-toggle\`). */}
+        {/* The filters (R14; 0d item 6): below 640 px a Disclosure, "Show Filters" / "Hide Filters"; at 640 px and up,
+            in a browser with ::details-content, its summary is hidden and the filters always show; without it the
+            Disclosure stays (globals.css, \`.directory-filter-toggle\`, #791). */}
         <div className="directory-filter-toggle">
         <Disclosure
           summary={`${mobileFiltersOpen ? 'Hide Filters' : 'Show Filters'}${hasFilters ? ' (active)' : ''}`}
