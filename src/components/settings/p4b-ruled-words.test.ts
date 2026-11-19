@@ -212,7 +212,11 @@ test('criterion 3 (H2): the privacy golden moves on exactly :10, :25, :243, :258
   const all = fs.readFileSync(GOLDEN, 'utf8').split('\n');
   const at = all.findIndex((line) => line.trim() === '"id": "source-row-nyc-record",');
   assert.ok(at > 2, 'premise: the golden has S2-B\'s City Record row');
-  const lines = [...all.slice(0, at - 2), ...all.slice(at + 3)];
+  // CKAN-2-WEB P2 (OA-1043, M4 = A): two lines gain one sentence, the definition of "not read", after the one of "not
+  // stated". Read without it, every line is H2's: the sentence is removed here, and nowhere else.
+  const notRead = ` ${jsonText('If we have not read a recipient\'s page, we write "not read."')}`;
+  assert.equal(all.filter((line) => line.includes(notRead)).length, 2, 'premise: the golden carries P2\'s sentence on two lines');
+  const lines = [...all.slice(0, at - 2), ...all.slice(at + 3)].map((line) => line.replace(notRead, ''));
   assert.equal(lines.length, BASE_LINES, 'the golden gained or lost lines');
   assert.equal(lines[14], BASE_15, ':15 moved');
   assert.equal(lines[247], BASE_248, ':248 moved');

@@ -287,6 +287,8 @@ export const PRIVACY_CONSENT_SECTIONS: readonly PrivacyConsentSection[] = [
       'For each recipient, we state what it says it keeps, and for how long when it gives a time.',
       'Where it says so on a page, we give that page and the date we read it.',
       'If a provider says nothing, we write "not stated."',
+      // CKAN-2-WEB P2 (OA-1043, M4 = A): the definition of the word the CKAN source's portal line uses.
+      'If we have not read a recipient\'s page, we write "not read."',
       "Nobody, including this site, can check a hosted service's logging from outside.",
       'That is why there is another option.',
       LOCAL_ONLY_OFFER,
@@ -332,7 +334,21 @@ export interface SourceDescription {
    * (`NYC_RECORD_EXAMPLES_SENTENCE`), which this site does not run.
    */
   base?: 'socrata';
+  /**
+   * Sentences that follow the reach sentence wherever it prints (the
+   * source's row, the privacy page's row, the pause card), as they read. The
+   * CKAN source's alone has them: what a portal receives
+   * (`CKAN_PORTAL_RECEIVES`, M5 = A).
+   */
+  afterReach?: string;
 }
+
+/**
+ * What a CKAN portal receives (CKAN-2-WEB P2, the owner's M5 = A, OA-1043):
+ * after the CKAN source's reach sentence, on its row, the privacy page and the
+ * pause card, through `sourceRowLines`. No other source prints it.
+ */
+export const CKAN_PORTAL_RECEIVES = "That server sends the AI model's searches and queries to the portal each one names. They are part of the web address the server requests, and can include words from your question.";
 
 /**
  * One entry per manifest source, keyed by `sourceId`, pinned to the manifest
@@ -378,12 +394,14 @@ export const SOURCE_DESCRIPTIONS: Readonly<Record<string, SourceDescription>> = 
     publisher: 'BetaNYC',
     link: 'https://github.com/BetaNYC/nys-openlegislation-mcp',
   },
-  // Router 0.11.0 (CKAN-1 P3, hub #314). The `what` line is the owner's ruled words (OA-1043, M1 and M2), pinned by
-  // `./ckan-description-line.test.ts`. Phase 2 of CKAN-2-WEB adds M1's third sentence and M3's sentence.
+  // Router 0.11.0 (CKAN-1 P3, hub #314). The `what` line is the owner's ruled words (OA-1043: M1 and M3, the whole
+  // line, CKAN-2-WEB P2; M2, its first two sentences, P1b), pinned by `./ckan-description-line.test.ts`. `afterReach`
+  // is M5's two sentences.
   'ckan-server': {
-    what: 'an open-source platform for open-data portals. Many governments publish their data on CKAN portals.',
+    what: 'an open-source platform for open-data portals. Many governments publish their data on CKAN portals. Universities and other groups run CKAN portals too. The AI model chooses the portal for each request, and the record names each portal.',
     publisher: 'onData',
     link: 'https://github.com/npstorey/ckan-mcp-server',
+    afterReach: CKAN_PORTAL_RECEIVES,
   },
 };
 

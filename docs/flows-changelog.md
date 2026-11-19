@@ -31,6 +31,48 @@ the statement's **hash** (the SHA-256 of the bytes `/api/flows` serves) under
 that configuration when the entry moves the hash but no version: such a
 change re-asks no one.
 
+## 2026-11-19 — the CKAN source's portal line (npstorey/civic-ai-tools#329, CKAN-2-WEB P2)
+
+This is the log's first entry with `CKAN_MCP_URL` set. Under it the statement
+has a row for the CKAN source, whose server's calls each name a CKAN portal.
+The row's portal line now names the operator of each portal a call names. It
+replaces the City of Boston's line, written for the one portal of a pack that
+an earlier router offered over the same server.
+
+- The CKAN source's row has one recipient: its server, at its configured host.
+  Its holders are two. The server's operator: what it keeps is for this site's
+  operator to state. The operator of each portal a call names (the record
+  names each portal by its address): not read. This site has not read each
+  portal's statement, and the privacy page defines "not read".
+- The City of Boston is no longer named, nor its statement, which the earlier
+  line cited as read 2026-11-16.
+- The CKAN source's `version` is the one below; the base `version` does not
+  move. The statement's `date` is 2026-10-20: no statement it carries was read
+  later.
+- On an instance that sets `CKAN_MCP_URL` for the first time, nobody is asked
+  again: CKAN is new to every reader's consent, and arrives Ask first.
+- On an instance that set it before this change, a reader who answered
+  before it is asked again about CKAN, and about nothing else.
+
+**Configuration:** the 2026-11-14 entry's, with `CKAN_MCP_URL` set to an
+address at `ckan-mcp.civicaitools.org`. The statement reads the address's host
+only. With `CKAN_MCP_URL` unset the statement has no CKAN row, and its versions
+are the 2026-11-14 entry's.
+
+**Base `version`:** `2489d0dda25a79b3286c380379c6d2c8202e66a77fe5b4f493f558a7ce190f9c` (unchanged)
+
+| Source | Its `version` | Where it runs | What its holders say they keep |
+|---|---|---|---|
+| `socrata` | `fe99ec852eb7bfa3c95ce0db20cf5d2c7411b79b1e61c5ddbad3c19190a61629` | `socrata-mcp.civicaitools.org` | unchanged |
+| `data-commons` | `a0d757284510792921c7889ed537e75ebbc9890a1f96c71b0fe393bc46ceb334` | Google's hosted endpoint, the default address | unchanged |
+| `nyc-charter` | `e381ddafc6d461ef1fdb913270aaac637d51801909613f6d7dc495fbcf6c7e61` | this site's sandbox | unchanged |
+| `nyc-checkbook` | `bb350a722fbf9a740096edbb561d00182bd4c9841d3254336a61ebfadeb17ec4` | this site's sandbox (`@betanyc/nyc-checkbook-mcp` 1.6.3), which may reach `www.checkbooknyc.com` | unchanged |
+| `nyc-record` | `ad4994622fa30487bfa46fbc0e74d6e7f9ed57a03afb9edc6a40ed529b6417ce` | `socrata-mcp.civicaitools.org`, the Socrata source's server | unchanged |
+| `nys-legislation` | `83b334e65e930c58f4adca15b11fe59e04e212c978fbd60d1b645693d587adf8` | this site's sandbox (`@betanyc/nys-openlegislation-mcp` 2.4.0), which may reach `legislation.nysenate.gov` | unchanged |
+| `ckan-server` | `08ed6a84b10037053abd0664602c326ea017447fbadc4754d9898f1edb5ad5d5` | `ckan-mcp.civicaitools.org` | The server's operator: what it keeps is for this site's operator to state. The operator of each portal a call names (the record names each portal by its address): not read. |
+
+**`date`:** 2026-10-20 (the 2026-11-14 entry's).
+
 ## 2026-11-14 — NYC City Record through the Socrata source (npstorey/civic-ai-tools#309 W8)
 
 NYC City Record no longer has a server of its own on this site. Its requests

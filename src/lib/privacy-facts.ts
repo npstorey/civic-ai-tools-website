@@ -63,6 +63,7 @@ import {
 } from './flows/sandbox-snapshots.ts';
 import { CONSENT_COOKIE_NAME } from './sources/consent.ts';
 import {
+  CKAN_PORTAL_RECEIVES,
   COOKIE_HOLDS,
   GUIDE_LINK_TEXT,
   GUIDE_SENTENCE,
@@ -1400,7 +1401,7 @@ export function sourceRow(source: FlowsStatement['sources'][number]): Statement 
     if (line.statementUrl) parts.push(' (', { link: line.statementUrl, text: 'its statement' }, line.readOn ? `, read ${line.readOn})` : ')');
   });
   parts.push(`. How current its data is: ${source.freshness}`);
-  return statement(`source-row-${source.sourceId}`, parts, [FLOWS_TRACE, k('SOURCE_DESCRIPTIONS'), k('REACH_SENTENCE'), ...(parts.includes(NYC_RECORD_EXAMPLES_SENTENCE.before) ? [k('NYC_RECORD_EXAMPLES_SENTENCE')] : []), 'env:SOCRATA_MCP_URL', 'env:BOSTON_OPENCONTEXT_MCP_URL', ...CIVIC_MANIFEST.filter((entry) => entry.sourceId === source.sourceId && entry.hostings.some((variant) => variant.kind === 'npm-package')).map((entry): Trace => `env:${entry.configuration.addressVariable}`)]);
+  return statement(`source-row-${source.sourceId}`, parts, [FLOWS_TRACE, k('SOURCE_DESCRIPTIONS'), k('REACH_SENTENCE'), ...(parts.includes(NYC_RECORD_EXAMPLES_SENTENCE.before) ? [k('NYC_RECORD_EXAMPLES_SENTENCE')] : []), ...(parts.includes(` ${CKAN_PORTAL_RECEIVES}`) ? [k('CKAN_PORTAL_RECEIVES')] : []), 'env:SOCRATA_MCP_URL', 'env:BOSTON_OPENCONTEXT_MCP_URL', ...CIVIC_MANIFEST.filter((entry) => entry.sourceId === source.sourceId && entry.hostings.some((variant) => variant.kind === 'npm-package')).map((entry): Trace => `env:${entry.configuration.addressVariable}`)]);
 }
 
 function consentSections(analytics: AnalyticsConfig | null): PrivacySection[] {

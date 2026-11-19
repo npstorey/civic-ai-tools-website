@@ -565,10 +565,10 @@ export const ENV_SPEC = [
   // request. Optional rather than recommended: absence is a configuration,
   // not a degraded feature, so it is not nagged about.
   { name: 'BOSTON_OPENCONTEXT_MCP_URL', tier: 'optional', purpose: "Boston OpenContext MCP endpoint — opt-in: unset, the source is not offered to a run (no tools, no guidance, no record entry). No default: the public endpoint refuses requests that carry no bearer token, and this app sends none" },
-  // The hosted CKAN server (router 0.11.0, CKAN-1 P3): opt-in, like Boston
-  // OpenContext. Set, it offers the CKAN source and the packs over it (Analyze
-  // Boston); unset, neither is offered. No default.
-  { name: 'CKAN_MCP_URL', tier: 'optional', purpose: "Hosted CKAN MCP server endpoint — opt-in: set, the CKAN source and the Analyze Boston pack over it are offered; unset, neither is offered to a run (no tools, no guidance, no record entry). No default" },
+  // The hosted CKAN server (router 0.12.0, CKAN-2-WEB P1): opt-in, like Boston
+  // OpenContext. Set, it offers the CKAN source, whose calls each name the CKAN
+  // portal they read; unset, it is not offered. No default.
+  { name: 'CKAN_MCP_URL', tier: 'optional', purpose: "Hosted CKAN MCP server endpoint — opt-in: set, the CKAN source is offered, its seven tools each naming a CKAN portal in server_url; unset, it is not offered to a run (no tools, no guidance, no record entry). No default" },
   // A source the instance RUNS rather than calls at an address (#617 P3,
   // ruling D7): NYC Charter, Laws and Rules, a publisher-bundled stdio server,
   // in a Vercel Sandbox this instance creates (src/lib/mcp/hosting/). Opt-in,

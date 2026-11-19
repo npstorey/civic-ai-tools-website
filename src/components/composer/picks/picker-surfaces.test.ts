@@ -492,6 +492,25 @@ test('W1-6 (S3; D2 = A, S6a): S3 only for a searchable query with no hit; a hit 
   assert.ok(!page.text().includes(W.S3));
 });
 
+// CKAN-2-WEB P2 criterion 1 (OA-1043, M1 = A and M3 = A): the picker's not-set-up row prints CKAN's ruled description
+// line, its first letter upper-cased (`PickerPanel.tsx`, `capitalized`, `NotSetUpRow`). `CKAN_MCP_URL` is unset in this
+// file, so a search for "CKAN" finds the source as not set up, the row production's picker shows. At `c451a735` the
+// row prints P1b's two sentences only, so the equality fails there.
+test('CKAN-2-WEB P2 criterion 1: the picker\'s not-set-up CKAN row prints the ruled description line, upper-cased first', async () => {
+  assert.equal(process.env.CKAN_MCP_URL, undefined, 'premise: CKAN is not set up in this file');
+  const page = await askPage();
+  await choose(page, W.pick);
+  await search(page, 'CKAN');
+  const ckan = rowFor(page, 'ckan-server');
+  assert.equal(ckan.props['data-row-kind'], 'not-set-up');
+  const lines = within(ckan).filter((el) => el.type === 'div').map((el) => textOf(el));
+  assert.deepEqual(lines, [
+    'CKAN',
+    'An open-source platform for open-data portals. Many governments publish their data on CKAN portals. Universities and other groups run CKAN portals too. The AI model chooses the portal for each request, and the record names each portal.',
+    W.S6a,
+  ]);
+});
+
 test('W1-6 (D2 = A): a set-up hit is the Settings row, with its control and S4, the box named for its source', async () => {
   const page = await askPage();
   await choose(page, W.pick);

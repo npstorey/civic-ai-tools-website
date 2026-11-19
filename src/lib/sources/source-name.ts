@@ -123,10 +123,14 @@ export interface SourceRowLines {
  * connector and its publisher, linked as the base's row links it, then where
  * it runs; the second names the connector its example queries are taken
  * from, linked as the entry links it, which this site does not run.
+ *
+ * An entry's `afterReach` (CKAN-2-WEB P2, M5 = A: the CKAN source's) follows
+ * the reach sentence, so every surface that prints the one prints the other.
  */
 export function sourceRowLines(source: Pick<FlowsSource, 'sourceId' | 'publisher' | 'host' | 'variant'>): SourceRowLines {
   const where = sourceWhere(source);
   const entry = Object.prototype.hasOwnProperty.call(SOURCE_DESCRIPTIONS, source.sourceId) ? SOURCE_DESCRIPTIONS[source.sourceId] : undefined;
+  const after: RowSegment[] = entry?.afterReach !== undefined ? [` ${entry.afterReach}`] : [];
   if (entry !== undefined && entry.base !== undefined) {
     const base = SOURCE_DESCRIPTIONS[entry.base];
     return {
@@ -138,11 +142,12 @@ export function sourceRowLines(source: Pick<FlowsSource, 'sourceId' | 'publisher
         NYC_RECORD_EXAMPLES_SENTENCE.before,
         { link: entry.link, text: entry.publisher },
         NYC_RECORD_EXAMPLES_SENTENCE.after,
+        ...after,
       ],
     };
   }
   if (entry !== undefined) {
-    return { what: entry.what, reach: [REACH_SENTENCE.before, { link: entry.link, text: entry.publisher }, `${REACH_SENTENCE.after}${where}${REACH_SENTENCE.end}`] };
+    return { what: entry.what, reach: [REACH_SENTENCE.before, { link: entry.link, text: entry.publisher }, `${REACH_SENTENCE.after}${where}${REACH_SENTENCE.end}`, ...after] };
   }
   if (source.publisher === 'not stated') return { what: null, reach: [`${REACH_SENTENCE.unstated}${where}${REACH_SENTENCE.end}`] };
   return { what: null, reach: [`${REACH_SENTENCE.before}${source.publisher}${REACH_SENTENCE.after}${where}${REACH_SENTENCE.end}`] };
