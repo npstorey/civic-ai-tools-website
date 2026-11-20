@@ -7,7 +7,8 @@
  *
  *   - `stream` (stdout / stderr) → rendered as plain monospaced text
  *   - `display_data` / `execute_result` → mime-bundle; prefer text/markdown,
- *     then text/html, then image/png, then text/plain (last-resort)
+ *     then text/html (sanitized before display), then image/png, then
+ *     text/plain (last-resort)
  *   - `error` → ename/evalue/traceback in a red error block (should not
  *     occur for a passing synthesis cell)
  *
@@ -19,6 +20,7 @@
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
 import type { NotebookOutput } from '@/components/answer-view/buildChatEvidenceView';
+import { sanitizeNotebookHtml } from './notebook-html';
 
 function flattenText(text: string | string[] | undefined): string {
   if (!text) return '';
@@ -81,12 +83,10 @@ function OutputBlock({ output, index }: { output: NotebookOutput; index: number 
         <div
           key={index}
           style={{ fontSize: '14px', overflow: 'auto' }}
-          // Sandbox-emitted HTML — pandas DataFrame HTML in particular. The
-          // sandbox executes notebook-author-supplied code, so this string
-          // is not user-input from another origin; it's emitted by our own
-          // signed sandbox pipeline. Phase 3 spec-side review may revisit
-          // whether to sanitize as defense-in-depth.
-          dangerouslySetInnerHTML={{ __html: html }}
+          // Notebook HTML output is sanitized before display: only table
+          // elements and plain formatting are kept (`notebook-html.ts`).
+          // One render site serves a live run and a stored record.
+          dangerouslySetInnerHTML={{ __html: sanitizeNotebookHtml(html) }}
         />
       );
     }
