@@ -1,0 +1,31 @@
+{
+  "name": "chat-paused",
+  "route": "/api/compare-stream",
+  "sources": [
+    "src/components/answer-view/consent-step-surfaces-driven.test.ts:124-126 (PAUSE, LOAD_START, PAUSE_LINE)",
+    "src/components/answer-view/consent-step-surfaces-driven.test.ts:255-264 (the sequence: analyze, the load, its pause, then each panel's complete)"
+  ],
+  "changes": [
+    "the reader's answer (Allow) is placed after the pause, and the load's end after it, as the notebook path has them",
+    "the without-data panel completes before the with-data panel, so the with-data panel's complete is the arrival",
+    "the with-data answer is lengthened ({answer}); the pause names the statement's own source ({source})"
+  ],
+  "answerMarker": "RUNANSWER-r10",
+  "answer": [
+    "RUNANSWER-r10: **42** requests.",
+    "",
+    "The count covers every request recorded in the fixture's year. Each row of the dataset is one request, and the count is the number of rows that the query returned, with no rows removed and none added.",
+    "",
+    "The figure is a fixture value for a layout measurement: it is long enough to wrap across several lines at a narrow width, so the last line of the answer can be measured against the docked question box."
+  ],
+  "events": [
+    { "type": "progress", "panel": "withMcp", "message": "Reading your question...", "phase": "analyze" },
+    { "type": "progress", "panel": "withMcp", "message": "Loading the {source} source", "phase": "tool_start", "iteration": 1, "args": { "alias": "{alias}" }, "toolName": "load_source", "operationType": "load_source" },
+    { "type": "progress", "panel": "withMcp", "message": "Waiting for your answer about {source}, which is set to Ask first", "phase": "consent_pause", "pause": { "$pause": true } },
+    { "$reader": "allow" },
+    { "type": "progress", "panel": "withMcp", "message": "Loading the {source} source", "phase": "tool_complete", "iteration": 1, "args": { "alias": "{alias}" }, "toolName": "load_source", "operationType": "load_source", "duration_ms": 4000 },
+    { "type": "complete", "panel": "withoutMcp", "data": { "content": "An answer.", "duration_ms": 1 } },
+    { "$arrival": true, "type": "complete", "panel": "withMcp", "data": { "content": "{answer}", "duration_ms": 1, "tools_called": [] } },
+    { "$end": true }
+  ]
+}

@@ -1,0 +1,28 @@
+{
+  "name": "chat-plain",
+  "route": "/api/compare-stream",
+  "sources": [
+    "src/components/answer-view/consent-step-surfaces-driven.test.ts:124-126 (LOAD_START)",
+    "src/components/answer-view/consent-step-surfaces-driven.test.ts:255-264 (the sequence, with no pause)"
+  ],
+  "changes": [
+    "the no-pause control: chat-paused.json with its pause line and the reader's answer removed",
+    "the with-data answer is lengthened ({answer})"
+  ],
+  "answerMarker": "RUNANSWER-r10",
+  "answer": [
+    "RUNANSWER-r10: **42** requests.",
+    "",
+    "The count covers every request recorded in the fixture's year. Each row of the dataset is one request, and the count is the number of rows that the query returned, with no rows removed and none added.",
+    "",
+    "The figure is a fixture value for a layout measurement: it is long enough to wrap across several lines at a narrow width, so the last line of the answer can be measured against the docked question box."
+  ],
+  "events": [
+    { "type": "progress", "panel": "withMcp", "message": "Reading your question...", "phase": "analyze" },
+    { "type": "progress", "panel": "withMcp", "message": "Loading the {source} source", "phase": "tool_start", "iteration": 1, "args": { "alias": "{alias}" }, "toolName": "load_source", "operationType": "load_source" },
+    { "type": "progress", "panel": "withMcp", "message": "Loading the {source} source", "phase": "tool_complete", "iteration": 1, "args": { "alias": "{alias}" }, "toolName": "load_source", "operationType": "load_source", "duration_ms": 4000 },
+    { "type": "complete", "panel": "withoutMcp", "data": { "content": "An answer.", "duration_ms": 1 } },
+    { "$arrival": true, "type": "complete", "panel": "withMcp", "data": { "content": "{answer}", "duration_ms": 1, "tools_called": [] } },
+    { "$end": true }
+  ]
+}

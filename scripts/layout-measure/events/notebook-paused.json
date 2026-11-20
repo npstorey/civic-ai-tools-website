@@ -1,0 +1,57 @@
+{
+  "name": "notebook-paused",
+  "route": "/api/query-notebook",
+  "sources": [
+    "src/components/answer-view/consent-step-finished-run.test.ts:219-238 (loadLine, pauseLine, RUN_ANSWER, NOTEBOOK)",
+    "src/components/answer-view/consent-step-finished-run.test.ts:253-280 (the sequence: phase A, a load, its pause, the reader's answer, the load's end, the call, the answer, phases B and C, the notebook, phases D and complete)",
+    "publish_inputs: added so the finished run offers Publish (src/components/notebook/NotebookOutput.tsx:87-88 needs a trace); its trace is the smallest one src/components/PublishEvidenceDialog.tsx:78-88 reads"
+  ],
+  "changes": [
+    "one pause, not the test's two; the pause names the statement's own source ({source}), built in the page from the statement in force",
+    "the answer is lengthened to several lines ({answer}, from `answer` below) so a check can read its last line"
+  ],
+  "answerMarker": "RUNANSWER-r10",
+  "answer": [
+    "RUNANSWER-r10: **42** requests.",
+    "",
+    "The count covers every request recorded in the fixture's year. Each row of the dataset is one request, and the count is the number of rows that the query returned, with no rows removed and none added.",
+    "",
+    "The figure is a fixture value for a layout measurement: it is long enough to wrap across several lines at a narrow width, so the last line of the answer can be measured against the docked question box."
+  ],
+  "events": [
+    { "type": "phase", "name": "A", "message": "Discovering datasets…" },
+    { "type": "phase_a_progress", "message": "Loading the {source} source", "phase": "tool_start", "iteration": 1, "toolName": "load_source", "operationType": "load_source" },
+    { "type": "phase_a_progress", "message": "Waiting for your answer about {source}, which is set to Ask first", "phase": "consent_pause", "pause": { "$pause": true } },
+    { "$reader": "allow" },
+    { "type": "phase_a_progress", "message": "Loading the {source} source", "phase": "tool_complete", "iteration": 1, "toolName": "load_source", "operationType": "load_source" },
+    { "type": "phase_a_tool_call", "name": "load_source", "operationType": "load_source", "args": { "alias": "{alias}" }, "duration_ms": 4000 },
+    { "type": "phase_a_answer", "content": "{answer}" },
+    { "type": "publish_inputs", "trace": { "resourceSpans": [] }, "answer": "{answer}", "duration_ms": 4200 },
+    { "type": "phase", "name": "B", "message": "Synthesizing notebook…" },
+    { "type": "phase", "name": "C", "message": "Executing in sandbox…" },
+    {
+      "$arrival": true,
+      "type": "notebook",
+      "notebook": {
+        "nbformat": 4,
+        "nbformat_minor": 5,
+        "metadata": {
+          "extensions": {
+            "org.civicaitools.execution": { "executedAt": "2026-10-30T12:00:00Z", "executionDuration_ms": 4200, "sandboxId": "fixture-sandbox-r10", "environment": { "python": "3.13", "libraries": {} } },
+            "org.civicaitools.notebook": { "provenance": "executed" }
+          }
+        },
+        "cells": [
+          { "cell_type": "markdown", "metadata": {}, "source": ["# Fixture notebook\n"] },
+          { "cell_type": "code", "metadata": { "role": "synthesis" }, "execution_count": 1, "source": ["display(Markdown(answer))\n"], "outputs": [{ "output_type": "display_data", "metadata": {}, "data": { "text/markdown": "{answer}" } }] }
+        ]
+      },
+      "sandboxId": "fixture-sandbox-r10",
+      "executionDuration_ms": 4200,
+      "validation": { "ok": true, "issues": [] }
+    },
+    { "type": "phase", "name": "D", "message": "Finalizing…" },
+    { "type": "phase", "name": "complete", "message": "Done." },
+    { "$end": true }
+  ]
+}
