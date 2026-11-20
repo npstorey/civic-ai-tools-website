@@ -162,6 +162,14 @@ function subscribe(listener: () => void): () => void {
 const getSnapshot = () => snapshot;
 const getServerSnapshot = () => EMPTY;
 
+/**
+ * The snapshot as it stands now, read outside a render: what a handler reads after awaiting `refreshConsent`, before
+ * React has rendered the read (FIX-1 D2, the send's re-read in `QueryForm`).
+ */
+export function consentSnapshot(): ConsentSnapshot {
+  return snapshot;
+}
+
 /** The instance's mode and store flag, each `null` for anything but an answer naming one; a failure here fails no other read. */
 async function readRouting(): Promise<Pick<ConsentSnapshot, 'routing' | 'store'>> {
   try {

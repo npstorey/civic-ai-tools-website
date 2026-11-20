@@ -170,6 +170,12 @@ export const PICKER_TEXT = {
   change: 'Change',
   /** S9 (D4 = B): under the box, after a send with "Only the ones I pick" chosen and nothing picked. */
   noPickAfterSend: 'No data source is picked, so nothing was sent. Pick at least one, or choose Auto.',
+  /**
+   * FIX-1 D2 = A, D3 = E0 (website #807; OA-1101, OA-1109): under the box, in S9's place, after a send with sources
+   * picked while the flows statement could not be read, again, at the send. Auto's own description stays where a reader
+   * chooses it (`DATA_SOURCES_ITEM`).
+   */
+  notLoadedAfterSend: 'Your picked data sources could not be loaded just now, so nothing was sent. Try again in a moment, or choose Auto.',
 } as const;
 
 function joinNames(names: readonly string[]): string {

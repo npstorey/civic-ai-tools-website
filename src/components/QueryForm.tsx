@@ -16,11 +16,11 @@ import { parseModelsResponse, type Model } from '@/lib/model-list';
 import { MODELS_LOAD_ERROR } from '@/lib/streaming';
 import { SETTINGS_HREF } from '@/lib/sources/copy';
 import Composer from '@/components/composer/Composer';
-import HarnessMenu from '@/components/composer/HarnessMenu';
+import HarnessMenu, { picksInForce } from '@/components/composer/HarnessMenu';
 import { SignInControl, useSignInAction } from '@/components/composer/SignInControl';
 import { COUNT_LINE, PICKER_TEXT, SIGN_IN_LINE, WHERE_LINE } from '@/components/composer/copy';
-import { canPauseToAsk, noSourceOnReason, panelStates, useSourceConsent, type SourceStateValue } from '@/components/sources/useSourceConsent';
-import { closePicker, dropPicks, markRefused, openPicker, usePicks } from '@/components/composer/picks/store';
+import { consentSnapshot, noSourceOnReason, panelStates, useSourceConsent, type ConsentSnapshot, type SourceStateValue } from '@/components/sources/useSourceConsent';
+import { closePicker, dropPicks, getPicks, markRefused, openPicker, usePicks, type PicksState } from '@/components/composer/picks/store';
 import { LoadedPickerPanel } from '@/components/composer/picks/load-picker';
 import { readerSourceName } from '@/lib/sources/source-name';
 import { useDefaultPortalArg, usePortalLocked } from '@/components/DefaultPortalProvider';
@@ -115,6 +115,13 @@ const noAddress = () => null;
  * none. The one that compares two cities is not offered on a locked instance
  * (#436).
  */
+
+/** The picks a question carries: the reader's, in the statement's order, less any source set Off (B10). */
+function pickedOf(consent: Pick<ConsentSnapshot, 'statement' | 'status' | 'pending'>, chosen: readonly string[]): string[] {
+  const ids = consent.statement?.sources.map((s) => s.sourceId) ?? [];
+  const states = consent.status ? panelStates({ status: consent.status, pending: consent.pending }, ids) : {};
+  return ids.filter((id) => chosen.includes(id) && states[id] !== 'off');
+}
 
 /** The count's answer from `/api/rate-limit`, kept only when it carries both numbers (addendum 3, 3.5). */
 interface QuestionCount { remaining: number; limit: number }
@@ -247,13 +254,28 @@ export default function QueryForm({
   const [cardOpen, setCardOpen] = useState(false);
   // "Only the ones I pick" (S3-B W1, npstorey/civic-ai-tools#318): the reader's picks, in the page's memory only
   // (`picks/store.ts`). Offered in loop with the decision store (`canPauseToAsk`; D5 = A), so only there do they narrow
-  // the where-line, name themselves under the box (S7) and travel with the question.
+  // the where-line, name themselves under the box (S7) and travel with the question. FIX-1 D1 = B (website #798): a
+  // routing read that failed, or named no form, keeps them, shown and sent (`picksInForce`, one predicate with the menu).
   const picks = usePicks();
-  const picking = picks.mode === 'pick' && canPauseToAsk(consent);
+  const picking = picksInForce(picks.mode, consent);
   const statementIds = consent.statement?.sources.map((s) => s.sourceId) ?? [];
   const pickStates = consent.status ? panelStates({ status: consent.status, pending: consent.pending }, statementIds) : {};
   /** The picks, in the statement's order: what S7 names and what the question carries. */
-  const picked = statementIds.filter((id) => picks.picked.includes(id) && pickStates[id] !== 'off');
+  const picked = pickedOf(consent, picks.picked);
+  // FIX-1 D2 = A (website #786 item 1): the flows statement could not be read, so the picks cannot be named or sent.
+  const statementLost = consent.loaded && consent.statement === null;
+  // The send was held because the statement was still missing when the send read it again; shown while that holds.
+  const [notLoadedHeld, setNotLoadedHeld] = useState(false);
+  if (notLoadedHeld && !(picking && statementLost)) {
+    // The "adjust state when a value changes" render-time pattern: the statement is back, or the reader chose Auto.
+    setNotLoadedHeld(false);
+  }
+  const rereading = useRef(false);
+  const live = useRef(true);
+  useEffect(() => {
+    live.current = true;
+    return () => { live.current = false; };
+  }, []);
   // The where-line (UX-2 P3b-1, 1B.1; D5 B; addenda 1-3), before and after a first consent. Nothing until the
   // statement and the status are both read (a failed read leaves either null, with `loaded` true). Before a consent
   // it reads the pending states, which Allow writes (`panelStates`); after one, the guard's own lookup. One predicate
@@ -339,26 +361,60 @@ export default function QueryForm({
   useEffect(() => {
     if (isLoading) closePicker();
   }, [isLoading]);
+  // FIX-1 (#798's second symptom): a read that ends picking hides the panel, and closes it too, so a later read that
+  // offers picking again leaves the panel as the reader last saw it, closed, rather than reopening it unasked.
+  useEffect(() => {
+    if (picks.open && consent.loaded && !picking) closePicker();
+  });
 
   // D4 = B's after-send line (S9). With the panel open it goes right above the panel, so it is in view at the press
   // (fix round 2): below the box and its harness trigger, before the panel's header; still under the box. Closed, it
   // stays in the where-line's place.
   const panelOpen = picking && picks.open;
-  const noPickNote = picking && picked.length === 0 && picks.refused ? (
+  // FIX-1 D2 = A: with sources picked and the statement still missing at the send, its line takes S9's place, and S9
+  // never shows while a source is picked and the statement is missing (#786 item 1).
+  const noPickNote = picking && statementLost && notLoadedHeld ? (
+    <p data-part="pick-note" role="status" className="composer-line">{PICKER_TEXT.notLoadedAfterSend}</p>
+  ) : picking && picked.length === 0 && picks.refused && !(statementLost && picks.picked.length > 0) ? (
     <p data-part="pick-note" role="status" className="composer-line">{PICKER_TEXT.noPickAfterSend}</p>
   ) : null;
 
   const ask = () => {
+    // FIX-1 D2 = A (site fact 2): after a failed read nothing reads again on its own (the guard reads only before the
+    // first load), so with the statement missing the send reads it again first, and goes by what that read finds.
+    if (picking && statementLost) {
+      if (rereading.current) return;
+      rereading.current = true;
+      setNotLoadedHeld(false);
+      void consent.refresh().then(() => {
+        rereading.current = false;
+        if (live.current) send(consentSnapshot(), getPicks());
+      });
+      return;
+    }
+    send(consent, picks);
+  };
+
+  const send = (now: ConsentSnapshot, chosen: PicksState) => {
+    const pickingNow = picksInForce(chosen.mode, now);
+    const pickedNow = pickedOf(now, chosen.picked);
+    // Still missing: nothing is sent, and the line under the box says so (D2 = A, D3 = E0).
+    if (pickingNow && now.loaded && now.statement === null && chosen.picked.length > 0) {
+      markRefused(false);
+      setNotLoadedHeld(true);
+      return;
+    }
+    setNotLoadedHeld(false);
     // D4 = B: "Only the ones I pick" with nothing picked sends nothing, and S9 says so under the box. Not a send, so the
     // panel stays open (R4 is about a send).
-    if (picking && picked.length === 0) {
+    if (pickingNow && pickedNow.length === 0) {
       markRefused(true);
       return;
     }
     markRefused(false);
     // R4: a send closes the panel.
     closePicker();
-    const args = [query.trim(), model, portal, mode, picking ? [...picked] : undefined] as const;
+    const args = [query.trim(), model, portal, mode, pickingNow ? [...pickedNow] : undefined] as const;
     const run = () => {
       lastSentRef.current = () => onSubmit(...args);
       setLastSentQuery(args[0]);
