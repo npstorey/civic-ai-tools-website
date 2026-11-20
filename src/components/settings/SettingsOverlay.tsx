@@ -179,24 +179,30 @@ function DataSources() {
         </p>
       )}
       {shown.length === 0 && searchable.length > 0 && <p style={MUTED}>{SETTINGS_TEXT.noMatch}</p>}
-      <ul data-target-source={targetSource ?? undefined} style={{ listStyle: 'none', margin: '0 0 10px', padding: 0, fontSize: '13px', color: 'var(--text-secondary)' }}>
-        {shown.map(({ source, name }) => {
-          const control: SourceStateControlProps = {
-            sourceId: source.sourceId,
-            name,
-            state: states[source.sourceId] ?? 'ask-first',
-            since: status?.states?.[source.sourceId]?.since,
-            inForce,
-            writing: consent.writing,
-            setState: consent.setState,
-            confirmed,
-            setConfirmed,
-            // The consent's own date line above carries the date (as the dashboard's tab did).
-            sinceLine: false,
-          };
-          return <SourceRow key={source.sourceId} source={source} control={control} consent={consent} />;
-        })}
-      </ul>
+      {/* FIX-1 D9 = A (website #786 item 4): `/api/flows` could not be read, so there is no list; N2 in its place says
+          why, and how to read it again (opening Settings reads it, `useSourceConsent`'s mount). */}
+      {consent.loaded && statement === null ? (
+        <p data-part="sources-not-loaded" style={MUTED}>{SETTINGS_TEXT.notLoaded}</p>
+      ) : (
+        <ul data-target-source={targetSource ?? undefined} style={{ listStyle: 'none', margin: '0 0 10px', padding: 0, fontSize: '13px', color: 'var(--text-secondary)' }}>
+          {shown.map(({ source, name }) => {
+            const control: SourceStateControlProps = {
+              sourceId: source.sourceId,
+              name,
+              state: states[source.sourceId] ?? 'ask-first',
+              since: status?.states?.[source.sourceId]?.since,
+              inForce,
+              writing: consent.writing,
+              setState: consent.setState,
+              confirmed,
+              setConfirmed,
+              // The consent's own date line above carries the date (as the dashboard's tab did).
+              sinceLine: false,
+            };
+            return <SourceRow key={source.sourceId} source={source} control={control} consent={consent} />;
+          })}
+        </ul>
+      )}
       <p style={MUTED}>
         <LocalOnlyOffer statement={statement} />
       </p>

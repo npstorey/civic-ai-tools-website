@@ -132,6 +132,8 @@ export const SETTINGS_TEXT = {
   tabs: { dataSources: 'Data sources', about: 'About these settings' },
   search: 'Search data sources',
   noMatch: 'No data source matches.',
+  /** FIX-1 D9 = A, N2 (website #786 item 4): in the list's place when `/api/flows` could not be read. Opening Settings reads it again. */
+  notLoaded: 'Data sources could not be loaded just now, so none are listed. Close Settings and open it again to try again.',
   aboutKeptWithAccounts: 'If you are signed in, your consent is kept on your account. If not, it is kept in a cookie until this browser session ends. The privacy page names the cookie.',
   aboutKeptWithoutAccounts: 'Your consent is kept in a cookie until this browser session ends. The privacy page names the cookie.',
   link: 'Data source settings',
