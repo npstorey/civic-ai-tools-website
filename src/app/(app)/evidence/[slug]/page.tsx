@@ -47,7 +47,7 @@ import ProvenanceGraphSection from '@/components/evidence/ProvenanceGraphSection
 // Machine-readable metadata shapes (JSON-LD + Highwire citation tags). Pure
 // builders in lib so the SHAPE is unit-testable — including what it omits
 // (#256: no publication date is stored, so none is asserted).
-import { buildEvidenceJsonLd, buildEvidenceCitationTags } from '@/lib/evidence/page-metadata';
+import { buildEvidenceJsonLd, buildEvidenceCitationTags, serializeJsonLd } from '@/lib/evidence/page-metadata';
 import { producerProfileLink } from '@/lib/evidence/producer-profile-label';
 import { isBlobRef, type BlobRef } from '@/lib/evidence/blob-ref';
 // The W3 fix's fetch-once-then-verify, shared with section B's system prompt (R10 P1b).
@@ -364,7 +364,7 @@ export default async function EvidencePage({ params }: PageProps) {
     <>
       <script
         type="application/ld+json"
-        dangerouslySetInnerHTML={{ __html: JSON.stringify(jsonLd) }}
+        dangerouslySetInnerHTML={{ __html: serializeJsonLd(jsonLd) }}
       />
       <Page width="record">
         {/* Unsigned-package banner (S3a P3, #166; ADR-0020 §Consequences
