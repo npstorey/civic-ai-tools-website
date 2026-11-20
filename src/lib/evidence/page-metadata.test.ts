@@ -13,6 +13,7 @@ import assert from 'node:assert/strict';
 import {
   buildEvidenceJsonLd,
   buildEvidenceCitationTags,
+  serializeJsonLd,
 } from './page-metadata.ts';
 
 const RECORD = {
@@ -114,4 +115,14 @@ test('both builders emit only string-valued keys Next.js metadata accepts', () =
   for (const value of Object.values(buildEvidenceCitationTags(RECORD))) {
     assert.equal(typeof value, 'string');
   }
+});
+
+// --- The record page escapes its structured data --------------------------
+
+test('serializeJsonLd: the record page escapes its structured data; the text has no <, > or & and parses back equal', () => {
+  const jsonLd = buildEvidenceJsonLd({ ...RECORD, title: 'a</script>b', summary: '<!-- & -->', creatorName: 'c > d' });
+  const text = serializeJsonLd(jsonLd);
+  assert.doesNotMatch(text, /[<>&]/);
+  assert.deepEqual(JSON.parse(text), jsonLd);
+  assert.equal(serializeJsonLd(buildEvidenceJsonLd(RECORD)), JSON.stringify(buildEvidenceJsonLd(RECORD)), 'a value with none of the three is written as before');
 });

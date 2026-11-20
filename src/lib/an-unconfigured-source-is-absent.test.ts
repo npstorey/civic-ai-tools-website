@@ -103,7 +103,7 @@ const STUB_PREFIX = 'file:///civic-238-p2-stub/';
 const DRIVER_URL = pathToFileURL(path.join(SRC, 'lib/sandbox/driver.ts')).href;
 const STUB_SOURCE: Record<string, string> = {
   'next/headers': `export async function headers() { return new Headers({ 'x-forwarded-for': '203.0.113.38' }); }`,
-  'next-auth': `export async function getServerSession() { return null; }`,
+  'next-auth': `export async function getServerSession() { return globalThis.__notebookSession ?? null; }`,
   '@/lib/auth': `export const authOptions = {};`,
   // The real error class; an executor that creates nothing. Phase A — the
   // model loop, which is what this file measures — has finished by then.
@@ -292,7 +292,15 @@ async function drive(name: string, run: () => Promise<Response>): Promise<Drive>
 const post = (route: string, body: unknown) =>
   new Request(`http://localhost${route}`, { method: 'POST', headers: { cookie: consentCookieForTests() }, body: JSON.stringify(body) }) as never;
 
-const notebookRoute = await import('../app/api/query-notebook/route.ts');
+// The notebook route requires sign-in: its requests carry a session, and no other route's do.
+const NOTEBOOK_SESSION = globalThis as unknown as { __notebookSession: unknown };
+function signedIn<A extends unknown[]>(post: (...args: A) => Promise<Response>): (...args: A) => Promise<Response> {
+  return async (...args) => {
+    NOTEBOOK_SESSION.__notebookSession = { user: { id: 'fixture-account' } };
+    try { return await post(...args); } finally { NOTEBOOK_SESSION.__notebookSession = null; }
+  };
+}
+const notebookRoute = { POST: signedIn((await import('../app/api/query-notebook/route.ts')).POST) };
 const compareStreamRoute = await import('../app/api/compare-stream/route.ts');
 const compareRoute = await import('../app/api/compare/route.ts');
 

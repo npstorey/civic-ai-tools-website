@@ -109,7 +109,8 @@ function stubSource(key: string, leg: string | null): string {
         return new Headers({ 'x-forwarded-for': globalThis.__p3.ip });
       }`;
     case 'next-auth':
-      return 'export async function getServerSession() { return null; }';
+      // The notebook route requires sign-in: one account per drive, as one address per drive.
+      return 'export async function getServerSession() { return { user: { id: `fixture-${globalThis.__p3.ip}` } }; }';
     case '@/lib/auth':
       return 'export const authOptions = {};';
     case 'lambda':

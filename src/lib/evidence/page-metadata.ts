@@ -78,6 +78,18 @@ export function buildEvidenceJsonLd(
 }
 
 /**
+ * The record page escapes its structured data: the JSON-LD element's text,
+ * with `<`, `>` and `&` written as JSON `\u` escapes, so no stored value can
+ * end the script element it is written into. `JSON.parse` reads it back equal.
+ */
+export function serializeJsonLd(value: Record<string, unknown>): string {
+  return JSON.stringify(value)
+    .replace(/</g, '\\u003c')
+    .replace(/>/g, '\\u003e')
+    .replace(/&/g, '\\u0026');
+}
+
+/**
  * Highwire-Press citation tags for one evidence record, shaped for the
  * `other:` block of a Next.js `Metadata` object.
  *

@@ -76,7 +76,7 @@ const STUB_PREFIX = 'file:///civic-r8-w1-usage-stub/';
 const DRIVER_URL = pathToFileURL(path.join(SRC, 'lib/sandbox/driver.ts')).href;
 const STUB_SOURCE: Record<string, string> = {
   'next/headers': `export async function headers() { return new Headers({ 'x-forwarded-for': '203.0.113.49' }); }`,
-  'next-auth': `export async function getServerSession() { return null; }`,
+  'next-auth': `export async function getServerSession() { return globalThis.__notebookSession ?? null; }`,
   '@/lib/auth': `export const authOptions = {};`,
   '@/lib/sandbox': `
      import { NotebookExecutionError } from ${JSON.stringify(DRIVER_URL)};
@@ -269,7 +269,15 @@ async function drive(name: string, routing: string | undefined, run: () => Promi
 }
 
 const compareStreamRoute = await import('./compare-stream/route.ts');
-const notebookRoute = await import('./query-notebook/route.ts');
+// The notebook route requires sign-in: its requests carry a session, and no other route's do.
+const NOTEBOOK_SESSION = globalThis as unknown as { __notebookSession: unknown };
+function signedIn<A extends unknown[]>(post: (...args: A) => Promise<Response>): (...args: A) => Promise<Response> {
+  return async (...args) => {
+    NOTEBOOK_SESSION.__notebookSession = { user: { id: 'fixture-account' } };
+    try { return await post(...args); } finally { NOTEBOOK_SESSION.__notebookSession = null; }
+  };
+}
+const notebookRoute = { POST: signedIn((await import('./query-notebook/route.ts')).POST) };
 const compareRoute = await import('./compare/route.ts');
 const runCompareStream = () => compareStreamRoute.POST(post('/api/compare-stream', { query: QUESTION, model: 'fixture-fast', portal: PORTAL, mcpOnly: true }));
 const runNotebook = () => notebookRoute.POST(post('/api/query-notebook', { query: QUESTION, portal: PORTAL }));

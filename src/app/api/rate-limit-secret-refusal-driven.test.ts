@@ -92,7 +92,7 @@ const STUB_SOURCE: Record<string, string> = {
   // The reader's address is switchable, so the counted drives below start
   // from a fresh allowance whatever the refused drives did.
   'next/headers': `export async function headers() { return new Headers({ 'x-forwarded-for': globalThis.__p1Address }); }`,
-  'next-auth': `export async function getServerSession() { return null; }`,
+  'next-auth': `export async function getServerSession() { return globalThis.__notebookSession ?? null; }`,
   '@/lib/auth': `export const authOptions = {};`,
   '@vercel/kv': `
     export const kv = {
@@ -220,7 +220,15 @@ process.env.KV_REST_API_TOKEN = 'fixture';
 
 const compare = (await import('./compare/route.ts')) as unknown as { POST: (r: Request) => Promise<Response> };
 const compareStream = (await import('./compare-stream/route.ts')) as unknown as { POST: (r: Request) => Promise<Response> };
-const notebook = (await import('./query-notebook/route.ts')) as unknown as { POST: (r: Request) => Promise<Response> };
+// The notebook route requires sign-in: its requests carry a session, and no other route's do.
+const NOTEBOOK_SESSION = globalThis as unknown as { __notebookSession: unknown };
+function signedIn<A extends unknown[]>(post: (...args: A) => Promise<Response>): (...args: A) => Promise<Response> {
+  return async (...args) => {
+    NOTEBOOK_SESSION.__notebookSession = { user: { id: 'fixture-account' } };
+    try { return await post(...args); } finally { NOTEBOOK_SESSION.__notebookSession = null; }
+  };
+}
+const notebook = { POST: signedIn(((await import('./query-notebook/route.ts')) as unknown as { POST: (r: Request) => Promise<Response> }).POST) };
 const rateLimit = (await import('./rate-limit/route.ts')) as unknown as { GET: () => Promise<Response> };
 
 // --- The drives -----------------------------------------------------------------------
@@ -357,8 +365,13 @@ test('#516 P1 (4): /api/rate-limit answers the same four fields, with the anonym
   assert.deepEqual(Object.keys(info).sort(), ['authenticated', 'limit', 'remaining', 'resets_at']);
   assert.equal(info.limit, 10);
   assert.equal(info.authenticated, false);
-  // Three questions were counted for this reader above, one per query route.
-  assert.equal(info.remaining, 7);
+  // Two questions were counted for this reader above, one per compare route.
+  // The notebook route requires sign-in, so its question was counted for the
+  // signed-in account, under another key.
+  assert.equal(info.remaining, 8);
+  const counted = (d: Drive) => d.kv.find((c) => c.op === 'incr')?.key;
+  assert.equal(counted(COUNTED[0]), counted(COUNTED[1]), 'the two compare routes did not count one reader');
+  assert.ok(counted(COUNTED[2]) && counted(COUNTED[2]) !== counted(COUNTED[0]), 'the notebook question was not counted for the signed-in account');
 });
 
 test('#516 P1: nothing in this file left the machine', () => {

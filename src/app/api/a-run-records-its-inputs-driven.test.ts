@@ -95,7 +95,7 @@ const STUB_PREFIX = 'file:///civic-r2-w4-stub/';
 const DRIVER_URL = pathToFileURL(path.join(SRC, 'lib/sandbox/driver.ts')).href;
 const STUB_SOURCE: Record<string, string> = {
   'next/headers': `export async function headers() { return new Headers({ 'x-forwarded-for': '203.0.113.44' }); }`,
-  'next-auth': `export async function getServerSession() { return null; }`,
+  'next-auth': `export async function getServerSession() { return globalThis.__notebookSession ?? null; }`,
   '@/lib/auth': `export const authOptions = {};`,
   // The real error class; an executor that returns the notebook it was given,
   // so the route goes on to emit its publish inputs. No sandbox is created.
@@ -270,7 +270,15 @@ const post = (route: string, body: unknown) =>
   new Request(`http://localhost${route}`, { method: 'POST', headers: { cookie: consentCookieForTests() }, body: JSON.stringify(body) }) as never;
 
 const compareStreamRoute = await import('./compare-stream/route.ts');
-const notebookRoute = await import('./query-notebook/route.ts');
+// The notebook route requires sign-in: its requests carry a session, and no other route's do.
+const NOTEBOOK_SESSION = globalThis as unknown as { __notebookSession: unknown };
+function signedIn<A extends unknown[]>(post: (...args: A) => Promise<Response>): (...args: A) => Promise<Response> {
+  return async (...args) => {
+    NOTEBOOK_SESSION.__notebookSession = { user: { id: 'fixture-account' } };
+    try { return await post(...args); } finally { NOTEBOOK_SESSION.__notebookSession = null; }
+  };
+}
+const notebookRoute = { POST: signedIn((await import('./query-notebook/route.ts')).POST) };
 const COMPARE_STREAM = await drive('/api/compare-stream', () =>
   compareStreamRoute.POST(post('/api/compare-stream', { query: QUESTION, model: 'fixture-fast', portal: PORTAL, mcpOnly: true })));
 const NOTEBOOK = await drive('/api/query-notebook', () =>

@@ -66,7 +66,7 @@ const SRC = path.resolve(HERE, '..', '..');
 const STUB_PREFIX = 'file:///r6-w4-wiring-stub/';
 const STUB_SOURCE: Record<string, string> = {
   'next/headers': `export async function headers() { return new Headers({ 'x-forwarded-for': '203.0.113.44' }); }`,
-  'next-auth': `export async function getServerSession() { return null; }`,
+  'next-auth': `export async function getServerSession() { return globalThis.__notebookSession ?? null; }`,
   '@/lib/auth': `export const authOptions = {};`,
   '@/lib/rate-limit': `
     export async function checkRateLimit() { return { remaining: 99, limit: 100, resetAt: 0 }; }
@@ -181,7 +181,15 @@ const { WHERE_IT_WENT_REASONS } = await import('../../lib/sources/copy.ts');
 
 type Handler = (request: Request) => Promise<Response>;
 const compareStream = (await import('./compare-stream/route.ts')) as unknown as { POST: Handler };
-const notebook = (await import('./query-notebook/route.ts')) as unknown as { POST: Handler };
+// The notebook route requires sign-in: its requests carry a session, and no other route's do.
+const NOTEBOOK_SESSION = globalThis as unknown as { __notebookSession: unknown };
+function signedIn<A extends unknown[]>(post: (...args: A) => Promise<Response>): (...args: A) => Promise<Response> {
+  return async (...args) => {
+    NOTEBOOK_SESSION.__notebookSession = { user: { id: 'fixture-account' } };
+    try { return await post(...args); } finally { NOTEBOOK_SESSION.__notebookSession = null; }
+  };
+}
+const notebook = { POST: signedIn(((await import('./query-notebook/route.ts')) as unknown as { POST: Handler }).POST) };
 const compare = (await import('./compare/route.ts')) as unknown as { POST: Handler };
 
 type Statement = Awaited<ReturnType<typeof buildFlowsStatement>>;

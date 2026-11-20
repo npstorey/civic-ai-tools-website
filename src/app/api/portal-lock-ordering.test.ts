@@ -71,6 +71,13 @@ test('#436 C2: the lock refuses before the rate limiter, before the allowance is
     assert.ok(refusal < at(source, 'checkRateLimit(', file), `${file} refuses AFTER the rate limiter`);
     assert.ok(refusal < at(source, 'incrementRateLimit(', file), `${file} spends the reader's allowance before refusing`);
     assert.ok(refusal < at(source, 'composeSystemPrompt({ portal', file), `${file} fetches the skill text before refusing`);
+    if (file === 'query-notebook/route.ts') {
+      // The notebook route requires sign-in: it reads the session, and refuses
+      // a request with none, before it reads the body the portal comes from.
+      assert.ok(at(source, 'getServerSession(', file) < at(source, 'await request.json()', file), `${file} reads the body before the session`);
+      assert.ok(at(source, 'await request.json()', file) < refusal, `${file} refuses the portal before reading the body`);
+      continue;
+    }
     assert.ok(refusal < at(source, 'getServerSession(', file), `${file} reads the session before refusing`);
   }
 });

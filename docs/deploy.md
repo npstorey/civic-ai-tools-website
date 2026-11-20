@@ -83,7 +83,10 @@ instance-configuration knob is tracked in [#221].
 > **Sign-in prerequisite — read before bring-up.** The notebook/query
 > execution feature (executed-sandbox mode: generate a Jupyter notebook,
 > run it against live data, sign the execution record) is enabled only
-> for **signed-in users**. Sign-in on your instance requires your own
+> for **signed-in users**: the form offers it only when signed in, and
+> `POST /api/query-notebook` refuses a request with no session (**401**)
+> before it reads the body, calls the model, runs the sandbox or charges
+> the rate limiter. Sign-in on your instance requires your own
 > OAuth application — a GitHub OAuth app or any standard OIDC provider —
 > plus `NEXTAUTH_SECRET` and `NEXTAUTH_URL`. None of that blocks the
 > quick bring-up below, but until it is configured your instance's core
@@ -673,7 +676,8 @@ with a JSON body `{"error": "…", "code": "notebooks_not_offered"}`; a
 client matches on the code, `notebooks_not_offered`, not on the text. It
 does so first, before it reads the request body, before any model call,
 and before the rate limiter is charged, so a refused request costs the
-caller nothing. The form never sends one under `none`; this is the
+caller nothing. It comes before the sign-in refusal (401 with no
+session), so it is the answer signed in or not. The form never sends one under `none`; this is the
 answer to a page loaded before the setting changed, or to a direct API
 call. A page loaded before the change shows the generic error copy.
 
@@ -1851,7 +1855,8 @@ internalizing:
   every host.
 - **Withholding is topology, not security.** The 404s shape which host
   presents which surface; access control is sign-in
-  (`SIGN_IN_ALLOWLIST`) and the per-route session checks, which apply
+  (`SIGN_IN_ALLOWLIST`) and the per-route session checks (among them
+  `/api/query-notebook`'s 401 for a request with no session), which apply
   identically on every host. `/ask` is the visible case: a signed-out
   visitor gets a sign-in prompt there rather than a redirect, on any
   host that serves it.

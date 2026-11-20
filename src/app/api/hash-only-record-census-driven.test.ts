@@ -363,7 +363,10 @@ const post = (route: string, body: unknown) =>
 const compareStreamRoute = await import('./compare-stream/route.ts');
 const notebookRoute = await import('./query-notebook/route.ts');
 const CHAT_SSE = await (await compareStreamRoute.POST(post('/api/compare-stream', { query: QUESTION, model: 'fixture-fast', portal: PORTAL, mcpOnly: true }))).text();
+// The notebook route requires sign-in: its request carries a session, as the summary handler's does below.
+P10.session = { user: { id: 'fixture-account' } };
 const NOTEBOOK_SSE = await (await notebookRoute.POST(post('/api/query-notebook', { query: QUESTION, portal: PORTAL }))).text();
+P10.session = null;
 const CHAT_EVENTS = eventsOf(CHAT_SSE);
 const NOTEBOOK_EVENTS = eventsOf(NOTEBOOK_SSE);
 

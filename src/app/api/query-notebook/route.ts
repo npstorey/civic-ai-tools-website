@@ -13,8 +13,9 @@
  * `data: { type: "notebook", … }` event carries the executed notebook for
  * the curl-driven Phase 1 acceptance test (project plan §6).
  *
- * Authentication / rate-limiting mirror the existing /api/compare-stream
- * route; this endpoint is gated by the same per-user / per-IP daily quotas.
+ * Sign-in is required: a request with no session is refused 401, after the
+ * executor-off refusal and before the body is read. Rate limiting mirrors
+ * /api/compare-stream; this endpoint draws on the same per-user daily quota.
  */
 import { NextRequest } from 'next/server';
 import { headers } from 'next/headers';
@@ -116,6 +117,18 @@ export async function POST(request: NextRequest) {
     return new Response(
       JSON.stringify(notebookRefusal.body),
       { status: notebookRefusal.status, headers: { 'Content-Type': 'application/json' } },
+    );
+  }
+
+  // The notebook route requires sign-in, as documented (docs/deploy.md,
+  // "Sign-in prerequisite"). A request with no session is refused 401 here:
+  // after the executor-off refusal above, and before the body is read, before
+  // any model call, before the sandbox and before the rate limiter.
+  const session = await getServerSession(authOptions);
+  if (!session?.user?.id) {
+    return new Response(
+      JSON.stringify({ error: 'Authentication required' }),
+      { status: 401, headers: { 'Content-Type': 'application/json' } },
     );
   }
 
@@ -261,9 +274,8 @@ export async function POST(request: NextRequest) {
     );
   }
 
-  // Rate-limit identical to /api/compare-stream — per-user when signed in,
-  // per-IP otherwise.
-  const session = await getServerSession(authOptions);
+  // Rate-limit as /api/compare-stream does. The session read above is
+  // required here, so the key is the account.
   const headersList = await headers();
   const forwardedFor = headersList.get('x-forwarded-for');
   const ip = forwardedFor?.split(',')[0] || 'unknown';
