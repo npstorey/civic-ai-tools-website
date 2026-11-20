@@ -26,4 +26,7 @@ export const PLANTS = {
   })()`,
 };
 
-export const PLANT_NAMES = ['1', '2', '3', '4', 'guard'];
+// 5: check 5's pin. A scroll injected at the arrival (the answer's first render scrolls the page 240 px); it lives
+// beside the check (`checks.mjs`, PLANT_5), since it must be installed before the arrival event, not before a read.
+
+export const PLANT_NAMES = ['1', '2', '3', '4', '5', 'guard'];

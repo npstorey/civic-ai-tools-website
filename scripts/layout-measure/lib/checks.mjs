@@ -197,12 +197,58 @@ export async function check4(ctx) {
 }
 
 // --- 5. #802: the answer's top in view when a paused run's answer arrives ------------------------------------------
+//
+// Seat ruling 7042757712 (amendment 1): the reader who does not scroll is a pin; the reds are a reader who has
+// scrolled. Every scroll here is made just before the arrival event is pushed, after Allow and after the events that
+// follow it, so the view at the arrival is the one the variant names:
+//   'none'  the pin: no scroll; the answer arrives in view and `scrollY` does not change at the arrival;
+//   'card'  red 1 (W9's state): mouse-wheel scrolls until the steps' consent card's top is at the header's bottom;
+//   'end'   red 2 (variant (c)): the page scrolled to its end;
+//   'y'     variant (f) on a run with no pause (no card): the wheel to the `scrollY` red 1 reached on that path and size.
+
+const CARD = `document.querySelector('[data-part="consent-step"][data-consent-place="steps"]')`;
+
+/** The reader's scroll for `variant`; returns what it aimed at and where it landed. */
+async function readerScroll(c, variant, targetY) {
+  const before = await c.ev('scrollY');
+  if (variant === 'end') {
+    await c.ev(`window.scrollTo({ top: document.documentElement.scrollHeight, behavior: 'instant' })`);
+    await c.settle();
+    return { variant, before, target: await c.ev('document.documentElement.scrollHeight - innerHeight'), after: await c.ev('scrollY') };
+  }
+  let card = null;
+  let target;
+  if (variant === 'card') {
+    const r = await c.ev(`(() => {${LIB} const card = ${CARD}; const header = document.querySelector('header'); return { card: R(card), headerBottom: header ? f1(header.getBoundingClientRect().bottom) : 0 }; })()`);
+    if (!r.card) throw new Error("no consent card in the run's steps to scroll to");
+    card = r.card;
+    target = before + r.card.top - r.headerBottom;
+  } else {
+    target = targetY;
+  }
+  for (let i = 0; i < 3; i += 1) {
+    const now = await c.ev('scrollY');
+    if (Math.abs(now - target) <= 2) break;
+    await c.wheel(target - now);
+    await c.settle();
+  }
+  return { variant, before, cardBefore: card, target: Math.round(target * 10) / 10, after: await c.ev('scrollY') };
+}
+
+/** Plant 5: a scroll injected at the arrival (the answer's first render moves the page), so the pin must read FAIL. */
+const PLANT_5 = `(() => {
+  const o = new MutationObserver(() => {
+    if (document.querySelector('[data-part="answer"]')) { o.disconnect(); window.scrollBy({ top: 240, behavior: 'instant' }); }
+  });
+  o.observe(document.body, { childList: true, subtree: true });
+  return true;
+})()`;
 
 /**
- * One paused-and-allowed run of `file` at `size`, with its timeline. `variant`: 'stay' (the reader stays where Allow
- * left them) or 'scroll-end' (the reader scrolls to the page's end after Allow, before the arrival).
+ * One run of `file` at `size` (a paused file is answered Allow at the prompt), with its timeline and the reader's
+ * scroll `variant` made just before the arrival.
  */
-async function pausedRun(ctx, label, size, file, variant = 'stay') {
+async function run5(ctx, label, size, file, variant, targetY) {
   let c;
   const timeline = [];
   try {
@@ -213,7 +259,7 @@ async function pausedRun(ctx, label, size, file, variant = 'stay') {
     await c.settle();
     await snap('sent');
     const route = await c.ev('window.__lm.streams[0].path');
-    let arrival = null; let live = null;
+    let arrival = null; let first = null; let live = null; let scroll = null; let beforeArrival = null;
     await feed(c, file, {
       onReader: async (action) => {
         if (action !== 'allow') throw new Error(`unknown reader action ${action}`);
@@ -224,17 +270,20 @@ async function pausedRun(ctx, label, size, file, variant = 'stay') {
         await c.until(`!${Q.prompt}`, 10000, 'the prompt to unmount after Allow');
         await c.settle();
         await snap('prompt unmounted');
-        if (variant === 'scroll-end') {
-          await c.ev(`window.scrollTo({ top: document.documentElement.scrollHeight, behavior: 'instant' })`);
-          await c.settle();
-          await snap('reader scrolled to the end');
+      },
+      beforeArrival: async () => {
+        if (variant !== 'none') {
+          scroll = await readerScroll(c, variant, targetY);
+          await snap(`reader scrolled (${variant})`);
         }
+        if (ctx.plant === '5') await c.ev(PLANT_5);
+        beforeArrival = await c.ev('scrollY');
       },
       onEvent: async (event, { arrival: isArrival }) => {
         const name = event.type === 'phase' ? `phase ${event.name}` : event.phase ? `${event.type} ${event.phase}` : event.panel ? `${event.type} ${event.panel}` : event.type;
         if (isArrival) {
           await c.frames();
-          await snap(`arrival (${name}), first frame`);
+          first = await snap(`arrival (${name}), first frame`);
           await c.settle();
           arrival = await snap(`arrival (${name}), settled`);
           live = await c.ev(LIVE);
@@ -245,74 +294,69 @@ async function pausedRun(ctx, label, size, file, variant = 'stay') {
       },
     });
     if (ctx.shots) await c.shot(ctx.shots(`check5-${label.replace(/[^a-z0-9]+/gi, '-')}`));
-    return { route, timeline, arrival, live, consentWrites: await c.ev('window.__lm.consentWrites'), statement: await c.ev('window.__lm.statementSource') };
+    return { route, variant, scroll, beforeArrival, first, arrival, timeline, live, consentWrites: await c.ev('window.__lm.consentWrites') };
   } finally { await closeAll(c); }
 }
 
 const inView = (row) => !!row && !!row.answer && row.answer.top >= (row.header ? row.header.bottom : 0) - 0.5 && row.answer.top < row.vh;
 const rowLine = (r) => `${r.at}: scrollY ${r.scrollY}  prompt ${r.prompt ? `${r.prompt.top}..${r.prompt.bottom}` : '-'}  card ${r.card ? `${r.card.top}..${r.card.bottom}` : '-'}  answer ${r.answer ? `${r.answer.top}..${r.answer.bottom}` : '-'}  focus ${r.active.body ? 'body' : `${r.active.tag}${r.active.text ? ` "${r.active.text}"` : ''}${r.active.rect ? ` @${r.active.rect.top}` : ''}`}`;
+const scrollLine = (s) => (s ? `scroll target ${s.target}${s.cardBefore ? ` (card before the scroll ${s.cardBefore.top}..${s.cardBefore.bottom})` : ''}  scrollY before ${s.before} after ${s.after}` : 'no scroll');
+const arrivalLine = (r) => `at the arrival: scrollY ${r.arrival?.scrollY} (just before ${r.beforeArrival})  answer ${r.arrival?.answer ? `${r.arrival.answer.top}..${r.arrival.answer.bottom}` : 'absent'}  header bottom ${r.arrival?.header?.bottom}  viewport bottom ${r.arrival?.vh}`;
 
 export async function check5(ctx) {
-  const lines = []; const data = { k2: {} }; let pass = true;
+  const lines = []; const data = { runs: {} }; let pass = true;
+  const P = ctx.events.notebookPaused; const C = ctx.events.chatPaused;
+  const NP = ctx.events.notebookPlain; const CP = ctx.events.chatPlain;
+  const judged = [];
   for (const size of [SIZES.phone, SIZES.laptop]) {
     const [w, h] = size;
-    const run = await pausedRun(ctx, `5 notebook@${w}`, size, ctx.events.notebookPaused);
-    const ok = inView(run.arrival);
-    pass = pass && ok;
-    const a = run.arrival;
-    lines.push(`${w}x${h}  notebook path (route ${run.route})  at the arrival: answer top ${a?.answer ? a.answer.top : 'absent'}  header bottom ${a?.header?.bottom}  viewport bottom ${a?.vh}  scrollY ${a?.scrollY}  ${verdict(ok)}`);
-    data[`notebook@${w}`] = run;
+    const runs = data.runs[w] = {};
+    runs.pinNotebook = await run5(ctx, `5 pin notebook@${w}`, size, P, 'none');
+    runs.pinChat = await run5(ctx, `5 pin chat@${w}`, size, C, 'none');
+    runs.red1Notebook = await run5(ctx, `5 red1 notebook@${w}`, size, P, 'card');
+    runs.red1Chat = await run5(ctx, `5 red1 chat@${w}`, size, C, 'card');
+    runs.red2Notebook = await run5(ctx, `5 red2 notebook@${w}`, size, P, 'end');
+    runs.red2Chat = await run5(ctx, `5 red2 chat@${w}`, size, C, 'end');
+    runs.dNotebook = await run5(ctx, `5 d notebook@${w}`, size, NP, 'none');
+    runs.dChat = await run5(ctx, `5 d chat@${w}`, size, CP, 'none');
+    runs.fCardNotebook = await run5(ctx, `5 f-card notebook@${w}`, size, NP, 'y', runs.red1Notebook.scroll.after);
+    runs.fCardChat = await run5(ctx, `5 f-card chat@${w}`, size, CP, 'y', runs.red1Chat.scroll.after);
+    runs.fEndNotebook = await run5(ctx, `5 f-end notebook@${w}`, size, NP, 'end');
+    runs.fEndChat = await run5(ctx, `5 f-end chat@${w}`, size, CP, 'end');
+
+    const pin = runs.pinNotebook;
+    const pinOk = inView(pin.arrival) && Math.abs(pin.arrival.scrollY - pin.beforeArrival) <= 0.5;
+    const r1 = runs.red1Notebook; const r1Ok = inView(r1.arrival);
+    const r2 = runs.red2Notebook; const r2Ok = inView(r2.arrival);
+    judged.push(pinOk, r1Ok, r2Ok);
+    lines.push(`${w}x${h}  PIN (no scroll), notebook path (route ${pin.route})  ${arrivalLine(pin)}  in view ${inView(pin.arrival)}, scrollY change ${Math.round((pin.arrival.scrollY - pin.beforeArrival) * 10) / 10}  ${verdict(pinOk)}`);
+    lines.push(`${w}x${h}  RED 1 (card's top to the header), notebook path  ${scrollLine(r1.scroll)}  ${arrivalLine(r1)}  ${verdict(r1Ok)}`);
+    lines.push(`${w}x${h}  RED 2 (the page's end), notebook path  ${scrollLine(r2.scroll)}  ${arrivalLine(r2)}  ${verdict(r2Ok)}`);
   }
-  // K2's data (recorded, not judged).
-  lines.push('K2 data (recorded, not PASS or FAIL):');
+  pass = judged.every(Boolean);
+
+  lines.push('Recorded, not PASS or FAIL:');
   for (const size of [SIZES.phone, SIZES.laptop]) {
     const [w] = size;
-    const nb = data[`notebook@${w}`];
-    lines.push(`  (a) timeline, notebook path at ${w}:`);
-    for (const r of nb.timeline) lines.push(`      ${rowLine(r)}`);
-    const chat = await pausedRun(ctx, `5 chat@${w}`, size, ctx.events.chatPaused);
-    data.k2[`chat@${w}`] = chat;
-    lines.push(`  (b) the chat path at ${w} (route ${chat.route}): answer in view at the arrival: ${inView(chat.arrival)}`);
-    for (const r of chat.timeline) lines.push(`      ${rowLine(r)}`);
-    const away = await pausedRun(ctx, `5 notebook scroll-end@${w}`, size, ctx.events.notebookPaused, 'scroll-end');
-    data.k2[`scroll-end@${w}`] = away;
-    lines.push(`  (c) the reader scrolls to the end after Allow, at ${w}: answer in view at the arrival: ${inView(away.arrival)}`);
-    for (const r of away.timeline.filter((x) => /Allow|unmounted|scrolled|arrival/.test(x.at) || x.at === 'click')) lines.push(`      ${rowLine(r)}`);
-    for (const [name, file] of [['notebook', ctx.events.notebookPlain], ['chat', ctx.events.chatPlain]]) {
-      const plain = await plainRun(ctx, `5 ${name} no-pause@${w}`, size, file);
-      data.k2[`${name}-no-pause@${w}`] = plain;
-      lines.push(`  (d) no-pause control, ${name} path at ${w}: scrollY before the arrival ${plain.before} after ${plain.after} (change ${Math.round((plain.after - plain.before) * 10) / 10}); answer in view: ${inView(plain.arrival)}`);
+    const runs = data.runs[w];
+    const rec = (tag, r) => `  ${tag} at ${w} (route ${r.route})  ${scrollLine(r.scroll)}  ${arrivalLine(r)}  in view ${inView(r.arrival)}  scrollY change at the arrival ${Math.round((r.arrival.scrollY - r.beforeArrival) * 10) / 10}`;
+    lines.push(rec('the pin on the chat path', runs.pinChat));
+    lines.push(rec('red 1 on the chat path', runs.red1Chat));
+    lines.push(rec('red 2 on the chat path', runs.red2Chat));
+    lines.push(rec('(d) no pause, no scroll, notebook path', runs.dNotebook));
+    lines.push(rec('(d) no pause, no scroll, chat path', runs.dChat));
+    lines.push(rec("(f) no pause, red 1's scroll (to its scrollY), notebook path", runs.fCardNotebook));
+    lines.push(rec("(f) no pause, red 1's scroll (to its scrollY), chat path", runs.fCardChat));
+    lines.push(rec('(f) no pause, the page\'s end, notebook path', runs.fEndNotebook));
+    lines.push(rec('(f) no pause, the page\'s end, chat path', runs.fEndChat));
+    lines.push(`  (e) live regions at the arrival, notebook pin at ${w}: ${JSON.stringify(runs.pinNotebook.live)}`);
+    lines.push(`  (e) live regions at the arrival, chat pin at ${w}: ${JSON.stringify(runs.pinChat.live)}`);
+    for (const [tag, r] of [['pin, notebook', runs.pinNotebook], ['red 1, notebook', runs.red1Notebook], ['red 1, chat', runs.red1Chat]]) {
+      lines.push(`  (a) timeline, ${tag} at ${w}:`);
+      for (const row of r.timeline) lines.push(`      ${rowLine(row)}`);
     }
-    lines.push(`  (e) live regions at the arrival, notebook path at ${w}: ${JSON.stringify(nb.live)}`);
-    lines.push(`  (e) live regions at the arrival, chat path at ${w}: ${JSON.stringify(chat.live)}`);
   }
-  return { id: '5', title: "#802: after the paused run's Allow, the answer's top is between the header's bottom and the viewport's bottom when it arrives", sizes: '390x844 and 1280x720 (the notebook path; the fixture session)', pass, lines, data };
-}
-
-/** A run with no pause: the scroll position just before and after the arrival. */
-async function plainRun(ctx, label, size, file) {
-  let c;
-  try {
-    c = await load(ctx, label, size, '/', { signedIn: true, mode: file.route === '/api/query-notebook' ? 'notebook' : 'standard', answer: answerOf(file) });
-    await ask(c, QUESTION);
-    await c.settle();
-    let before = null; let after = null; let arrival = null;
-    let last = await c.ev('scrollY');
-    await feed(c, file, {
-      onEvent: async (event, { arrival: isArrival }) => {
-        if (isArrival) {
-          before = last;
-          await c.settle();
-          arrival = await c.ev(SNAP(file.answerMarker));
-          after = arrival.scrollY;
-        } else {
-          await c.settle();
-          last = await c.ev('scrollY');
-        }
-      },
-    });
-    return { route: await c.ev('window.__lm.streams[0].path'), before, after, arrival };
-  } finally { await closeAll(c); }
+  return { id: '5', title: "#802 (amended by ruling 7042757712): the pin, and the answer's top in view at the arrival after the reader has scrolled", sizes: '390x844 and 1280x720; judged on the notebook path, the chat path recorded; the fixture session', pass, lines, data };
 }
 
 // --- 6. #786 item 3: focus in view after the Settings overlay closes ------------------------------------------------

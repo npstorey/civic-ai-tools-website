@@ -11,14 +11,19 @@
 //   3  the `role="tablist"` row does not overflow at 390, and the page's `scrollWidth` is at most 390;
 //   4  the docked composer hides no answer line: scrolled to the end, the answer's last line ends at or above the
 //      docked bar's top;
-//   5  #802: after a paused run's Allow, pressed at the prompt, the answer's top is between the header's bottom and
-//      the viewport's bottom when the answer arrives, at 390 and 1280 on the notebook path; with K2's data (the
-//      timeline, the chat path, a reader who scrolls away, a no-pause control, the live regions), recorded only;
+//   5  #802, as seat ruling 7042757712 (website #807) amended it, at 390 and 1280 on the notebook path, after a
+//      paused run's Allow pressed at the prompt:
+//        the pin   the reader does not scroll: the answer arrives in view and `scrollY` does not change;
+//        red 1     the reader wheels until the steps' consent card's top is at the header's bottom: the answer's top
+//                  is between the header's bottom and the viewport's bottom when it arrives;
+//        red 2     the same, after a scroll to the page's end.
+//      Recorded only: the same three on the chat path, the no-pause run unscrolled (d) and with the same scrolls
+//      (f), the live regions at the arrival (e), and each run's timeline (a);
 //   6  #786 item 3: after the picker panel is open, the Settings overlay opens over it, a refresh closes the panel
 //      and the overlay closes, the focused element's box is inside the viewport at 390 (reported at 1280 too).
-// `--plant <1|2|3|4>` injects that check's planted defect into the page under test; `--plant guard` switches off the
-// page's answer for the run routes, so the run must read VOID. `--out <dir>` writes the full record (JSON) and a
-// screenshot per measured state.
+// `--plant <1|2|3|4|5>` injects that check's planted defect into the page under test (5: a scroll at the arrival, for
+// the pin); `--plant guard` switches off the page's answer for the run routes, so the run must read VOID. `--out
+// <dir>` writes the full record (JSON) and a screenshot per measured state.
 //
 // HOW THE STATES ARE REACHED. The real app, unchanged: no fixture route, no setting, no model call, no dependency.
 // An init script (`lib/page-init.mjs`) answers the page's own requests inside the page: the run routes with a stream
@@ -31,11 +36,17 @@
 // A PROTECTED PREVIEW. Its protection cookie is read from the environment variable LAYOUT_MEASURE_PROTECTION_COOKIE
 // and set on the origin's host by CDP. This script never prints or writes it.
 //
+// THE STAND-INS. What is measured in place of what the reader meets:
+//   - the notebook path is measured on the home page's `QuerySurface` in Sandbox mode (sessionStorage
+//     `civicaitools.notebookMode`, with the client session answered in the page), since `/ask` needs a server session;
+//   - a local build is served with `SERVE_MARKETING=1`, since an instance that configures no hosts serves the app
+//     role only and the home page would redirect;
+//   - the consent, routing and session reads are answered in the page.
+//
 // BLIND SPOTS. What a green here does not say:
 //   - It cannot reach a page that the server renders for a session: `/ask` (which renders a sign-in panel signed
-//     out) and `/dashboard`. The notebook path is measured on the home page's surface, in Sandbox mode, with a
-//     fixture session answered in the page; `/ask` mounts the same `QuerySurface` with `presentation="answer-first"`
-//     around it, which this script does not see.
+//     out) and `/dashboard`. `/ask` mounts the same `QuerySurface` with `presentation="answer-first"` around it,
+//     which this script does not see.
 //   - Chrome only, headless, at the emulated sizes; no WebKit, no Safari, no touch, no real scrollbar.
 //   - The run is a stub: event files, not a model. A layout a real run reaches only through timing or content these
 //     files do not carry is not measured.
@@ -54,7 +65,7 @@ const HERE = path.dirname(fileURLToPath(import.meta.url));
 const REPO = path.resolve(HERE, '..', '..');
 
 function usage(message) {
-  console.error(`${message}\nusage: node scripts/layout-measure/run.mjs --origin <url> [--only <check>[,<check>]] [--plant <1|2|3|4|guard>] [--out <dir>]`);
+  console.error(`${message}\nusage: node scripts/layout-measure/run.mjs --origin <url> [--only <check>[,<check>]] [--plant <1|2|3|4|5|guard>] [--out <dir>]`);
   process.exit(2);
 }
 

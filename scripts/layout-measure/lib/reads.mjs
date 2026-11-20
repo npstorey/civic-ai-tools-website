@@ -67,9 +67,10 @@ export async function ask(c, question, { expectStream = true } = {}) {
 
 /**
  * Feeds an event file's events, one at a time, each followed by a settled layout. `onEvent(event, { arrival })` runs
- * after each pushed event; `onReader(action)` runs at a `$reader` step.
+ * after each pushed event; `onReader(action)` runs at a `$reader` step; `beforeArrival()` runs just before the event
+ * marked `$arrival` is pushed.
  */
-export async function feed(c, file, { onEvent = async () => {}, onReader = async () => {} } = {}) {
+export async function feed(c, file, { onEvent = async () => {}, onReader = async () => {}, beforeArrival = async () => {} } = {}) {
   for (const raw of file.events) {
     if (raw.$reader) {
       await onReader(raw.$reader);
@@ -82,6 +83,7 @@ export async function feed(c, file, { onEvent = async () => {}, onReader = async
       continue;
     }
     const { $arrival, ...event } = raw;
+    if ($arrival === true) await beforeArrival();
     const pushed = await c.ev(`window.__lm.push(${JSON.stringify(event)})`);
     if (!pushed) throw new Error(`the run's stream was not open for ${event.type}`);
     await onEvent(event, { arrival: $arrival === true });

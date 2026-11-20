@@ -190,6 +190,11 @@ export async function openSession({ label, origin, guard, initScript, protection
     await send('Input.dispatchKeyEvent', { type: 'keyUp', key: k, code, windowsVirtualKeyCode: vk }, s);
   };
   const insertText = (text) => send('Input.insertText', { text }, s);
+  /** A reader's scroll: one mouse-wheel event of `deltaY` px at the viewport's centre. */
+  const wheel = async (deltaY) => {
+    const [x, y] = await ev('[Math.round(innerWidth / 2), Math.round(innerHeight / 2)]');
+    await send('Input.dispatchMouseEvent', { type: 'mouseWheel', x, y, deltaX: 0, deltaY }, s);
+  };
   const shot = async (file) => {
     const { data } = await send('Page.captureScreenshot', { format: 'png' }, s);
     fs.writeFileSync(file, Buffer.from(data, 'base64'));
@@ -200,5 +205,5 @@ export async function openSession({ label, origin, guard, initScript, protection
     await sleep(300);
     try { fs.rmSync(profile, { recursive: true, force: true }); } catch { /* Chrome still writing */ }
   };
-  return { send, ev, until, size, go, frames, still, settle, click, clickAt, key, insertText, shot, close, notes };
+  return { send, ev, until, size, go, frames, still, settle, click, clickAt, key, insertText, wheel, shot, close, notes };
 }

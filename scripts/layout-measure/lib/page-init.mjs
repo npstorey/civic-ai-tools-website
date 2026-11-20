@@ -21,7 +21,6 @@
 //
 // `pageInit` is serialized with `Function.prototype.toString`, so it may use nothing from this module's scope.
 
-/* eslint-disable @typescript-eslint/no-unused-vars */
 export function pageInit(cfg) {
   if (window.__lm) return;
   const real = window.fetch.bind(window);
