@@ -117,7 +117,7 @@ const SANDBOX_DRIVER_URL = pathToFileURL(path.join(SRC, 'lib/sandbox/driver.ts')
 const VERCEL_BLOB_FILE = path.join(SRC, 'lib/storage/vercel-blob.ts');
 const STUB_SOURCE: Record<string, string> = {
   'next/headers': `export async function headers() { return new Headers({ 'x-forwarded-for': '203.0.113.61' }); }`,
-  'next-auth': `export async function getServerSession() { return null; }`,
+  'next-auth': `export async function getServerSession() { return globalThis.__notebookSession ?? null; }`,
   '@/lib/auth': `export const authOptions = {};`,
   '@/lib/api-auth': `
     export async function resolveRequestUser() { return { userId: 'fixture-account', scopes: ['records:publish'], method: 'bearer' }; }
@@ -328,7 +328,15 @@ function eventsOf(body: string): Json[] {
 }
 
 const compareStreamRoute = await import('./compare-stream/route.ts');
-const notebookRoute = await import('./query-notebook/route.ts');
+// The notebook route requires sign-in: its requests carry a session, and no other route's do.
+const NOTEBOOK_SESSION = globalThis as unknown as { __notebookSession: unknown };
+function signedIn<A extends unknown[]>(post: (...args: A) => Promise<Response>): (...args: A) => Promise<Response> {
+  return async (...args) => {
+    NOTEBOOK_SESSION.__notebookSession = { user: { id: 'fixture-account' } };
+    try { return await post(...args); } finally { NOTEBOOK_SESSION.__notebookSession = null; }
+  };
+}
+const notebookRoute = { POST: signedIn((await import('./query-notebook/route.ts')).POST) };
 const recordsRoute = (await import('./records/route.ts')) as unknown as { POST: (request: Request) => Promise<Response> };
 
 async function drive(name: string, kind: Drive['kind'], routing: 'all-sources' | 'in-loop'): Promise<Drive> {

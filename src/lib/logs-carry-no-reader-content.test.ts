@@ -129,8 +129,9 @@ const STUB_SOURCE: Record<string, string> = {
   'next/headers': `export async function headers() {
      return new Headers({ 'x-forwarded-for': '203.0.113.9' });
    }`,
-  // Anonymous: the route then takes the IP branch of its identifier choice.
-  'next-auth': `export async function getServerSession() { return null; }`,
+  // The notebook route requires sign-in: its requests carry a session, and
+  // the route takes the account branch of its identifier choice.
+  'next-auth': `export async function getServerSession() { return { user: { id: 'fixture-account' } }; }`,
   // Only ever handed to the stubbed `getServerSession` above. Stubbed rather
   // than imported so this file pulls in no part of the sign-in provider tree,
   // which another sprint owns.
@@ -411,7 +412,7 @@ interface RouteDrive { log: string[]; sse: string }
  * One real request through the real handler, with the executor failing in the
  * named way. Four drives: one per branch of the pipeline's `catch`, plus the
  * adversarial `name` case. The
- * anonymous daily allowance is 10, so three fit inside one day's quota.
+ * signed-in daily allowance is 25, so the four fit inside one day's quota.
  */
 async function driveNotebookRoute(mode: 'notebook-execution' | 'other-error' | 'non-error' | 'name-canary'): Promise<RouteDrive> {
   globals.__civicP1ExecutorMode = mode;

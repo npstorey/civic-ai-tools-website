@@ -190,7 +190,7 @@ function printingCell(values: Record<string, string | undefined>): Record<string
 const STUB_PREFIX = 'file:///civic-516-p9-stub/';
 const STUB_SOURCE: Record<string, string> = {
   'next/headers': `export async function headers() { return new Headers({ 'x-forwarded-for': globalThis.__p9.ip }); }`,
-  'next-auth': 'export async function getServerSession() { return null; }',
+  'next-auth': 'export async function getServerSession() { return globalThis.__notebookSession ?? null; }',
   '@/lib/auth': 'export const authOptions = {};',
   '@/lib/api-auth': `
     export async function resolveRequestUser() { return { userId: 'fixture-account', scopes: ['records:publish'], method: 'bearer' }; }
@@ -386,7 +386,15 @@ process.env.DC_API_KEY = DC_CANARY;
 
 interface WireEvent { type: string; [key: string]: unknown }
 
-const notebookRoute = (await import('./query-notebook/route.ts')) as unknown as { POST: (request: Request) => Promise<Response> };
+// The notebook route requires sign-in: its requests carry a session, and no other route's do.
+const NOTEBOOK_SESSION = globalThis as unknown as { __notebookSession: unknown };
+function signedIn<A extends unknown[]>(post: (...args: A) => Promise<Response>): (...args: A) => Promise<Response> {
+  return async (...args) => {
+    NOTEBOOK_SESSION.__notebookSession = { user: { id: 'fixture-account' } };
+    try { return await post(...args); } finally { NOTEBOOK_SESSION.__notebookSession = null; }
+  };
+}
+const notebookRoute = { POST: signedIn(((await import('./query-notebook/route.ts')) as unknown as { POST: (request: Request) => Promise<Response> }).POST) };
 const recordsRoute = (await import('./records/route.ts')) as unknown as { POST: (request: Request) => Promise<Response> };
 
 const response = await notebookRoute.POST(new Request('http://localhost/api/query-notebook', {

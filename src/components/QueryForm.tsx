@@ -173,8 +173,9 @@ export default function QueryForm({
   // October 2026 roster (#573) it is `anthropic/claude-haiku-5.5`.
   const [model, setModel] = useState('');
   const [portal, setPortal] = useState('');
-  // Phase 2a1 gate: executed-sandbox mode is signed-in-only. Anonymous users
-  // cannot invoke /api/query-notebook through the UI. `useStoredMode` keeps
+  // Phase 2a1 gate: executed-sandbox mode is signed-in-only. The form offers
+  // it only when signed in, and /api/query-notebook refuses a request with no
+  // session (401), whatever sends it. `useStoredMode` keeps
   // the sticky-per-session persistence from §10 Q7 but force-returns
   // 'standard' when the user is not authenticated.
   const { status: authStatus } = useSession();

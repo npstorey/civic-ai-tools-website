@@ -128,25 +128,14 @@ const { POST } = (await import('./query-notebook/route.ts')) as {
   POST: (request: Request) => Promise<Response>;
 };
 
-/** A request whose body records whether the route read it. */
+/** A request carrying a consent in force; `bodyUsed` says whether the route read its body. */
 function request(body: string = JSON.stringify({ query: 'How many?' })): { request: Request; bodyRead: () => boolean } {
-  let read = false;
-  const stream = new ReadableStream<Uint8Array>({
-    pull(controller) {
-      read = true;
-      controller.enqueue(new TextEncoder().encode(body));
-      controller.close();
-    },
+  const req = new Request('http://localhost/api/query-notebook', {
+    method: 'POST',
+    headers: { 'content-type': 'application/json', cookie: consentCookieForTests() },
+    body,
   });
-  return {
-    request: new Request('http://localhost/api/query-notebook', {
-      method: 'POST',
-      headers: { 'content-type': 'application/json', cookie: consentCookieForTests() },
-      body: stream,
-      duplex: 'half',
-    } as RequestInit),
-    bodyRead: () => read,
-  };
+  return { request: req, bodyRead: () => req.bodyUsed };
 }
 
 function reset(session: unknown): void {

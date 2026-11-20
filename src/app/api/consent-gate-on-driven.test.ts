@@ -384,14 +384,14 @@ const MIXED = cookieFor({ socrata: 'on', 'data-commons': 'off', 'boston-opencont
 
 const NO_CONSENT: Array<[string, Drive]> = [
   ['/api/compare-stream', await drive(compareStream.POST, STREAM_URL, STREAM_BODY, { session: ANON })],
-  ['/api/query-notebook', await drive(notebook.POST, NOTEBOOK_URL, NOTEBOOK_BODY, { session: ANON })],
+  ['/api/query-notebook', await drive(notebook.POST, NOTEBOOK_URL, NOTEBOOK_BODY, { session: SIGNED_IN_NO_DB })],
   ['/api/compare', await drive(compare.POST, COMPARE_URL, COMPARE_BODY, { session: ANON, replies: ANSWER_ONLY })],
   ['/api/evidence/[slug]/replay', await drive(replayRoute.POST, REPLAY_URL, REPLAY_BODY, { session: SIGNED_IN_NO_DB, replies: ANSWER_ONLY, slug: 'gate' })],
 ];
 
 const NONE_ON: Array<[string, Drive]> = [
   ['/api/compare-stream', await drive(compareStream.POST, STREAM_URL, STREAM_BODY, { session: ANON, cookie: ALL_OFF })],
-  ['/api/query-notebook', await drive(notebook.POST, NOTEBOOK_URL, NOTEBOOK_BODY, { session: ANON, cookie: ALL_OFF })],
+  ['/api/query-notebook', await drive(notebook.POST, NOTEBOOK_URL, NOTEBOOK_BODY, { session: SIGNED_IN_NO_DB, cookie: ALL_OFF })],
   ['/api/compare', await drive(compare.POST, COMPARE_URL, COMPARE_BODY, { session: ANON, cookie: ALL_OFF, replies: ANSWER_ONLY })],
   ['/api/evidence/[slug]/replay', await drive(replayRoute.POST, REPLAY_URL, REPLAY_BODY, { session: SIGNED_IN_NO_DB, cookie: ALL_OFF, replies: ANSWER_ONLY, slug: 'gate' })],
   ['/api/compare-stream (Off and Ask first)', await drive(compareStream.POST, STREAM_URL, STREAM_BODY, { session: ANON, cookie: ALL_HELD })],
