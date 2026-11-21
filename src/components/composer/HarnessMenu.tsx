@@ -29,7 +29,8 @@
  *     picker, also when it is already chosen; while it is chosen the item's value reads S13 ("{n} picked");
  *   - a read that says otherwise (all-sources, or no store): disabled with D8's reason;
  *   - while the routing pair is unread, or its read failed: disabled, with no reason (R2): no sentence about
- *     picking shows until the read says which form is true;
+ *     picking shows until the read says which form is true. A reader who chose it before a read failed keeps it
+ *     (FIX-1 D1 = B, website #798; `picksInForce`): it stays checked, and the value still reads S13;
  *   - in loop with the store while the flows statement is unread, or `/api/flows` answered non-OK (S3-B F, the cold
  *     read's F3): disabled, with no reason, as R2. The picker lists the statement's sources and words a hit by it, so
  *     it never opens over an empty list or calls a source this site has set up "Not set up on this site.".
@@ -44,7 +45,7 @@ import type { Model } from '@/lib/model-list';
 import type { QueryMode } from '@/lib/query-presentation';
 import { NOTEBOOK_MODE_UNAVAILABLE_REASON, type NotebookModeAffordance } from '@/lib/notebook-availability';
 import { SETTINGS_HREF } from '@/lib/sources/copy';
-import { canPauseToAsk, useSourceConsent } from '@/components/sources/useSourceConsent';
+import { canPauseToAsk, useSourceConsent, type ConsentSnapshot } from '@/components/sources/useSourceConsent';
 import { startSignIn, useSignInAction } from './SignInControl';
 import { chooseAuto, choosePicking, usePicks } from './picks/store';
 import {
@@ -81,6 +82,24 @@ export interface HarnessMenuProps {
   picking?: boolean;
 }
 
+/**
+ * Whether the reader's picks are in force (FIX-1, D1 = B, website #798): the mount offers picking, the reader chose
+ * "Only the ones I pick", and the routing read either says in loop with the store (`canPauseToAsk`) or has finished
+ * without naming a form (a failed or unknown read, `loaded` with `routing` or `store` still `null`). Picks narrow a run
+ * and never widen it (`src/lib/sources/picks.ts`), so after a failed read the picks stay shown and are sent; a read that
+ * names all-sources, or in loop with no store, ends them, as before (D5 = A, D8 = B). One predicate for this menu's
+ * value and the form's picks line and send (`QueryForm`), so the two cannot part.
+ */
+export function picksInForce(mode: 'auto' | 'pick', consent: Pick<ConsentSnapshot, 'loaded' | 'routing' | 'store'>): boolean {
+  if (mode !== 'pick') return false;
+  return canPauseToAsk(consent) || (consent.loaded && !pickingNotOffered(consent));
+}
+
+/** The read names a form in which "Only the ones I pick" is not offered: all-sources, or in loop with no store (D8 = B). */
+function pickingNotOffered(consent: Pick<ConsentSnapshot, 'routing' | 'store'>): boolean {
+  return consent.routing === 'all-sources' || (consent.routing === 'in-loop' && consent.store === false);
+}
+
 const ID = {
   heading: 'harness-heading',
   model: 'model',
@@ -107,10 +126,11 @@ export default function HarnessMenu({ variant, models, model, onModel, session, 
   const form = inLoopForm ? DATA_SOURCES_ITEM.inLoop : DATA_SOURCES_ITEM.allSources;
   const picks = usePicks();
   // The read says which form is true only when it names all-sources, or in loop with no store (R2).
-  const notOffered = consent.routing === 'all-sources' || (consent.routing === 'in-loop' && consent.store === false);
+  const notOffered = pickingNotOffered(consent);
   // PQ6 = (b): a form is known only once the read names one; until then Auto states no routing.
   const formKnown = inLoopForm || notOffered;
-  const pickChosen = picking && inLoopForm && picks.mode === 'pick';
+  // FIX-1 D1 = B (#798): after a read that failed, the reader's choice stays chosen, and the value keeps counting the picks.
+  const pickChosen = picking && picksInForce(picks.mode, consent);
   // The picker reads the flows statement (S3-B F, F3): until it is read, the option is not offered, and says nothing.
   const statementRead = consent.statement !== null;
   const pickItem: MenuItem | null = !picking
@@ -121,7 +141,7 @@ export default function HarnessMenu({ variant, models, model, onModel, session, 
         ? { id: ID.sourcesPick, label: DATA_SOURCES_ITEM.pick, checked: pickChosen, disabled: true }
         : notOffered
           ? { id: ID.sourcesPick, label: DATA_SOURCES_ITEM.pick, checked: false, disabledReason: DATA_SOURCES_ITEM.allSources.pickReason }
-          : { id: ID.sourcesPick, label: DATA_SOURCES_ITEM.pick, checked: false, disabled: true };
+          : { id: ID.sourcesPick, label: DATA_SOURCES_ITEM.pick, checked: pickChosen, disabled: true };
 
   const heading: MenuItem = { id: ID.heading, kind: 'heading', label: HARNESS_HEADING };
   const rule: MenuItem = { id: ID.rule, kind: 'rule', label: '' };

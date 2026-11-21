@@ -60,6 +60,32 @@ export function pickerRows(query: string, statement: FlowsStatement | null, conf
   return { rows, searched: true };
 }
 
+/** The open modal (`Dialog.tsx`'s `aria-modal` panel) that holds `active`, if any. */
+function modalHolding(active: Element | null): Element | null {
+  return active && typeof active.closest === 'function' ? active.closest('[aria-modal="true"]') : null;
+}
+
+/**
+ * Focus back to `opener` once `modal` has left the page (FIX-1, website #786 item 3). The modal returns focus first, to
+ * what had it when it opened (`useModalFocus`); only where that returned it nowhere (its opener left the page with the
+ * panel, so focus is on the body) does the panel's opener take it. Measured at the base: the panel's close focused its
+ * opener behind the open overlay, and the overlay's close then restored the page's scroll with that opener off screen
+ * (FX0's check 6, -305.7 px at 390). Focusing after the close scrolls the opener into view.
+ */
+function returnFocusAfter(modal: Element, opener: HTMLElement): void {
+  if (typeof MutationObserver === 'undefined' || typeof document === 'undefined') return;
+  const observer = new MutationObserver(() => {
+    if (modal.isConnected) return;
+    observer.disconnect();
+    const settle = typeof requestAnimationFrame === 'function' ? requestAnimationFrame : (run: () => void) => setTimeout(run, 0);
+    settle(() => {
+      const active = document.activeElement;
+      if ((active === null || active === document.body) && opener.isConnected) opener.focus();
+    });
+  });
+  observer.observe(document.body, { childList: true, subtree: true });
+}
+
 const ROW = { padding: '8px 0', borderTop: '1px solid var(--border-color)' } as const;
 const capitalized = (what: string | null) => (what === null ? null : what.charAt(0).toUpperCase() + what.slice(1));
 
@@ -112,7 +138,12 @@ export default function PickerPanel({ docked }: { docked: boolean }) {
     const opener = typeof document !== 'undefined' ? (document.activeElement as HTMLElement | null) : null;
     searchRef.current?.focus();
     return () => {
-      if (opener && typeof opener.focus === 'function' && opener.isConnected) opener.focus();
+      if (!opener || typeof opener.focus !== 'function') return;
+      // FIX-1 (website #786 item 3): closed while a modal over the page holds focus (the Settings overlay, whose
+      // refresh closed the panel). Focus stays in the modal, and comes back to the opener only after the modal closes.
+      const modal = modalHolding(document.activeElement);
+      if (modal) returnFocusAfter(modal, opener);
+      else if (opener.isConnected) opener.focus();
     };
   }, []);
 
