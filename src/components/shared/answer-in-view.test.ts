@@ -133,7 +133,12 @@ Object.assign(globalThis as Record<string, unknown>, {
   document: {
     ...target,
     querySelectorAll: (selector: string) => select(selector).map(nodeFor),
-    querySelector: (selector: string) => { const [element] = select(selector); return element ? nodeFor(element) : null; },
+    // The site's sticky header is the root layout's, outside the tree mounted here: answered with its stubbed box.
+    querySelector: (selector: string) => {
+      if (selector.trim() === 'header') return nodeFor(h('header', null) as unknown as HostElement);
+      const [element] = select(selector);
+      return element ? nodeFor(element) : null;
+    },
   },
 });
 

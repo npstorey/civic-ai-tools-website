@@ -35,14 +35,27 @@
  * before any answer (the first send, a retry after a failed run, the form's
  * resend after Allow) is not counted. That is kept in session storage, so a
  * remount in the same session does not show it again.
+ *
+ * THE ANSWER, FOR A READER WHO SCROLLED (FIX-1 FX2; website #807, G0's rulings D4 to D8 on #802). When a run's answer
+ * first renders with content out of view, the window brings its top under the header, once per run; focus stays.
+ * Two polite live regions, mounted with the surface, announce the answer once per run ("The answer to your question is
+ * ready.") and the consent card's outcome sentence after a reply at the pause prompt (`./answer-arrival.ts`).
+ *
+ * A RUN THAT ENDED WITH NOTHING (FIX-1 FX2, #786 item 2). A run the route refused before any panel had anything (the
+ * consent gate's `consent_required`, one error event per panel; the daily limit's 429) is no longer streaming: its
+ * panels are handed `isStreaming={false}`, so neither keeps "Connecting..." or its waiting line beside the card or the
+ * refusal. Every other run's panels are handed `isStreaming` as before.
  */
 
-import { cloneElement, useState, useRef, type CSSProperties, type ReactElement } from 'react';
+import { cloneElement, useMemo, useState, useRef, type CSSProperties, type ReactElement } from 'react';
 import QueryForm from '@/components/QueryForm';
 import { useDefaultPortalArg } from '@/components/DefaultPortalProvider';
 import ComparisonDisplay from '@/components/ComparisonDisplay';
 import NotebookOutput from '@/components/notebook/NotebookOutput';
 import { ConsentPausePrompt, preferredScrollBehavior } from '@/components/answer-view/ConsentStep';
+import { adaptNotebook } from '@/components/answer-view/adapt-notebook';
+import { ANSWER_READY } from '@/components/composer/copy';
+import { useAnswerArrival, useConsentReplyAnnouncement } from '@/components/shared/answer-arrival';
 import { useStreamingComparison } from '@/hooks/useStreamingComparison';
 import { useNotebookStream } from '@/hooks/useNotebookStream';
 import { useSessionChoice } from '@/hooks/useSessionChoice';
@@ -160,6 +173,26 @@ export default function QuerySurface({
       && (streaming.withMcp.content !== '' || streaming.withoutMcp.content !== '')
     : !notebook.state.isLoading && notebook.state.notebook != null;
   const running = streaming.isLoading || notebook.state.isLoading;
+  // FX2 (D4 to D7): the run's answer and its content. The answer part is drawn even with nothing in it ("No synthesis
+  // was produced for this analysis."), so the surface decides on the content the view would show: the with-data
+  // panel's answer on the chat path, the notebook's answer (`adaptNotebook`, as `ChatNotebookOutput` reads it) on the
+  // notebook path.
+  const notebookAnswer = notebook.state.notebook;
+  const notebookAnswerHasContent = useMemo(() => {
+    if (!notebookAnswer) return false;
+    const kind = adaptNotebook({ notebook: notebookAnswer, prompt: '', model: '', portal: '', toolCalls: [], instance: null, socrataMcpUrl: null }).answer.content.kind;
+    return kind === 'markdown' || kind === 'cell-outputs';
+  }, [notebookAnswer]);
+  // Arrived: the answer has rendered with content (the chat path's first content, the notebook path's notebook).
+  const answerArrived = lastMode === 'standard' ? streaming.withMcp.content !== '' : notebookAnswerHasContent;
+  // Ready: the run is complete with that answer. On the notebook path the two coincide (the ORCH's reading, the seat's).
+  const answerReady = lastMode === 'standard' ? answered && streaming.withMcp.content !== '' : notebookAnswerHasContent;
+  useAnswerArrival(answerArrived, resultsRef);
+  const consentReply = useConsentReplyAnnouncement();
+  // #786 item 2: the run is over and no panel has anything (no content, steps, error or completion time): nothing is
+  // coming, so no panel is streaming.
+  const panelsEndedEmpty = !streaming.isLoading && [streaming.withoutMcp, streaming.withMcp].every((panel) =>
+    panel.content === '' && !panel.error && panel.duration_ms === undefined && panel.progressLog.length === 0 && panel.progressGroups.length === 0);
   const [answeredOnce, setAnsweredOnce] = useState(false);
   // A run that ended with no answer (refused or errored) before any answer: the first-time line waits for one.
   const [endedWithoutAnswer, setEndedWithoutAnswer] = useState(false);
@@ -335,7 +368,7 @@ export default function QuerySurface({
             withMcp={null}
             isLoading={streaming.isLoading}
             modelName={getModelDisplayName(usedModel)}
-            isStreaming={true}
+            isStreaming={!panelsEndedEmpty}
             streamingWithoutMcp={streaming.withoutMcp}
             streamingWithMcp={streaming.withMcp}
             queryText={lastQuery}
@@ -373,6 +406,13 @@ export default function QuerySurface({
 
       {/* Query Form, docked below the results from the first send that starts a run */}
       {docked && form}
+
+      {/* FX2 (D6 to D8): the surface's two polite live regions, mounted with it, so each stays across the swap from
+          progress to answer and from one run to the next. Read by a screen reader only. */}
+      <div key="announcements" className="ui-visually-hidden">
+        <p role="status" aria-live="polite" data-part="answer-announcement">{answerReady ? ANSWER_READY : ''}</p>
+        <p role="status" aria-live="polite" data-part="consent-reply-announcement">{consentReply}</p>
+      </div>
     </>
   );
 }
