@@ -178,6 +178,12 @@ export const PICKER_TEXT = {
   notLoadedAfterSend: 'Your picked data sources could not be loaded just now, so nothing was sent. Try again in a moment, or choose Auto.',
 } as const;
 
+/**
+ * FIX-1 D6 = A, D7 = A (website #807; G0, OA-1101): the question surface's one polite announcement, once per run, when
+ * the run's answer is ready (`src/components/shared/answer-arrival.ts`). Read by a screen reader only.
+ */
+export const ANSWER_READY = 'The answer to your question is ready.';
+
 function joinNames(names: readonly string[]): string {
   if (names.length <= 1) return names.join('');
   return `${names.slice(0, -1).join(', ')} and ${names[names.length - 1]}`;
