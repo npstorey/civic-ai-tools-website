@@ -301,7 +301,11 @@ async function run5(ctx, label, size, file, variant, targetY) {
 const inView = (row) => !!row && !!row.answer && row.answer.top >= (row.header ? row.header.bottom : 0) - 0.5 && row.answer.top < row.vh;
 const rowLine = (r) => `${r.at}: scrollY ${r.scrollY}  prompt ${r.prompt ? `${r.prompt.top}..${r.prompt.bottom}` : '-'}  card ${r.card ? `${r.card.top}..${r.card.bottom}` : '-'}  answer ${r.answer ? `${r.answer.top}..${r.answer.bottom}` : '-'}  focus ${r.active.body ? 'body' : `${r.active.tag}${r.active.text ? ` "${r.active.text}"` : ''}${r.active.rect ? ` @${r.active.rect.top}` : ''}`}`;
 const scrollLine = (s) => (s ? `scroll target ${s.target}${s.cardBefore ? ` (card before the scroll ${s.cardBefore.top}..${s.cardBefore.bottom})` : ''}  scrollY before ${s.before} after ${s.after}` : 'no scroll');
-const arrivalLine = (r) => `at the arrival: scrollY ${r.arrival?.scrollY} (just before ${r.beforeArrival})  answer ${r.arrival?.answer ? `${r.arrival.answer.top}..${r.arrival.answer.bottom}` : 'absent'}  header bottom ${r.arrival?.header?.bottom}  viewport bottom ${r.arrival?.vh}`;
+// FIX-1 FX2b: the topmost author line's top against the header's bottom, recorded only (no verdict reads it).
+const authorLine = (row) => (row?.author
+  ? `author line (${row.authorLines}) top ${row.author.top} ${row.author.top >= (row.header ? row.header.bottom : 0) - 0.5 ? 'at or below' : 'ABOVE'} the header's bottom`
+  : 'no author line');
+const arrivalLine = (r) => `at the arrival: scrollY ${r.arrival?.scrollY} (just before ${r.beforeArrival})  answer ${r.arrival?.answer ? `${r.arrival.answer.top}..${r.arrival.answer.bottom}` : 'absent'}  ${authorLine(r.arrival)}  header bottom ${r.arrival?.header?.bottom}  viewport bottom ${r.arrival?.vh}`;
 
 export async function check5(ctx) {
   const lines = []; const data = { runs: {} }; let pass = true;
