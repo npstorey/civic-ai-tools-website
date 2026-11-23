@@ -1,4 +1,4 @@
-// The rule: the site sends a Content-Security-Policy (report-only) and a
+// The rule: the site enforces its Content-Security-Policy, and sends a
 // Referrer-Policy.
 //
 // WHAT IS DRIVEN. The site's own configuration, `next.config.ts`: its
@@ -67,10 +67,10 @@ function everyPath(routes: HeaderRoute[] | null): Map<string, string> {
 }
 
 for (const [name, env, , policy] of CASES) {
-  test(`the site sends a Content-Security-Policy (report-only) and a Referrer-Policy: ${name}`, async () => {
+  test(`the site enforces its Content-Security-Policy, and sends a Referrer-Policy: ${name}`, async () => {
     const headers = everyPath(await headersUnder(env));
-    assert.equal(headers.get('content-security-policy-report-only'), policy);
-    assert.equal(headers.get('content-security-policy'), undefined, 'the policy is enforced, not report-only');
+    assert.equal(headers.get('content-security-policy'), policy, 'the policy is not enforced');
+    assert.equal(headers.get('content-security-policy-report-only'), undefined, 'a report-only policy is still sent');
     assert.equal(headers.get('referrer-policy'), 'strict-origin-when-cross-origin');
   });
 }
