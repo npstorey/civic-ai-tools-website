@@ -384,17 +384,35 @@ for (const [shape, answer] of [
   });
 }
 
-/** Every kind `classifyStreamError` returns but the limit's and consent's, which have their own tests. */
-const KEPT_KINDS = (STREAM_ERROR_KINDS as readonly string[]).filter((k) => k !== 'rate_limit' && k !== 'consent_required');
+/** Every kind `classifyStreamError` returns but the limit's, consent's and an ended session's, which have their own tests. */
+const KEPT_KINDS = (STREAM_ERROR_KINDS as readonly string[]).filter((k) => k !== 'rate_limit' && k !== 'consent_required' && k !== 'session_ended');
 
-test('fix round 2, A5 (premise): the kinds are the fifteen, and the thirteen that keep the block are listed here', () => {
-  // Fifteen since FIX-1 FX-S2 added `session_ended`, which keeps the block as the others do.
+test('fix round 2, A5 (premise): the kinds are the fifteen, and the twelve that keep the block are listed here', () => {
+  // Fifteen since FIX-1 FX-S2 added `session_ended`, which has its own tests below.
   assert.equal(STREAM_ERROR_KINDS.length, 15);
   assert.deepEqual(KEPT_KINDS, [
     'model_rate_limited', 'model_not_configured', 'model_auth_rejected', 'mcp_not_configured', 'mcp_timeout', 'mcp_unavailable',
-    'connection', 'notebook_execution', 'not_offered', 'no_sources_on', 'no_picks_usable', 'session_ended', 'generic',
+    'connection', 'notebook_execution', 'not_offered', 'no_sources_on', 'no_picks_usable', 'generic',
   ]);
 });
+
+// FIX-1 FX-S2 (OA-1175 (b), Seat ruling 7105927335): a reader whose session ended is asked to sign in again. Its block
+// keeps the heading and the sentence, and holds no switch line and no Retry: asking again needs a sign-in first.
+const S1 = 'You are no longer signed in, so nothing was sent. Sign in again, then ask your question again.';
+for (const [shape, answer] of [
+  ["the notebook route's own 401", () => json({ error: 'Authentication required' }, 401)],
+  ['a refusal carrying session_ended', () => json({ error: 'fixture session_ended', code: 'session_ended' }, 503)],
+] as const) {
+  test(`a reader whose session ended is asked to sign in again: ${shape} renders the heading and the sentence, with no switch line and no Retry`, async () => {
+    const block = await notebookBlock(answer);
+    assert.ok(block, 'premise: the refusal rendered a role="alert" block');
+    assert.ok(block!.text.startsWith(NB_HEADING), `the heading is gone: ${block!.text}`);
+    assert.ok(block!.text.includes(S1), `the sentence is gone: ${block!.text}`);
+    assert.ok(!block!.text.includes(NB_SWITCH), `the switch line is still there: ${block!.text}`);
+    assert.equal(block!.retry, 0, 'Retry is still there');
+    assert.equal(block!.text, `${NB_HEADING} ${S1}`, 'the block holds more than the heading and the sentence');
+  });
+}
 
 for (const kind of KEPT_KINDS) {
   test(`fix round 2, A5 (b): a ${kind} refusal keeps the block: the heading, its message, the switch line and Retry`, async () => {
