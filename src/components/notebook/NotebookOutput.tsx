@@ -90,6 +90,9 @@ export default function NotebookOutput({ state, prompt, model, portal, onRetry }
   // the refusal alone (RL-1): its heading names a generation that failed, and Standard mode and Retry are refused
   // again until the count resets. Every other kind keeps the block as built.
   const limitRefusal = state.errorKind === 'rate_limit';
+  // FIX-1 FX-S2 (OA-1175 (b)): a reader whose session ended is asked to sign in again. The block keeps its heading and
+  // that sentence, and holds no switch line and no Retry: asking again needs a sign-in first.
+  const sessionEnded = state.errorKind === 'session_ended';
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: '24px' }}>
@@ -142,13 +145,13 @@ export default function NotebookOutput({ state, prompt, model, portal, onRetry }
               </pre>
             </div>
           )}
-          {!limitRefusal && (
+          {!limitRefusal && !sessionEnded && (
             <span style={{ fontSize: '13px', color: 'var(--text-secondary)' }}>
               You can switch back to <em>Standard</em> mode and try the same
               question, or retry below.
             </span>
           )}
-          {!limitRefusal && onRetry && (
+          {!limitRefusal && !sessionEnded && onRetry && (
             <button
               type="button"
               onClick={onRetry}
