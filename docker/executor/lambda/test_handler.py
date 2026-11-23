@@ -73,10 +73,29 @@ class NotebookEnvironment(unittest.TestCase):
     def test_function_held_tokens_come_from_the_function_and_cannot_be_overridden(self):
         os.environ['SOCRATA_APP_TOKEN'] = 'from-the-function'
         os.environ.pop('DC_API_KEY', None)
-        env = handler.notebook_env({'SOCRATA_APP_TOKEN': 'from-the-payload', 'EXTRA': 'x'})
+        env = handler.notebook_env({'SOCRATA_APP_TOKEN': 'from-the-request', 'EXTRA': 'x'}, ('SOCRATA_APP_TOKEN', 'DC_API_KEY'))
         self.assertEqual(env['SOCRATA_APP_TOKEN'], 'from-the-function')
         self.assertNotIn('DC_API_KEY', env)
         self.assertEqual(env['EXTRA'], 'x')
+
+    def test_a_notebook_key_is_added_only_when_the_request_names_it(self):
+        os.environ['SOCRATA_APP_TOKEN'] = 'fixture-socrata-held'
+        os.environ['DC_API_KEY'] = 'fixture-dc-held'
+        cases = (
+            (['DC_API_KEY'], {'DC_API_KEY': 'fixture-dc-held'}),
+            ([], {}),
+            (['DC_API_KEY', 'SOCRATA_APP_TOKEN'], {'DC_API_KEY': 'fixture-dc-held', 'SOCRATA_APP_TOKEN': 'fixture-socrata-held'}),
+        )
+        for named, expected in cases:
+            env = handler.notebook_env({}, named)
+            held = {name: env[name] for name in handler.FUNCTION_HELD_VARIABLES if name in env}
+            self.assertEqual(held, expected, named)
+
+    def test_the_request_names_only_held_variables_and_nothing_else_reads_as_a_name(self):
+        self.assertEqual(handler.held_variables({'heldVariables': ['DC_API_KEY']}), ('DC_API_KEY',))
+        self.assertEqual(handler.held_variables({'heldVariables': ['PATH', 'DC_API_KEY', 'AWS_SECRET_ACCESS_KEY']}), ('DC_API_KEY',))
+        for absent in ({}, {'heldVariables': 'DC_API_KEY'}, {'heldVariables': [1, None]}, {'heldVariables': None}):
+            self.assertEqual(handler.held_variables(absent), (), absent)
 
     def test_the_function_proxy_reaches_the_notebook_in_both_spellings(self):
         os.environ['HTTPS_PROXY'] = 'http://egress.example:3128'
@@ -229,6 +248,33 @@ class Handler(unittest.TestCase):
         self.assertEqual(result['exitCode'], -1)
         self.assertIn('wall-clock cap (1500ms) exceeded', result['stderr'])
 
+    def test_the_notebook_receives_only_the_keys_the_request_names(self):
+        saved = dict(os.environ)
+        os.environ['SOCRATA_APP_TOKEN'] = 'fixture-socrata-held'
+        os.environ['DC_API_KEY'] = 'fixture-dc-held'
+        lister = {
+            'cmd': sys.executable,
+            'args': ['-c', "import os; open('/tmp/out.txt','w').write(','.join(n for n in ('DC_API_KEY', 'SOCRATA_APP_TOKEN') if n in os.environ))"],
+            'env': {},
+        }
+        try:
+            for named, expected in ((['DC_API_KEY'], b'DC_API_KEY'), ([], b''), (['DC_API_KEY', 'SOCRATA_APP_TOKEN'], b'DC_API_KEY,SOCRATA_APP_TOKEN')):
+                event = {
+                    'protocol': handler.PROTOCOL,
+                    'files': [],
+                    'command': lister,
+                    'readBack': '/tmp/out.txt',
+                    'versionProbe': {'cmd': sys.executable, 'args': ['-c', 'print("3.13.99")']},
+                    'timeoutMs': 30_000,
+                    'heldVariables': named,
+                }
+                result = self.call(event)
+                self.assertEqual(result['exitCode'], 0, result.get('stderr'))
+                self.assertEqual(base64.b64decode(result['executed']), expected, named)
+        finally:
+            os.environ.clear()
+            os.environ.update(saved)
+
     def test_a_path_outside_tmp_or_another_protocol_is_refused(self):
         self.assertEqual(self.call(payload(readBack='/etc/passwd'))['refused'], 'payload')
         self.assertEqual(self.call(payload(files=[{'path': '/tmp/../etc/x', 'content': ''}]))['refused'], 'payload')
@@ -350,6 +396,7 @@ class NotebookOutputsCarryNoCredential(unittest.TestCase):
             command=NBCONVERT,
             readBack='/tmp/executed.ipynb',
             timeoutMs=120_000,
+            heldVariables=list(CANARIES),
         )
         return json.loads(handler.handler(event, Context()))
 

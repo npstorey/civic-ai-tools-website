@@ -1545,6 +1545,9 @@ test('with the three variables unset the sandbox SDK is called exactly as before
     // held to a placeholder for the byte comparison.
     name: EXECUTOR_NAME,
     persistent: false,
+    // A notebook's sandbox reaches only the hosts its run's data steps read
+    // (#807); this session names none, so a snapshot-booted one is deny-all.
+    networkPolicy: 'deny-all',
     source: { type: 'snapshot', snapshotId: 'snap_probe' },
   };
   const withTriple = { ...expectedBase, token: 'probe-not-a-real-token', teamId: 'team_probe', projectId: 'prj_probe' };

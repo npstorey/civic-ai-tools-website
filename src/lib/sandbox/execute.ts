@@ -30,11 +30,12 @@
  */
 import type { Notebook } from '../notebook-author/cells.ts';
 import { PINNED_LIBRARIES, PYTHON_RUNTIME_VERSION } from '../notebook-author/prompt.ts';
-import { executorToolingPipSpecs, ExecutorSettingError, NotebookExecutionError } from './driver.ts';
+import { executorToolingPipSpecs, ExecutorSettingError, NOTEBOOK_KEY_VARIABLES, NotebookExecutionError } from './driver.ts';
 import { EXECUTOR_DRIVER_NONE } from '../notebook-availability.ts';
-import type { ExecutorSession, NotebookExecutorDriver, SessionExecutorDriver } from './driver.ts';
+import type { ExecutorSession, NotebookExecutorDriver, NotebookReach, SessionExecutorDriver } from './driver.ts';
 
 export { ExecutorSettingError, NotebookExecutionError } from './driver.ts';
+export type { NotebookReach } from './driver.ts';
 
 /**
  * The session cap and the per-cell limit, in seconds, when nothing sets them.
@@ -192,6 +193,12 @@ export interface ExecuteNotebookOptions {
   timeoutMs?: number;
   /** Timeout passed to `jupyter nbconvert --ExecutePreprocessor.timeout`. Defaults to EXECUTOR_CELL_TIMEOUT_S. */
   notebookTimeoutS?: number;
+  /**
+   * What the notebook's run reads (`synthesizeNotebook`'s `reach`): the hosts
+   * its sandbox may reach and the keys its environment holds. Absent is
+   * nothing: no host and no key (#807).
+   */
+  reach?: NotebookReach;
   /** Extra env vars passed to the session. */
   extraEnv?: Record<string, string>;
   /** AbortSignal for the caller's wrapping timeout. */
@@ -212,12 +219,24 @@ export interface ExecutionResult {
   libraries: Record<string, string>;
 }
 
-function buildNotebookEnv(extra?: Record<string, string>): Record<string, string> {
+/**
+ * The notebook's environment: each key its run reads, when this app holds it,
+ * and the caller's extras. A notebook's environment holds a source's key only
+ * when its run reads that source (#807), so a key the reach does not name is
+ * not put in, whatever this app's environment carries.
+ */
+function buildNotebookEnv(reach: NotebookReach, extra?: Record<string, string>): Record<string, string> {
   const env: Record<string, string> = {};
-  const socrataToken = process.env[ENV_SOCRATA_TOKEN];
-  if (socrataToken) env[ENV_SOCRATA_TOKEN] = socrataToken;
-  const dcKey = process.env[ENV_DC_API_KEY];
-  if (dcKey) env[ENV_DC_API_KEY] = dcKey;
+  // Each read by its own name, so a reach can name a notebook key and nothing else.
+  const held: Record<(typeof NOTEBOOK_KEY_VARIABLES)[number], string | undefined> = {
+    [ENV_SOCRATA_TOKEN]: process.env[ENV_SOCRATA_TOKEN],
+    [ENV_DC_API_KEY]: process.env[ENV_DC_API_KEY],
+  };
+  for (const name of NOTEBOOK_KEY_VARIABLES) {
+    if (!reach.credentials.includes(name)) continue;
+    const value = held[name];
+    if (value) env[name] = value;
+  }
   if (extra) {
     for (const [k, v] of Object.entries(extra)) {
       env[k] = v;
@@ -347,7 +366,8 @@ export async function executeNotebookWith(
   const configured = resolveExecutorTimeouts();
   const timeoutMs = opts.timeoutMs ?? configured.sessionMs;
   const notebookTimeoutS = opts.notebookTimeoutS ?? configured.cellS;
-  const env = buildNotebookEnv(opts.extraEnv);
+  const reach: NotebookReach = opts.reach ?? { hosts: [], credentials: [] };
+  const env = buildNotebookEnv(reach, opts.extraEnv);
   const nbconvert = nbconvertCommand(notebookTimeoutS);
   const startedAt = Date.now();
 
@@ -357,6 +377,8 @@ export async function executeNotebookWith(
     const run = await driver.runNotebook({
       files: [{ path: NOTEBOOK_IN_PATH, content: JSON.stringify(notebook) }],
       command: { ...nbconvert, env },
+      // The function holds the keys and adds only these (#807).
+      heldVariables: reach.credentials.filter((name) => NOTEBOOK_KEY_VARIABLES.includes(name)),
       readBack: NOTEBOOK_OUT_PATH,
       versionProbe: { cmd: VERSION_PROBE.cmd, args: [...VERSION_PROBE.args] },
       timeoutMs,
@@ -372,7 +394,15 @@ export async function executeNotebookWith(
     };
   }
 
-  return runInSession(driver, notebook, { snapshotId, timeoutMs, env, nbconvert, startedAt, signal: opts.signal });
+  return runInSession(driver, notebook, {
+    snapshotId,
+    timeoutMs,
+    env,
+    hosts: reach.hosts,
+    nbconvert,
+    startedAt,
+    signal: opts.signal,
+  });
 }
 
 async function runInSession(
@@ -382,21 +412,24 @@ async function runInSession(
     snapshotId: string | undefined;
     timeoutMs: number;
     env: Record<string, string>;
+    hosts: readonly string[];
     nbconvert: { cmd: string; args: string[] };
     startedAt: number;
     signal: AbortSignal | undefined;
   },
 ): Promise<ExecutionResult> {
-  const { snapshotId, timeoutMs, env, nbconvert, startedAt } = run;
+  const { snapshotId, timeoutMs, env, hosts, nbconvert, startedAt } = run;
   const opts = { signal: run.signal };
-  const session = await driver.createSession({ timeoutMs, env, snapshotId });
+  const session = await driver.createSession({ timeoutMs, env, snapshotId, hosts });
   try {
     // Without a preinstalled stack (fresh sandbox), pip-install the pins.
     if (!session.stackPreinstalled) {
       await ensureScientificStack(session);
     }
 
-    // Stage the notebook on the session filesystem.
+    // Stage the notebook on the session filesystem. From here on a sandbox
+    // reaches only the run's hosts: the vercel-sandbox driver narrows a fresh
+    // sandbox's policy from the package index before its first write (#807).
     const notebookJson = JSON.stringify(notebook);
     await session.writeFiles(
       [{ path: NOTEBOOK_IN_PATH, content: notebookJson }],

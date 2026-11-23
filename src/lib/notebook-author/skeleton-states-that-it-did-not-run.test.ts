@@ -204,13 +204,13 @@ test('the two stamps cannot drift: both producers write a value the canonical vo
   assert.ok(
     typeof stamped === 'string' && (NOTEBOOK_PROVENANCE_VALUES as readonly string[]).includes(stamped),
     `the skeleton's stamp (${JSON.stringify(stamped)}) is not a member of NOTEBOOK_PROVENANCE_VALUES — ` +
-      'the executed path writes "executed" at synthesize.ts:189 and the skeleton must write the reserved ' +
+      'the executed path writes "executed" at synthesize.ts:228 and the skeleton must write the reserved ' +
       'sibling from the same declaration, not a bare literal of its own',
   );
 
   // ADDED BY THE FIX (P2 IMPL), and the reason: as written above, this test is
   // titled for two producers and reads ONE. It restates the executed path's
-  // value in prose ("the executed path writes \"executed\" at synthesize.ts:189")
+  // value in prose ("the executed path writes \"executed\" at synthesize.ts:228")
   // rather than driving that producer, so the executed stamp could change to
   // anything at all and nothing here would notice — which is the drift the
   // criterion asks to be made impossible. Both producers are pure synchronous

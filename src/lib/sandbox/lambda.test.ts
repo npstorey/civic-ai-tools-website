@@ -25,6 +25,9 @@
 //     header timeout it is given, not the global one (D6).
 //   - THE LISTS: the names held on the function are the names the notebook's
 //     environment carries and the names the handler adds.
+//   - THE KEYS PER RUN (#807): a notebook's environment holds a source's key
+//     only when its run reads that source, so the request names the keys the
+//     run reads, from the reach `synthesizeNotebook` returns, and no others.
 //
 // Run with: npm test
 
@@ -35,6 +38,8 @@ import net from 'node:net';
 import { randomBytes } from 'node:crypto';
 import { readFileSync } from 'node:fs';
 import type { Notebook } from '../notebook-author/cells.ts';
+import { synthesizeNotebook } from '../notebook-author/synthesize.ts';
+import type { PhaseAToolCall } from '../notebook-author/tool-to-cell.ts';
 
 // --- the stand-in for the Lambda API ------------------------------------------
 
@@ -150,7 +155,7 @@ async function run(
   vars: Record<string, string | null> = {},
   scripted: Answer[] = [],
   notebook: Notebook = NOTEBOOK,
-  opts: { signal?: AbortSignal } = {},
+  opts: Parameters<typeof executeNotebook>[1] = {},
 ): Promise<{ calls: Recorded[]; result?: Awaited<ReturnType<typeof executeNotebook>>; error?: unknown }> {
   requests.length = 0;
   answers = [...scripted];
@@ -243,6 +248,61 @@ test('D5: the portal tokens are never in the invoke, whatever the app environmen
     assert.ok(!raw.includes(value), `the invoke carried the value of ${name}`);
     assert.ok(!(name in JSON.parse(calls[0].body).command.env), `the invoke named ${name}`);
   }
+});
+
+// --- the keys per run (#807) -------------------------------------------------
+
+const SOCRATA_STEP: PhaseAToolCall = {
+  name: 'get_data',
+  args: { type: 'query', portal: 'data.cityofnewyork.us', dataset_id: 'erm2-nwe9', query: 'SELECT count(*)' },
+  resultSummary: { rows: 1, columns: 1 },
+};
+const DATA_COMMONS_STEP: PhaseAToolCall = {
+  name: 'get_observations',
+  args: { variable_dcid: 'Count_Person', place_dcid: 'geoId/36' },
+  resultSummary: { rows: 3, columns: 4 },
+};
+const CATALOG_STEP: PhaseAToolCall = { name: 'get_data', args: { type: 'catalog', portal: 'data.cityofnewyork.us', query: 'permits' } };
+
+/** A notebook written by the real synthesizer, with the reach it states. */
+function synthesized(toolCalls: PhaseAToolCall[]) {
+  const out = synthesizeNotebook({
+    query: 'How many permits were issued?',
+    defaultPortal: 'data.cityofnewyork.us',
+    toolCalls,
+    finalAnswer: 'The answer.',
+    modelName: 'fixture/model',
+    modelAccess: 'through a fixture endpoint',
+    generatedAt: '2026-11-23T00:00:00.000Z',
+  });
+  return { notebook: out.notebook, opts: { reach: (out as unknown as { reach?: unknown }).reach } as never };
+}
+
+for (const [label, toolCalls, expected] of [
+  ['a run with only a Data Commons step', [DATA_COMMONS_STEP], ['DC_API_KEY']],
+  ['a run with no data step', [CATALOG_STEP], []],
+  ['a run with both', [SOCRATA_STEP, DATA_COMMONS_STEP], ['DC_API_KEY', 'SOCRATA_APP_TOKEN']],
+] as const) {
+  test(`#807: ${label} asks the function for ${JSON.stringify(expected)}, and the request carries no key`, async () => {
+    const { notebook, opts } = synthesized([...toolCalls]);
+    const { calls, error } = await run(DECOYS, [], notebook, opts);
+    assert.equal(error, undefined, `the run failed: ${String(error)}`);
+    assert.equal(calls.length, 1, 'premise: one invoke');
+    const sent = JSON.parse(calls[0].body) as { heldVariables?: unknown; command: { env: Record<string, string> } };
+    assert.deepEqual(sent.heldVariables, expected, 'the names the function is asked to add');
+    const raw = calls[0].body + JSON.stringify(calls[0].headers);
+    for (const [name, value] of Object.entries(DECOYS)) {
+      assert.ok(!raw.includes(value), `the invoke carried the value of ${name}`);
+      assert.ok(!(name in sent.command.env), `the request's env names ${name}`);
+    }
+  });
+}
+
+test('#807: the names follow the run, not the app: with neither key held by the app, a Data Commons run still names its key', async () => {
+  const { notebook, opts } = synthesized([DATA_COMMONS_STEP]);
+  const { calls, error } = await run({}, [], notebook, opts);
+  assert.equal(error, undefined, `the run failed: ${String(error)}`);
+  assert.deepEqual(JSON.parse(calls[0].body).heldVariables, ['DC_API_KEY']);
 });
 
 // --- the answer ---------------------------------------------------------------
@@ -452,7 +512,8 @@ test('the names held on the function are the notebook env names and the names th
   };
   setEnv(DECOYS);
   try {
-    await executeNotebookWith(capturing as never, NOTEBOOK);
+    // A run that reads both sources: its environment holds both keys (#807).
+    await executeNotebookWith(capturing as never, NOTEBOOK, { reach: { hosts: [], credentials: ['DC_API_KEY', 'SOCRATA_APP_TOKEN'] } });
   } finally {
     setEnv({ SOCRATA_APP_TOKEN: null, DC_API_KEY: null });
   }

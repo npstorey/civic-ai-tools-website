@@ -20,7 +20,9 @@
  *
  * SECRETS (ruling D5). The two data-portal tokens are set on the function, not
  * sent: `FUNCTION_HELD_VARIABLES` are removed from the payload, whatever the
- * app's environment carries, and the handler adds them from its own.
+ * app's environment carries, and the handler adds them from its own. It adds
+ * only the ones the request names in `heldVariables`: the keys this run reads
+ * (#807). A handler older than that field adds both.
  *
  * TRANSPORT (ruling D6). With a proxy configured, the client takes the SDK's
  * fetch transport, as the S3 driver does, so NO_PROXY decides per destination
@@ -201,6 +203,7 @@ export function buildPayload(run: NotebookRun): Record<string, unknown> {
     protocol: LAMBDA_PROTOCOL,
     files: run.files.map((file) => ({ path: file.path, content: file.content })),
     command: { cmd: run.command.cmd, args: [...run.command.args], env },
+    heldVariables: [...run.heldVariables],
     readBack: run.readBack,
     versionProbe: { cmd: run.versionProbe.cmd, args: [...run.versionProbe.args] },
     timeoutMs: run.timeoutMs,
