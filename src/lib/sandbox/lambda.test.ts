@@ -512,7 +512,8 @@ test('the names held on the function are the notebook env names and the names th
   };
   setEnv(DECOYS);
   try {
-    await executeNotebookWith(capturing as never, NOTEBOOK);
+    // A run that reads both sources: its environment holds both keys (#807).
+    await executeNotebookWith(capturing as never, NOTEBOOK, { reach: { hosts: [], credentials: ['DC_API_KEY', 'SOCRATA_APP_TOKEN'] } });
   } finally {
     setEnv({ SOCRATA_APP_TOKEN: null, DC_API_KEY: null });
   }

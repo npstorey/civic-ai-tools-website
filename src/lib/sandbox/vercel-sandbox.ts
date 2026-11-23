@@ -40,15 +40,20 @@
  * this module hands the SDK a `fetch` that swaps that agent for a proxy-aware
  * one — see `proxyAwareSandboxFetch`. With none configured the SDK is called
  * exactly as before and no dispatcher is built.
+ *
+ * NETWORK (#807). A notebook's sandbox reaches only the hosts its run's data
+ * steps read (`CreateSessionOptions.hosts`), and none when it has none; see
+ * `runNetworkPolicy` and `createSandbox`.
  */
 import { randomBytes } from 'node:crypto';
-import { Sandbox } from '@vercel/sandbox';
+import { Sandbox, type NetworkPolicy } from '@vercel/sandbox';
 import type { Dispatcher } from 'undici';
 import {
   createProxyDispatcher,
   resolveProxySettings,
   type ProxySettings,
 } from '../outbound-proxy.ts';
+import { isPlainHostName } from './driver.ts';
 import type {
   CreateSessionOptions,
   ExecutorCommand,
@@ -77,6 +82,25 @@ const TLS_ENV: Record<string, string> = {
 interface SandboxCreateBase {
   timeout: number;
   env: Record<string, string>;
+}
+
+/**
+ * The hosts a fresh sandbox's pip reaches while it installs the pinned stack:
+ * the package index and the host it serves files from. Measured on the
+ * provider (2026-11-23): `pip install` exits 0 with only these two allowed.
+ */
+export const PACKAGE_INDEX_HOSTS: readonly string[] = ['pypi.org', 'files.pythonhosted.org'];
+
+/**
+ * A notebook's sandbox reaches only the hosts its run's data steps read
+ * (#807): an allowlist of exactly those hosts, or 'deny-all' when there are
+ * none. A host that is not a plain domain name is left out, so a request to it
+ * is refused, never widened into a pattern. The provider's allowlist denies
+ * every host it does not name, an IP literal and plain HTTP included.
+ */
+export function runNetworkPolicy(hosts: readonly string[] | undefined): NetworkPolicy {
+  const allow = [...new Set((hosts ?? []).filter(isPlainHostName))].sort();
+  return allow.length > 0 ? { allow } : 'deny-all';
 }
 
 /** Environment-variable names for the off-platform auth triple. */
@@ -208,6 +232,7 @@ export function executorSandboxName(): string {
 function createSandbox(
   snapshotId: string | undefined,
   base: SandboxCreateBase,
+  runPolicy: NetworkPolicy,
 ): Promise<Sandbox> {
   // ONE-USE, on every branch (#491). From 3.x a sandbox is persistent unless
   // told otherwise: stopping it snapshots its filesystem so the next session
@@ -215,14 +240,18 @@ function createSandbox(
   // resumed, so a persistent one would keep that visitor's files and add a
   // snapshot to the project's storage on every run.
   const oneUse = { ...base, name: executorSandboxName(), persistent: false as const };
+  // THE NETWORK (#807). From a snapshot the stack is installed, so the sandbox
+  // is created with its run's policy. A fresh sandbox is created reaching only
+  // the package index, for pip, and is narrowed to its run's policy before the
+  // notebook is written (the session's `writeFiles` below).
   const params = snapshotId
-    ? { ...oneUse, source: { type: 'snapshot' as const, snapshotId } }
+    ? { ...oneUse, networkPolicy: runPolicy, source: { type: 'snapshot' as const, snapshotId } }
     // No snapshot configured — boot a fresh python3.13 sandbox; the
     // orchestrator installs the pinned scientific stack inline. Slower
     // (~10-30s cold start) and intended only for the snapshot-build script +
     // local-dev smoke tests. `runtime` is deprecated in 3.x in favour of
     // `image`, and still boots python3.13 there (measured 2026-10-16, #617 P1).
-    : { ...oneUse, runtime: 'python3.13' as const };
+    : { ...oneUse, networkPolicy: { allow: [...PACKAGE_INDEX_HOSTS] }, runtime: 'python3.13' as const };
 
   // Attach the auth triple ONLY when complete. Two distinct call shapes
   // rather than a spread of possibly-undefined keys: an undefined-valued
@@ -248,10 +277,22 @@ export function createVercelSandboxDriver(): SessionExecutorDriver {
     name: 'vercel-sandbox',
 
     async createSession(opts: CreateSessionOptions): Promise<ExecutorSession> {
-      const sandbox = await createSandbox(opts.snapshotId, {
-        timeout: opts.timeoutMs,
-        env: { ...TLS_ENV, ...opts.env },
-      });
+      const runPolicy = runNetworkPolicy(opts.hosts);
+      const sandbox = await createSandbox(
+        opts.snapshotId,
+        { timeout: opts.timeoutMs, env: { ...TLS_ENV, ...opts.env } },
+        runPolicy,
+      );
+      // A snapshot-booted sandbox was created with its run's policy; a fresh
+      // one reaches the package index, for pip, until it is narrowed: before
+      // the notebook is written, and before any command other than pip. A
+      // refused update fails the run rather than leave the wider policy.
+      let narrowed = Boolean(opts.snapshotId);
+      const narrow = async (signal?: AbortSignal): Promise<void> => {
+        if (narrowed) return;
+        await sandbox.update({ networkPolicy: runPolicy }, ...(signal ? [{ signal }] : []));
+        narrowed = true;
+      };
 
       return {
         // The instance id a record carries in its execution extension's
@@ -264,6 +305,7 @@ export function createVercelSandboxDriver(): SessionExecutorDriver {
         stackPreinstalled: Boolean(opts.snapshotId),
 
         async runCommand(command: ExecutorCommand): Promise<ExecutorCommandResult> {
+          if (command.cmd !== 'pip') await narrow(command.signal);
           const result = await sandbox.runCommand({
             cmd: command.cmd,
             args: command.args,
@@ -281,6 +323,8 @@ export function createVercelSandboxDriver(): SessionExecutorDriver {
         },
 
         async writeFiles(files, writeOpts) {
+          // The first write stages the notebook, after pip.
+          await narrow(writeOpts?.signal);
           await sandbox.writeFiles(
             files.map((f) => ({ path: f.path, content: f.content })),
             writeOpts?.signal ? { signal: writeOpts.signal } : undefined,

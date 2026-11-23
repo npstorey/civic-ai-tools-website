@@ -140,13 +140,16 @@ function notebookOf(...sources) {
   };
 }
 
-/** Run `notebook` through the lambda driver on the emulator. Returns { result } or { error }. */
-async function throughLambda(notebook, env = process.env) {
+/**
+ * Run `notebook` through the lambda driver on the emulator. Returns { result } or { error }. `reach` is what the run
+ * reads (#807); the handler adds only the keys it names.
+ */
+async function throughLambda(notebook, env = process.env, reach = undefined) {
   const { executeNotebookWith } = await import('../src/lib/sandbox/execute.ts');
   const { emulatorLambdaDriver } = await import('./lambda-emulator.mjs');
   const driver = await emulatorLambdaDriver(EMULATOR_ENDPOINT, env);
   try {
-    return { result: await executeNotebookWith(driver, notebook) };
+    return { result: await executeNotebookWith(driver, notebook, reach ? { reach } : {}) };
   } catch (error) {
     return { error };
   }
@@ -432,12 +435,19 @@ async function stepSecrets() {
   const reporter = notebookOf(
     "import hashlib, os\nfor n in ('SOCRATA_APP_TOKEN', 'DC_API_KEY'):\n    print(n, hashlib.sha256(os.environ.get(n, '').encode()).hexdigest())",
   );
-  const reported = await throughLambda(reporter);
+  // A run that reads both sources gets both keys from the function's environment.
+  const reported = await throughLambda(reporter, process.env, { hosts: [], credentials: ['DC_API_KEY', 'SOCRATA_APP_TOKEN'] });
   if (reported.error) return fail(`the token-reporting run failed: ${reported.error.message}`);
   const lines = streams(reported.result.notebook, 'stdout').join('');
   for (const [name, value] of Object.entries(state.decoys)) {
     if (!lines.includes(`${name} ${sha(value)}`)) return fail(`the notebook did not receive ${name} from the function's environment`);
   }
+  // A run that reads Data Commons alone gets its key and not the other (#807).
+  const one = await throughLambda(reporter, process.env, { hosts: [], credentials: ['DC_API_KEY'] });
+  if (one.error) return fail(`the one-source run failed: ${one.error.message}`);
+  const oneLines = streams(one.result.notebook, 'stdout').join('');
+  if (!oneLines.includes(`DC_API_KEY ${sha(state.decoys.DC_API_KEY)}`)) return fail('the one-source run did not receive DC_API_KEY');
+  if (!oneLines.includes(`SOCRATA_APP_TOKEN ${sha('')}`)) return fail('the one-source run received SOCRATA_APP_TOKEN, which it does not read');
 
   const failing = await throughLambda(notebookOf(`raise ValueError(${JSON.stringify(traceMarker)})`));
   if (!failing.error || !String(failing.error.stderr ?? '').includes(traceMarker)) {
@@ -445,7 +455,7 @@ async function stepSecrets() {
   }
   const found = leaks(await functionLog());
   if (found.length) return fail(`the function's log carries ${found.length} of the decoy tokens and the traceback marker`);
-  return ok("the tokens reached the notebook from the function's environment; the function's log carries neither token nor traceback");
+  return ok("the tokens the run reads reached the notebook from the function's environment, and only those; the function's log carries neither token nor traceback");
 }
 
 const MATPLOTLIB_PROBE = [

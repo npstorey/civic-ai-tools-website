@@ -758,6 +758,19 @@ variables (`SOCRATA_APP_TOKEN`, `DC_API_KEY`) and the proxy variables reach
 the container as `docker exec -e NAME`, with the value in the CLI's
 environment, so `ps` on the host or in the app container never shows them.
 
+**What a notebook reaches, on every driver:**
+
+- A notebook's environment holds a source's key only when its run reads that
+  source: `SOCRATA_APP_TOKEN` for a run with a Socrata data step, `DC_API_KEY`
+  for one with a Data Commons data step, neither for a run with no data step.
+- Under `vercel-sandbox`, a notebook's sandbox reaches only the hosts its run's
+  data steps read, and a run with no data step reaches none. A sandbox booted
+  without a snapshot also reaches `pypi.org` and `files.pythonhosted.org` while
+  it installs the pinned stack, and no longer once the notebook is staged.
+- Under `container` and `lambda`, a notebook's reach is the operator's network:
+  `EXECUTOR_CONTAINER_NETWORK` for a container, the function's network for a
+  function.
+
 There is no read-only-root setting yet. Measured: under a read-only root the
 image's matplotlib cache cannot be written, and a notebook that imports
 matplotlib gains the same warning in its signed output. A read-only root also
@@ -798,7 +811,9 @@ comes back in the response.
 - **The data-portal tokens:** `SOCRATA_APP_TOKEN` and `DC_API_KEY` are **set
   on the function, not the app**. The app never sends them, whatever its own
   environment carries, and the handler adds them from the function's
-  environment. A credential's value never appears in a notebook output, a
+  environment, only the ones the run reads (the request names them; a handler
+  older than this adds both, so redeploy the function image after the app).
+  A credential's value never appears in a notebook output, a
   stream event or a record: the handler removes both values, raw, URL-encoded
   and JSON-escaped, from the executed notebook and from the stderr it returns,
   and leaves `[NAME removed]` in their place; the app removes any value it also
@@ -2434,7 +2449,8 @@ They are passed by name only
 process, so no proxy value appears on a command line. With the variables
 unset, every `docker` invocation is exactly what it was before this
 existed. The vercel-sandbox driver passes nothing: a managed sandbox runs
-on the provider's network.
+on the provider's network, and reaches only the hosts its run's data steps
+read.
 
 - **`NO_PROXY` inside the container** is the same composed list:
   `localhost`, `127.0.0.1` and `[::1]` first, then yours. Inside the
@@ -2496,7 +2512,8 @@ CLI login (a development path) calls `https://api.vercel.com` and, when
 the login itself has expired, `https://vercel.com`, both through the
 global `fetch`, which also honours the variables. The notebook's own
 code runs inside the sandbox, on the provider's network, and its
-requests are not this instance's traffic. An instance that executes no
+requests are not this instance's traffic. A notebook's sandbox reaches only
+the hosts its run's data steps read. An instance that executes no
 notebooks makes none of these calls. The snapshot build script
 (`scripts/build-sandbox-snapshot.ts`) is an operator tool that calls the
 SDK directly rather than through this driver, and does not take this

@@ -145,13 +145,16 @@ function readCalls(): Call[] {
 const NOTEBOOK: Notebook = { cells: [], metadata: {}, nbformat: 4, nbformat_minor: 5 } as unknown as Notebook;
 
 /** One run with `vars` set, returning every CLI call it made. Restores `vars` after. */
-async function run(vars: Record<string, string> = {}): Promise<{ calls: Call[]; error?: unknown }> {
+async function run(
+  vars: Record<string, string> = {},
+  opts: Parameters<typeof executeNotebook>[1] = {},
+): Promise<{ calls: Call[]; error?: unknown }> {
   rmSync(LOG, { force: true });
   rmSync(PIDFILE, { force: true });
   for (const [name, value] of Object.entries(vars)) process.env[name] = value;
   let error: unknown;
   try {
-    await executeNotebook(NOTEBOOK);
+    await executeNotebook(NOTEBOOK, opts);
   } catch (err) {
     error = err;
   } finally {
@@ -385,7 +388,8 @@ function leaks(argvs: string[][]): string[] {
 }
 
 test('#521: no argv carries a notebook token, and the container still receives each by name', async () => {
-  const { calls, error } = await run(DECOYS);
+  // A run that reads both sources, so its environment holds both keys (#807).
+  const { calls, error } = await run(DECOYS, { reach: { hosts: [], credentials: ['DC_API_KEY', 'SOCRATA_APP_TOKEN'] } });
   assert.equal(error, undefined, `the run failed: ${String(error)}`);
   assert.equal(calls.length, 6, 'the run did not make the six invocations the leak check reads');
   assert.deepEqual(leaks(calls.map((call) => call.args)), [], 'a token value is on a CLI command line (ps shows argv)');

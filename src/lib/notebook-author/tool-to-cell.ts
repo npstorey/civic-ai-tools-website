@@ -17,6 +17,8 @@ import { FIND_SOURCE_WORDS } from '../sources/copy.ts';
 import { SEARCH_OPERATION, searchNotebookLine, searchQueryOf } from '../flows/search-words.ts';
 import { npmPackageVariants } from '../mcp/registry.ts';
 import { RETIRED_HOSTED_SERVERS, type RetiredHostedServer } from '../mcp/retired-sources.ts';
+import type { NotebookKeyVariable } from '../sandbox/driver.ts';
+import type { HelperId } from './helpers/index.ts';
 
 /**
  * `call`, named by its upstream name (#599 W3). Since W3 a record names a tool
@@ -439,6 +441,25 @@ export interface ToolCellOutput {
   dataFrameVariable: string | null;
   /** Citation entry for the footer cell (dataset_id + portal/url). */
   citation: { id: string; label: string; url: string } | null;
+  /**
+   * What this step's cell reads (#807). Set by the renderer that writes the
+   * cell, so the cell and what it requests come from one place; absent on a
+   * step that writes no request (a failed call, a step that cannot re-run).
+   * `synthesizeNotebook` turns it into the notebook's reach.
+   */
+  reach?: StepReach;
+}
+
+/** What one data step's cell requests, and the key its helper reads. */
+export interface StepReach {
+  /**
+   * The address the cell requests: the one its call named (a Socrata portal,
+   * a CKAN server), or the fixed address the cell's helper requests, read from
+   * that helper's own source.
+   */
+  requests: { address: string } | { helperAddress: HelperId };
+  /** The key the cell's helper reads from its environment, when it reads one. */
+  credential?: NotebookKeyVariable;
 }
 
 export interface ToolCellContext {
@@ -700,6 +721,8 @@ function renderSocrataQueryCell(
     producedDataFrame: true,
     dataFrameVariable: dfVar,
     citation: { id: datasetId, label: datasetId, url: socrataDatasetUrl(portal, datasetId) },
+    // `fetch_socrata` requests `https://<portal>/resource/…` with the token.
+    reach: { requests: { address: `https://${portal}/` }, credential: 'SOCRATA_APP_TOKEN' },
   };
 }
 
@@ -744,6 +767,7 @@ function renderDataCommonsObsCell(
     producedDataFrame: true,
     dataFrameVariable: dfVar,
     citation: { id: variable, label: `${variable} @ ${place}`, url: `https://datacommons.org/place/${place}` },
+    reach: { requests: { helperAddress: 'fetch_data_commons' }, credential: 'DC_API_KEY' },
   };
 }
 
@@ -771,6 +795,7 @@ function renderOpenContextSqlCell(
     dataFrameVariable: dfVar,
     // Boston OpenContext's own id (CKAN-1 P3, A-C6): `boston-ckan` is the Boston pack's `sourceId` since router 0.11.0.
     citation: { id: 'boston-opencontext', label: 'data.boston.gov (CKAN)', url: 'https://data.boston.gov' },
+    reach: { requests: { helperAddress: 'fetch_opencontext' } },
   };
 }
 
@@ -805,6 +830,7 @@ function renderOpenContextQueryCell(
     producedDataFrame: true,
     dataFrameVariable: dfVar,
     citation: { id: resourceId, label: `data.boston.gov: ${resourceId}`, url: `https://data.boston.gov/dataset/${resourceId}` },
+    reach: { requests: { helperAddress: 'fetch_opencontext' } },
   };
 }
 
@@ -843,6 +869,7 @@ function renderCkanDatastoreCell(call: PhaseAToolCall, ctx: ToolCellContext): To
       producedDataFrame: true,
       dataFrameVariable: dfVar,
       citation: { id: `${host} (CKAN SQL)`, label: `${host} (CKAN)`, url: serverUrl },
+      reach: { requests: { address: serverUrl } },
     };
   }
   const resourceId = String(call.args.resource_id ?? '');
@@ -867,6 +894,7 @@ function renderCkanDatastoreCell(call: PhaseAToolCall, ctx: ToolCellContext): To
     producedDataFrame: true,
     dataFrameVariable: dfVar,
     citation: { id: resourceId, label: `${host}: ${resourceId}`, url: `${serverUrl.replace(/\/+$/, '')}/api/3/action/datastore_search?resource_id=${encodeURIComponent(resourceId)}` },
+    reach: { requests: { address: serverUrl } },
   };
 }
 

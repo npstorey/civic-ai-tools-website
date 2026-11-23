@@ -28,6 +28,10 @@ A notebook output never carries the value of a notebook credential: the
 function holds the values, so the handler removes both, by value, from the
 executed notebook and from the stderr it returns (`credential_forms`).
 
+KEYS PER RUN (#807). A notebook's environment holds a source's key only when
+its run reads that source: the handler adds only the function-held tokens the
+request names in `heldVariables`, and a request that names none gets none.
+
 SIZE (ruling D2). The response is serialized here and returned as bytes, which
 the runtime client passes through untouched, so the size checked is the size
 sent. Above RESPONSE_LIMIT_BYTES the handler returns a refusal instead.
@@ -264,16 +268,26 @@ def _argv(command):
     return [cmd, *args]
 
 
-def notebook_env(extra):
+def held_variables(event):
+    """The function-held names the request asks for: `heldVariables`, kept only
+    where it is a list, and only the names in FUNCTION_HELD_VARIABLES. Anything
+    else names none."""
+    named = event.get('heldVariables') if isinstance(event, dict) else None
+    if not isinstance(named, list):
+        return ()
+    return tuple(name for name in FUNCTION_HELD_VARIABLES if name in named)
+
+
+def notebook_env(extra, held=()):
     """The environment the notebook's processes get: the image's own, the proxy and
-    certificate settings, the notebook paths, the function-held tokens, and the
-    payload's variables."""
+    certificate settings, the notebook paths, the function-held tokens the run
+    reads (`held`), and the request's own variables."""
     env = {name: os.environ[name] for name in IMAGE_VARIABLES + PROXY_VARIABLES if name in os.environ}
     env.update({name: os.environ[name] for name in CA_VARIABLES if os.environ.get(name)})
     env['HOME'] = NOTEBOOK_HOME
     env['MPLCONFIGDIR'] = NOTEBOOK_MPLCONFIGDIR
     for name in FUNCTION_HELD_VARIABLES:
-        if os.environ.get(name):
+        if name in held and os.environ.get(name):
             env[name] = os.environ[name]
     for key, value in (extra or {}).items():
         if isinstance(key, str) and isinstance(value, str) and key not in FUNCTION_HELD_VARIABLES:
@@ -353,7 +367,7 @@ def run(event, request_id, remaining_s, started):
     for item in files:
         with open(item['path'], 'w', encoding='utf-8') as f:
             f.write(item['content'])
-    env = notebook_env(command.get('env'))
+    env = notebook_env(command.get('env'), held_variables(event))
 
     # The session cap from the app, and the function's own timeout, whichever ends first.
     cap_s = timeout_ms / 1000.0 - (time.monotonic() - started)

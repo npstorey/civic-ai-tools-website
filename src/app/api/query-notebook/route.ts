@@ -480,7 +480,7 @@ export async function POST(request: NextRequest) {
 
       await emit({ type: 'phase', name: 'C', message: 'Executing in sandbox…' });
       const execStart = Date.now();
-      const execution = await executeNotebook(synthesis.notebook);
+      const execution = await executeNotebook(synthesis.notebook, { reach: synthesis.reach });
       // A NOTEBOOK OUTPUT NEVER CARRIES THE VALUE OF A NOTEBOOK CREDENTIAL
       // (#516). The notebook ran with both in its environment
       // (`buildNotebookEnv`), and the model wrote its cells, so any output can

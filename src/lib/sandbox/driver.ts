@@ -99,6 +99,39 @@ export function executorToolingPipSpecs(): string[] {
   return Object.entries(EXECUTOR_TOOLING_PACKAGES).map(([name, version]) => `${name}==${version}`);
 }
 
+/**
+ * The keys a notebook's data steps read from their environment: the Socrata
+ * app token (`fetch_socrata.py`) and the Data Commons key
+ * (`fetch_data_commons.py`), in that order.
+ */
+export const NOTEBOOK_KEY_VARIABLES = ['SOCRATA_APP_TOKEN', 'DC_API_KEY'] as const;
+export type NotebookKeyVariable = (typeof NOTEBOOK_KEY_VARIABLES)[number];
+
+/**
+ * What one notebook's run reads, as `synthesizeNotebook` states it from the
+ * cells it rendered (#807). Two rules follow from it:
+ *   - a notebook's sandbox reaches only the hosts its run's data steps read
+ *     (`hosts`; none at all when it has no data step);
+ *   - a notebook's environment holds a source's key only when its run reads
+ *     that source (`credentials`).
+ * `hosts` is lower-cased, unique and sorted; `credentials` is unique and
+ * sorted. An executor given no reach treats it as empty: no host, no key.
+ */
+export interface NotebookReach {
+  hosts: string[];
+  credentials: NotebookKeyVariable[];
+}
+
+/**
+ * Whether `host` is a plain domain name: lower-case letters, digits and
+ * hyphens in two or more labels, the last starting with a letter. A host a
+ * network allowlist can be given as is: no wildcard, no IP literal, no port,
+ * no single label.
+ */
+export function isPlainHostName(host: string): boolean {
+  return /^(?=.{1,253}$)([a-z0-9]([a-z0-9-]{0,61}[a-z0-9])?\.)+[a-z]([a-z0-9-]{0,61}[a-z0-9])?$/.test(host);
+}
+
 /** A single command to run inside an executor session. */
 export interface ExecutorCommand {
   cmd: string;
@@ -156,13 +189,21 @@ export interface CreateSessionOptions {
    * on overrun, which surfaces as a failed in-flight command.
    */
   timeoutMs: number;
-  /** Env visible to the executed notebook (data-portal tokens + caller extras). */
+  /** Env visible to the executed notebook (the keys its run reads + caller extras). */
   env: Record<string, string>;
   /**
    * vercel-sandbox driver only: snapshot to boot from. Ignored by the
    * container driver, whose prebuilt image is the equivalent concept.
    */
   snapshotId?: string;
+  /**
+   * vercel-sandbox driver only: the hosts the notebook's data steps read
+   * (`NotebookReach.hosts`), the only hosts its sandbox may reach once the
+   * notebook is staged. Absent or empty is none: the sandbox is denied all
+   * outbound access. The container's network is the operator's
+   * (`EXECUTOR_CONTAINER_NETWORK`).
+   */
+  hosts?: readonly string[];
 }
 
 /** A driver whose runtime lives across calls: create, exec, read, stop. */
@@ -184,6 +225,11 @@ export interface NotebookRun {
   files: ReadonlyArray<{ path: string; content: string }>;
   /** The nbconvert command, with the notebook's environment. */
   command: { cmd: string; args: string[]; env: Record<string, string> };
+  /**
+   * The function-held keys this run reads (`NotebookReach.credentials`): the
+   * only ones the runtime adds to the notebook's environment from its own.
+   */
+  heldVariables: NotebookKeyVariable[];
   /** The file the command writes: the executed notebook. */
   readBack: string;
   /** The Python-version probe, run after the command. */

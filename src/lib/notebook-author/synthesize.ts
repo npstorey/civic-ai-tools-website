@@ -24,6 +24,7 @@ import { getPublicationHost } from '../site-config.ts';
 import { coverPortals } from './cover-portals.ts';
 import { getHelperSource, helpersForToolNames, type HelperId } from './helpers/index.ts';
 import { buildMetricCaptureCell } from './phase-d.ts';
+import { isPlainHostName, type NotebookReach } from '../sandbox/driver.ts';
 import {
   CELL_4_HEADER,
   NOTEBOOK_EXTENSION_KEY,
@@ -40,6 +41,7 @@ import {
 } from './prompt.ts';
 import {
   type PhaseAToolCall,
+  type StepReach,
   countAnalysisSteps,
   countReproducibleFetches,
   renderDiscoverySummaryCell,
@@ -73,6 +75,38 @@ export interface SynthesisOutputs {
   embeddedHelpers: HelperId[];
   /** Structured summary parsed from the LLM's reproducible-mode output, if any. */
   summary: StructuredSummary | null;
+  /**
+   * What the notebook's run reads, from the data steps it rendered (#807): the
+   * hosts their helpers request and the keys they read. The executor reads
+   * this and nothing else: no other cell adds a host or a key.
+   */
+  reach: NotebookReach;
+}
+
+/**
+ * The address a fixed-host helper requests (its `url = "https://<host>/…"`
+ * line), read from the helper's own source, which is the code its cell runs.
+ * Throws for a helper that states none: `fetch_socrata` and `fetch_ckan`
+ * request the address their call names instead.
+ */
+function helperAddress(id: HelperId): string {
+  const match = /\burl = "(https:\/\/[^/"]+\/)/.exec(getHelperSource(id));
+  if (!match) throw new Error(`the ${id} helper states no fixed address it requests`);
+  return match[1]!;
+}
+
+/**
+ * The host a data step's cell requests, lower-cased, when it is a plain domain
+ * name; otherwise none, so a request to it is refused rather than widened.
+ */
+function stepHost(step: StepReach): string | null {
+  const address = 'address' in step.requests ? step.requests.address : helperAddress(step.requests.helperAddress);
+  try {
+    const host = new URL(address).hostname.toLowerCase();
+    return isPlainHostName(host) ? host : null;
+  } catch {
+    return null;
+  }
 }
 
 function buildHelperCellSource(helperIds: readonly HelperId[]): string {
@@ -131,6 +165,8 @@ export function synthesizeNotebook(inputs: PhaseAOutputs): SynthesisOutputs {
   // Steps 5..N — one (markdown + code) pair per fetching tool call
   const dataFrameVariables: string[] = [];
   const citationMap = new Map<string, { id: string; label: string; url: string }>();
+  const reachedHosts = new Set<string>();
+  const readKeys = new Set<NotebookReach['credentials'][number]>();
   let dataFrameIndex = 1;
   for (const call of inputs.toolCalls) {
     const rendered = renderFetchToolCell(call, {
@@ -144,6 +180,11 @@ export function synthesizeNotebook(inputs: PhaseAOutputs): SynthesisOutputs {
     }
     if (rendered.citation) {
       citationMap.set(rendered.citation.id, rendered.citation);
+    }
+    if (rendered.reach) {
+      const host = stepHost(rendered.reach);
+      if (host) reachedHosts.add(host);
+      if (rendered.reach.credential) readKeys.add(rendered.reach.credential);
     }
     // Only a call that actually produced a DataFrame consumes a step number.
     // Since #321 a rendered call is no longer necessarily a fetching one — a
@@ -203,5 +244,6 @@ export function synthesizeNotebook(inputs: PhaseAOutputs): SynthesisOutputs {
     dataFrameVariables,
     embeddedHelpers: helperIds,
     summary: parsed.summary,
+    reach: { hosts: [...reachedHosts].sort(), credentials: [...readKeys].sort() },
   };
 }

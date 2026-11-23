@@ -345,7 +345,18 @@ mcp.unref();
 const MCP_URL = `http://127.0.0.1:${(mcp.address() as AddressInfo).port}/mcp`;
 
 const { startScriptedModelServer } = await import('../../lib/model-loop/test-harness.ts');
-const scripted = await startScriptedModelServer([{ content: 'Twelve complaints were recorded.' }]);
+// A run that reads both sources, so the notebook's environment holds both keys:
+// a notebook's environment holds a source's key only when its run reads that
+// source (#807).
+const scripted = await startScriptedModelServer([
+  {
+    toolCalls: [
+      { id: 'p9-socrata', name: 'socrata__get_data', args: { type: 'query', portal: 'data.example.org', dataset_id: 'abcd-1234', query: 'SELECT count(*)' } },
+      { id: 'p9-dc', name: 'data_commons__get_observations', args: { variable_dcid: 'Count_Person', place_dcid: 'geoId/36' } },
+    ],
+  },
+  { content: 'Twelve complaints were recorded.' },
+]);
 scripted.server.unref();
 
 // --- Environment, set before any app module loads -------------------------------

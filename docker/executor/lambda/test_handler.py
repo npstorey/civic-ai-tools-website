@@ -73,7 +73,7 @@ class NotebookEnvironment(unittest.TestCase):
     def test_function_held_tokens_come_from_the_function_and_cannot_be_overridden(self):
         os.environ['SOCRATA_APP_TOKEN'] = 'from-the-function'
         os.environ.pop('DC_API_KEY', None)
-        env = handler.notebook_env({'SOCRATA_APP_TOKEN': 'from-the-payload', 'EXTRA': 'x'})
+        env = handler.notebook_env({'SOCRATA_APP_TOKEN': 'from-the-request', 'EXTRA': 'x'}, ('SOCRATA_APP_TOKEN', 'DC_API_KEY'))
         self.assertEqual(env['SOCRATA_APP_TOKEN'], 'from-the-function')
         self.assertNotIn('DC_API_KEY', env)
         self.assertEqual(env['EXTRA'], 'x')
