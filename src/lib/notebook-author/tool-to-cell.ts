@@ -816,9 +816,12 @@ function renderOpenContextQueryCell(
  *
  * A `datastore_search` cell re-runs the call with every argument it carried, as the server sends them (the fork's
  * `src/tools/datastore.ts` at `pin`): `resource_id`, `q`, `filters`, `limit`, `offset`, `fields`, `sort` and
- * `distinct`. An absent `limit` is the server's default, 100 (the helper's own default is the same), and `limit: 0`
- * stays 0. `response_format` is not passed: it chooses only how the server writes the same records for the model (a
- * markdown table or compact JSON), and the portal's action takes no such parameter.
+ * `distinct`. For `q` the cell mirrors upstream v0.4.146, where `q` is a string or an object such as
+ * `{"column": "word"}`: the cell writes an object as a Python dict, and `fetch_ckan` sends it as compact JSON, as the
+ * server sends it (`JSON.stringify`), and a string as is. An absent `limit` is the server's default, 100 (the helper's
+ * own default is the same), and `limit: 0` stays 0. `response_format` is not passed: it chooses only how the server
+ * writes the same records for the model (a markdown table or compact JSON), and the portal's action takes no such
+ * parameter.
  */
 function renderCkanDatastoreCell(call: PhaseAToolCall, ctx: ToolCellContext): ToolCellOutput {
   const dfVar = `df${ctx.dataFrameIndex}`;
