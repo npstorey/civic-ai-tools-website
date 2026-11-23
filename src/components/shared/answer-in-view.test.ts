@@ -83,6 +83,19 @@ let answerTop: number | null = 300;
 const windowScrolls: Array<{ top?: number; behavior?: string }> = [];
 /** `scrollIntoView` calls, recorded with the element's part. */
 const intoView: Array<{ part: unknown; options: unknown }> = [];
+/** Calls to `focus` on any element the document handed out, recorded (focus never moves). */
+const focusCalls: unknown[] = [];
+
+/**
+ * FX2b: the author lines' layout. FX2's tests model the answer part's box only, and their document hands out no
+ * siblings, so the surface measures the answer part as FX2 shipped it. With `authorLayout` on (FX2b's tests), the
+ * document also answers `previousElementSibling` from the rendered tree, each author line (`[data-author]`) directly
+ * before an answer part is `AUTHOR_LINE_HEIGHT` px tall and sits above it, and an answer part after the first (the
+ * closed disclosure's F) sits 3,000 px lower, so a surface that measured the wrong one would scroll by a different amount.
+ */
+let authorLayout = false;
+/** A 12 px author line at the page's line height, plus its 8 px bottom margin (`AnswerView.tsx`, `AUTHOR_LINE_STYLE`). */
+const AUTHOR_LINE_HEIGHT = 26;
 
 function* within(node: unknown): Generator<HostElement> {
   if (Array.isArray(node)) { for (const c of node) yield* within(c); return; }
@@ -101,15 +114,72 @@ function select(selector: string, scope?: HostElement): HostElement[] {
   return all.filter((el) => pairs.every(([k, v]) => el.props[k] === v));
 }
 
+/** A host element's host children, in order (arrays flattened; text skipped). */
+function hostChildren(element: HostElement): HostElement[] {
+  const out: HostElement[] = [];
+  const walk = (node: unknown) => {
+    if (Array.isArray(node)) { for (const c of node) walk(c); return; }
+    if (node !== null && typeof node === 'object' && 'props' in (node as object) && typeof (node as HostElement).type === 'string') out.push(node as HostElement);
+  };
+  walk(element.props.children);
+  return out;
+}
+/** The rendered element's previous element sibling, or null. */
+function previousSibling(element: HostElement): HostElement | null {
+  for (const parent of page?.elements() ?? []) {
+    const kids = hostChildren(parent);
+    const at = kids.indexOf(element);
+    if (at >= 0) return at > 0 ? kids[at - 1] : null;
+  }
+  return null;
+}
+/** The rendered element's next element siblings, in order. */
+function nextSiblings(element: HostElement): HostElement[] {
+  for (const parent of page?.elements() ?? []) {
+    const kids = hostChildren(parent);
+    const at = kids.indexOf(element);
+    if (at >= 0) return kids.slice(at + 1);
+  }
+  return [];
+}
+/** An answer part's top: the first one's is `answerTop`; with `authorLayout`, a later one's is 3,000 px lower. */
+function answerPartTop(element: HostElement): number {
+  const base = answerTop ?? 0;
+  if (!authorLayout) return base;
+  const parts = (page?.elements() ?? []).filter((el) => el.props['data-part'] === 'answer');
+  return parts.indexOf(element) <= 0 ? base : base + 3000;
+}
+/** With `authorLayout`: an author line directly before an answer part, stacked above it; else null. */
+function authorLineTop(element: HostElement): number | null {
+  if (!authorLayout || element.props['data-author'] === undefined) return null;
+  let lines = 1;
+  for (const next of nextSiblings(element)) {
+    if (next.props['data-part'] === 'answer') return answerPartTop(next) - AUTHOR_LINE_HEIGHT * lines;
+    if (next.props['data-author'] === undefined) return null;
+    lines += 1;
+  }
+  return null;
+}
+
 function nodeFor(element: HostElement): Record<string, unknown> {
   const box = () => {
-    const top = element.type === 'header' ? 0 : element.props['data-part'] === 'answer' && answerTop !== null ? answerTop : 0;
-    const bottom = element.type === 'header' ? HEADER_BOTTOM : top + 200;
+    const author = authorLineTop(element);
+    const top = element.type === 'header' ? 0
+      : element.props['data-part'] === 'answer' && answerTop !== null ? answerPartTop(element)
+        : author !== null ? author : 0;
+    const bottom = element.type === 'header' ? HEADER_BOTTOM : author !== null ? top + AUTHOR_LINE_HEIGHT : top + 200;
     return { top, bottom, left: 0, right: 0, width: 0, height: bottom - top, x: 0, y: top };
   };
   return {
     getBoundingClientRect: box,
     getAttribute: (name: string) => (element.props[name] === undefined ? null : String(element.props[name])),
+    hasAttribute: (name: string) => element.props[name] !== undefined,
+    get previousElementSibling() {
+      if (!authorLayout) return undefined;
+      const prev = previousSibling(element);
+      return prev ? nodeFor(prev) : null;
+    },
+    focus: () => { focusCalls.push(element.props['data-part'] ?? element.type); },
     querySelector: (s: string) => { const [found] = select(s, element); return found ? nodeFor(found) : null; },
     querySelectorAll: (s: string) => select(s, element).map(nodeFor),
     scrollIntoView: (options: unknown) => { intoView.push({ part: element.props['data-part'], options }); },
@@ -220,6 +290,8 @@ afterEach(() => {
   answerTop = 300;
   windowScrolls.length = 0;
   intoView.length = 0;
+  focusCalls.length = 0;
+  authorLayout = false;
 });
 
 const settle = async (surface: Surface, ms = 50) => {
@@ -524,3 +596,110 @@ for (const [label, decision, sentence, path] of [
     assert.equal(regions.length, 1, `expected one polite live region holding "${sentence}"; the polite regions read: ${JSON.stringify(politeRegions(p).map((el) => textOf(el)))}`);
   });
 }
+
+// --- FX2b: the answer arrives with its author line in view (Seat ruling 7080749045) -----------------------------------
+//
+// THE RULING. The answer is drawn under its author line or lines (`<p data-author>`, "Answer, written by the model …"),
+// so "the answer's top under the header" (D5 = A) is the topmost author line's top. The surface measures and moves from
+// the first of the `[data-author]` elements directly before the answer part, and from the answer part when there is
+// none; "in view" moves with it. There can be zero, one or two author lines (`adapt-notebook.ts:218-226`).
+//
+// WHAT MAKES IT ABLE TO FAIL. At the base (`b4e5319`) the surface measures the answer part: after its move the author
+// line sits 26 px per line above the 16 px gap, behind the header, and an arrival whose part is in view but whose author
+// line is behind the header moves nothing. The no-author and in-view cases are the pins, green at both.
+
+/** A notebook whose rendering cell holds `outputs`: the shape that decides how many author lines the answer has. */
+const notebookWith = (outputs: Json[]) => ({
+  ...notebookOf(false),
+  cells: [
+    { cell_type: 'markdown', metadata: {}, source: ['# Fixture notebook\n'] },
+    { cell_type: 'code', metadata: { role: 'synthesis' }, execution_count: 1, source: ['display(answer)\n'], outputs },
+  ],
+});
+const ONE_LINE = [{ output_type: 'display_data', metadata: {}, data: { 'text/markdown': RUN_ANSWER } }];
+const TWO_LINES = [{ output_type: 'display_data', metadata: {}, data: { 'text/html': '<table><tr><td>RUNANSWER-fx2b</td><td>42</td></tr></table>', 'text/plain': '42' } }];
+const NO_LINE = [{ output_type: 'error', ename: 'ValueError', evalue: 'RUNANSWER-fx2b', traceback: ['ValueError: RUNANSWER-fx2b'] }];
+
+/** The author lines directly before the main (first) answer part, in order. */
+function authorLinesOfMainAnswer(surface: Surface): HostElement[] {
+  const [main] = answersOn(surface);
+  assert.ok(main, 'premise: no answer part');
+  const lines: HostElement[] = [];
+  for (let prev = previousSibling(main); prev && prev.props['data-author'] !== undefined; prev = previousSibling(prev)) lines.unshift(prev);
+  return lines;
+}
+
+/** A notebook run on /ask whose answer arrives with `outputs`, its part's top at `top`; returns the scrolls since the arrival. */
+async function notebookArrival(outputs: Json[], top: number): Promise<{ page: Surface; made: Array<{ top?: number; behavior?: string }> }> {
+  SIGNED_IN();
+  answers();
+  await consentWith();
+  authorLayout = true;
+  answerTop = top;
+  const p = await mountPage(ASK_NOTEBOOK());
+  const stream = await ask(p);
+  await notebookSteps(p, stream);
+  const from = windowScrolls.length;
+  stream.push({ type: 'notebook', notebook: notebookWith(outputs), sandboxId: 'fixture-sandbox-fx2', executionDuration_ms: 4200, validation: { ok: true, issues: [] } });
+  await settle(p, MEASURE_WAIT);
+  await notebookEnds(p, stream);
+  return { page: p, made: windowScrolls.slice(from) };
+}
+
+/** After the one scroll, the topmost author line's top lands at or below the header's bottom, within the 16 px gap and a pixel. */
+function assertAuthorLineUnderHeader(made: Array<{ top?: number }>, authorTop: number, where: string): void {
+  assert.equal(made.length, 1, `${where}: expected one scroll of the window: ${JSON.stringify(made)}`);
+  const landed = authorTop - (made[0].top ?? NaN);
+  assert.ok(landed >= HEADER_BOTTOM && landed <= HEADER_BOTTOM + 17, `${where}: after the move the topmost author line's top is at ${landed}, not under the header's bottom (${HEADER_BOTTOM})`);
+  assert.deepEqual(focusCalls, [], `${where}: focus was moved`);
+}
+
+test('FX2b criterion 1, one author line, the notebook path: an answer that arrives out of view is moved so its author line is under the header, measured from the main answer, not the disclosure\'s', async () => {
+  const { page: p, made } = await notebookArrival(ONE_LINE, -400);
+  const lines = authorLinesOfMainAnswer(p);
+  assert.deepEqual(lines.map((l) => l.props['data-author']), ['answer'], 'premise: one author line over the answer');
+  assert.ok(textOf(lines[0]).startsWith('Answer, written by the model'), `premise: the author line reads ${textOf(lines[0])}`);
+  assert.ok(answersOn(p).length >= 2, 'premise: the disclosure places a second answer part later in the document');
+  assertAuthorLineUnderHeader(made, -400 - AUTHOR_LINE_HEIGHT, 'one author line');
+});
+
+test('FX2b criterion 1, two author lines (answer, then computed), the notebook path: the top one comes under the header', async () => {
+  const { page: p, made } = await notebookArrival(TWO_LINES, -400);
+  assert.deepEqual(authorLinesOfMainAnswer(p).map((l) => l.props['data-author']), ['answer', 'computed'], 'premise: two author lines over the answer');
+  assertAuthorLineUnderHeader(made, -400 - 2 * AUTHOR_LINE_HEIGHT, 'two author lines');
+});
+
+test('FX2b criterion 1, one author line, the chat path (the home page): at the first content, the author line comes under the header', async () => {
+  answers();
+  await consentWith();
+  authorLayout = true;
+  answerTop = -400;
+  const p = await mountPage(h(Home));
+  const stream = await ask(p);
+  await chatSteps(p, stream);
+  const from = windowScrolls.length;
+  stream.push({ type: 'token', panel: 'withMcp', content: 'RUNANSWER-fx2b: ' });
+  await settle(p, MEASURE_WAIT);
+  assert.deepEqual(authorLinesOfMainAnswer(p).map((l) => l.props['data-author']), ['answer'], 'premise: one author line over the answer');
+  assertAuthorLineUnderHeader(windowScrolls.slice(from), -400 - AUTHOR_LINE_HEIGHT, 'the chat path');
+});
+
+test('FX2b criterion 2: an arrival whose answer part is in view but whose author line is behind the header moves once, and the author line comes under the header', async () => {
+  // The part's top, 70, is under the header's bottom (64); its author line's top, 44, is behind the header.
+  const { made } = await notebookArrival(ONE_LINE, 70);
+  assertAuthorLineUnderHeader(made, 70 - AUTHOR_LINE_HEIGHT, 'part in view, author line behind the header');
+});
+
+test('FX2b pin: an answer with no author line (a cell that only raised an error) moves exactly as at the base, from the answer part', async () => {
+  const { page: p, made } = await notebookArrival(NO_LINE, -400);
+  assert.deepEqual(authorLinesOfMainAnswer(p), [], 'premise: no author line over the answer');
+  assert.deepEqual(made, [{ top: -400 - HEADER_BOTTOM - 16, behavior: 'smooth' }], 'the answer with no author line did not move as at the base');
+  assert.deepEqual(focusCalls, [], 'focus was moved');
+});
+
+test('FX2b pin: an arrival whose author line is already in view moves nothing', async () => {
+  const { page: p, made } = await notebookArrival(ONE_LINE, 300);
+  assert.equal(authorLinesOfMainAnswer(p).length, 1, 'premise: one author line over the answer');
+  assert.deepEqual(made, [], 'the page moved although the author line arrived in view');
+  assert.deepEqual(focusCalls, [], 'focus was moved');
+});

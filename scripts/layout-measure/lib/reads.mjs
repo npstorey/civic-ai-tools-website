@@ -32,14 +32,21 @@ export const LIB = `
 /** The answer element whose text carries `marker` (the event file's `answerMarker`). */
 export const ANSWER = (marker) => `[...document.querySelectorAll('[data-part="answer"]')].find((a) => a.textContent.includes(${JSON.stringify(marker)})) || null`;
 
-/** One timeline row: scroll, the prompt's, the card's and the answer's boxes, the header and the bar, and focus. */
+/**
+ * One timeline row: scroll, the prompt's, the card's and the answer's boxes, the header and the bar, and focus. FIX-1
+ * FX2b: also the topmost author line directly before the answer part (`<p data-author>`; zero, one or two of them), as
+ * `author`, null when there is none. Recorded only.
+ */
 export const SNAP = (marker) => `(() => {${LIB}
   const header = document.querySelector('header');
+  const answerEl = ${ANSWER(marker)};
+  let authorEl = null;
+  for (let prev = answerEl ? answerEl.previousElementSibling : null; prev && prev.hasAttribute('data-author'); prev = prev.previousElementSibling) authorEl = prev;
   return {
     t: Math.round(performance.now()), scrollY: f1(scrollY), vh: innerHeight, docHeight: document.documentElement.scrollHeight,
     header: R(header), prompt: R(${Q.prompt}),
     card: R(document.querySelector('[data-part="consent-step"][data-consent-place="steps"]')),
-    answer: R(${ANSWER(marker)}), bar: R(${Q.bar}),
+    answer: R(answerEl), author: R(authorEl), authorLines: authorEl ? authorEl.getAttribute('data-author') : null, bar: R(${Q.bar}),
     active: describe(document.activeElement),
   };
 })()`;

@@ -4,7 +4,8 @@
  * The answer, for a reader who scrolled, and the surface's two announcements (FIX-1 FX2, website #807; G0's rulings D4
  * to D8 on #802). Used by `QuerySurface` only.
  *
- * THE MOVE (D4 = A, D5 = A). When a run's answer first renders with content, the surface measures its top: if it is
+ * THE MOVE (D4 = A, D5 = A). When a run's answer first renders with content, the surface measures its top (its topmost
+ * author line's, when it has one: FX2b, Seat ruling 7080749045): if it is
  * not between the sticky header's bottom and the viewport's bottom, the window scrolls once so the top sits just under
  * the header, with the surface's own behaviour (`preferredScrollBehavior`: at once under reduced motion). An answer
  * that arrives in view moves nothing. Keyboard focus is never moved. The measure waits a moment after the answer
@@ -40,6 +41,17 @@ function headerBottom(): number {
   return header && header.bottom > 0 ? header.bottom : 0;
 }
 
+/**
+ * The answer's top as the page draws it (FIX-1 FX2b, Seat ruling 7080749045): the topmost of the author lines directly
+ * before the answer part (`<p data-author>`, "Answer, written by the model …"; zero, one or two of them,
+ * `adapt-notebook.ts`), or the answer part itself when it has none.
+ */
+export function answerTopElement(answer: Element): Element {
+  let top = answer;
+  for (let prev = answer.previousElementSibling; prev && prev.hasAttribute?.('data-author'); prev = prev.previousElementSibling) top = prev;
+  return top;
+}
+
 /** The answer's top is in view: between the header's bottom and the viewport's bottom (D4). */
 export function answerTopInView(top: number, header: number, viewportHeight: number): boolean {
   return top >= header - 0.5 && top < viewportHeight;
@@ -47,12 +59,13 @@ export function answerTopInView(top: number, header: number, viewportHeight: num
 
 /**
  * Brings the answer's top under the header when it is out of view (D5): one scroll of the window. Returns what it did.
- * `root` is the results container; the document when it is not attached.
+ * `root` is the results container; the document when it is not attached. The answer part is the first in the document
+ * (the main one; the disclosure's second placement comes later), and its top is its topmost author line's (FX2b).
  */
 export function bringAnswerIntoView(root: ParentNode | null): 'moved' | 'in-view' | 'absent' {
   if (typeof document === 'undefined' || typeof window === 'undefined') return 'absent';
   const answer = (root ?? document).querySelector?.('[data-part="answer"]');
-  const box = answer?.getBoundingClientRect?.();
+  const box = answer ? answerTopElement(answer).getBoundingClientRect?.() : undefined;
   if (!box) return 'absent';
   const top = headerBottom();
   if (answerTopInView(box.top, top, window.innerHeight)) return 'in-view';
