@@ -150,7 +150,7 @@ const BARE_CLAIM = 'complete, reproducible analysis';
 
 /**
  * The phrase both generators must use for a step that is not re-run. Both
- * already own a copy — `#### Not reproduced:` in `tool-to-cell.ts:400`/`:699`,
+ * already own a copy — `#### Not reproduced:` in `tool-to-cell.ts:278`,
  * `*Not reproduced below.*` in `notebook.ts:153` — so this is the word the two
  * documents already share, not a new vocabulary invented for the test.
  */
