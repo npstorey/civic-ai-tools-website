@@ -1,5 +1,5 @@
 /**
- * The site sends a Content-Security-Policy (report-only) and a Referrer-Policy.
+ * The site enforces its Content-Security-Policy, and sends a Referrer-Policy.
  *
  * Set from `next.config.ts`'s `headers()` on every path, so every response
  * carries them: pages, the record page, `/ask`, sign-in, the talk decks (a
@@ -14,9 +14,9 @@
  *     badge), and the configured analytics service's own image hosts, from
  *     `resolveAnalytics`, the resolver that picks the tag;
  *   - `object-src 'none'`, `base-uri 'self'`, `frame-ancestors 'none'`.
- * Report-only: a browser reports what the policy would refuse and refuses
- * nothing. `script-src`, `default-src`, `connect-src` and `form-action` are
- * not set here.
+ * Enforced: a browser refuses what the policy does not admit, and reports it
+ * in its console. `script-src`, `default-src`, `connect-src` and
+ * `form-action` are not set here.
  *
  * THE REFERRER-POLICY is `strict-origin-when-cross-origin`, the browsers' own
  * default, sent so it does not depend on the browser.
@@ -55,7 +55,7 @@ export function securityHeaderRoutes(env: AnalyticsEnv): { source: string; heade
     {
       source: '/:path*',
       headers: [
-        { key: 'Content-Security-Policy-Report-Only', value: contentSecurityPolicy(env) },
+        { key: 'Content-Security-Policy', value: contentSecurityPolicy(env) },
         { key: 'Referrer-Policy', value: REFERRER_POLICY },
       ],
     },

@@ -37,8 +37,8 @@ const nextConfig: NextConfig = {
   experimental: {
     agentUpgrade: false,
   },
-  // The site sends a Content-Security-Policy (report-only) and a
-  // Referrer-Policy on every path (`src/lib/security-headers.ts`). The
+  // The site enforces its Content-Security-Policy, and sends a
+  // Referrer-Policy, on every path (`src/lib/security-headers.ts`). The
   // analytics part is read here, at build, as the analytics tag is.
   async headers() {
     return securityHeaderRoutes({
