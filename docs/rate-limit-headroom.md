@@ -19,7 +19,7 @@
   - signed-in → the GitHub user id (`src/app/api/compare-stream/route.ts:38`, `src/app/api/rate-limit/route.ts:13`)
   - anonymous → `x-forwarded-for`'s first IP (`compare-stream/route.ts:37`)
 - The counter is keyed `rate:{identifier}:{YYYY-MM-DD}` in Vercel KV (Upstash), 48 h expiry, with an in-memory fallback when KV is absent. The day boundary is **UTC** (`getToday()`).
-- `checkRateLimit` / `incrementRateLimit` pick the ceiling with `isAuthenticated ? AUTHENTICATED_LIMIT : ANONYMOUS_LIMIT`.
+- `checkRateLimit` / `consumeRateLimit` pick the ceiling with `isAuthenticated ? AUTHENTICATED_LIMIT : ANONYMOUS_LIMIT`.
 
 ### The real demo risk: shared NAT collapses the room into one bucket
 
@@ -65,7 +65,7 @@ Make `ANONYMOUS_LIMIT` (and optionally `AUTHENTICATED_LIMIT`) read an env overri
 
 Exempt a specific identifier (the venue egress IP) or a shared bypass token from the limit entirely.
 
-- **Touch-points:** `src/lib/rate-limit.ts` (add an `isExempt(identifier)` consulted by `checkRateLimit` + `incrementRateLimit`, e.g. against `process.env.RATE_LIMIT_ALLOWLIST` of comma-separated IPs, or a `process.env.DEMO_BYPASS_TOKEN` matched from a request header), **and** `src/app/api/compare-stream/route.ts:42-48` (skip the `isRateLimited` gate when exempt). Needs the venue egress IP known in advance, or a bypass token loaded on the demo machine.
+- **Touch-points:** `src/lib/rate-limit.ts` (add an `isExempt(identifier)` consulted by `checkRateLimit` + `consumeRateLimit`, e.g. against `process.env.RATE_LIMIT_ALLOWLIST` of comma-separated IPs, or a `process.env.DEMO_BYPASS_TOKEN` matched from a request header), **and** `src/app/api/compare-stream/route.ts:42-48` (skip the `isRateLimited` gate when exempt). Needs the venue egress IP known in advance, or a bypass token loaded on the demo machine.
 - **Pros:** precisely targets the demo without globally loosening anything; can be effectively unlimited for the exempt identity.
 - **Cons:** most code and most risk. A new bypass path is a security surface that must be removed or tightly scoped afterward; a token in a query string can leak; an IP allowlist breaks if the venue's NAT egress differs from what you pinned. Highest complexity for a one-day need.
 
