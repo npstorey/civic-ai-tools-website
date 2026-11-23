@@ -38,7 +38,7 @@ const SIGN_IN_GATED = isSignInGateEnabled();
 /**
  * Pick the ceiling for a request. Pure — every input is a parameter — so the
  * tier selection is testable without mutating process.env or reloading the
- * module. `checkRateLimit`/`incrementRateLimit` call it with the module
+ * module. `checkRateLimit`/`consumeRateLimit` call it with the module
  * constants above.
  *
  * WHERE THE APP TIER APPLIES (v0.1.0 reading, deliberately conservative):
@@ -215,7 +215,25 @@ export async function checkRateLimit(
   };
 }
 
-export async function incrementRateLimit(
+/**
+ * The rate limit counts a request before it checks it (FIX-1 FX-S2). The one
+ * call a route that runs a question makes: the count goes up first, in one
+ * step (the key-value store's `incr` is atomic; the memory store's read and
+ * write run with no await between them), and the request is refused when the
+ * new count is over the limit. Requests sent at once are therefore counted one
+ * after another, and no more of them pass than the allowance holds.
+ *
+ * WHAT IT RETURNS is the allowance as this request found it: `remaining` is
+ * the limit less the count before this request, clamped at 0, which is what
+ * `checkRateLimit` read for it when the check came first. So
+ * `isRateLimited(info)` holds exactly when the new count is over the limit,
+ * and the 429 body (`{ error, rateLimit }`) is what it was.
+ *
+ * WHAT A REFUSED REQUEST LEAVES: the count it added. A refused request now
+ * counts one past the limit, where the check-first order left the count at the
+ * limit; `/api/rate-limit` reads `remaining` 0 either way, since it is clamped.
+ */
+export async function consumeRateLimit(
   identifier: string,
   isAuthenticated: boolean
 ): Promise<RateLimitInfo> {
@@ -244,7 +262,8 @@ export async function incrementRateLimit(
   }
 
   return {
-    remaining: Math.max(0, limit - count),
+    // The count before this request: `count` includes it.
+    remaining: Math.max(0, limit - (count - 1)),
     limit,
     resets_at: getResetTime(),
     authenticated: isAuthenticated,

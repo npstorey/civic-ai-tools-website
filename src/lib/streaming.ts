@@ -188,9 +188,17 @@ export interface ErrorEvent extends StreamEvent {
 // place error-to-copy mapping lives, consumed by every SSE-consuming hook.
 
 /**
- * The fourteen kinds every streaming failure classifies into. Single-sourced as
+ * The fifteen kinds every streaming failure classifies into. Single-sourced as
  * an array rather than a bare union so the round-trip test can enumerate them
- * (#154): a fourteenth kind is covered by that test the moment it is added here.
+ * (#154): a new kind is covered by that test the moment it is added here.
+ *
+ * `session_ended` (FIX-1 FX-S2): a reader whose session ended is asked to sign
+ * in again. It is a run route's own 401 (`/api/query-notebook` refuses a
+ * request with no session before the body, the model, the sandbox and the
+ * limiter), as the page's stream client reads it (`SSEError`, `./sse-client.ts`,
+ * read by its name). Only that client's 401 selects it: a 401 from anything the
+ * server itself calls (the model service, a data source) is not the reader's
+ * session.
  *
  * `consent_required` (R6 W2, #632) is set explicitly by the consent gate
  * (`./sources/consent-gate.ts`), never derived from text: a question this site
@@ -240,12 +248,13 @@ export const STREAM_ERROR_KINDS = [
   'consent_required',
   'no_sources_on',
   'no_picks_usable',
+  'session_ended',
   'generic',
 ] as const;
 
 export type StreamErrorKind = (typeof STREAM_ERROR_KINDS)[number];
 
-/** True for a value that is one of the fourteen kinds (an unknown code is not). */
+/** True for a value that is one of the fifteen kinds (an unknown code is not). */
 export function isStreamErrorKind(value: unknown): value is StreamErrorKind {
   return typeof value === 'string' && (STREAM_ERROR_KINDS as readonly string[]).includes(value);
 }
@@ -309,6 +318,12 @@ export function classifyStreamError(input: unknown): StreamErrorKind {
   // it here. Two limiters, two paths, two kinds — a reader is told which one
   // stopped them.
   if (status === 429) return 'rate_limit';
+  // FIX-1 FX-S2: a run route's own 401, as the page's stream client reads it.
+  // Only the client's `SSEError` (`./sse-client.ts`, which names itself so) is
+  // read here, by its name: that module is browser-only and this one is not,
+  // so it is not imported. A 401 the server met calling anything else is not
+  // the reader's session, and keeps the classification below.
+  if (input instanceof Error && input.name === 'SSEError' && status === 401) return 'session_ended';
 
   // --- Fallback: matching the shape of the message text --------------------
   // Secondary by design since #154, never the primary path for a payload that
@@ -419,6 +434,9 @@ const FRIENDLY_STREAM_COPY: Record<StreamErrorKind, string> = {
   no_sources_on: 'Every data source is set to Off or Ask first, so nothing was sent. Turn a source On in Data source settings, then ask again.',
   // S3-B W1 (S10, D9 = A): the reader picked sources for this question and none could be used, so nothing was sent.
   no_picks_usable: 'None of the data sources you picked could be used, so nothing was sent. Pick again, or choose Auto.',
+  // FIX-1 FX-S2 (Seat ruling 7072824077, S1): a reader whose session ended is asked to sign in again. The run route
+  // refused before the body, the model, the sandbox and the limiter, so nothing was sent.
+  session_ended: 'You are no longer signed in, so nothing was sent. Sign in again, then ask your question again.',
   generic: 'Something went wrong while running this query. Please try again in a moment.',
 };
 

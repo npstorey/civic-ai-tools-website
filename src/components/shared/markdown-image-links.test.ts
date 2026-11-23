@@ -176,16 +176,16 @@ function review(body: string): string {
 }
 
 /** Each renderer, given one markdown text, returns the markup it renders. */
-const RENDERERS: [name: string, render: (markdown: string) => string][] = [
-  ['the answer', (markdown) => inAnswerView(recordModel(storedPackage(markdown)))],
-  ['the sources line', (markdown) => inAnswerView({ ...recordModel(storedPackage('An answer.')), sources: { author: 'Fixture author', line: markdown } })],
-  ['a notebook output in markdown form', (markdown) => inAnswerView(liveNotebook([{ output_type: 'display_data', metadata: {}, data: { 'text/markdown': markdown } }]))],
-  ["a review's body", (markdown) => review(`First line.\n\n${markdown}`)],
-  ["the panel's answer", (markdown) => renderToStaticMarkup(createElement(ResponsePanel, { title: 'Fixture', subtitle: 'Fixture', content: markdown, variant: 'without-mcp', duration_ms: 5, isLoading: false }))],
+const RENDERERS: [name: string, render: (markdown: string) => string, copies: number][] = [
+  ['the answer', (markdown) => inAnswerView(recordModel(storedPackage(markdown))), 2],
+  ['the sources line', (markdown) => inAnswerView({ ...recordModel(storedPackage('An answer.')), sources: { author: 'Fixture author', line: markdown } }), 1],
+  ['a notebook output in markdown form', (markdown) => inAnswerView(liveNotebook([{ output_type: 'display_data', metadata: {}, data: { 'text/markdown': markdown } }])), 2],
+  ["a review's body", (markdown) => review(`First line.\n\n${markdown}`), 1],
+  ["the panel's answer", (markdown) => renderToStaticMarkup(createElement(ResponsePanel, { title: 'Fixture', subtitle: 'Fixture', content: markdown, variant: 'without-mcp', duration_ms: 5, isLoading: false })), 1],
   ["the steps' summary line", (markdown) => renderToStaticMarkup(createElement(ProgressLog, {
     groups: [], standaloneEntries: [], variant: 'with-mcp', isActive: false, isComplete: true,
     toolsCalled: [{ name: 'search', args: { type: 'catalog', query: markdown }, duration_ms: 5 }], totalDuration_ms: 5,
-  }))],
+  })), 1],
 ];
 
 /** Every `<img>` in a render whose `src` is not a `data:` address. */
@@ -201,25 +201,34 @@ function linksTo(markup: string, address: string): { tag: string; text: string }
 }
 
 // --- The rule -----------------------------------------------------------------------
+//
+// `copies` is how many times the renderer shows the markdown: `AnswerView` places the answer twice (under its author
+// line, and again inside the record's disclosure), so each copy carries its own link.
 
-for (const [name, render] of RENDERERS) {
+for (const [name, render, copies] of RENDERERS) {
+  const copiesOf = (markup: string) => {
+    assert.ok(markup.includes('Before'), `premise: the text renders: ${markup.slice(0, 400)}`);
+    return copies;
+  };
   test(`images in answers are shown as links: ${name}, with alt text`, () => {
     const markup = render(WITH_ALT);
     assert.ok(markup.includes('Before'), `premise: the text renders: ${markup.slice(0, 400)}`);
     assert.deepEqual(remoteImages(markup), [], 'an image with a remote address renders');
     const links = linksTo(markup, ADDRESS);
-    assert.equal(links.length, 1, `not one link to the address: ${JSON.stringify(links)}`);
-    assert.equal(links[0].text, ALT, 'the link text is not the alt text');
-    assert.match(links[0].tag, /target="_blank"/, 'the link does not open in a new tab');
-    assert.match(links[0].tag, /rel="noopener noreferrer"/, 'the link does not carry noopener noreferrer');
+    assert.equal(links.length, copiesOf(markup), `not one link to the address per rendered copy: ${JSON.stringify(links)}`);
+    for (const link of links) {
+      assert.equal(link.text, ALT, 'the link text is not the alt text');
+      assert.match(link.tag, /target="_blank"/, 'the link does not open in a new tab');
+      assert.match(link.tag, /rel="noopener noreferrer"/, 'the link does not carry noopener noreferrer');
+    }
   });
 
   test(`images in answers are shown as links: ${name}, with empty alt text`, () => {
     const markup = render(NO_ALT);
     assert.deepEqual(remoteImages(markup), [], 'an image with a remote address renders');
     const links = linksTo(markup, ADDRESS);
-    assert.equal(links.length, 1, `not one link to the address: ${JSON.stringify(links)}`);
-    assert.equal(links[0].text, ADDRESS, 'the link text is not the address');
+    assert.equal(links.length, copiesOf(markup), `not one link to the address per rendered copy: ${JSON.stringify(links)}`);
+    for (const link of links) assert.equal(link.text, ADDRESS, 'the link text is not the address');
   });
 }
 

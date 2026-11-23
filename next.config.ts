@@ -1,4 +1,8 @@
 import type { NextConfig } from "next";
+// Explicit .ts extension: this module is also loaded by the plain-Node test
+// runner (`src/lib/security-headers.test.ts`), which does not resolve
+// extensionless imports.
+import { securityHeaderRoutes } from "./src/lib/security-headers.ts";
 
 /**
  * Standalone output is opt-in via `BUILD_STANDALONE=1` (see `npm run
@@ -32,6 +36,16 @@ const nextConfig: NextConfig = {
   // change of its own, not a stop in the middle of another.
   experimental: {
     agentUpgrade: false,
+  },
+  // The site sends a Content-Security-Policy (report-only) and a
+  // Referrer-Policy on every path (`src/lib/security-headers.ts`). The
+  // analytics part is read here, at build, as the analytics tag is.
+  async headers() {
+    return securityHeaderRoutes({
+      NEXT_PUBLIC_ANALYTICS_SERVICE: process.env.NEXT_PUBLIC_ANALYTICS_SERVICE,
+      NEXT_PUBLIC_ANALYTICS_ID: process.env.NEXT_PUBLIC_ANALYTICS_ID,
+      NEXT_PUBLIC_GA_MEASUREMENT_ID: process.env.NEXT_PUBLIC_GA_MEASUREMENT_ID,
+    });
   },
   images: {
     remotePatterns: [

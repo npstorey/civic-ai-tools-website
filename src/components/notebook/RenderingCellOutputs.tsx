@@ -21,6 +21,7 @@ import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
 import type { NotebookOutput } from '@/components/answer-view/buildChatEvidenceView';
 import { sanitizeNotebookHtml } from './notebook-html';
+import { withImageLinks } from '@/components/shared/markdown-image-links';
 
 function flattenText(text: string | string[] | undefined): string {
   if (!text) return '';
@@ -73,7 +74,7 @@ function OutputBlock({ output, index }: { output: NotebookOutput; index: number 
             color: 'var(--text-primary)',
           }}
         >
-          <ReactMarkdown remarkPlugins={[remarkGfm]}>{md}</ReactMarkdown>
+          <ReactMarkdown remarkPlugins={[remarkGfm]} components={withImageLinks()}>{md}</ReactMarkdown>
         </div>
       );
     }

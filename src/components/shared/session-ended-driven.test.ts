@@ -42,6 +42,13 @@ const DRIVER_URL = pathToFileURL(path.join(SRC, 'lib/sandbox/driver.ts')).href;
 
 registerSurfaceHooks({
   ...CONSENT_SURFACE_STUBS,
+  // signOut records what it was called with: the page's sign-out on the 401 is read here, and its requests in Chrome.
+  'next-auth/react': `
+    const S = globalThis.__w3Sessions;
+    export function useSession() { return { status: S.client.status, data: S.client.data, update: async () => S.client.data }; }
+    export async function signIn() {}
+    export async function signOut(options) { (globalThis.__seSignOuts ??= []).push(options ?? null); }
+    export function SessionProvider({ children }) { return children; }`,
   'next/headers': `export async function headers() { return new Headers({ 'x-forwarded-for': '203.0.113.71' }); }`,
   '@/lib/rate-limit': `
     globalThis.__seLimiter = { calls: 0 };
@@ -100,6 +107,9 @@ const SENTENCE = 'You are no longer signed in, so nothing was sent. Sign in agai
 
 const json = (body: unknown, status = 200) => new Response(JSON.stringify(body), { status, headers: { 'Content-Type': 'application/json' } });
 let recorded: string[] = [];
+/** The notebook route's answer: the real handler, or a fixture refusal (the pin's cases). */
+let notebookAnswer: ((request: Request) => Promise<Response>) | null = null;
+const signOuts = (): unknown[] => ((globalThis as unknown as { __seSignOuts?: unknown[] }).__seSignOuts ??= []);
 
 function answers() {
   recorded = [];
@@ -111,7 +121,7 @@ function answers() {
     '/api/rate-limit': () => json({ remaining: 7, limit: 25, resets_at: '2099-01-01T00:00:00.000Z', authenticated: true }),
     '/api/auth/session': () => json({}),
     '/api/query-notebook': async (request: Request) => {
-      const response = (await notebookRoute.POST(request)) as Response;
+      const response = notebookAnswer ? await notebookAnswer(request) : (await notebookRoute.POST(request)) as Response;
       const text = await response.text();
       recorded.push(`${response.status} ${response.headers.get('content-type')}\n${text}`);
       return new Response(text, { status: response.status, headers: response.headers });
@@ -123,6 +133,8 @@ const mounted: Surface[] = [];
 beforeEach(() => {
   storage.clear();
   sessions.rows.clear();
+  signOuts().length = 0;
+  notebookAnswer = null;
   (globalThis as unknown as { __seLimiter: { calls: number } }).__seLimiter.calls = 0;
 });
 afterEach(() => {
@@ -135,7 +147,8 @@ const settle = async (surface: Surface, ms = 50) => {
   await surface.settle();
 };
 
-test('a reader whose session ended is asked to sign in again: the notebook route refuses with 401, and the reader sees the sentence for it', async (t) => {
+/** A consent in force, the page signed in and the server reading no session; one question asked on the notebook path. */
+async function askSignedIn(): Promise<Surface> {
   // The consent is in force (written while the server read no session, so it is the browser's own).
   sessions.server = null;
   sessions.client = { status: 'unauthenticated', data: null };
@@ -156,6 +169,11 @@ test('a reader whose session ended is asked to sign in again: the notebook route
   await page.type(box!, 'How many service requests did Boston record in 2025?');
   await page.submit(page.elements().find((el) => el.type === 'form' && page.elements().some((x) => x.type === 'textarea'))!);
   await settle(page, 150);
+  return page;
+}
+
+test('a reader whose session ended is asked to sign in again: the notebook route refuses with 401, and the reader sees the sentence for it', async (t) => {
+  const page = await askSignedIn();
   assert.equal(recorded.length, 1, 'premise: the question reached the real notebook route once');
   t.diagnostic(`the route's refusal, as the page read it:\n${recorded[0]}`);
   assert.ok(recorded[0].startsWith('401 '), 'premise: the route refused with 401');
@@ -163,6 +181,37 @@ test('a reader whose session ended is asked to sign in again: the notebook route
   const text = page.text();
   assert.ok(text.includes(SENTENCE), `the sentence for an ended session is not shown; the page reads: ${text.slice(0, 600)}`);
   assert.ok(!text.includes(streaming.friendlyStreamError({ code: 'generic' })), 'the generic sentence is shown');
+  assert.deepEqual(signOuts(), [{ redirect: false }], 'the page did not sign out, once and without leaving the page');
+});
+
+/** Every other way a run is refused or fails: none of them signs the reader out. */
+const OTHER_REFUSALS: [name: string, answer: () => Promise<Response>][] = [
+  ['a 403 consent refusal', async () => json({ error: 'fixture', code: 'consent_required' }, 403)],
+  ['a 403 with no source On', async () => json({ error: 'fixture', code: 'no_sources_on' }, 403)],
+  ['the daily limit (429)', async () => json({ error: 'Rate limit exceeded', rateLimit: { remaining: 0, limit: 25, resets_at: '2099-01-01T00:00:00.000Z', authenticated: true } }, 429)],
+  ['a 500 with no kind', async () => json({ error: 'fixture' }, 500)],
+  ['a 503 configuration refusal', async () => json({ error: 'fixture', code: 'model_not_configured' }, 503)],
+  ['a network error', async () => { throw new TypeError('fetch failed'); }],
+];
+
+for (const [name, answer] of OTHER_REFUSALS) {
+  test(`a reader whose session ended is asked to sign in again, and no one else is signed out: ${name} leaves the session as it was`, async () => {
+    notebookAnswer = answer;
+    const page = await askSignedIn();
+    assert.ok(!page.text().includes(SENTENCE), `the sentence for an ended session is shown for ${name}`);
+    assert.deepEqual(signOuts(), [], `the page signed out on ${name}`);
+    assert.equal(sessions.client.status, 'authenticated', 'premise: the session is as it was');
+  });
+}
+
+test('a reader whose session ended is asked to sign in again: only the stream client\'s 401 is read as an ended session', async () => {
+  const { SSEError } = await load('lib/sse-client.ts');
+  assert.equal(streaming.classifyStreamError(new SSEError('Authentication required', 401)), 'session_ended');
+  // A 401 the server met calling something else keeps its classification.
+  const upstream = Object.assign(new Error('Invalid API key'), { status: 401 });
+  assert.equal(streaming.classifyStreamError(upstream), 'model_auth_rejected');
+  assert.equal(streaming.classifyStreamError({ status: 401, message: 'fixture' }), 'generic');
+  assert.equal(streaming.classifyStreamError(new SSEError('fixture', 403)), 'generic');
 });
 
 /** Every kind's sentence before this rule, byte for byte. */

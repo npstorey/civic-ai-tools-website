@@ -387,11 +387,12 @@ for (const [shape, answer] of [
 /** Every kind `classifyStreamError` returns but the limit's and consent's, which have their own tests. */
 const KEPT_KINDS = (STREAM_ERROR_KINDS as readonly string[]).filter((k) => k !== 'rate_limit' && k !== 'consent_required');
 
-test('fix round 2, A5 (premise): the kinds are the fourteen, and the twelve that keep the block are listed here', () => {
-  assert.equal(STREAM_ERROR_KINDS.length, 14);
+test('fix round 2, A5 (premise): the kinds are the fifteen, and the thirteen that keep the block are listed here', () => {
+  // Fifteen since FIX-1 FX-S2 added `session_ended`, which keeps the block as the others do.
+  assert.equal(STREAM_ERROR_KINDS.length, 15);
   assert.deepEqual(KEPT_KINDS, [
     'model_rate_limited', 'model_not_configured', 'model_auth_rejected', 'mcp_not_configured', 'mcp_timeout', 'mcp_unavailable',
-    'connection', 'notebook_execution', 'not_offered', 'no_sources_on', 'no_picks_usable', 'generic',
+    'connection', 'notebook_execution', 'not_offered', 'no_sources_on', 'no_picks_usable', 'session_ended', 'generic',
   ]);
 });
 

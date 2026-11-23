@@ -58,6 +58,7 @@ const STUB_SOURCE: Record<string, string> = {
     export async function checkRateLimit() { globalThis.__signIn.checks++; return { remaining: 99, limit: 100, reset: 0 }; }
     export function isRateLimited() { return false; }
     export async function incrementRateLimit() { globalThis.__signIn.increments++; }
+    export async function consumeRateLimit(...a) { const info = await checkRateLimit(...a); await incrementRateLimit(...a); return info; }
     export function getMissingRateLimitSecretError() { return null; }`,
   '@/lib/mcp/socrata-skill': `
     export const DEFAULT_SOURCE_SELECTION = undefined;

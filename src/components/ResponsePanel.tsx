@@ -4,6 +4,7 @@ import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
 import ProgressLog from './ProgressLog';
 import McpResponseDisplay from './shared/McpResponseDisplay';
+import { withImageLinks } from './shared/markdown-image-links';
 import type { ProgressLogEntry, ProgressGroup, ToolCall, EvidenceTrace } from '@/hooks/useStreamingComparison';
 import type { WhereItWentModel } from '@/lib/flows/where-it-went';
 
@@ -94,7 +95,7 @@ export default function ResponsePanel({
 
   const markdownContent = (text: string, showCursor?: boolean) => (
     <div className="response-markdown">
-      <ReactMarkdown remarkPlugins={[remarkGfm]}>{text}</ReactMarkdown>
+      <ReactMarkdown remarkPlugins={[remarkGfm]} components={withImageLinks()}>{text}</ReactMarkdown>
       {showCursor && (
         <span
           style={{

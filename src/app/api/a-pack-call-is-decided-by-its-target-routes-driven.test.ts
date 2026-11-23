@@ -53,6 +53,7 @@ const STUB_SOURCE: Record<string, string> = {
     export async function checkRateLimit() { return { remaining: 99, limit: 100, resetAt: 0 }; }
     export function isRateLimited() { return false; }
     export async function incrementRateLimit() {}
+    export async function consumeRateLimit(...a) { const info = await checkRateLimit(...a); await incrementRateLimit(...a); return info; }
     export function getMissingRateLimitSecretError() { return null; }`,
   '@/lib/sandbox': `
     export class NotebookExecutionError extends Error {}

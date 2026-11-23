@@ -56,6 +56,7 @@ registerSurfaceHooks({
     export async function checkRateLimit() { globalThis.__fx2Limiter.checks += 1; return { remaining: globalThis.__fx2Limiter.limited ? 0 : 99, limit: 100, resetAt: 0 }; }
     export function isRateLimited() { return globalThis.__fx2Limiter.limited; }
     export async function incrementRateLimit() { globalThis.__fx2Limiter.increments += 1; }
+    export async function consumeRateLimit(...a) { const info = await checkRateLimit(...a); await incrementRateLimit(...a); return info; }
     export function getMissingRateLimitSecretError() { return null; }`,
 });
 

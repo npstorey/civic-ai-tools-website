@@ -138,7 +138,7 @@ const source = http.createServer(async (req, res) => {
   for await (const chunk of req) body += chunk;
   const msg = body ? (JSON.parse(body) as { id?: unknown; method?: string }) : {};
   if (msg.id === undefined) { res.writeHead(202); res.end(); return; }
-  const reply = (payload: Record<string, unknown>) => JSON.stringify({ jsonrpc: '2.0', id: msg.id, ...payload });
+  const reply = (fields: Record<string, unknown>) => JSON.stringify({ jsonrpc: '2.0', id: msg.id, ...fields });
   if (msg.method === 'initialize') {
     res.writeHead(200, { 'content-type': 'application/json', 'mcp-session-id': 'counts-first-session' });
     res.end(reply({ result: { protocolVersion: '2024-11-05', capabilities: { tools: {} }, serverInfo: { name: 'cl', version: '0' } } }));
@@ -241,13 +241,13 @@ for (const [storeName, useStore] of Object.entries(STORES)) {
     assert.equal((await allowance()).remaining, 0, 'after the last question');
     const refused = await send(post, route, body);
     assert.equal(refused.status, 429);
-    const payload = JSON.parse(refused.text) as { error: unknown; rateLimit: Record<string, unknown> };
-    assert.deepEqual(Object.keys(payload).sort(), ['error', 'rateLimit']);
-    assert.equal(payload.error, 'Rate limit exceeded');
-    assert.deepEqual(Object.keys(payload.rateLimit).sort(), ['authenticated', 'limit', 'remaining', 'resets_at']);
-    assert.equal(payload.rateLimit.remaining, 0);
-    assert.equal(payload.rateLimit.limit, LIMIT);
-    assert.equal(payload.rateLimit.authenticated, false);
+    const refusal = JSON.parse(refused.text) as { error: unknown; rateLimit: Record<string, unknown> };
+    assert.deepEqual(Object.keys(refusal).sort(), ['error', 'rateLimit']);
+    assert.equal(refusal.error, 'Rate limit exceeded');
+    assert.deepEqual(Object.keys(refusal.rateLimit).sort(), ['authenticated', 'limit', 'remaining', 'resets_at']);
+    assert.equal(refusal.rateLimit.remaining, 0);
+    assert.equal(refusal.rateLimit.limit, LIMIT);
+    assert.equal(refusal.rateLimit.authenticated, false);
     assert.equal((await allowance()).remaining, 0, 'after a refused question');
   });
 }
