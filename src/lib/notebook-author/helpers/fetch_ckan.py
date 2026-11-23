@@ -17,7 +17,7 @@ def fetch_ckan(
     server_url: str,
     resource_id: str | None = None,
     *,
-    q: str | None = None,
+    q: str | dict | None = None,
     filters: dict | None = None,
     limit: int = 100,
     offset: int = 0,
@@ -33,14 +33,15 @@ def fetch_ckan(
       1. Resource mode: pass `resource_id` and the call's other arguments.
          They are sent as the server sends them: `limit`, `offset` and
          `distinct` always (defaults 100, 0 and false, the server's), `q` and
-         `sort` when non-empty, and `filters` (as JSON) and `fields` (joined
-         with commas) when given.
+         `sort` when non-empty (a dict `q` as compact JSON), and `filters` (as
+         JSON) and `fields` (joined with commas) when given.
       2. SQL mode: pass `sql`, one SELECT or WITH statement.
 
     Args:
         server_url: The portal's address, as the original call named it.
         resource_id: CKAN resource id (required unless using `sql`).
-        q: Optional full-text search across all fields.
+        q: Optional full-text search. A string searches all fields; a dict
+            such as `{"column": "word"}` searches only the columns it names.
         filters: Optional field-equality filters as `{field: value, ...}`.
         limit: Max rows in resource mode (default 100; 0 returns no rows).
         offset: Rows to skip in resource mode (default 0).
@@ -66,7 +67,12 @@ def fetch_ckan(
             "offset": str(offset),
             "distinct": "true" if distinct else "false",
         }
-        if q:
+        if isinstance(q, dict):
+            # Compact JSON, keys in the call's order and non-ASCII unescaped:
+            # the server's JSON.stringify, byte for byte.
+            if q:
+                params["q"] = json.dumps(q, separators=(",", ":"), ensure_ascii=False)
+        elif q:
             params["q"] = q
         if filters is not None:
             params["filters"] = json.dumps(filters, separators=(",", ":"))
