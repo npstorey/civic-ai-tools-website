@@ -5,7 +5,7 @@
 // the query routes) says when: the UTC midnight after the key's date, whatever time zone the host process runs in. It
 // used to be the host's local midnight (`setDate` and `setHours`), which is UTC midnight only on a UTC host.
 //
-// WHAT IS DRIVEN. `checkRateLimit` and `incrementRateLimit`, in this process, under `TZ=America/New_York` (behind UTC)
+// WHAT IS DRIVEN. `checkRateLimit` and `consumeRateLimit`, in this process, under `TZ=America/New_York` (behind UTC)
 // and `TZ=Asia/Tokyo` (ahead of it), and under `UTC` as the guard, at two instants on each side of a local date change:
 // 02:00Z, when New York is still on the previous date, and 20:00Z, when Tokyo is already on the next one. Node reads
 // `process.env.TZ` again when it is set, which each case checks before it reads (a premise, so a process that ignored
@@ -19,7 +19,7 @@ import assert from 'node:assert/strict';
 
 for (const name of ['KV_REST_API_URL', 'KV_REST_API_TOKEN']) delete process.env[name];
 process.env.RATE_LIMIT_SECRET = 'fixture';
-const { checkRateLimit, incrementRateLimit } = await import('./rate-limit.ts');
+const { checkRateLimit, consumeRateLimit } = await import('./rate-limit.ts');
 
 const ZONE_BEFORE = process.env.TZ;
 
@@ -35,7 +35,7 @@ async function resetsAtIn(zone: string, at: number): Promise<{ offset: number; c
   try {
     const offset = new Date(at).getTimezoneOffset();
     const check = (await checkRateLimit('fixture-reader', false)).resets_at;
-    const increment = (await incrementRateLimit('fixture-reader', false)).resets_at;
+    const increment = (await consumeRateLimit('fixture-reader', false)).resets_at;
     return { offset, check, increment };
   } finally {
     mock.timers.reset();

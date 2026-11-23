@@ -1700,6 +1700,36 @@ The app shows no consent notice for either service. Whether one is needed
 depends on the service and on where the readers are, and is the operator's
 to decide.
 
+### Security headers (no variable)
+
+The site sends a Content-Security-Policy (report-only) and a
+Referrer-Policy on every response: pages, the record page, `/ask`, sign-in,
+the talk decks and the API. They are set in `next.config.ts` (`headers()`,
+built by [`src/lib/security-headers.ts`](../src/lib/security-headers.ts)) and
+read at `next build`, like the analytics variables above.
+
+| Header | Value |
+| --- | --- |
+| `Content-Security-Policy-Report-Only` | `img-src 'self' data: https://typedstandards.org` and the analytics service's image hosts; `object-src 'none'`; `base-uri 'self'`; `frame-ancestors 'none'` |
+| `Referrer-Policy` | `strict-origin-when-cross-origin` |
+
+**The analytics part follows the Analytics variables.** It is built from the
+same resolver that picks the tag (`resolveAnalytics`,
+`src/lib/analytics-config.ts`), so the two cannot disagree:
+`google-analytics` adds `https://www.googletagmanager.com` and
+`https://*.google-analytics.com` to `img-src` (the hosts Google's CSP guide
+for the Google tag lists for Analytics without Ads features); `plausible`
+and no analytics add nothing. A new service adds its image hosts in
+`ANALYTICS_IMAGE_HOSTS` beside the tag.
+
+**Report-only.** A browser reports what the policy would refuse, in its
+console, and refuses nothing. The site has no reporting endpoint.
+
+**Answers show images as links.** A markdown image in an answer, a record
+or a review renders as a link to its address, so `img-src` does not need to
+admit image hosts an answer names. A notebook's own `image/png` output is a
+`data:` image.
+
 ## Sign-in configuration
 
 Sign-in is what unlocks the executed-notebook feature, the publisher

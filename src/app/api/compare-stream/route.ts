@@ -9,7 +9,7 @@ import { canAsk, consentInForce, picksRefusalPayload, type ConsentRefusalPayload
 import { pickedRunOf, picksFromBody } from '@/lib/sources/picks';
 import { decisionStoreFromEnv, readerGone, streamingRoutePause } from '@/lib/sources/decision';
 import { createInLoopRouting, DIRECTORY_SET_RULE, directorySet, entersInLoop, READER_PICKED_RULE, sourceRoutingMode } from '@/lib/mcp/routing-mode';
-import { checkRateLimit, getMissingRateLimitSecretError, incrementRateLimit, isRateLimited } from '@/lib/rate-limit';
+import { consumeRateLimit, getMissingRateLimitSecretError, isRateLimited } from '@/lib/rate-limit';
 import { headers } from 'next/headers';
 import { encodeSSE, errorLogFacts, panelsForRun, startSseKeepAlive, streamErrorPayload, type StreamErrorCode, type PanelType, type StreamEvent } from '@/lib/streaming';
 import { getGenAiSystem, getMissingModelCredentialError, ModelConfigurationError } from '@/lib/model-client';
@@ -250,17 +250,14 @@ export async function POST(request: NextRequest) {
       : null;
     if (picked && !picked.usable) return refuse(picksRefusalPayload(consent.statement));
 
-    // Check rate limit
-    const rateLimitInfo = await checkRateLimit(identifier, isAuthenticated);
+    // The rate limit counts a request before it checks it (`consumeRateLimit`).
+    const rateLimitInfo = await consumeRateLimit(identifier, isAuthenticated);
     if (isRateLimited(rateLimitInfo)) {
       return new Response(
         JSON.stringify({ error: 'Rate limit exceeded', rateLimit: rateLimitInfo }),
         { status: 429, headers: { 'Content-Type': 'application/json' } }
       );
     }
-
-    // Increment rate limit
-    await incrementRateLimit(identifier, isAuthenticated);
 
     // --- Evidence trace: initialize ---
     const trace = new TraceBuilder(CIVICAITOOLS_TRACE_CONFIG);

@@ -121,7 +121,7 @@ test('#30 P6 F1: the refusal precedes every upstream call and the rate limiter',
     // Nothing may be charged to a reader for a request that was never going to
     // run. Same rule F3 restates for the notebook route.
     assert.ok(
-      resolve < at(source, 'incrementRateLimit(', route),
+      resolve < at(source, 'consumeRateLimit(', route),
       `${route} refuses before spending the reader's daily allowance`,
     );
   }
@@ -146,7 +146,7 @@ test('#30 P6 F3: /api/query-notebook uses the shared endpoint guard, up front', 
   );
   // …and ahead of the limiter, which is the second half of the finding.
   assert.ok(
-    guard < at(source, 'incrementRateLimit(', 'query-notebook'),
+    guard < at(source, 'consumeRateLimit(', 'query-notebook'),
     'a misconfigured instance must not burn a reader’s allowance to fail',
   );
 });
@@ -257,7 +257,7 @@ test('#30 P6: no query route reaches the model before it has refused what it can
     );
     assert.ok(
       at(source, 'getMissingModelCredentialError()', route) <
-        at(source, 'incrementRateLimit(', route),
+        at(source, 'consumeRateLimit(', route),
       `${route} guards before it charges`,
     );
   }
@@ -288,9 +288,9 @@ test('#516 P1: every rate-limited route refuses a missing RATE_LIMIT_SECRET befo
       1,
       `${route} asks for the refusal exactly once`,
     );
-    assert.ok(guard < at(source, 'checkRateLimit(', route), `${route} refuses before it reads the count`);
+    assert.ok(guard < at(source, route === 'rate-limit/route.ts' ? 'checkRateLimit(' : 'consumeRateLimit(', route), `${route} refuses before it reads the count`);
     if (route === 'rate-limit/route.ts') continue;
-    assert.ok(guard < at(source, 'incrementRateLimit(', route), `${route} refuses before it charges`);
+    assert.ok(guard < at(source, 'consumeRateLimit(', route), `${route} refuses before it charges`);
     assert.ok(guard < at(source, 'composeSystemPrompt({ portal', route), `${route} refuses before the skill fetch`);
   }
 });
@@ -332,7 +332,7 @@ test('R6 W2: every gated route asks for the consent in force exactly once, after
     for (const earlier of ['resolveRunPortal(', 'getMissingModelCredentialError()', 'getMissingRateLimitSecretError()']) {
       assert.ok(at(source, earlier, route) < gate, `${route} reads the consent before ${earlier}`);
     }
-    for (const later of ['checkRateLimit(', 'incrementRateLimit(', 'composeSystemPrompt({ portal']) {
+    for (const later of ['consumeRateLimit(', 'composeSystemPrompt({ portal']) {
       assert.ok(gate < at(source, later, route), `${route} reaches ${later} before reading the consent`);
     }
   }

@@ -8,7 +8,7 @@ import { composeSystemPrompt, withPortalLockGuidance } from '@/lib/mcp/socrata-s
 import { consentInForce, picksRefusalPayload } from '@/lib/sources/consent-gate';
 import { pickedRunOf, picksFromBody } from '@/lib/sources/picks';
 import { createInLoopRouting, DIRECTORY_SET_RULE, directorySet, entersInLoop, READER_PICKED_RULE, sourceRoutingMode } from '@/lib/mcp/routing-mode';
-import { checkRateLimit, getMissingRateLimitSecretError, incrementRateLimit, isRateLimited } from '@/lib/rate-limit';
+import { consumeRateLimit, getMissingRateLimitSecretError, isRateLimited } from '@/lib/rate-limit';
 import { getGenAiSystem, getMissingModelCredentialError, getModelClient, classifyModelError, ModelConfigurationError } from '@/lib/model-client';
 import { packOfDispatchTarget, whereItWentFromCalls } from '@/lib/flows/where-it-went';
 import { resolveModelIdentity, ModelNotOfferedError } from '@/lib/model-resolver';
@@ -168,7 +168,8 @@ export async function POST(request: NextRequest) {
     // THIS APP's own per-day request budget — never the model endpoint's.
     // It answers HTTP 429 and classifies as `rate_limit`; an endpoint's 429 is
     // `model_rate_limited` and is handled in the catch below (website#30 G0 D6).
-    const rateLimitInfo = await checkRateLimit(identifier, isAuthenticated);
+    // It counts a request before it checks it (`consumeRateLimit`).
+    const rateLimitInfo = await consumeRateLimit(identifier, isAuthenticated);
     if (isRateLimited(rateLimitInfo)) {
       return NextResponse.json(
         {
@@ -178,9 +179,6 @@ export async function POST(request: NextRequest) {
         { status: 429 }
       );
     }
-
-    // Increment rate limit
-    await incrementRateLimit(identifier, isAuthenticated);
 
     // System prompt for the MCP-enabled query - uses skill module
     // Under the lock one section is appended (#436, D7); unlocked, unchanged.

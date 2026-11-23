@@ -49,42 +49,11 @@
  * never another service's tag.
  */
 import Script from 'next/script';
-
-export const ANALYTICS_SERVICES = ['google-analytics', 'plausible'] as const;
-export type AnalyticsService = (typeof ANALYTICS_SERVICES)[number];
-
-export interface AnalyticsEnv {
-  NEXT_PUBLIC_ANALYTICS_SERVICE?: string;
-  NEXT_PUBLIC_ANALYTICS_ID?: string;
-  NEXT_PUBLIC_GA_MEASUREMENT_ID?: string;
-}
-
-export interface AnalyticsConfig {
-  service: AnalyticsService;
-  id: string;
-}
-
-/** A set value, trimmed; `null` for unset, empty, or whitespace alone. */
-function present(raw: string | undefined): string | null {
-  if (typeof raw !== 'string') return null;
-  const value = raw.trim();
-  return value === '' ? null : value;
-}
-
-function isService(value: string): value is AnalyticsService {
-  return (ANALYTICS_SERVICES as readonly string[]).includes(value);
-}
-
-export function resolveAnalytics(env: AnalyticsEnv): AnalyticsConfig | null {
-  const service = present(env.NEXT_PUBLIC_ANALYTICS_SERVICE);
-  const id = present(env.NEXT_PUBLIC_ANALYTICS_ID);
-  if (service !== null || id !== null) {
-    if (service === null || id === null || !isService(service)) return null;
-    return { service, id };
-  }
-  const priorEraId = present(env.NEXT_PUBLIC_GA_MEASUREMENT_ID);
-  return priorEraId === null ? null : { service: 'google-analytics', id: priorEraId };
-}
+// The decision moved to a module of its own, unchanged, so next.config.ts can
+// load it (the site's security headers read it). Re-exported here as before.
+import type { AnalyticsConfig } from './analytics-config.ts';
+export { ANALYTICS_SERVICES, resolveAnalytics } from './analytics-config.ts';
+export type { AnalyticsService, AnalyticsEnv, AnalyticsConfig } from './analytics-config.ts';
 
 const PLAUSIBLE_INIT =
   'window.plausible=window.plausible||function(){(plausible.q=plausible.q||[]).push(arguments)},plausible.init=plausible.init||function(i){plausible.o=i||{}};\n' +

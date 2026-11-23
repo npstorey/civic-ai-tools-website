@@ -74,6 +74,7 @@ const STUB_SOURCE: Record<string, string> = {
     export async function checkRateLimit() { globalThis.__p4.checks++; return { remaining: 99, limit: 100, reset: 0 }; }
     export function isRateLimited() { return false; }
     export async function incrementRateLimit() { globalThis.__p4.increments++; }
+    export async function consumeRateLimit(...a) { const info = await checkRateLimit(...a); await incrementRateLimit(...a); return info; }
     // #516 P1: the secret's refusal lives beside the limiter; this file
     // counts the limiter, so the stub never refuses (the refusal is driven in
     // rate-limit-secret-refusal-driven.test.ts).
@@ -248,8 +249,7 @@ test('#547 C2: the refusal is made once, first in the handler', () => {
     'getMissingModelCredentialError()',
     'getMissingMcpRoutingError()',
     'getServerSession(',
-    'checkRateLimit(',
-    'incrementRateLimit(',
+    'consumeRateLimit(',
     // The skill fetch (`buildSystemPrompt(portal)` until #599 W4).
     'composeSystemPrompt({ portal',
     'queryWithMcpStreaming(',

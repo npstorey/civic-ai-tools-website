@@ -53,6 +53,7 @@ import { Fragment, useCallback, type ReactNode } from 'react';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
 import ProgressLog from '@/components/ProgressLog';
+import { withImageLinks } from '@/components/shared/markdown-image-links';
 import ConsentStep from '@/components/answer-view/ConsentStep';
 import NotebookSection from '@/components/evidence/NotebookSection';
 import ChatSignersSection from '@/components/notebook/ChatSignersSection';
@@ -214,7 +215,7 @@ export function AnswerBody({ answer }: { answer: AnswerPart }) {
         // The site's own words, under no author line: nothing the model wrote is shown.
         <em data-part="answer-unavailable" style={{ color: 'var(--text-muted)' }}>{content.text}</em>
       ) : content.kind === 'markdown' ? (
-        <ReactMarkdown remarkPlugins={[remarkGfm]} components={MARKDOWN_COMPONENTS}>{content.markdown}</ReactMarkdown>
+        <ReactMarkdown remarkPlugins={[remarkGfm]} components={withImageLinks(MARKDOWN_COMPONENTS)}>{content.markdown}</ReactMarkdown>
       ) : (
         <em style={{ color: 'var(--text-muted)' }}>
           No synthesis was produced for this analysis.
@@ -838,7 +839,7 @@ export default function AnswerView({
             color: 'var(--text-secondary)', borderRadius: '0 4px 4px 0',
           }}>
             <AuthorLine part="sources" text={model.sources.author} />
-            <ReactMarkdown components={SOURCES_COMPONENTS}>{model.sources.line}</ReactMarkdown>
+            <ReactMarkdown components={withImageLinks(SOURCES_COMPONENTS)}>{model.sources.line}</ReactMarkdown>
           </div>
         )}
 

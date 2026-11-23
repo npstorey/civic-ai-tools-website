@@ -14,6 +14,7 @@
  * arrives, so the rest of the UI does not re-render every second.
  */
 import { useCallback, useRef, useState } from 'react';
+import { signOut } from 'next-auth/react';
 import { connectSSE } from '@/lib/sse-client';
 import { classifyStreamError, friendlyStreamError, notebookExecutionErrorMessage, reasonWithoutIdentifier, type ConsentPausePayload, type StreamErrorKind } from '@/lib/streaming';
 import { reportConsentPause, reportConsentRefusal } from '@/components/sources/useSourceConsent';
@@ -420,6 +421,13 @@ export function useNotebookStream() {
         setState((prev) => ({ ...prev, error: null, isLoading: false, completedAt: Date.now() }));
         return;
       }
+      // FIX-1 FX-S2 (Seat ruling 7103204985, shape E): a reader whose session
+      // ended is asked to sign in again. On the run route's 401 — the one
+      // classification that selects that sentence, and no other — the page
+      // signs out without leaving it, so the header offers "Sign in": the
+      // provider's own sign-out, then its own session read. Every other
+      // refusal or error leaves the session as it was.
+      if (classifyStreamError(err) === 'session_ended') void signOut({ redirect: false });
       // friendlyStreamError maps SSEError 429, MCP timeout/down, and connection
       // drops to calm copy — the raw error/server text never reaches the UI.
       setState((prev) => ({ ...prev, error: friendlyStreamError(err), errorKind: classifyStreamError(err), isLoading: false, completedAt: Date.now() }));

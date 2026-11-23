@@ -10,6 +10,7 @@ import { getEducationalAnnotation, buildNarrativeSummary, buildStatsSummary, bui
 import ToolCallCard from './ToolCallCard';
 import NarrationExplainer from './NarrationExplainer';
 import ConsentStep from './answer-view/ConsentStep';
+import { withImageLinks } from './shared/markdown-image-links';
 
 interface ProgressLogProps {
   groups: ProgressGroup[];
@@ -380,7 +381,7 @@ function CompletedSummary({
     <div className="completed-summary-enter" style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
       {/* Layer A: Narrative summary (rendered via ReactMarkdown for dataset links) */}
       <ReactMarkdown
-        components={{
+        components={withImageLinks({
           p: ({ children }) => (
             <p
               style={{
@@ -407,7 +408,7 @@ function CompletedSummary({
               {children}
             </a>
           ),
-        }}
+        })}
       >
         {narrative}
       </ReactMarkdown>

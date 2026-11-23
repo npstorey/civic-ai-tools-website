@@ -88,7 +88,7 @@ registerHooks({
 
 for (const name of ['KV_REST_API_URL', 'KV_REST_API_TOKEN', 'RATE_LIMIT_SECRET']) delete process.env[name];
 
-const { checkRateLimit, incrementRateLimit } = await import('./rate-limit.ts');
+const { checkRateLimit, consumeRateLimit } = await import('./rate-limit.ts');
 
 // --- Instruments ----------------------------------------------------------------
 
@@ -149,7 +149,7 @@ function onDay<T>(at: number, run: () => Promise<T>): Promise<T> {
 async function storedMapKey(identifier: string, at = DAY): Promise<string> {
   const keys = await onDay(at, () => mapKeysDuring(async () => {
     await checkRateLimit(identifier, false);
-    await incrementRateLimit(identifier, false);
+    await consumeRateLimit(identifier, false);
   }));
   const rateKeys = [...new Set(keys.filter((k) => k.startsWith('rate:')))];
   assert.equal(rateKeys.length, 1, `one rate key for one identifier on one day, saw: ${JSON.stringify(rateKeys)}`);
@@ -195,7 +195,7 @@ for (const [label, canary, authenticated] of [
     withSecret('fixture');
     const keys = await onDay(DAY, () => mapKeysDuring(async () => {
       await checkRateLimit(canary, authenticated);
-      await incrementRateLimit(canary, authenticated);
+      await consumeRateLimit(canary, authenticated);
     }));
     const rateKeys = keys.filter((k) => k.startsWith('rate:'));
     assert.ok(rateKeys.length >= 2, `the check and the increment each reached the map: ${JSON.stringify(keys)}`);
@@ -209,7 +209,7 @@ for (const [label, canary, authenticated] of [
     const mapKeys = await onDay(DAY, () => mapKeysDuring(async () => {
       calls = await kvKeysDuring(async () => {
         await checkRateLimit(canary, authenticated);
-        await incrementRateLimit(canary, authenticated);
+        await consumeRateLimit(canary, authenticated);
       });
     }));
     setKvConfigured(false);
@@ -262,7 +262,7 @@ for (const [label, value] of [['absent', undefined], ['empty', ''], ['whitespace
     for (const kvOn of [false, true]) {
       setKvConfigured(kvOn);
       withSecret(value);
-      for (const call of [checkRateLimit, incrementRateLimit]) {
+      for (const call of [checkRateLimit, consumeRateLimit]) {
         let calls: KvCall[] = [];
         let caught: unknown;
         const mapKeys = await mapKeysDuring(async () => {

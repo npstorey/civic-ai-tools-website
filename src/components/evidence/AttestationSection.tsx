@@ -3,6 +3,7 @@
 import { useSession } from 'next-auth/react';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
+import { withImageLinks } from '@/components/shared/markdown-image-links';
 import { useSignInOptions } from '@/components/SignInOptionsProvider';
 import { resolveSignInProse } from '@/lib/auth-provider-options';
 import type { ReviewSignatureStatus } from '@/lib/evidence/trust-signal';
@@ -306,7 +307,7 @@ function ExpertReviewBody({ payload }: { payload: AttestationPackageData | null 
   }
   return (
     <div className="response-markdown" style={{ fontSize: '14px' }}>
-      <ReactMarkdown remarkPlugins={[remarkGfm]}>{payload.body}</ReactMarkdown>
+      <ReactMarkdown remarkPlugins={[remarkGfm]} components={withImageLinks()}>{payload.body}</ReactMarkdown>
     </div>
   );
 }

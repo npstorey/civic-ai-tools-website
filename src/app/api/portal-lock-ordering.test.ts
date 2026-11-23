@@ -68,8 +68,8 @@ test('#436 C2: the lock refuses before the rate limiter, before the allowance is
     const source = read(file);
     const refusal = at(source, 'if (!portalResolution.ok) {', file);
     assert.ok(refusal > at(source, 'resolveRunPortal(', file), `${file} checks the resolution after making it`);
-    assert.ok(refusal < at(source, 'checkRateLimit(', file), `${file} refuses AFTER the rate limiter`);
-    assert.ok(refusal < at(source, 'incrementRateLimit(', file), `${file} spends the reader's allowance before refusing`);
+    // One call counts and checks (`consumeRateLimit`): before it is both "before the limiter" and "before the spend".
+    assert.ok(refusal < at(source, 'consumeRateLimit(', file), `${file} spends the reader's allowance before refusing`);
     assert.ok(refusal < at(source, 'composeSystemPrompt({ portal', file), `${file} fetches the skill text before refusing`);
     if (file === 'query-notebook/route.ts') {
       // The notebook route requires sign-in: it reads the session, and refuses

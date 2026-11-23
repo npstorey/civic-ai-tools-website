@@ -84,6 +84,7 @@ const STUB_SOURCE: Record<string, string> = {
     export async function checkRateLimit() { globalThis.__r6w2Gate.checks += 1; return { remaining: 99, limit: 100, resetAt: 0 }; }
     export function isRateLimited() { return false; }
     export async function incrementRateLimit() { globalThis.__r6w2Gate.increments += 1; }
+    export async function consumeRateLimit(...a) { const info = await checkRateLimit(...a); await incrementRateLimit(...a); return info; }
     export function getMissingRateLimitSecretError() { return null; }`,
   '@/lib/sandbox': `
     export class NotebookExecutionError extends Error {}

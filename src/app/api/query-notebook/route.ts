@@ -22,7 +22,7 @@ import { headers } from 'next/headers';
 import { randomUUID } from 'node:crypto';
 import { getServerSession } from 'next-auth';
 import { authOptions } from '@/lib/auth';
-import { checkRateLimit, getMissingRateLimitSecretError, incrementRateLimit, isRateLimited } from '@/lib/rate-limit';
+import { consumeRateLimit, getMissingRateLimitSecretError, isRateLimited } from '@/lib/rate-limit';
 import { mcpToolsFor, offeredMcpTools } from '@/lib/mcp/tools';
 import { callMcpTool, startRunServerReads, withReportedKeys } from '@/lib/mcp/client';
 import { configuredMcpServers, dispatchTargetOf, getMissingMcpRoutingError, readMcpEnvFromProcess, routedSourceId } from '@/lib/mcp/registry';
@@ -193,7 +193,7 @@ export async function POST(request: NextRequest) {
   //      there, and the variable at fault is named nowhere the operator looks.
   //      The typed message names the variable and the fix, and it survives
   //      because it is returned from here rather than classified downstream.
-  //   2. IT BURNED QUOTA TO FAIL. `incrementRateLimit` below ran before
+  //   2. IT BURNED QUOTA TO FAIL. The limiter below (then `incrementRateLimit`) ran before
   //      anything had established the endpoint was usable, so every attempt
   //      against a misconfigured instance spent a day's allowance of a reader
   //      who could never have got an answer. Guard first, then increment.
@@ -310,14 +310,14 @@ export async function POST(request: NextRequest) {
   if (picked && !picked.usable) {
     return new Response(JSON.stringify(picksRefusalPayload(consent.statement)), { status: 403, headers: { 'Content-Type': 'application/json' } });
   }
-  const rateLimitInfo = await checkRateLimit(identifier, isAuthenticated);
+  // The rate limit counts a request before it checks it (`consumeRateLimit`).
+  const rateLimitInfo = await consumeRateLimit(identifier, isAuthenticated);
   if (isRateLimited(rateLimitInfo)) {
     return new Response(
       JSON.stringify({ error: 'Rate limit exceeded', rateLimit: rateLimitInfo }),
       { status: 429, headers: { 'Content-Type': 'application/json' } },
     );
   }
-  await incrementRateLimit(identifier, isAuthenticated);
 
   // Build the multi-source system prompt up front so its hash anchors the trace.
   // The configuration is read once, so the prompt, the tools and what the
