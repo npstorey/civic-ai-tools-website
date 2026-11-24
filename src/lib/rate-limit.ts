@@ -217,11 +217,27 @@ export async function checkRateLimit(
 
 /**
  * The rate limit counts a request before it checks it (FIX-1 FX-S2). The one
- * call a route that runs a question makes: the count goes up first, in one
- * step (the key-value store's `incr` is atomic; the memory store's read and
- * write run with no await between them), and the request is refused when the
- * new count is over the limit. Requests sent at once are therefore counted one
- * after another, and no more of them pass than the allowance holds.
+ * call a route that runs a question makes: the count goes up first, and the
+ * request is refused when the new count is over the limit. Which count that is
+ * depends on what the shared count store answers.
+ *
+ * WHILE THE STORE'S INCREMENT ANSWERS, the count is the store's, and it goes
+ * up in one step (`incr` is atomic). Requests sent at once are counted one
+ * after another, and no more of them pass than the allowance holds. A failed
+ * expiry after it changes nothing: the store's count stands. With no store
+ * configured, the memory store counts the same way: its read and write run
+ * with no await between them.
+ *
+ * WHEN THE INCREMENT FAILS, the fallback reads the stored count with `get` and
+ * counts this request on top of the larger of that count and this instance's
+ * memory count, which it records. A request over the allowance is still
+ * refused. The read and the count are not one step: requests sent at once can
+ * each read the same stored count, as under the check-first order. The memory
+ * count orders the ones that reach the same instance; instances do not share
+ * it.
+ *
+ * WHEN THE STORE ANSWERS NOTHING (the increment and the read both fail), the
+ * count is this instance's memory count alone, as before.
  *
  * WHAT IT RETURNS is the allowance as this request found it: `remaining` is
  * the limit less the count before this request, clamped at 0, which is what
@@ -229,9 +245,10 @@ export async function checkRateLimit(
  * `isRateLimited(info)` holds exactly when the new count is over the limit,
  * and the 429 body (`{ error, rateLimit }`) is what it was.
  *
- * WHAT A REFUSED REQUEST LEAVES: the count it added. A refused request now
- * counts one past the limit, where the check-first order left the count at the
- * limit; `/api/rate-limit` reads `remaining` 0 either way, since it is clamped.
+ * WHAT A REFUSED REQUEST LEAVES: the count it added, in whichever store
+ * counted it. A refused request now counts one past the limit, where the
+ * check-first order left the count at the limit; `/api/rate-limit` reads
+ * `remaining` 0 either way, since it is clamped.
  */
 export async function consumeRateLimit(
   identifier: string,
@@ -246,14 +263,30 @@ export async function consumeRateLimit(
   const kvAvailable = process.env.KV_REST_API_URL && process.env.KV_REST_API_TOKEN;
 
   if (kvAvailable) {
+    let stored: number | null = null;
     try {
-      count = await kv.incr(key);
-      // Set expiry to 48 hours. This is also what retires the keys stored
-      // before #516 P1, which carried the identifier: none outlives it.
-      await kv.expire(key, 48 * 60 * 60);
+      stored = await kv.incr(key);
     } catch {
-      // Fall back to memory store
-      count = (memoryStore.get(key) || 0) + 1;
+      // The store did not count this request: the fallback below does.
+    }
+    if (stored !== null) {
+      count = stored;
+      try {
+        // Set expiry to 48 hours. This is also what retires the keys stored
+        // before #516 P1, which carried the identifier: none outlives it.
+        await kv.expire(key, 48 * 60 * 60);
+      } catch {
+        // The store's count stands. A key no expiry has reached has none; it
+        // names its date, so no later day reads it.
+      }
+    } else {
+      let read = 0;
+      try {
+        read = (await kv.get<number>(key)) || 0;
+      } catch {
+        // The store answers nothing: the memory count alone, as before.
+      }
+      count = Math.max(read, memoryStore.get(key) || 0) + 1;
       memoryStore.set(key, count);
     }
   } else {
