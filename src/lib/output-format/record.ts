@@ -7,9 +7,16 @@
  * writes `extensions["org.civicaitools.output-format"] = { preset: { id, version } }`.
  *
  * WRITTEN FROM THE ROOT SPAN AND NOTHING ELSE. The publish body comes from the browser, and the publish route passes its
- * extensions through as received; so a key of this name in the request is replaced by the root span's, and under
- * "Auto" (no attribute) it is dropped. A request that carries no such key is handed back untouched, the same object, so
- * an "Auto" record's bytes are what they were before formats existed (the legacy hash chain hashes insertion order).
+ * extensions through as received; so a key of this name in the request is replaced by the root span's, and when the
+ * root span states no format (this site's "Auto" runs) it is dropped. A request that carries no such key is handed back
+ * untouched, the same object, so an "Auto" record's bytes are what they were before formats existed (the legacy hash
+ * chain hashes insertion order).
+ *
+ * ABSENCE MEANS "NOT RECORDED", NEVER "AUTO" (the seat's ruling 7146180428, item 6). A root span with no attribute is
+ * this site's "Auto" run, but also any trace that recorded none: a BlobRef trace, a trace made before formats existed,
+ * another producer's. So a record with no `org.civicaitools.output-format` key states nothing about the format, as an
+ * absent run attribute states nothing (`packager.ts`, `extractRunAttributes`); a surface that reads the key renders a
+ * missing key as not stated.
  *
  * An attribute that is present but is not exactly `{ id, version }`, both strings, THROWS rather than reading as absent,
  * as the harness's own run attributes do (`extractRunAttributes`): a record that silently lost the format it was asked
@@ -36,7 +43,7 @@ function rootSpan(trace: unknown): SpanLike | undefined {
   return (spans as SpanLike[]).find((s) => s && !s.parentSpanId);
 }
 
-/** The format the run's root span states, or undefined for an "Auto" run (or a trace with no root span). */
+/** The format the run's root span states, or undefined when it states none (an "Auto" run, or a trace that recorded none). */
 export function outputFormatOfTrace(trace: unknown): OutputFormatRef | undefined {
   const attribute = rootSpan(trace)?.attributes?.find((a) => a?.key === OUTPUT_FORMAT_ATTRIBUTE);
   if (!attribute) return undefined;
@@ -59,8 +66,8 @@ export function outputFormatOfTrace(trace: unknown): OutputFormatRef | undefined
 
 /**
  * The extensions a record carries, given the request's and the run's trace: the request's, with
- * `org.civicaitools.output-format` written from the root span (replacing one the request carried) or, under "Auto",
- * removed. Untouched, the same object, when neither the request nor the run names a format.
+ * `org.civicaitools.output-format` written from the root span (replacing one the request carried) or, when the root span
+ * states no format, removed. Untouched, the same object, when neither the request nor the run names a format.
  */
 export function withOutputFormatExtension(
   extensions: Record<string, unknown> | undefined,

@@ -725,7 +725,8 @@ export function buildEvidencePackage(input: PackageInput): { pkg: EvidencePackag
       routingConfiguration: run.routingConfiguration,
       // The format the run was asked for (OF2, website #810; the seat's S4, criterion 7): written from the root span's
       // `analysis.output_format` into `org.civicaitools.output-format`, replacing a key of that name the request
-      // carried, and removed under "Auto". A request with no such key from an "Auto" run is passed through untouched.
+      // carried, and removed when the root span states none (an "Auto" run; absence states nothing, never "Auto"). A
+      // request with no such key from a run that states no format is passed through untouched.
       extensions: withOutputFormatExtension(input.extensions, inspectableTrace),
     },
     { host: requirePublicationHost() },

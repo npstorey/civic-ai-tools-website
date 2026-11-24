@@ -4,7 +4,8 @@
  *
  * "Auto" is not a format here: it is the absence of one. A question in "Auto" carries no `outputFormat` field, its
  * run's root span states nothing, and its record carries no `org.civicaitools.output-format` key, so every byte of it
- * is what it was before formats existed.
+ * is what it was before formats existed. The converse does not hold: a record with no such key states nothing about
+ * the format ("not recorded"), since a trace that recorded none looks the same (`record.ts`).
  *
  *   THE SETTING. `SITE_OUTPUT_FORMAT`: `on` or `off` (trimmed, any case), unset meaning off; any other value is off.
  *     Off, the menu shows no "Output format" item, and a question that names a format anyway is refused. Read at call

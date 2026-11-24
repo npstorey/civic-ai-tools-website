@@ -3041,6 +3041,8 @@ The `load_source` result is one line of plain text with no JSON in it. A loaded 
 
 A `picks` value that is not an array, an empty array, or a list none of whose picks the run can use (none is kept, or none that is kept is On on a run that cannot stop to ask) is refused with `code: "no_picks_usable"` before the rate limiter, the model or any source is called: a `403` on `/api/compare` and `/api/query-notebook`, and an error event per panel on `/api/compare-stream`. Nothing about the picks is stored.
 
+**A question's output format.** A request to `/api/compare-stream` or `/api/query-notebook` may carry `outputFormat`, `{ "id", "version" }`: the format the reader chose under "Output format" ([`SITE_OUTPUT_FORMAT`](#environment-reference-tier-by-tier)). Absent, the question is "Auto". A format this instance does not offer, any value that is not exactly an offered `{ id, version }`, and any `outputFormat` at all with the switch off are refused with `code: "output_format_not_offered"` at the point and on the channel picks are refused, after the picks' check and before the rate limiter, the model or any source: a `403` with a JSON body on `/api/query-notebook`, and an error event per panel on `/api/compare-stream`. `/api/compare` takes no format.
+
 **Models.** Every model in the catalog gets `load_source`. There is no per-model switch.
 
 On 2026-10-19 (run `2026-10-19-quote-184845`), each model was sent one source's guidance through OpenRouter, in two shapes. It was asked to quote the guidance's first line and last sentence.
