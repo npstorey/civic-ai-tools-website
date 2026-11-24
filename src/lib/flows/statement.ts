@@ -324,7 +324,8 @@ export interface FlowsSourceInputs {
  * THE TEST HOOK (A14). A test sets the inputs the statement is built from, so the consent gate, the consent route and
  * the pause's route, which all build through `buildFlowsStatement`, see a manifest of any size (the 200-source
  * fixture). It is a module variable set only by `setFlowsSourceInputsForTests`: no request, header, cookie or
- * environment variable reaches it, and no app module calls the setter (`statement-hook-driven.test.ts` holds both).
+ * environment variable reaches it, and no app module calls the setter
+ * (`src/app/api/sources/consent/consent-stores-s4-driven.test.ts` holds both).
  */
 let sourceInputsForTests: FlowsSourceInputs | null = null;
 
