@@ -231,15 +231,24 @@ Each cost a real mistake; the incident sits in an HTML comment beside it. Path-s
        mid-execution. The same check stopped strays before counting them, so a run that leaked would
        still have printed "STRAYS: 0". Both were fixed before any measurement was taken. -->
 
-- **`Sandbox.list()` returns a wrapper, and one page is not the count.** The rows sit at
-  `.json.sandboxes`, and a bare call returns 20 of them — measured against a scope holding 37. A reader
-  that reaches for `.sandboxes`, or that stops after the first page, gets a confident zero instead of an
-  error. Chain `pagination.next` until it is absent, and check any derived count against a single
-  large-limit read.
+- **`Sandbox.list()` returns a promise of a paginator, and one page is not the count.** At the
+  installed `@vercel/sandbox` 3.9.1 the call returns a promise of a `Paginator`, so it is awaited
+  before `toArray()`, `pages()` or `for await`:
+  `await (await Sandbox.list({ namePrefix, sortBy: 'name' })).toArray()`. The awaited value holds the
+  first page's `sandboxes` and `pagination` at the top level, and only those three walk every page. A
+  reader of `.sandboxes` counts the first page and nothing after it; a reader of the 1.x path
+  `.json.sandboxes` finds no `json` field, so a plain read throws and optional chaining turns it into
+  a confident zero. Before trusting a zero, read the returned object's own keys.
   <!-- Same spike, two instances of one shape. An auth probe read the wrong field of that listing and
        reported success whether or not it had authenticated, so a dry run created a sandbox that billed
        for four minutes with nothing configured; the first cleanup check then read only page one. An
-       instrument that cannot fail is not an instrument — the fixture rule above, one level down. -->
+       instrument that cannot fail is not an instrument — the fixture rule above, one level down.
+       Corrected 2026-11-24: until then this rule described 1.10.2, the spike's version, where the call
+       returned a wrapper `{ json, response, text }` with the rows at `.json.sandboxes`, and a bare call
+       returned 20 rows of a scope holding 37. The repository pins `^3.9.1` (one lockfile copy, 3.9.1);
+       the shape above is read from its `dist/sandbox.d.ts`, `dist/sandbox.js` and
+       `dist/utils/paginator.js`. FX-S3 (#821, 2026-11-23) read its rows with `toArray()`; its close
+       record wrote the call as `list({ … }).toArray()`, which leaves out the await on `list()`. -->
   When a ruling names the records a criterion is for, the criterion is driven on those records,
   read live — a fixture that *can* fail still says nothing about an instance it does not resemble.
   <!-- Wave #434 ruling D8 named the two May records whose calls were refused before outcome marking.
@@ -330,3 +339,36 @@ Each cost a real mistake; the incident sits in an HTML comment beside it. Path-s
        and the migrate guard's `printf | grep -Eq` failed open, no prompt at all, on every
        multi-line command with more than a pipe buffer of lines after the match. None of the three
        is a timing flake: the data was written before the read began. -->
+
+- **A closing keyword closes an issue wherever GitHub finds one.** GitHub reads `close`, `fix` or
+  `resolve`, in any of their forms, followed by an issue reference anywhere in a PR body, including
+  prose that explains why the PR does not close that issue, and in every commit message that lands on
+  main, across a line break or a blank line. The sentence's meaning does not matter. Where an issue
+  must stay open past a merge, never write the keyword beside its number. Read
+  `gh pr view <n> --json closingIssuesReferences` after every write to the body; it must read `[]`.
+  It covers the body only, so before each push this must also print nothing:
+  `git log --format=%B <base>..HEAD | tr '\n' ' ' | grep -oiE '\b(close[sd]?|fix(e[sd])?|resolve[sd]?)[[:space:]:]*#[0-9]+'`.
+  <!-- #794 (2026-11-18): the body said "Refs #790", as ruled, but one of its report lines quoted the
+       header's closing keyword beside #790 to explain why it did not apply, and GitHub linked #790 to
+       close at the merge; rewording the line cleared it. Commit 2f22f9c of #812 (2026-11-21): the
+       subject ended with the keyword and the body began with "#786", across a blank line, and the
+       merge closed #786 with its item 2 still open, while `closingIssuesReferences` read `[]`
+       throughout. -->
+
+- **An agent runs one command per Bash call, and one network or signing operation per call.** No
+  `&&`, `||` or `;` chains: a commit, a push, a tag, a `gh` write and an `op run` each take a call of
+  their own, and Node 24 is reached by prefixing `PATH` with its `bin` directory, not by
+  `eval "$(fnm env)"`. The rule binds this repository's sessions and every brief one of them gives an
+  agent, which states it in its own words. Two failures hide behind a compound call. A signing step
+  beside a network step fails as a whole with an error that names the signing agent, so it reads as
+  a locked vault. And a compound call is the shape that raises an owner permission prompt, which
+  looks like a slow call from inside the session and like a stall from outside it.
+  <!-- Recorded with Wave #345's lessons (2026-08-27/28): a signing step and a push in one call failed
+       with "communication with agent failed"; each alone succeeded, and the failure had read as
+       signing being unavailable to the session. 2026-11-21: one IMPL run was held three times on
+       owner prompts, each a compound call (an `eval` of a command substitution, an `rm -rf`, a pipe
+       into `tar`); its single commands raised none. 2026-11-22/23: briefs carrying the PATH prefix
+       and one command per call ran four IMPLs of 100-170 calls each with no prompt. 2026-11-23: a
+       read-only `;` chain prompted. 2026-11-24: an ORCH session's one call, a `mkdir`, a `cp -p` and
+       a `chmod`, waited about twelve hours on an owner approval, and the session first reported
+       itself idle. Proposed at FIX-1-2's close (#807). -->
