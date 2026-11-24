@@ -100,7 +100,7 @@ const offeredWhenOn = (): unknown => registry?.offeredOutputFormats?.({ SITE_OUT
 
 // --- The words (each a draft for G0b, but the label "Output format", G0-1 = A) -------------------------------------
 
-const W = { item: 'Output format', auto: 'Auto', ds: 'Data sources', session: 'Session type', model: 'Model' };
+const W = { item: 'Output format', auto: 'Auto', autoOption: 'Auto - text as the model writes it', ds: 'Data sources', session: 'Session type', model: 'Model' };
 
 // --- The answers ---------------------------------------------------------------------------------------------------
 
@@ -333,7 +333,7 @@ test('criterion 4 (red, choice a): the choice lasts the browser session, in sess
   const page = await askPage('on');
   await chooseIn(page, W.item, FORMAT.label);
   assert.equal(storage.get('civicaitools.outputFormat'), `${FORMAT.id}@${FORMAT.version}`);
-  await chooseIn(page, W.item, W.auto);
+  await chooseIn(page, W.item, W.autoOption);
   assert.equal(storage.get('civicaitools.outputFormat'), 'auto');
 });
 

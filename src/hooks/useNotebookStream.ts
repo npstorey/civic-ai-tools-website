@@ -173,7 +173,7 @@ export function useNotebookStream() {
     setState(INITIAL_STATE);
   }, []);
 
-  const start = useCallback(async (query: string, model: string, portal: string, picks?: readonly string[]) => {
+  const start = useCallback(async (query: string, model: string, portal: string, picks?: readonly string[], outputFormat?: { id: string; version: string }) => {
     abortRef.current?.abort();
     abortRef.current = new AbortController();
 
@@ -401,7 +401,12 @@ export function useNotebookStream() {
       await connectSSE({
         url: '/api/query-notebook',
         // S3-B W1: the reader's picks, only when the question was sent with them; an Auto body is as it was.
-        body: { query, model, portal, ...(picks ? { picks: [...picks] } : {}) },
+        // OF2 (website #810): the output format, only when one other than Auto was chosen; an Auto body is as it was.
+        body: {
+          query, model, portal,
+          ...(picks ? { picks: [...picks] } : {}),
+          ...(outputFormat ? { outputFormat: { id: outputFormat.id, version: outputFormat.version } } : {}),
+        },
         signal: abortRef.current.signal,
         onEvent: (evt) => handleEvent(evt as RawNotebookEvent),
         onComplete: () => {

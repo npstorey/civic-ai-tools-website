@@ -64,6 +64,7 @@ import {
   InstanceIdentityError,
 } from '../site-config.ts';
 import { canonicalEnvName } from '../publisher-env.ts';
+import { withOutputFormatExtension } from '../output-format/record.ts';
 import { getModelApiKind } from '../model-client.ts';
 import { modelAgentDescription } from '../model-catalog.ts';
 
@@ -722,7 +723,10 @@ export function buildEvidencePackage(input: PackageInput): { pkg: EvidencePackag
       // 0.14.0, ADR-0033 amendment 5), read from the root span's
       // `analysis.routing_configuration`; absent, the key is absent.
       routingConfiguration: run.routingConfiguration,
-      extensions: input.extensions,
+      // The format the run was asked for (OF2, website #810; the seat's S4, criterion 7): written from the root span's
+      // `analysis.output_format` into `org.civicaitools.output-format`, replacing a key of that name the request
+      // carried, and removed under "Auto". A request with no such key from an "Auto" run is passed through untouched.
+      extensions: withOutputFormatExtension(input.extensions, inspectableTrace),
     },
     { host: requirePublicationHost() },
   );

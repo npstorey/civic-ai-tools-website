@@ -114,6 +114,22 @@ export const DATA_SOURCES_ITEM = {
   footer: 'All data sources and your consent',
 } as const;
 
+/**
+ * OF2 (Sprint OF-1, website #810; G0-1 = A, G0-2 = A): the Output format item, directly after Data sources, on an
+ * instance with `SITE_OUTPUT_FORMAT` on. The label is ruled (G0-1 = A); the value, Auto's option line and its
+ * description are DRAFTS for the owner's words memo (G0b). A format's own words travel with it from the registry
+ * (`src/lib/output-format/registry.ts`); OF2 offers none but Auto (G0-9 = A).
+ */
+export const OUTPUT_FORMAT_ITEM = {
+  label: 'Output format',
+  /** The item's value under Auto (draft). */
+  value: 'Auto',
+  /** Auto's option line (draft). */
+  auto: 'Auto - text as the model writes it',
+  /** Auto's description (draft). */
+  autoDescription: 'The answer is the model\'s text, with no other format applied.',
+} as const;
+
 /** Rows 4-5, 15: the Session type item and its two values. */
 export const SESSION_TYPE_ITEM = { label: 'Session type', sandbox: 'Sandbox', standard: 'Standard' } as const;
 /**
