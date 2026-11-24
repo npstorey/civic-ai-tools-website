@@ -1,0 +1,5035 @@
+{
+ "note": "A synthetic 200-source manifest for tests (S4 W1, criteria A1, A6, A14): the hub benchmark inventory benchmark/inventories/200.json at 9ab745a, 21 servers and 179 packs over four bases, with every hosting and log holder an example (.example hosts, Example Holder names, example dates). Not a real configuration; nothing in the app reads it.",
+ "addresses": {
+  "perfect_world": "https://perfect-world.example/mcp",
+  "eu_spain_public_data": "https://eu-spain-public-data.example/mcp",
+  "socrata": "https://socrata.example/mcp",
+  "jersey_opendata": "https://jersey-opendata.example/mcp",
+  "tender": "https://tender.example/mcp",
+  "muhurat": "https://muhurat.example/mcp",
+  "nyc-mta": "https://nyc-mta.example/mcp",
+  "arcgis_johnsoncity": "https://arcgis-johnsoncity.example/mcp",
+  "commercialrealestatefor_sale": "https://commercialrealestatefor-sale.example/mcp",
+  "remjobs": "https://remjobs.example/mcp",
+  "events_43fa58": "https://events-43fa58.example/mcp",
+  "data-commons": "https://data-commons.example/mcp",
+  "boston-opencontext": "https://boston-opencontext.example/mcp",
+  "studiofinder": "https://studiofinder.example/mcp"
+ },
+ "entries": [
+  {
+   "kind": "server",
+   "sourceId": "perfect_world",
+   "alias": "perfect_world",
+   "displayName": "org.everythingisperfect/perfect-world",
+   "freshness": "Not stated: the MCP Registry entry says nothing about how current its data is.",
+   "consentDefault": "on",
+   "hostings": [
+    {
+     "kind": "remote",
+     "variant": "remote",
+     "runsAt": "other",
+     "logging": [
+      {
+       "statedBy": "manifest",
+       "holder": "Example Holder A",
+       "keeps": "metadata",
+       "retention": "Example: 30 days",
+       "statementUrl": "https://holder-a.example/privacy",
+       "readOn": "an example date"
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "kind": "pack",
+   "sourceId": "policedata_coloradosprings_gov",
+   "alias": "policedata_coloradosprings_gov",
+   "displayName": "Colorado Springs Police Department Open Data",
+   "freshness": "Live: queries reach the portal when they are made (a dataset's metadata or a single record may be reused for up to five minutes); each dataset updates on its publisher's schedule.",
+   "base": "socrata",
+   "consentDefault": "on",
+   "hostings": [
+    {
+     "kind": "remote",
+     "variant": "remote",
+     "runsAt": "other",
+     "logging": [
+      {
+       "statedBy": "manifest",
+       "holder": "Example Holder G",
+       "keeps": "none",
+       "statementUrl": "https://holder-g.example/privacy",
+       "readOn": "an example date"
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "kind": "pack",
+   "sourceId": "datahub_austintexas_gov",
+   "alias": "datahub_austintexas_gov",
+   "displayName": "City Data Hub | City of Austin",
+   "freshness": "Live: queries reach the portal when they are made (a dataset's metadata or a single record may be reused for up to five minutes); each dataset updates on its publisher's schedule.",
+   "base": "socrata",
+   "consentDefault": "on",
+   "hostings": [
+    {
+     "kind": "remote",
+     "variant": "remote",
+     "runsAt": "other",
+     "logging": [
+      {
+       "statedBy": "manifest",
+       "holder": "Example Holder G",
+       "keeps": "none",
+       "statementUrl": "https://holder-g.example/privacy",
+       "readOn": "an example date"
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "kind": "pack",
+   "sourceId": "siouxfalls_data_socrata_com",
+   "alias": "siouxfalls_data_socrata_com",
+   "displayName": "City of Sioux Falls Open Data",
+   "freshness": "Live: queries reach the portal when they are made (a dataset's metadata or a single record may be reused for up to five minutes); each dataset updates on its publisher's schedule.",
+   "base": "socrata",
+   "consentDefault": "on",
+   "hostings": [
+    {
+     "kind": "remote",
+     "variant": "remote",
+     "runsAt": "other",
+     "logging": [
+      {
+       "statedBy": "manifest",
+       "holder": "Example Holder G",
+       "keeps": "none",
+       "statementUrl": "https://holder-g.example/privacy",
+       "readOn": "an example date"
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "kind": "server",
+   "sourceId": "nyc-record",
+   "alias": "nyc_record",
+   "displayName": "NYC City Record MCP Server",
+   "freshness": "Live: every call queries the City Record Online dataset on NYC Open Data, which is updated daily.",
+   "consentDefault": "on",
+   "hostings": [
+    {
+     "kind": "npm-package",
+     "variant": "sandbox",
+     "runsAt": "instance-sandbox",
+     "package": "@example/nyc-record",
+     "version": "0.0.0-example",
+     "outbound": [],
+     "logging": [
+      {
+       "statedBy": "manifest",
+       "holder": "Example Holder B",
+       "keeps": "content",
+       "retention": "Example: one year",
+       "statementUrl": "https://holder-b.example/privacy",
+       "readOn": "an example date"
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "kind": "pack",
+   "sourceId": "stutsman_data_socrata_com",
+   "alias": "stutsman_data_socrata_com",
+   "displayName": "Stutsman County Open Finance",
+   "freshness": "Live: queries reach the portal when they are made (a dataset's metadata or a single record may be reused for up to five minutes); each dataset updates on its publisher's schedule.",
+   "base": "socrata",
+   "consentDefault": "on",
+   "hostings": [
+    {
+     "kind": "remote",
+     "variant": "remote",
+     "runsAt": "other",
+     "logging": [
+      {
+       "statedBy": "manifest",
+       "holder": "Example Holder G",
+       "keeps": "none",
+       "statementUrl": "https://holder-g.example/privacy",
+       "readOn": "an example date"
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "kind": "pack",
+   "sourceId": "alpharetta_data_socrata_com",
+   "alias": "alpharetta_data_socrata_com",
+   "displayName": "City of Alpharetta Open Data",
+   "freshness": "Live: queries reach the portal when they are made (a dataset's metadata or a single record may be reused for up to five minutes); each dataset updates on its publisher's schedule.",
+   "base": "socrata",
+   "consentDefault": "on",
+   "hostings": [
+    {
+     "kind": "remote",
+     "variant": "remote",
+     "runsAt": "other",
+     "logging": [
+      {
+       "statedBy": "manifest",
+       "holder": "Example Holder G",
+       "keeps": "none",
+       "statementUrl": "https://holder-g.example/privacy",
+       "readOn": "an example date"
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "kind": "pack",
+   "sourceId": "citydata_mesaaz_gov",
+   "alias": "citydata_mesaaz_gov",
+   "displayName": "City of Mesa Internal Performance Portal",
+   "freshness": "Live: queries reach the portal when they are made (a dataset's metadata or a single record may be reused for up to five minutes); each dataset updates on its publisher's schedule.",
+   "base": "socrata",
+   "consentDefault": "on",
+   "hostings": [
+    {
+     "kind": "remote",
+     "variant": "remote",
+     "runsAt": "other",
+     "logging": [
+      {
+       "statedBy": "manifest",
+       "holder": "Example Holder G",
+       "keeps": "none",
+       "statementUrl": "https://holder-g.example/privacy",
+       "readOn": "an example date"
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "kind": "pack",
+   "sourceId": "data_auburnwa_gov",
+   "alias": "data_auburnwa_gov",
+   "displayName": "Auburn Open Data",
+   "freshness": "Live: queries reach the portal when they are made (a dataset's metadata or a single record may be reused for up to five minutes); each dataset updates on its publisher's schedule.",
+   "base": "socrata",
+   "consentDefault": "on",
+   "hostings": [
+    {
+     "kind": "remote",
+     "variant": "remote",
+     "runsAt": "other",
+     "logging": [
+      {
+       "statedBy": "manifest",
+       "holder": "Example Holder G",
+       "keeps": "none",
+       "statementUrl": "https://holder-g.example/privacy",
+       "readOn": "an example date"
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "kind": "pack",
+   "sourceId": "highways_hidot_hawaii_gov",
+   "alias": "highways_hidot_hawaii_gov",
+   "displayName": "State of Hawaii Department of Transportation",
+   "freshness": "Live: queries reach the portal when they are made (a dataset's metadata or a single record may be reused for up to five minutes); each dataset updates on its publisher's schedule.",
+   "base": "socrata",
+   "consentDefault": "on",
+   "hostings": [
+    {
+     "kind": "remote",
+     "variant": "remote",
+     "runsAt": "other",
+     "logging": [
+      {
+       "statedBy": "manifest",
+       "holder": "Example Holder G",
+       "keeps": "none",
+       "statementUrl": "https://holder-g.example/privacy",
+       "readOn": "an example date"
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "kind": "pack",
+   "sourceId": "data_kingcounty_gov",
+   "alias": "data_kingcounty_gov",
+   "displayName": "King County Open Data",
+   "freshness": "Live: queries reach the portal when they are made (a dataset's metadata or a single record may be reused for up to five minutes); each dataset updates on its publisher's schedule.",
+   "base": "socrata",
+   "consentDefault": "on",
+   "hostings": [
+    {
+     "kind": "remote",
+     "variant": "remote",
+     "runsAt": "other",
+     "logging": [
+      {
+       "statedBy": "manifest",
+       "holder": "Example Holder G",
+       "keeps": "none",
+       "statementUrl": "https://holder-g.example/privacy",
+       "readOn": "an example date"
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "kind": "server",
+   "sourceId": "nyc-checkbook",
+   "alias": "nyc_checkbook",
+   "displayName": "NYC Checkbook MCP Server",
+   "freshness": "Live: every call queries Checkbook NYC as it stands, and the server spaces its requests at least 1.1 seconds apart.",
+   "consentDefault": "ask-first",
+   "hostings": [
+    {
+     "kind": "npm-package",
+     "variant": "sandbox",
+     "runsAt": "instance-sandbox",
+     "package": "@example/nyc-checkbook",
+     "version": "0.0.0-example",
+     "outbound": [],
+     "logging": [
+      {
+       "statedBy": "manifest",
+       "holder": "Example Holder C",
+       "keeps": "none",
+       "statementUrl": "https://holder-c.example/privacy",
+       "readOn": "an example date"
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "kind": "pack",
+   "sourceId": "data_ohiocourtofclaims_gov",
+   "alias": "data_ohiocourtofclaims_gov",
+   "displayName": "Ohio Court of Claims Open Data",
+   "freshness": "Live: queries reach the portal when they are made (a dataset's metadata or a single record may be reused for up to five minutes); each dataset updates on its publisher's schedule.",
+   "base": "socrata",
+   "consentDefault": "on",
+   "hostings": [
+    {
+     "kind": "remote",
+     "variant": "remote",
+     "runsAt": "other",
+     "logging": [
+      {
+       "statedBy": "manifest",
+       "holder": "Example Holder G",
+       "keeps": "none",
+       "statementUrl": "https://holder-g.example/privacy",
+       "readOn": "an example date"
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "kind": "pack",
+   "sourceId": "data_richmondgov_com",
+   "alias": "data_richmondgov_com",
+   "displayName": "Richmond GeoHub / data.richmondgov.com",
+   "freshness": "Live: queries reach the portal when they are made (a dataset's metadata or a single record may be reused for up to five minutes); each dataset updates on its publisher's schedule.",
+   "base": "socrata",
+   "consentDefault": "on",
+   "hostings": [
+    {
+     "kind": "remote",
+     "variant": "remote",
+     "runsAt": "other",
+     "logging": [
+      {
+       "statedBy": "manifest",
+       "holder": "Example Holder G",
+       "keeps": "none",
+       "statementUrl": "https://holder-g.example/privacy",
+       "readOn": "an example date"
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "kind": "pack",
+   "sourceId": "datacatalog_cookcountyil_gov",
+   "alias": "datacatalog_cookcountyil_gov",
+   "displayName": "Cook County Government Open Data",
+   "freshness": "Live: queries reach the portal when they are made (a dataset's metadata or a single record may be reused for up to five minutes); each dataset updates on its publisher's schedule.",
+   "base": "socrata",
+   "consentDefault": "on",
+   "hostings": [
+    {
+     "kind": "remote",
+     "variant": "remote",
+     "runsAt": "other",
+     "logging": [
+      {
+       "statedBy": "manifest",
+       "holder": "Example Holder G",
+       "keeps": "none",
+       "statementUrl": "https://holder-g.example/privacy",
+       "readOn": "an example date"
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "kind": "pack",
+   "sourceId": "nvof_open_data_socrata_com",
+   "alias": "nvof_open_data_socrata_com",
+   "displayName": "Nevada Open Finance",
+   "freshness": "Live: queries reach the portal when they are made (a dataset's metadata or a single record may be reused for up to five minutes); each dataset updates on its publisher's schedule.",
+   "base": "socrata",
+   "consentDefault": "on",
+   "hostings": [
+    {
+     "kind": "remote",
+     "variant": "remote",
+     "runsAt": "other",
+     "logging": [
+      {
+       "statedBy": "manifest",
+       "holder": "Example Holder G",
+       "keeps": "none",
+       "statementUrl": "https://holder-g.example/privacy",
+       "readOn": "an example date"
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "kind": "pack",
+   "sourceId": "ugos_info",
+   "alias": "ugos_info",
+   "displayName": "Understanding Gulf Ocean Systems Data Catalog",
+   "freshness": "Live: each call would query the portal's CKAN API as it stands; each dataset updates on its publisher's schedule.",
+   "base": "boston-opencontext",
+   "consentDefault": "on",
+   "hostings": [
+    {
+     "kind": "remote",
+     "variant": "remote",
+     "runsAt": "other",
+     "logging": [
+      {
+       "statedBy": "manifest",
+       "holder": "Example Holder T",
+       "keeps": "not-stated",
+       "statementUrl": "https://holder-t.example/privacy",
+       "readOn": "an example date"
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "kind": "pack",
+   "sourceId": "opendata_winchesterva_gov",
+   "alias": "opendata_winchesterva_gov",
+   "displayName": "Winchester VA",
+   "freshness": "Live: each call would query the portal's CKAN API as it stands; each dataset updates on its publisher's schedule.",
+   "base": "boston-opencontext",
+   "consentDefault": "on",
+   "hostings": [
+    {
+     "kind": "remote",
+     "variant": "remote",
+     "runsAt": "other",
+     "logging": [
+      {
+       "statedBy": "manifest",
+       "holder": "Example Holder T",
+       "keeps": "not-stated",
+       "statementUrl": "https://holder-t.example/privacy",
+       "readOn": "an example date"
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "kind": "pack",
+   "sourceId": "data_bloomington_in_gov",
+   "alias": "data_bloomington_in_gov",
+   "displayName": "City of Bloomington Open Data Portal",
+   "freshness": "Live: queries reach the portal when they are made (a dataset's metadata or a single record may be reused for up to five minutes); each dataset updates on its publisher's schedule.",
+   "base": "socrata",
+   "consentDefault": "on",
+   "hostings": [
+    {
+     "kind": "remote",
+     "variant": "remote",
+     "runsAt": "other",
+     "logging": [
+      {
+       "statedBy": "manifest",
+       "holder": "Example Holder G",
+       "keeps": "none",
+       "statementUrl": "https://holder-g.example/privacy",
+       "readOn": "an example date"
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "kind": "server",
+   "sourceId": "nyc-charter",
+   "alias": "nyc_charter",
+   "displayName": "NYC Charter, Laws and Rules MCP Server",
+   "freshness": "Pinned to version 0.3.1 of the publisher's package and the index it bundles: the Charter and the Administrative Code are current through Local Law 2026/147, enacted September 12, 2026, and the Rules through rules effective October 4, 2026.",
+   "consentDefault": "on",
+   "hostings": [
+    {
+     "kind": "npm-package",
+     "variant": "sandbox",
+     "runsAt": "instance-sandbox",
+     "package": "@example/nyc-charter",
+     "version": "0.0.0-example",
+     "outbound": [],
+     "logging": [
+      {
+       "statedBy": "manifest",
+       "holder": "Example Holder D",
+       "keeps": "not-stated",
+       "statementUrl": "https://holder-d.example/privacy",
+       "readOn": "an example date"
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "kind": "pack",
+   "sourceId": "data_readingpa_gov",
+   "alias": "data_readingpa_gov",
+   "displayName": "Open Reading | Open Data Reading",
+   "freshness": "Live: queries reach the portal when they are made (a dataset's metadata or a single record may be reused for up to five minutes); each dataset updates on its publisher's schedule.",
+   "base": "socrata",
+   "consentDefault": "on",
+   "hostings": [
+    {
+     "kind": "remote",
+     "variant": "remote",
+     "runsAt": "other",
+     "logging": [
+      {
+       "statedBy": "manifest",
+       "holder": "Example Holder G",
+       "keeps": "none",
+       "statementUrl": "https://holder-g.example/privacy",
+       "readOn": "an example date"
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "kind": "pack",
+   "sourceId": "internal_open_piercecountywa_gov",
+   "alias": "internal_open_piercecountywa_gov",
+   "displayName": "Pierce County, WA Data Catalog",
+   "freshness": "Live: queries reach the portal when they are made (a dataset's metadata or a single record may be reused for up to five minutes); each dataset updates on its publisher's schedule.",
+   "base": "socrata",
+   "consentDefault": "on",
+   "hostings": [
+    {
+     "kind": "remote",
+     "variant": "remote",
+     "runsAt": "other",
+     "logging": [
+      {
+       "statedBy": "manifest",
+       "holder": "Example Holder G",
+       "keeps": "none",
+       "statementUrl": "https://holder-g.example/privacy",
+       "readOn": "an example date"
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "kind": "pack",
+   "sourceId": "parkeronline_data_socrata_com",
+   "alias": "parkeronline_data_socrata_com",
+   "displayName": "Town of Parker Open Data",
+   "freshness": "Live: queries reach the portal when they are made (a dataset's metadata or a single record may be reused for up to five minutes); each dataset updates on its publisher's schedule.",
+   "base": "socrata",
+   "consentDefault": "on",
+   "hostings": [
+    {
+     "kind": "remote",
+     "variant": "remote",
+     "runsAt": "other",
+     "logging": [
+      {
+       "statedBy": "manifest",
+       "holder": "Example Holder G",
+       "keeps": "none",
+       "statementUrl": "https://holder-g.example/privacy",
+       "readOn": "an example date"
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "kind": "pack",
+   "sourceId": "data_fultoncountyga_gov",
+   "alias": "data_fultoncountyga_gov",
+   "displayName": "Fulton County, Georgia - Open Data",
+   "freshness": "Live: queries reach the portal when they are made (a dataset's metadata or a single record may be reused for up to five minutes); each dataset updates on its publisher's schedule.",
+   "base": "socrata",
+   "consentDefault": "on",
+   "hostings": [
+    {
+     "kind": "remote",
+     "variant": "remote",
+     "runsAt": "other",
+     "logging": [
+      {
+       "statedBy": "manifest",
+       "holder": "Example Holder G",
+       "keeps": "none",
+       "statementUrl": "https://holder-g.example/privacy",
+       "readOn": "an example date"
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "kind": "pack",
+   "sourceId": "datahub_smcgov_org",
+   "alias": "datahub_smcgov_org",
+   "displayName": "San Mateo County Data Catalog",
+   "freshness": "Live: queries reach the portal when they are made (a dataset's metadata or a single record may be reused for up to five minutes); each dataset updates on its publisher's schedule.",
+   "base": "socrata",
+   "consentDefault": "on",
+   "hostings": [
+    {
+     "kind": "remote",
+     "variant": "remote",
+     "runsAt": "other",
+     "logging": [
+      {
+       "statedBy": "manifest",
+       "holder": "Example Holder G",
+       "keeps": "none",
+       "statementUrl": "https://holder-g.example/privacy",
+       "readOn": "an example date"
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "kind": "pack",
+   "sourceId": "future_michigan_gov",
+   "alias": "future_michigan_gov",
+   "displayName": "Open Michigan",
+   "freshness": "Live: queries reach the portal when they are made (a dataset's metadata or a single record may be reused for up to five minutes); each dataset updates on its publisher's schedule.",
+   "base": "socrata",
+   "consentDefault": "on",
+   "hostings": [
+    {
+     "kind": "remote",
+     "variant": "remote",
+     "runsAt": "other",
+     "logging": [
+      {
+       "statedBy": "manifest",
+       "holder": "Example Holder G",
+       "keeps": "none",
+       "statementUrl": "https://holder-g.example/privacy",
+       "readOn": "an example date"
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "kind": "pack",
+   "sourceId": "cityofchicago_v2_demo_soc_759933",
+   "alias": "cityofchicago_v2_demo_soc_759933",
+   "displayName": "City of Chicago | Data Portal",
+   "freshness": "Live: queries reach the portal when they are made (a dataset's metadata or a single record may be reused for up to five minutes); each dataset updates on its publisher's schedule.",
+   "base": "socrata",
+   "consentDefault": "on",
+   "hostings": [
+    {
+     "kind": "remote",
+     "variant": "remote",
+     "runsAt": "other",
+     "logging": [
+      {
+       "statedBy": "manifest",
+       "holder": "Example Holder G",
+       "keeps": "none",
+       "statementUrl": "https://holder-g.example/privacy",
+       "readOn": "an example date"
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "kind": "pack",
+   "sourceId": "metroairports_data_socrata_com",
+   "alias": "metroairports_data_socrata_com",
+   "displayName": "MAC Sustainability | Sustainability - Metro Airports",
+   "freshness": "Live: queries reach the portal when they are made (a dataset's metadata or a single record may be reused for up to five minutes); each dataset updates on its publisher's schedule.",
+   "base": "socrata",
+   "consentDefault": "on",
+   "hostings": [
+    {
+     "kind": "remote",
+     "variant": "remote",
+     "runsAt": "other",
+     "logging": [
+      {
+       "statedBy": "manifest",
+       "holder": "Example Holder G",
+       "keeps": "none",
+       "statementUrl": "https://holder-g.example/privacy",
+       "readOn": "an example date"
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "kind": "pack",
+   "sourceId": "data_sf_gov",
+   "alias": "data_sf_gov",
+   "displayName": "San Francisco Open Data Portal",
+   "freshness": "Live: queries reach the portal when they are made (a dataset's metadata or a single record may be reused for up to five minutes); each dataset updates on its publisher's schedule.",
+   "base": "socrata",
+   "consentDefault": "on",
+   "hostings": [
+    {
+     "kind": "remote",
+     "variant": "remote",
+     "runsAt": "other",
+     "logging": [
+      {
+       "statedBy": "manifest",
+       "holder": "Example Holder G",
+       "keeps": "none",
+       "statementUrl": "https://holder-g.example/privacy",
+       "readOn": "an example date"
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "kind": "pack",
+   "sourceId": "wifire_data_sdsc_edu",
+   "alias": "wifire_data_sdsc_edu",
+   "displayName": "WIFIRE Commons Data Catalog",
+   "freshness": "Live: each call would query the portal's CKAN API as it stands; each dataset updates on its publisher's schedule.",
+   "base": "boston-opencontext",
+   "consentDefault": "on",
+   "hostings": [
+    {
+     "kind": "remote",
+     "variant": "remote",
+     "runsAt": "other",
+     "logging": [
+      {
+       "statedBy": "manifest",
+       "holder": "Example Holder T",
+       "keeps": "not-stated",
+       "statementUrl": "https://holder-t.example/privacy",
+       "readOn": "an example date"
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "kind": "pack",
+   "sourceId": "open_piercecountywa_gov",
+   "alias": "open_piercecountywa_gov",
+   "displayName": "Open Pierce County",
+   "freshness": "Live: queries reach the portal when they are made (a dataset's metadata or a single record may be reused for up to five minutes); each dataset updates on its publisher's schedule.",
+   "base": "socrata",
+   "consentDefault": "on",
+   "hostings": [
+    {
+     "kind": "remote",
+     "variant": "remote",
+     "runsAt": "other",
+     "logging": [
+      {
+       "statedBy": "manifest",
+       "holder": "Example Holder G",
+       "keeps": "none",
+       "statementUrl": "https://holder-g.example/privacy",
+       "readOn": "an example date"
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "kind": "pack",
+   "sourceId": "data_fortworthtexas_gov",
+   "alias": "data_fortworthtexas_gov",
+   "displayName": "Open Data Portal for the City of Fort Worth",
+   "freshness": "Live: queries reach the portal when they are made (a dataset's metadata or a single record may be reused for up to five minutes); each dataset updates on its publisher's schedule.",
+   "base": "socrata",
+   "consentDefault": "on",
+   "hostings": [
+    {
+     "kind": "remote",
+     "variant": "remote",
+     "runsAt": "other",
+     "logging": [
+      {
+       "statedBy": "manifest",
+       "holder": "Example Holder G",
+       "keeps": "none",
+       "statementUrl": "https://holder-g.example/privacy",
+       "readOn": "an example date"
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "kind": "server",
+   "sourceId": "eu_spain_public_data",
+   "alias": "eu_spain_public_data",
+   "displayName": "EU & Spain Public Data (BOE, BORME, EU funding, TED)",
+   "freshness": "Not stated: the MCP Registry entry says nothing about how current its data is.",
+   "consentDefault": "on",
+   "hostings": [
+    {
+     "kind": "remote",
+     "variant": "remote",
+     "runsAt": "other",
+     "logging": [
+      {
+       "statedBy": "manifest",
+       "holder": "Example Holder E",
+       "keeps": "metadata",
+       "retention": "Example: 30 days",
+       "statementUrl": "https://holder-e.example/privacy",
+       "readOn": "an example date"
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "kind": "pack",
+   "sourceId": "impact_stlouisco_com",
+   "alias": "impact_stlouisco_com",
+   "displayName": "Impact STLCO",
+   "freshness": "Live: queries reach the portal when they are made (a dataset's metadata or a single record may be reused for up to five minutes); each dataset updates on its publisher's schedule.",
+   "base": "socrata",
+   "consentDefault": "on",
+   "hostings": [
+    {
+     "kind": "remote",
+     "variant": "remote",
+     "runsAt": "other",
+     "logging": [
+      {
+       "statedBy": "manifest",
+       "holder": "Example Holder G",
+       "keeps": "none",
+       "statementUrl": "https://holder-g.example/privacy",
+       "readOn": "an example date"
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "kind": "pack",
+   "sourceId": "fortlauderdale_data_socrata_com",
+   "alias": "fortlauderdale_data_socrata_com",
+   "displayName": "City of Fort Lauderdale Police Department | Performance Management | City of Fort Lauderdale Police Department",
+   "freshness": "Live: queries reach the portal when they are made (a dataset's metadata or a single record may be reused for up to five minutes); each dataset updates on its publisher's schedule.",
+   "base": "socrata",
+   "consentDefault": "on",
+   "hostings": [
+    {
+     "kind": "remote",
+     "variant": "remote",
+     "runsAt": "other",
+     "logging": [
+      {
+       "statedBy": "manifest",
+       "holder": "Example Holder G",
+       "keeps": "none",
+       "statementUrl": "https://holder-g.example/privacy",
+       "readOn": "an example date"
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "kind": "pack",
+   "sourceId": "indio_data_socrata_com",
+   "alias": "indio_data_socrata_com",
+   "displayName": "City of Indio Open Finance",
+   "freshness": "Live: queries reach the portal when they are made (a dataset's metadata or a single record may be reused for up to five minutes); each dataset updates on its publisher's schedule.",
+   "base": "socrata",
+   "consentDefault": "on",
+   "hostings": [
+    {
+     "kind": "remote",
+     "variant": "remote",
+     "runsAt": "other",
+     "logging": [
+      {
+       "statedBy": "manifest",
+       "holder": "Example Holder G",
+       "keeps": "none",
+       "statementUrl": "https://holder-g.example/privacy",
+       "readOn": "an example date"
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "kind": "pack",
+   "sourceId": "data_chhs_ca_gov",
+   "alias": "data_chhs_ca_gov",
+   "displayName": "California Health and Human Services Open Data Portal",
+   "freshness": "Live: each call would query the portal's CKAN API as it stands; each dataset updates on its publisher's schedule.",
+   "base": "boston-opencontext",
+   "consentDefault": "on",
+   "hostings": [
+    {
+     "kind": "remote",
+     "variant": "remote",
+     "runsAt": "other",
+     "logging": [
+      {
+       "statedBy": "manifest",
+       "holder": "Example Holder T",
+       "keeps": "not-stated",
+       "statementUrl": "https://holder-t.example/privacy",
+       "readOn": "an example date"
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "kind": "pack",
+   "sourceId": "data_everettwa_gov",
+   "alias": "data_everettwa_gov",
+   "displayName": "Everett Open Data Portal",
+   "freshness": "Live: queries reach the portal when they are made (a dataset's metadata or a single record may be reused for up to five minutes); each dataset updates on its publisher's schedule.",
+   "base": "socrata",
+   "consentDefault": "on",
+   "hostings": [
+    {
+     "kind": "remote",
+     "variant": "remote",
+     "runsAt": "other",
+     "logging": [
+      {
+       "statedBy": "manifest",
+       "holder": "Example Holder G",
+       "keeps": "none",
+       "statementUrl": "https://holder-g.example/privacy",
+       "readOn": "an example date"
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "kind": "pack",
+   "sourceId": "bythenumbers_sco_ca_gov_2",
+   "alias": "bythenumbers_sco_ca_gov_2",
+   "displayName": "By The Numbers - CA Local Government Financial Data",
+   "freshness": "Live: queries reach the portal when they are made (a dataset's metadata or a single record may be reused for up to five minutes); each dataset updates on its publisher's schedule.",
+   "base": "socrata",
+   "consentDefault": "on",
+   "hostings": [
+    {
+     "kind": "remote",
+     "variant": "remote",
+     "runsAt": "other",
+     "logging": [
+      {
+       "statedBy": "manifest",
+       "holder": "Example Holder G",
+       "keeps": "none",
+       "statementUrl": "https://holder-g.example/privacy",
+       "readOn": "an example date"
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "kind": "server",
+   "sourceId": "nyc-311",
+   "alias": "nyc_311",
+   "displayName": "nyc-311-mcp",
+   "freshness": "Live: queries the NYC 311 Public API at request time.",
+   "consentDefault": "on",
+   "hostings": [
+    {
+     "kind": "npm-package",
+     "variant": "sandbox",
+     "runsAt": "instance-sandbox",
+     "package": "@example/nyc-311",
+     "version": "0.0.0-example",
+     "outbound": [],
+     "logging": [
+      {
+       "statedBy": "manifest",
+       "holder": "Example Holder F",
+       "keeps": "content",
+       "retention": "Example: one year",
+       "statementUrl": "https://holder-f.example/privacy",
+       "readOn": "an example date"
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "kind": "server",
+   "sourceId": "socrata",
+   "alias": "socrata",
+   "displayName": "Socrata MCP Server",
+   "freshness": "Live: queries reach the portal when they are made (a dataset's metadata or a single record may be reused for up to five minutes); each dataset updates on its publisher's schedule.",
+   "consentDefault": "on",
+   "hostings": [
+    {
+     "kind": "remote",
+     "variant": "remote",
+     "runsAt": "other",
+     "logging": [
+      {
+       "statedBy": "manifest",
+       "holder": "Example Holder G",
+       "keeps": "none",
+       "statementUrl": "https://holder-g.example/privacy",
+       "readOn": "an example date"
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "kind": "server",
+   "sourceId": "jersey_opendata",
+   "alias": "jersey_opendata",
+   "displayName": "Jersey Opendata",
+   "freshness": "Not stated: the MCP Registry entry says nothing about how current its data is.",
+   "consentDefault": "on",
+   "hostings": [
+    {
+     "kind": "remote",
+     "variant": "remote",
+     "runsAt": "other",
+     "logging": [
+      {
+       "statedBy": "manifest",
+       "holder": "Example Holder H",
+       "keeps": "not-stated",
+       "statementUrl": "https://holder-h.example/privacy",
+       "readOn": "an example date"
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "kind": "pack",
+   "sourceId": "gainesville_govstat_demo_fee6f9",
+   "alias": "gainesville_govstat_demo_fee6f9",
+   "displayName": "Open Data Portal | statGNV",
+   "freshness": "Live: queries reach the portal when they are made (a dataset's metadata or a single record may be reused for up to five minutes); each dataset updates on its publisher's schedule.",
+   "base": "socrata",
+   "consentDefault": "on",
+   "hostings": [
+    {
+     "kind": "remote",
+     "variant": "remote",
+     "runsAt": "other",
+     "logging": [
+      {
+       "statedBy": "manifest",
+       "holder": "Example Holder G",
+       "keeps": "none",
+       "statementUrl": "https://holder-g.example/privacy",
+       "readOn": "an example date"
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "kind": "pack",
+   "sourceId": "fusioncenter_nhit_org",
+   "alias": "fusioncenter_nhit_org",
+   "displayName": "NHIT Data Fusion Center\u00ae",
+   "freshness": "Live: queries reach the portal when they are made (a dataset's metadata or a single record may be reused for up to five minutes); each dataset updates on its publisher's schedule.",
+   "base": "socrata",
+   "consentDefault": "on",
+   "hostings": [
+    {
+     "kind": "remote",
+     "variant": "remote",
+     "runsAt": "other",
+     "logging": [
+      {
+       "statedBy": "manifest",
+       "holder": "Example Holder G",
+       "keeps": "none",
+       "statementUrl": "https://holder-g.example/privacy",
+       "readOn": "an example date"
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "kind": "server",
+   "sourceId": "tender",
+   "alias": "tender",
+   "displayName": "Tender MCP",
+   "freshness": "Not stated: the MCP Registry entry says nothing about how current its data is.",
+   "consentDefault": "on",
+   "hostings": [
+    {
+     "kind": "remote",
+     "variant": "remote",
+     "runsAt": "other",
+     "logging": [
+      {
+       "statedBy": "manifest",
+       "holder": "Example Holder I",
+       "keeps": "metadata",
+       "retention": "Example: 30 days",
+       "statementUrl": "https://holder-i.example/privacy",
+       "readOn": "an example date"
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "kind": "pack",
+   "sourceId": "www_datahub_va_gov",
+   "alias": "www_datahub_va_gov",
+   "displayName": "Department of Veterans Affairs Data Hub",
+   "freshness": "Live: queries reach the portal when they are made (a dataset's metadata or a single record may be reused for up to five minutes); each dataset updates on its publisher's schedule.",
+   "base": "socrata",
+   "consentDefault": "on",
+   "hostings": [
+    {
+     "kind": "remote",
+     "variant": "remote",
+     "runsAt": "other",
+     "logging": [
+      {
+       "statedBy": "manifest",
+       "holder": "Example Holder G",
+       "keeps": "none",
+       "statementUrl": "https://holder-g.example/privacy",
+       "readOn": "an example date"
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "kind": "pack",
+   "sourceId": "data_mo_gov",
+   "alias": "data_mo_gov",
+   "displayName": "State of Missouri Open data portal",
+   "freshness": "Live: queries reach the portal when they are made (a dataset's metadata or a single record may be reused for up to five minutes); each dataset updates on its publisher's schedule.",
+   "base": "socrata",
+   "consentDefault": "on",
+   "hostings": [
+    {
+     "kind": "remote",
+     "variant": "remote",
+     "runsAt": "other",
+     "logging": [
+      {
+       "statedBy": "manifest",
+       "holder": "Example Holder G",
+       "keeps": "none",
+       "statementUrl": "https://holder-g.example/privacy",
+       "readOn": "an example date"
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "kind": "pack",
+   "sourceId": "datadiscovery_nlm_nih_gov",
+   "alias": "datadiscovery_nlm_nih_gov",
+   "displayName": "National Library of Medicine | National Institutes of Health | Open Data Portal",
+   "freshness": "Live: queries reach the portal when they are made (a dataset's metadata or a single record may be reused for up to five minutes); each dataset updates on its publisher's schedule.",
+   "base": "socrata",
+   "consentDefault": "on",
+   "hostings": [
+    {
+     "kind": "remote",
+     "variant": "remote",
+     "runsAt": "other",
+     "logging": [
+      {
+       "statedBy": "manifest",
+       "holder": "Example Holder G",
+       "keeps": "none",
+       "statementUrl": "https://holder-g.example/privacy",
+       "readOn": "an example date"
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "kind": "pack",
+   "sourceId": "data_cdc_gov",
+   "alias": "data_cdc_gov",
+   "displayName": "Data | Centers for Disease Control and Prevention - CDC",
+   "freshness": "Live: queries reach the portal when they are made (a dataset's metadata or a single record may be reused for up to five minutes); each dataset updates on its publisher's schedule.",
+   "base": "socrata",
+   "consentDefault": "on",
+   "hostings": [
+    {
+     "kind": "remote",
+     "variant": "remote",
+     "runsAt": "other",
+     "logging": [
+      {
+       "statedBy": "manifest",
+       "holder": "Example Holder G",
+       "keeps": "none",
+       "statementUrl": "https://holder-g.example/privacy",
+       "readOn": "an example date"
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "kind": "server",
+   "sourceId": "muhurat",
+   "alias": "muhurat",
+   "displayName": "Naksha Muhurat",
+   "freshness": "Not stated: the MCP Registry entry says nothing about how current its data is.",
+   "consentDefault": "on",
+   "hostings": [
+    {
+     "kind": "remote",
+     "variant": "remote",
+     "runsAt": "other",
+     "logging": [
+      {
+       "statedBy": "manifest",
+       "holder": "Example Holder J",
+       "keeps": "content",
+       "retention": "Example: one year",
+       "statementUrl": "https://holder-j.example/privacy",
+       "readOn": "an example date"
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "kind": "pack",
+   "sourceId": "data_brla_gov",
+   "alias": "data_brla_gov",
+   "displayName": "Open Data Baton Rouge",
+   "freshness": "Live: queries reach the portal when they are made (a dataset's metadata or a single record may be reused for up to five minutes); each dataset updates on its publisher's schedule.",
+   "base": "socrata",
+   "consentDefault": "on",
+   "hostings": [
+    {
+     "kind": "remote",
+     "variant": "remote",
+     "runsAt": "other",
+     "logging": [
+      {
+       "statedBy": "manifest",
+       "holder": "Example Holder G",
+       "keeps": "none",
+       "statementUrl": "https://holder-g.example/privacy",
+       "readOn": "an example date"
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "kind": "pack",
+   "sourceId": "springfield_data_socrata_com",
+   "alias": "springfield_data_socrata_com",
+   "displayName": "Springfield Open Data",
+   "freshness": "Live: queries reach the portal when they are made (a dataset's metadata or a single record may be reused for up to five minutes); each dataset updates on its publisher's schedule.",
+   "base": "socrata",
+   "consentDefault": "on",
+   "hostings": [
+    {
+     "kind": "remote",
+     "variant": "remote",
+     "runsAt": "other",
+     "logging": [
+      {
+       "statedBy": "manifest",
+       "holder": "Example Holder G",
+       "keeps": "none",
+       "statementUrl": "https://holder-g.example/privacy",
+       "readOn": "an example date"
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "kind": "pack",
+   "sourceId": "dubuque_data_socrata_com",
+   "alias": "dubuque_data_socrata_com",
+   "displayName": "City of Dubuque Open Data",
+   "freshness": "Live: queries reach the portal when they are made (a dataset's metadata or a single record may be reused for up to five minutes); each dataset updates on its publisher's schedule.",
+   "base": "socrata",
+   "consentDefault": "on",
+   "hostings": [
+    {
+     "kind": "remote",
+     "variant": "remote",
+     "runsAt": "other",
+     "logging": [
+      {
+       "statedBy": "manifest",
+       "holder": "Example Holder G",
+       "keeps": "none",
+       "statementUrl": "https://holder-g.example/privacy",
+       "readOn": "an example date"
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "kind": "pack",
+   "sourceId": "data_sccgov_org",
+   "alias": "data_sccgov_org",
+   "displayName": "County of Santa Clara Open Data Portal",
+   "freshness": "Live: queries reach the portal when they are made (a dataset's metadata or a single record may be reused for up to five minutes); each dataset updates on its publisher's schedule.",
+   "base": "socrata",
+   "consentDefault": "on",
+   "hostings": [
+    {
+     "kind": "remote",
+     "variant": "remote",
+     "runsAt": "other",
+     "logging": [
+      {
+       "statedBy": "manifest",
+       "holder": "Example Holder G",
+       "keeps": "none",
+       "statementUrl": "https://holder-g.example/privacy",
+       "readOn": "an example date"
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "kind": "pack",
+   "sourceId": "data_norfolk_gov",
+   "alias": "data_norfolk_gov",
+   "displayName": "City of Norfolk Data | Open Data Portal - City of Norfolk, VA Open Data",
+   "freshness": "Live: queries reach the portal when they are made (a dataset's metadata or a single record may be reused for up to five minutes); each dataset updates on its publisher's schedule.",
+   "base": "socrata",
+   "consentDefault": "on",
+   "hostings": [
+    {
+     "kind": "remote",
+     "variant": "remote",
+     "runsAt": "other",
+     "logging": [
+      {
+       "statedBy": "manifest",
+       "holder": "Example Holder G",
+       "keeps": "none",
+       "statementUrl": "https://holder-g.example/privacy",
+       "readOn": "an example date"
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "kind": "pack",
+   "sourceId": "data_wa_gov",
+   "alias": "data_wa_gov",
+   "displayName": "Washington State Open Data Portal",
+   "freshness": "Live: queries reach the portal when they are made (a dataset's metadata or a single record may be reused for up to five minutes); each dataset updates on its publisher's schedule.",
+   "base": "socrata",
+   "consentDefault": "on",
+   "hostings": [
+    {
+     "kind": "remote",
+     "variant": "remote",
+     "runsAt": "other",
+     "logging": [
+      {
+       "statedBy": "manifest",
+       "holder": "Example Holder G",
+       "keeps": "none",
+       "statementUrl": "https://holder-g.example/privacy",
+       "readOn": "an example date"
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "kind": "pack",
+   "sourceId": "data_ca_gov",
+   "alias": "data_ca_gov",
+   "displayName": "California Open Data Portal",
+   "freshness": "Live: each call would query the portal's CKAN API as it stands; each dataset updates on its publisher's schedule.",
+   "base": "boston-opencontext",
+   "consentDefault": "on",
+   "hostings": [
+    {
+     "kind": "remote",
+     "variant": "remote",
+     "runsAt": "other",
+     "logging": [
+      {
+       "statedBy": "manifest",
+       "holder": "Example Holder T",
+       "keeps": "not-stated",
+       "statementUrl": "https://holder-t.example/privacy",
+       "readOn": "an example date"
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "kind": "pack",
+   "sourceId": "cthru_data_socrata_com",
+   "alias": "cthru_data_socrata_com",
+   "displayName": "CTHRU - Massachusetts Financial Transparency",
+   "freshness": "Live: queries reach the portal when they are made (a dataset's metadata or a single record may be reused for up to five minutes); each dataset updates on its publisher's schedule.",
+   "base": "socrata",
+   "consentDefault": "on",
+   "hostings": [
+    {
+     "kind": "remote",
+     "variant": "remote",
+     "runsAt": "other",
+     "logging": [
+      {
+       "statedBy": "manifest",
+       "holder": "Example Holder G",
+       "keeps": "none",
+       "statementUrl": "https://holder-g.example/privacy",
+       "readOn": "an example date"
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "kind": "pack",
+   "sourceId": "data_mesaaz_gov",
+   "alias": "data_mesaaz_gov",
+   "displayName": "City of Mesa GIS Data Portal",
+   "freshness": "Live: queries reach the portal when they are made (a dataset's metadata or a single record may be reused for up to five minutes); each dataset updates on its publisher's schedule.",
+   "base": "socrata",
+   "consentDefault": "on",
+   "hostings": [
+    {
+     "kind": "remote",
+     "variant": "remote",
+     "runsAt": "other",
+     "logging": [
+      {
+       "statedBy": "manifest",
+       "holder": "Example Holder G",
+       "keeps": "none",
+       "statementUrl": "https://holder-g.example/privacy",
+       "readOn": "an example date"
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "kind": "pack",
+   "sourceId": "data_capitol_texas_gov",
+   "alias": "data_capitol_texas_gov",
+   "displayName": "Capitol Data Portal",
+   "freshness": "Live: each call would query the portal's CKAN API as it stands; each dataset updates on its publisher's schedule.",
+   "base": "boston-opencontext",
+   "consentDefault": "on",
+   "hostings": [
+    {
+     "kind": "remote",
+     "variant": "remote",
+     "runsAt": "other",
+     "logging": [
+      {
+       "statedBy": "manifest",
+       "holder": "Example Holder T",
+       "keeps": "not-stated",
+       "statementUrl": "https://holder-t.example/privacy",
+       "readOn": "an example date"
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "kind": "pack",
+   "sourceId": "data_oxnard_org",
+   "alias": "data_oxnard_org",
+   "displayName": "City of Oxnard Spatial Data Portal",
+   "freshness": "Live: queries reach the portal when they are made (a dataset's metadata or a single record may be reused for up to five minutes); each dataset updates on its publisher's schedule.",
+   "base": "socrata",
+   "consentDefault": "on",
+   "hostings": [
+    {
+     "kind": "remote",
+     "variant": "remote",
+     "runsAt": "other",
+     "logging": [
+      {
+       "statedBy": "manifest",
+       "holder": "Example Holder G",
+       "keeps": "none",
+       "statementUrl": "https://holder-g.example/privacy",
+       "readOn": "an example date"
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "kind": "pack",
+   "sourceId": "atlanta_data_socrata_com",
+   "alias": "atlanta_data_socrata_com",
+   "displayName": "City of Atlanta Financial Data Portal",
+   "freshness": "Live: queries reach the portal when they are made (a dataset's metadata or a single record may be reused for up to five minutes); each dataset updates on its publisher's schedule.",
+   "base": "socrata",
+   "consentDefault": "on",
+   "hostings": [
+    {
+     "kind": "remote",
+     "variant": "remote",
+     "runsAt": "other",
+     "logging": [
+      {
+       "statedBy": "manifest",
+       "holder": "Example Holder G",
+       "keeps": "none",
+       "statementUrl": "https://holder-g.example/privacy",
+       "readOn": "an example date"
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "kind": "server",
+   "sourceId": "nyc-mta",
+   "alias": "nyc_mta",
+   "displayName": "mta-mcp",
+   "freshness": "Live MTA feeds for alerts and outages; station names from a bundled snapshot of MTA's static GTFS.",
+   "consentDefault": "on",
+   "hostings": [
+    {
+     "kind": "remote",
+     "variant": "remote",
+     "runsAt": "other",
+     "logging": [
+      {
+       "statedBy": "manifest",
+       "holder": "Example Holder K",
+       "keeps": "none",
+       "statementUrl": "https://holder-k.example/privacy",
+       "readOn": "an example date"
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "kind": "pack",
+   "sourceId": "data_cambridgema_gov",
+   "alias": "data_cambridgema_gov",
+   "displayName": "City of Cambridge, MA Open Data Catalog",
+   "freshness": "Live: queries reach the portal when they are made (a dataset's metadata or a single record may be reused for up to five minutes); each dataset updates on its publisher's schedule.",
+   "base": "socrata",
+   "consentDefault": "on",
+   "hostings": [
+    {
+     "kind": "remote",
+     "variant": "remote",
+     "runsAt": "other",
+     "logging": [
+      {
+       "statedBy": "manifest",
+       "holder": "Example Holder G",
+       "keeps": "none",
+       "statementUrl": "https://holder-g.example/privacy",
+       "readOn": "an example date"
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "kind": "pack",
+   "sourceId": "mischooldata_data_socrata_com",
+   "alias": "mischooldata_data_socrata_com",
+   "displayName": "MI School Data Open Data Portal",
+   "freshness": "Live: queries reach the portal when they are made (a dataset's metadata or a single record may be reused for up to five minutes); each dataset updates on its publisher's schedule.",
+   "base": "socrata",
+   "consentDefault": "on",
+   "hostings": [
+    {
+     "kind": "remote",
+     "variant": "remote",
+     "runsAt": "other",
+     "logging": [
+      {
+       "statedBy": "manifest",
+       "holder": "Example Holder G",
+       "keeps": "none",
+       "statementUrl": "https://holder-g.example/privacy",
+       "readOn": "an example date"
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "kind": "pack",
+   "sourceId": "chicago_socrata_com",
+   "alias": "chicago_socrata_com",
+   "displayName": "Chicago Open Data Portal",
+   "freshness": "Live: queries reach the portal when they are made (a dataset's metadata or a single record may be reused for up to five minutes); each dataset updates on its publisher's schedule.",
+   "base": "socrata",
+   "consentDefault": "on",
+   "hostings": [
+    {
+     "kind": "remote",
+     "variant": "remote",
+     "runsAt": "other",
+     "logging": [
+      {
+       "statedBy": "manifest",
+       "holder": "Example Holder G",
+       "keeps": "none",
+       "statementUrl": "https://holder-g.example/privacy",
+       "readOn": "an example date"
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "kind": "pack",
+   "sourceId": "educationtocareer_data_mass_gov",
+   "alias": "educationtocareer_data_mass_gov",
+   "displayName": "Massachusetts Education-to-Career Research and Data Hub",
+   "freshness": "Live: queries reach the portal when they are made (a dataset's metadata or a single record may be reused for up to five minutes); each dataset updates on its publisher's schedule.",
+   "base": "socrata",
+   "consentDefault": "on",
+   "hostings": [
+    {
+     "kind": "remote",
+     "variant": "remote",
+     "runsAt": "other",
+     "logging": [
+      {
+       "statedBy": "manifest",
+       "holder": "Example Holder G",
+       "keeps": "none",
+       "statementUrl": "https://holder-g.example/privacy",
+       "readOn": "an example date"
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "kind": "pack",
+   "sourceId": "data_pa_gov_2",
+   "alias": "data_pa_gov_2",
+   "displayName": "Open Data Pennsylvania",
+   "freshness": "Live: queries reach the portal when they are made (a dataset's metadata or a single record may be reused for up to five minutes); each dataset updates on its publisher's schedule.",
+   "base": "socrata",
+   "consentDefault": "on",
+   "hostings": [
+    {
+     "kind": "remote",
+     "variant": "remote",
+     "runsAt": "other",
+     "logging": [
+      {
+       "statedBy": "manifest",
+       "holder": "Example Holder G",
+       "keeps": "none",
+       "statementUrl": "https://holder-g.example/privacy",
+       "readOn": "an example date"
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "kind": "pack",
+   "sourceId": "policeview_johnscreekga_gov",
+   "alias": "policeview_johnscreekga_gov",
+   "displayName": "Johns Creek Police Department",
+   "freshness": "Live: queries reach the portal when they are made (a dataset's metadata or a single record may be reused for up to five minutes); each dataset updates on its publisher's schedule.",
+   "base": "socrata",
+   "consentDefault": "on",
+   "hostings": [
+    {
+     "kind": "remote",
+     "variant": "remote",
+     "runsAt": "other",
+     "logging": [
+      {
+       "statedBy": "manifest",
+       "holder": "Example Holder G",
+       "keeps": "none",
+       "statementUrl": "https://holder-g.example/privacy",
+       "readOn": "an example date"
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "kind": "pack",
+   "sourceId": "transparencyarchive_michigan_gov",
+   "alias": "transparencyarchive_michigan_gov",
+   "displayName": "MI Transparency - State Expenditures",
+   "freshness": "Live: queries reach the portal when they are made (a dataset's metadata or a single record may be reused for up to five minutes); each dataset updates on its publisher's schedule.",
+   "base": "socrata",
+   "consentDefault": "on",
+   "hostings": [
+    {
+     "kind": "remote",
+     "variant": "remote",
+     "runsAt": "other",
+     "logging": [
+      {
+       "statedBy": "manifest",
+       "holder": "Example Holder G",
+       "keeps": "none",
+       "statementUrl": "https://holder-g.example/privacy",
+       "readOn": "an example date"
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "kind": "pack",
+   "sourceId": "opendata_socrata_com",
+   "alias": "opendata_socrata_com",
+   "displayName": "Open Data by Socrata",
+   "freshness": "Live: queries reach the portal when they are made (a dataset's metadata or a single record may be reused for up to five minutes); each dataset updates on its publisher's schedule.",
+   "base": "socrata",
+   "consentDefault": "on",
+   "hostings": [
+    {
+     "kind": "remote",
+     "variant": "remote",
+     "runsAt": "other",
+     "logging": [
+      {
+       "statedBy": "manifest",
+       "holder": "Example Holder G",
+       "keeps": "none",
+       "statementUrl": "https://holder-g.example/privacy",
+       "readOn": "an example date"
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "kind": "pack",
+   "sourceId": "data_cityofchicago_org",
+   "alias": "data_cityofchicago_org",
+   "displayName": "Chicago, Il Open Data",
+   "freshness": "Live: queries reach the portal when they are made (a dataset's metadata or a single record may be reused for up to five minutes); each dataset updates on its publisher's schedule.",
+   "base": "socrata",
+   "consentDefault": "on",
+   "hostings": [
+    {
+     "kind": "remote",
+     "variant": "remote",
+     "runsAt": "other",
+     "logging": [
+      {
+       "statedBy": "manifest",
+       "holder": "Example Holder G",
+       "keeps": "none",
+       "statementUrl": "https://holder-g.example/privacy",
+       "readOn": "an example date"
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "kind": "pack",
+   "sourceId": "data_cityoforlando_net_2",
+   "alias": "data_cityoforlando_net_2",
+   "displayName": "City of Orlando Open Data Portal",
+   "freshness": "Live: queries reach the portal when they are made (a dataset's metadata or a single record may be reused for up to five minutes); each dataset updates on its publisher's schedule.",
+   "base": "socrata",
+   "consentDefault": "on",
+   "hostings": [
+    {
+     "kind": "remote",
+     "variant": "remote",
+     "runsAt": "other",
+     "logging": [
+      {
+       "statedBy": "manifest",
+       "holder": "Example Holder G",
+       "keeps": "none",
+       "statementUrl": "https://holder-g.example/privacy",
+       "readOn": "an example date"
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "kind": "pack",
+   "sourceId": "dashboard_plano_gov",
+   "alias": "dashboard_plano_gov",
+   "displayName": "City of Plano | Open Data Portal",
+   "freshness": "Live: queries reach the portal when they are made (a dataset's metadata or a single record may be reused for up to five minutes); each dataset updates on its publisher's schedule.",
+   "base": "socrata",
+   "consentDefault": "on",
+   "hostings": [
+    {
+     "kind": "remote",
+     "variant": "remote",
+     "runsAt": "other",
+     "logging": [
+      {
+       "statedBy": "manifest",
+       "holder": "Example Holder G",
+       "keeps": "none",
+       "statementUrl": "https://holder-g.example/privacy",
+       "readOn": "an example date"
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "kind": "pack",
+   "sourceId": "data_pa_gov",
+   "alias": "data_pa_gov",
+   "displayName": "Open Data Pennsylvania",
+   "freshness": "Live: queries reach the portal when they are made (a dataset's metadata or a single record may be reused for up to five minutes); each dataset updates on its publisher's schedule.",
+   "base": "socrata",
+   "consentDefault": "on",
+   "hostings": [
+    {
+     "kind": "remote",
+     "variant": "remote",
+     "runsAt": "other",
+     "logging": [
+      {
+       "statedBy": "manifest",
+       "holder": "Example Holder G",
+       "keeps": "none",
+       "statementUrl": "https://holder-g.example/privacy",
+       "readOn": "an example date"
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "kind": "pack",
+   "sourceId": "data_ucar_edu",
+   "alias": "data_ucar_edu",
+   "displayName": "DASH Search",
+   "freshness": "Live: each call would query the portal's CKAN API as it stands; each dataset updates on its publisher's schedule.",
+   "base": "boston-opencontext",
+   "consentDefault": "on",
+   "hostings": [
+    {
+     "kind": "remote",
+     "variant": "remote",
+     "runsAt": "other",
+     "logging": [
+      {
+       "statedBy": "manifest",
+       "holder": "Example Holder T",
+       "keeps": "not-stated",
+       "statementUrl": "https://holder-t.example/privacy",
+       "readOn": "an example date"
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "kind": "pack",
+   "sourceId": "health_data_ny_gov",
+   "alias": "health_data_ny_gov",
+   "displayName": "Health Data NY",
+   "freshness": "Live: queries reach the portal when they are made (a dataset's metadata or a single record may be reused for up to five minutes); each dataset updates on its publisher's schedule.",
+   "base": "socrata",
+   "consentDefault": "on",
+   "hostings": [
+    {
+     "kind": "remote",
+     "variant": "remote",
+     "runsAt": "other",
+     "logging": [
+      {
+       "statedBy": "manifest",
+       "holder": "Example Holder G",
+       "keeps": "none",
+       "statementUrl": "https://holder-g.example/privacy",
+       "readOn": "an example date"
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "kind": "pack",
+   "sourceId": "data_amerigeoss_org",
+   "alias": "data_amerigeoss_org",
+   "displayName": "AmeriGEOSS Community Platform DataHub. (BETA)",
+   "freshness": "Live: each call would query the portal's CKAN API as it stands; each dataset updates on its publisher's schedule.",
+   "base": "boston-opencontext",
+   "consentDefault": "on",
+   "hostings": [
+    {
+     "kind": "remote",
+     "variant": "remote",
+     "runsAt": "other",
+     "logging": [
+      {
+       "statedBy": "manifest",
+       "holder": "Example Holder T",
+       "keeps": "not-stated",
+       "statementUrl": "https://holder-t.example/privacy",
+       "readOn": "an example date"
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "kind": "pack",
+   "sourceId": "boston_pack",
+   "alias": "boston_pack",
+   "displayName": "Boston OpenContext MCP Server (pack)",
+   "freshness": "Live: each call queries the CKAN data store behind data.boston.gov; each dataset updates on the City's schedule (311 daily, crime weekly, assessor annually).",
+   "base": "boston-opencontext",
+   "consentDefault": "on",
+   "hostings": [
+    {
+     "kind": "remote",
+     "variant": "remote",
+     "runsAt": "other",
+     "logging": [
+      {
+       "statedBy": "manifest",
+       "holder": "Example Holder T",
+       "keeps": "not-stated",
+       "statementUrl": "https://holder-t.example/privacy",
+       "readOn": "an example date"
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "kind": "pack",
+   "sourceId": "washoe_data_socrata_com",
+   "alias": "washoe_data_socrata_com",
+   "displayName": "Washoe County Open Finance",
+   "freshness": "Live: queries reach the portal when they are made (a dataset's metadata or a single record may be reused for up to five minutes); each dataset updates on its publisher's schedule.",
+   "base": "socrata",
+   "consentDefault": "on",
+   "hostings": [
+    {
+     "kind": "remote",
+     "variant": "remote",
+     "runsAt": "other",
+     "logging": [
+      {
+       "statedBy": "manifest",
+       "holder": "Example Holder G",
+       "keeps": "none",
+       "statementUrl": "https://holder-g.example/privacy",
+       "readOn": "an example date"
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "kind": "pack",
+   "sourceId": "data_modestogov_com",
+   "alias": "data_modestogov_com",
+   "displayName": "Modesto City View",
+   "freshness": "Live: queries reach the portal when they are made (a dataset's metadata or a single record may be reused for up to five minutes); each dataset updates on its publisher's schedule.",
+   "base": "socrata",
+   "consentDefault": "on",
+   "hostings": [
+    {
+     "kind": "remote",
+     "variant": "remote",
+     "runsAt": "other",
+     "logging": [
+      {
+       "statedBy": "manifest",
+       "holder": "Example Holder G",
+       "keeps": "none",
+       "statementUrl": "https://holder-g.example/privacy",
+       "readOn": "an example date"
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "kind": "pack",
+   "sourceId": "healthdata_tn_gov",
+   "alias": "healthdata_tn_gov",
+   "displayName": "TDH Health Data",
+   "freshness": "Live: queries reach the portal when they are made (a dataset's metadata or a single record may be reused for up to five minutes); each dataset updates on its publisher's schedule.",
+   "base": "socrata",
+   "consentDefault": "on",
+   "hostings": [
+    {
+     "kind": "remote",
+     "variant": "remote",
+     "runsAt": "other",
+     "logging": [
+      {
+       "statedBy": "manifest",
+       "holder": "Example Holder G",
+       "keeps": "none",
+       "statementUrl": "https://holder-g.example/privacy",
+       "readOn": "an example date"
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "kind": "pack",
+   "sourceId": "data_orcities_org",
+   "alias": "data_orcities_org",
+   "displayName": "LOC Open Data Portal",
+   "freshness": "Live: queries reach the portal when they are made (a dataset's metadata or a single record may be reused for up to five minutes); each dataset updates on its publisher's schedule.",
+   "base": "socrata",
+   "consentDefault": "on",
+   "hostings": [
+    {
+     "kind": "remote",
+     "variant": "remote",
+     "runsAt": "other",
+     "logging": [
+      {
+       "statedBy": "manifest",
+       "holder": "Example Holder G",
+       "keeps": "none",
+       "statementUrl": "https://holder-g.example/privacy",
+       "readOn": "an example date"
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "kind": "pack",
+   "sourceId": "amrdcdata_ssec_wisc_edu",
+   "alias": "amrdcdata_ssec_wisc_edu",
+   "displayName": "Antarctic Meteorological Research and Data Center",
+   "freshness": "Live: each call would query the portal's CKAN API as it stands; each dataset updates on its publisher's schedule.",
+   "base": "boston-opencontext",
+   "consentDefault": "on",
+   "hostings": [
+    {
+     "kind": "remote",
+     "variant": "remote",
+     "runsAt": "other",
+     "logging": [
+      {
+       "statedBy": "manifest",
+       "holder": "Example Holder T",
+       "keeps": "not-stated",
+       "statementUrl": "https://holder-t.example/privacy",
+       "readOn": "an example date"
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "kind": "pack",
+   "sourceId": "data_roseville_ca_us",
+   "alias": "data_roseville_ca_us",
+   "displayName": "Roseville Open Data",
+   "freshness": "Live: queries reach the portal when they are made (a dataset's metadata or a single record may be reused for up to five minutes); each dataset updates on its publisher's schedule.",
+   "base": "socrata",
+   "consentDefault": "on",
+   "hostings": [
+    {
+     "kind": "remote",
+     "variant": "remote",
+     "runsAt": "other",
+     "logging": [
+      {
+       "statedBy": "manifest",
+       "holder": "Example Holder G",
+       "keeps": "none",
+       "statementUrl": "https://holder-g.example/privacy",
+       "readOn": "an example date"
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "kind": "pack",
+   "sourceId": "data_colorado_gov",
+   "alias": "data_colorado_gov",
+   "displayName": "Colorado Information Marketplace",
+   "freshness": "Live: queries reach the portal when they are made (a dataset's metadata or a single record may be reused for up to five minutes); each dataset updates on its publisher's schedule.",
+   "base": "socrata",
+   "consentDefault": "on",
+   "hostings": [
+    {
+     "kind": "remote",
+     "variant": "remote",
+     "runsAt": "other",
+     "logging": [
+      {
+       "statedBy": "manifest",
+       "holder": "Example Holder G",
+       "keeps": "none",
+       "statementUrl": "https://holder-g.example/privacy",
+       "readOn": "an example date"
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "kind": "pack",
+   "sourceId": "clatsop_data_socrata_com",
+   "alias": "clatsop_data_socrata_com",
+   "displayName": "Clatsop County Open Finance",
+   "freshness": "Live: queries reach the portal when they are made (a dataset's metadata or a single record may be reused for up to five minutes); each dataset updates on its publisher's schedule.",
+   "base": "socrata",
+   "consentDefault": "on",
+   "hostings": [
+    {
+     "kind": "remote",
+     "variant": "remote",
+     "runsAt": "other",
+     "logging": [
+      {
+       "statedBy": "manifest",
+       "holder": "Example Holder G",
+       "keeps": "none",
+       "statementUrl": "https://holder-g.example/privacy",
+       "readOn": "an example date"
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "kind": "pack",
+   "sourceId": "data_myneighborhooddata_org",
+   "alias": "data_myneighborhooddata_org",
+   "displayName": "Neighborhood Data for Social Change",
+   "freshness": "Live: queries reach the portal when they are made (a dataset's metadata or a single record may be reused for up to five minutes); each dataset updates on its publisher's schedule.",
+   "base": "socrata",
+   "consentDefault": "on",
+   "hostings": [
+    {
+     "kind": "remote",
+     "variant": "remote",
+     "runsAt": "other",
+     "logging": [
+      {
+       "statedBy": "manifest",
+       "holder": "Example Holder G",
+       "keeps": "none",
+       "statementUrl": "https://holder-g.example/privacy",
+       "readOn": "an example date"
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "kind": "pack",
+   "sourceId": "opendata_hawaii_gov",
+   "alias": "opendata_hawaii_gov",
+   "displayName": "Hawaii Open Data",
+   "freshness": "Live: each call would query the portal's CKAN API as it stands; each dataset updates on its publisher's schedule.",
+   "base": "boston-opencontext",
+   "consentDefault": "on",
+   "hostings": [
+    {
+     "kind": "remote",
+     "variant": "remote",
+     "runsAt": "other",
+     "logging": [
+      {
+       "statedBy": "manifest",
+       "holder": "Example Holder T",
+       "keeps": "not-stated",
+       "statementUrl": "https://holder-t.example/privacy",
+       "readOn": "an example date"
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "kind": "pack",
+   "sourceId": "opendata_fcgov_com",
+   "alias": "opendata_fcgov_com",
+   "displayName": "OpenData Fort Collins",
+   "freshness": "Live: queries reach the portal when they are made (a dataset's metadata or a single record may be reused for up to five minutes); each dataset updates on its publisher's schedule.",
+   "base": "socrata",
+   "consentDefault": "on",
+   "hostings": [
+    {
+     "kind": "remote",
+     "variant": "remote",
+     "runsAt": "other",
+     "logging": [
+      {
+       "statedBy": "manifest",
+       "holder": "Example Holder G",
+       "keeps": "none",
+       "statementUrl": "https://holder-g.example/privacy",
+       "readOn": "an example date"
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "kind": "pack",
+   "sourceId": "data_mmcp_ms_gov",
+   "alias": "data_mmcp_ms_gov",
+   "displayName": "Mississippi Medical Cannabis Program Data Portal",
+   "freshness": "Live: queries reach the portal when they are made (a dataset's metadata or a single record may be reused for up to five minutes); each dataset updates on its publisher's schedule.",
+   "base": "socrata",
+   "consentDefault": "on",
+   "hostings": [
+    {
+     "kind": "remote",
+     "variant": "remote",
+     "runsAt": "other",
+     "logging": [
+      {
+       "statedBy": "manifest",
+       "holder": "Example Holder G",
+       "keeps": "none",
+       "statementUrl": "https://holder-g.example/privacy",
+       "readOn": "an example date"
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "kind": "pack",
+   "sourceId": "civicdata_com",
+   "alias": "civicdata_com",
+   "displayName": "CivicData/Accela Open Data Portal",
+   "freshness": "Live: each call would query the portal's CKAN API as it stands; each dataset updates on its publisher's schedule.",
+   "base": "boston-opencontext",
+   "consentDefault": "on",
+   "hostings": [
+    {
+     "kind": "remote",
+     "variant": "remote",
+     "runsAt": "other",
+     "logging": [
+      {
+       "statedBy": "manifest",
+       "holder": "Example Holder T",
+       "keeps": "not-stated",
+       "statementUrl": "https://holder-t.example/privacy",
+       "readOn": "an example date"
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "kind": "pack",
+   "sourceId": "data_honolulu_gov",
+   "alias": "data_honolulu_gov",
+   "displayName": "Honolulu County, Hi Open Data",
+   "freshness": "Live: queries reach the portal when they are made (a dataset's metadata or a single record may be reused for up to five minutes); each dataset updates on its publisher's schedule.",
+   "base": "socrata",
+   "consentDefault": "on",
+   "hostings": [
+    {
+     "kind": "remote",
+     "variant": "remote",
+     "runsAt": "other",
+     "logging": [
+      {
+       "statedBy": "manifest",
+       "holder": "Example Holder G",
+       "keeps": "none",
+       "statementUrl": "https://holder-g.example/privacy",
+       "readOn": "an example date"
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "kind": "pack",
+   "sourceId": "performance_fultoncountyga_gov",
+   "alias": "performance_fultoncountyga_gov",
+   "displayName": "Rally | Open Data Portal | Fulton Performance",
+   "freshness": "Live: queries reach the portal when they are made (a dataset's metadata or a single record may be reused for up to five minutes); each dataset updates on its publisher's schedule.",
+   "base": "socrata",
+   "consentDefault": "on",
+   "hostings": [
+    {
+     "kind": "remote",
+     "variant": "remote",
+     "runsAt": "other",
+     "logging": [
+      {
+       "statedBy": "manifest",
+       "holder": "Example Holder G",
+       "keeps": "none",
+       "statementUrl": "https://holder-g.example/privacy",
+       "readOn": "an example date"
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "kind": "pack",
+   "sourceId": "data_ct_gov",
+   "alias": "data_ct_gov",
+   "displayName": "Connecticut Open Data",
+   "freshness": "Live: queries reach the portal when they are made (a dataset's metadata or a single record may be reused for up to five minutes); each dataset updates on its publisher's schedule.",
+   "base": "socrata",
+   "consentDefault": "on",
+   "hostings": [
+    {
+     "kind": "remote",
+     "variant": "remote",
+     "runsAt": "other",
+     "logging": [
+      {
+       "statedBy": "manifest",
+       "holder": "Example Holder G",
+       "keeps": "none",
+       "statementUrl": "https://holder-g.example/privacy",
+       "readOn": "an example date"
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "kind": "pack",
+   "sourceId": "auditor_ca_demo_socrata_com",
+   "alias": "auditor_ca_demo_socrata_com",
+   "displayName": "California State Auditor Open Data",
+   "freshness": "Live: queries reach the portal when they are made (a dataset's metadata or a single record may be reused for up to five minutes); each dataset updates on its publisher's schedule.",
+   "base": "socrata",
+   "consentDefault": "on",
+   "hostings": [
+    {
+     "kind": "remote",
+     "variant": "remote",
+     "runsAt": "other",
+     "logging": [
+      {
+       "statedBy": "manifest",
+       "holder": "Example Holder G",
+       "keeps": "none",
+       "statementUrl": "https://holder-g.example/privacy",
+       "readOn": "an example date"
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "kind": "pack",
+   "sourceId": "datahub_smcgov_org_2",
+   "alias": "datahub_smcgov_org_2",
+   "displayName": "San Mateo County Data Catalog",
+   "freshness": "Live: queries reach the portal when they are made (a dataset's metadata or a single record may be reused for up to five minutes); each dataset updates on its publisher's schedule.",
+   "base": "socrata",
+   "consentDefault": "on",
+   "hostings": [
+    {
+     "kind": "remote",
+     "variant": "remote",
+     "runsAt": "other",
+     "logging": [
+      {
+       "statedBy": "manifest",
+       "holder": "Example Holder G",
+       "keeps": "none",
+       "statementUrl": "https://holder-g.example/privacy",
+       "readOn": "an example date"
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "kind": "pack",
+   "sourceId": "data_urbanaillinois_us",
+   "alias": "data_urbanaillinois_us",
+   "displayName": "Data Catalog: Urbana, IL",
+   "freshness": "Live: queries reach the portal when they are made (a dataset's metadata or a single record may be reused for up to five minutes); each dataset updates on its publisher's schedule.",
+   "base": "socrata",
+   "consentDefault": "on",
+   "hostings": [
+    {
+     "kind": "remote",
+     "variant": "remote",
+     "runsAt": "other",
+     "logging": [
+      {
+       "statedBy": "manifest",
+       "holder": "Example Holder G",
+       "keeps": "none",
+       "statementUrl": "https://holder-g.example/privacy",
+       "readOn": "an example date"
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "kind": "pack",
+   "sourceId": "data_ok_gov",
+   "alias": "data_ok_gov",
+   "displayName": "Oklahoma Data Catalog",
+   "freshness": "Live: each call would query the portal's CKAN API as it stands; each dataset updates on its publisher's schedule.",
+   "base": "boston-opencontext",
+   "consentDefault": "on",
+   "hostings": [
+    {
+     "kind": "remote",
+     "variant": "remote",
+     "runsAt": "other",
+     "logging": [
+      {
+       "statedBy": "manifest",
+       "holder": "Example Holder T",
+       "keeps": "not-stated",
+       "statementUrl": "https://holder-t.example/privacy",
+       "readOn": "an example date"
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "kind": "server",
+   "sourceId": "nyc-council",
+   "alias": "nyc_council",
+   "displayName": "nyc-council-mcp",
+   "freshness": "Live Legistar API, plus a local index built from an archive of Council legislation where the deployment provides one.",
+   "consentDefault": "on",
+   "hostings": [
+    {
+     "kind": "npm-package",
+     "variant": "sandbox",
+     "runsAt": "instance-sandbox",
+     "package": "@example/nyc-council",
+     "version": "0.0.0-example",
+     "outbound": [],
+     "logging": [
+      {
+       "statedBy": "manifest",
+       "holder": "Example Holder L",
+       "keeps": "not-stated",
+       "statementUrl": "https://holder-l.example/privacy",
+       "readOn": "an example date"
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "kind": "pack",
+   "sourceId": "data_permits_performance_gov",
+   "alias": "data_permits_performance_gov",
+   "displayName": "Open Data Portal | FPISC Reports | Permitting Data Platform",
+   "freshness": "Live: queries reach the portal when they are made (a dataset's metadata or a single record may be reused for up to five minutes); each dataset updates on its publisher's schedule.",
+   "base": "socrata",
+   "consentDefault": "on",
+   "hostings": [
+    {
+     "kind": "remote",
+     "variant": "remote",
+     "runsAt": "other",
+     "logging": [
+      {
+       "statedBy": "manifest",
+       "holder": "Example Holder G",
+       "keeps": "none",
+       "statementUrl": "https://holder-g.example/privacy",
+       "readOn": "an example date"
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "kind": "server",
+   "sourceId": "arcgis_johnsoncity",
+   "alias": "arcgis_johnsoncity",
+   "displayName": "Arcgis Johnsoncity",
+   "freshness": "Not stated: the MCP Registry entry says nothing about how current its data is.",
+   "consentDefault": "on",
+   "hostings": [
+    {
+     "kind": "remote",
+     "variant": "remote",
+     "runsAt": "other",
+     "logging": [
+      {
+       "statedBy": "manifest",
+       "holder": "Example Holder M",
+       "keeps": "metadata",
+       "retention": "Example: 30 days",
+       "statementUrl": "https://holder-m.example/privacy",
+       "readOn": "an example date"
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "kind": "server",
+   "sourceId": "nys-legislation",
+   "alias": "nys_legislation",
+   "displayName": "NYS Open Legislation MCP Server",
+   "freshness": "Live: every call queries the Senate's Open Legislation API as it stands.",
+   "consentDefault": "ask-first",
+   "hostings": [
+    {
+     "kind": "npm-package",
+     "variant": "sandbox",
+     "runsAt": "instance-sandbox",
+     "package": "@example/nys-legislation",
+     "version": "0.0.0-example",
+     "outbound": [],
+     "logging": [
+      {
+       "statedBy": "manifest",
+       "holder": "Example Holder N",
+       "keeps": "content",
+       "retention": "Example: one year",
+       "statementUrl": "https://holder-n.example/privacy",
+       "readOn": "an example date"
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "kind": "pack",
+   "sourceId": "washoe_data_socrata_com_2",
+   "alias": "washoe_data_socrata_com_2",
+   "displayName": "Washoe County Open Finance",
+   "freshness": "Live: queries reach the portal when they are made (a dataset's metadata or a single record may be reused for up to five minutes); each dataset updates on its publisher's schedule.",
+   "base": "socrata",
+   "consentDefault": "on",
+   "hostings": [
+    {
+     "kind": "remote",
+     "variant": "remote",
+     "runsAt": "other",
+     "logging": [
+      {
+       "statedBy": "manifest",
+       "holder": "Example Holder G",
+       "keeps": "none",
+       "statementUrl": "https://holder-g.example/privacy",
+       "readOn": "an example date"
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "kind": "pack",
+   "sourceId": "healthdata_nj_gov",
+   "alias": "healthdata_nj_gov",
+   "displayName": "New Jersey State Health Assessment Data (NJSHAD) - NJ.gov",
+   "freshness": "Live: queries reach the portal when they are made (a dataset's metadata or a single record may be reused for up to five minutes); each dataset updates on its publisher's schedule.",
+   "base": "socrata",
+   "consentDefault": "on",
+   "hostings": [
+    {
+     "kind": "remote",
+     "variant": "remote",
+     "runsAt": "other",
+     "logging": [
+      {
+       "statedBy": "manifest",
+       "holder": "Example Holder G",
+       "keeps": "none",
+       "statementUrl": "https://holder-g.example/privacy",
+       "readOn": "an example date"
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "kind": "pack",
+   "sourceId": "data_bts_gov",
+   "alias": "data_bts_gov",
+   "displayName": "BTS Data Inventory",
+   "freshness": "Live: queries reach the portal when they are made (a dataset's metadata or a single record may be reused for up to five minutes); each dataset updates on its publisher's schedule.",
+   "base": "socrata",
+   "consentDefault": "on",
+   "hostings": [
+    {
+     "kind": "remote",
+     "variant": "remote",
+     "runsAt": "other",
+     "logging": [
+      {
+       "statedBy": "manifest",
+       "holder": "Example Holder G",
+       "keeps": "none",
+       "statementUrl": "https://holder-g.example/privacy",
+       "readOn": "an example date"
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "kind": "pack",
+   "sourceId": "data_providenceri_gov",
+   "alias": "data_providenceri_gov",
+   "displayName": "City of Providence Open Data Portal",
+   "freshness": "Live: queries reach the portal when they are made (a dataset's metadata or a single record may be reused for up to five minutes); each dataset updates on its publisher's schedule.",
+   "base": "socrata",
+   "consentDefault": "on",
+   "hostings": [
+    {
+     "kind": "remote",
+     "variant": "remote",
+     "runsAt": "other",
+     "logging": [
+      {
+       "statedBy": "manifest",
+       "holder": "Example Holder G",
+       "keeps": "none",
+       "statementUrl": "https://holder-g.example/privacy",
+       "readOn": "an example date"
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "kind": "pack",
+   "sourceId": "data_wcad_org",
+   "alias": "data_wcad_org",
+   "displayName": "WCAD Open Data",
+   "freshness": "Live: queries reach the portal when they are made (a dataset's metadata or a single record may be reused for up to five minutes); each dataset updates on its publisher's schedule.",
+   "base": "socrata",
+   "consentDefault": "on",
+   "hostings": [
+    {
+     "kind": "remote",
+     "variant": "remote",
+     "runsAt": "other",
+     "logging": [
+      {
+       "statedBy": "manifest",
+       "holder": "Example Holder G",
+       "keeps": "none",
+       "statementUrl": "https://holder-g.example/privacy",
+       "readOn": "an example date"
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "kind": "pack",
+   "sourceId": "data_coloradosprings_gov",
+   "alias": "data_coloradosprings_gov",
+   "displayName": "Colorado Springs Open Data Catalog",
+   "freshness": "Live: queries reach the portal when they are made (a dataset's metadata or a single record may be reused for up to five minutes); each dataset updates on its publisher's schedule.",
+   "base": "socrata",
+   "consentDefault": "on",
+   "hostings": [
+    {
+     "kind": "remote",
+     "variant": "remote",
+     "runsAt": "other",
+     "logging": [
+      {
+       "statedBy": "manifest",
+       "holder": "Example Holder G",
+       "keeps": "none",
+       "statementUrl": "https://holder-g.example/privacy",
+       "readOn": "an example date"
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "kind": "pack",
+   "sourceId": "covid19_buffalony_gov",
+   "alias": "covid19_buffalony_gov",
+   "displayName": "COVID-19 Buffalo, NY Data Catalog",
+   "freshness": "Live: queries reach the portal when they are made (a dataset's metadata or a single record may be reused for up to five minutes); each dataset updates on its publisher's schedule.",
+   "base": "socrata",
+   "consentDefault": "on",
+   "hostings": [
+    {
+     "kind": "remote",
+     "variant": "remote",
+     "runsAt": "other",
+     "logging": [
+      {
+       "statedBy": "manifest",
+       "holder": "Example Holder G",
+       "keeps": "none",
+       "statementUrl": "https://holder-g.example/privacy",
+       "readOn": "an example date"
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "kind": "pack",
+   "sourceId": "detroitdata_org",
+   "alias": "detroitdata_org",
+   "displayName": "DetroitData",
+   "freshness": "Live: each call would query the portal's CKAN API as it stands; each dataset updates on its publisher's schedule.",
+   "base": "boston-opencontext",
+   "consentDefault": "on",
+   "hostings": [
+    {
+     "kind": "remote",
+     "variant": "remote",
+     "runsAt": "other",
+     "logging": [
+      {
+       "statedBy": "manifest",
+       "holder": "Example Holder T",
+       "keeps": "not-stated",
+       "statementUrl": "https://holder-t.example/privacy",
+       "readOn": "an example date"
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "kind": "pack",
+   "sourceId": "opendata_maryland_gov",
+   "alias": "opendata_maryland_gov",
+   "displayName": "Open Data | opendata.maryland.gov",
+   "freshness": "Live: queries reach the portal when they are made (a dataset's metadata or a single record may be reused for up to five minutes); each dataset updates on its publisher's schedule.",
+   "base": "socrata",
+   "consentDefault": "on",
+   "hostings": [
+    {
+     "kind": "remote",
+     "variant": "remote",
+     "runsAt": "other",
+     "logging": [
+      {
+       "statedBy": "manifest",
+       "holder": "Example Holder G",
+       "keeps": "none",
+       "statementUrl": "https://holder-g.example/privacy",
+       "readOn": "an example date"
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "kind": "server",
+   "sourceId": "commercialrealestatefor_sale",
+   "alias": "commercialrealestatefor_sale",
+   "displayName": "CRE For Sale: underwrite, finance and watch public property sales",
+   "freshness": "Not stated: the MCP Registry entry says nothing about how current its data is.",
+   "consentDefault": "on",
+   "hostings": [
+    {
+     "kind": "remote",
+     "variant": "remote",
+     "runsAt": "other",
+     "logging": [
+      {
+       "statedBy": "manifest",
+       "holder": "Example Holder O",
+       "keeps": "none",
+       "statementUrl": "https://holder-o.example/privacy",
+       "readOn": "an example date"
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "kind": "pack",
+   "sourceId": "data_cityoforlando_net",
+   "alias": "data_cityoforlando_net",
+   "displayName": "City of Orlando Open Data Portal",
+   "freshness": "Live: queries reach the portal when they are made (a dataset's metadata or a single record may be reused for up to five minutes); each dataset updates on its publisher's schedule.",
+   "base": "socrata",
+   "consentDefault": "on",
+   "hostings": [
+    {
+     "kind": "remote",
+     "variant": "remote",
+     "runsAt": "other",
+     "logging": [
+      {
+       "statedBy": "manifest",
+       "holder": "Example Holder G",
+       "keeps": "none",
+       "statementUrl": "https://holder-g.example/privacy",
+       "readOn": "an example date"
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "kind": "pack",
+   "sourceId": "opendata_howardcountymd_gov",
+   "alias": "opendata_howardcountymd_gov",
+   "displayName": "Howard County - Open Data Portal | Open Data Portal",
+   "freshness": "Live: queries reach the portal when they are made (a dataset's metadata or a single record may be reused for up to five minutes); each dataset updates on its publisher's schedule.",
+   "base": "socrata",
+   "consentDefault": "on",
+   "hostings": [
+    {
+     "kind": "remote",
+     "variant": "remote",
+     "runsAt": "other",
+     "logging": [
+      {
+       "statedBy": "manifest",
+       "holder": "Example Holder G",
+       "keeps": "none",
+       "statementUrl": "https://holder-g.example/privacy",
+       "readOn": "an example date"
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "kind": "pack",
+   "sourceId": "data_cityofnewyork_us",
+   "alias": "data_cityofnewyork_us",
+   "displayName": "NYC Open Data Portal",
+   "freshness": "Live: queries reach the portal when they are made (a dataset's metadata or a single record may be reused for up to five minutes); each dataset updates on its publisher's schedule.",
+   "base": "socrata",
+   "consentDefault": "on",
+   "hostings": [
+    {
+     "kind": "remote",
+     "variant": "remote",
+     "runsAt": "other",
+     "logging": [
+      {
+       "statedBy": "manifest",
+       "holder": "Example Holder G",
+       "keeps": "none",
+       "statementUrl": "https://holder-g.example/privacy",
+       "readOn": "an example date"
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "kind": "pack",
+   "sourceId": "fiscalfocus_pittsburghpa_gov",
+   "alias": "fiscalfocus_pittsburghpa_gov",
+   "displayName": "Fiscal Focus Pittsburgh",
+   "freshness": "Live: queries reach the portal when they are made (a dataset's metadata or a single record may be reused for up to five minutes); each dataset updates on its publisher's schedule.",
+   "base": "socrata",
+   "consentDefault": "on",
+   "hostings": [
+    {
+     "kind": "remote",
+     "variant": "remote",
+     "runsAt": "other",
+     "logging": [
+      {
+       "statedBy": "manifest",
+       "holder": "Example Holder G",
+       "keeps": "none",
+       "statementUrl": "https://holder-g.example/privacy",
+       "readOn": "an example date"
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "kind": "pack",
+   "sourceId": "data_oce_pr_gov",
+   "alias": "data_oce_pr_gov",
+   "displayName": "OCEPR - Open Data",
+   "freshness": "Live: queries reach the portal when they are made (a dataset's metadata or a single record may be reused for up to five minutes); each dataset updates on its publisher's schedule.",
+   "base": "socrata",
+   "consentDefault": "on",
+   "hostings": [
+    {
+     "kind": "remote",
+     "variant": "remote",
+     "runsAt": "other",
+     "logging": [
+      {
+       "statedBy": "manifest",
+       "holder": "Example Holder G",
+       "keeps": "none",
+       "statementUrl": "https://holder-g.example/privacy",
+       "readOn": "an example date"
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "kind": "pack",
+   "sourceId": "hcs_chrr_ohio_state_edu",
+   "alias": "hcs_chrr_ohio_state_edu",
+   "displayName": "CHRR HCS Repository",
+   "freshness": "Live: each call would query the portal's CKAN API as it stands; each dataset updates on its publisher's schedule.",
+   "base": "boston-opencontext",
+   "consentDefault": "on",
+   "hostings": [
+    {
+     "kind": "remote",
+     "variant": "remote",
+     "runsAt": "other",
+     "logging": [
+      {
+       "statedBy": "manifest",
+       "holder": "Example Holder T",
+       "keeps": "not-stated",
+       "statementUrl": "https://holder-t.example/privacy",
+       "readOn": "an example date"
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "kind": "pack",
+   "sourceId": "data_weho_org",
+   "alias": "data_weho_org",
+   "displayName": "City of West Hollywood Open Data Catalog",
+   "freshness": "Live: queries reach the portal when they are made (a dataset's metadata or a single record may be reused for up to five minutes); each dataset updates on its publisher's schedule.",
+   "base": "socrata",
+   "consentDefault": "on",
+   "hostings": [
+    {
+     "kind": "remote",
+     "variant": "remote",
+     "runsAt": "other",
+     "logging": [
+      {
+       "statedBy": "manifest",
+       "holder": "Example Holder G",
+       "keeps": "none",
+       "statementUrl": "https://holder-g.example/privacy",
+       "readOn": "an example date"
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "kind": "pack",
+   "sourceId": "data_energystar_gov",
+   "alias": "data_energystar_gov",
+   "displayName": "ENERGY STAR Product Data Catalog",
+   "freshness": "Live: queries reach the portal when they are made (a dataset's metadata or a single record may be reused for up to five minutes); each dataset updates on its publisher's schedule.",
+   "base": "socrata",
+   "consentDefault": "on",
+   "hostings": [
+    {
+     "kind": "remote",
+     "variant": "remote",
+     "runsAt": "other",
+     "logging": [
+      {
+       "statedBy": "manifest",
+       "holder": "Example Holder G",
+       "keeps": "none",
+       "statementUrl": "https://holder-g.example/privacy",
+       "readOn": "an example date"
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "kind": "pack",
+   "sourceId": "data_cnra_ca_gov",
+   "alias": "data_cnra_ca_gov",
+   "displayName": "California Natural Resources Agency Open Data",
+   "freshness": "Live: each call would query the portal's CKAN API as it stands; each dataset updates on its publisher's schedule.",
+   "base": "boston-opencontext",
+   "consentDefault": "on",
+   "hostings": [
+    {
+     "kind": "remote",
+     "variant": "remote",
+     "runsAt": "other",
+     "logging": [
+      {
+       "statedBy": "manifest",
+       "holder": "Example Holder T",
+       "keeps": "not-stated",
+       "statementUrl": "https://holder-t.example/privacy",
+       "readOn": "an example date"
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "kind": "pack",
+   "sourceId": "data_framinghamma_gov",
+   "alias": "data_framinghamma_gov",
+   "displayName": "Rally | Open Data Portal | Open Data Framingham",
+   "freshness": "Live: queries reach the portal when they are made (a dataset's metadata or a single record may be reused for up to five minutes); each dataset updates on its publisher's schedule.",
+   "base": "socrata",
+   "consentDefault": "on",
+   "hostings": [
+    {
+     "kind": "remote",
+     "variant": "remote",
+     "runsAt": "other",
+     "logging": [
+      {
+       "statedBy": "manifest",
+       "holder": "Example Holder G",
+       "keeps": "none",
+       "statementUrl": "https://holder-g.example/privacy",
+       "readOn": "an example date"
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "kind": "pack",
+   "sourceId": "data_michigan_gov",
+   "alias": "data_michigan_gov",
+   "displayName": "Michigan Open Data Portal",
+   "freshness": "Live: queries reach the portal when they are made (a dataset's metadata or a single record may be reused for up to five minutes); each dataset updates on its publisher's schedule.",
+   "base": "socrata",
+   "consentDefault": "on",
+   "hostings": [
+    {
+     "kind": "remote",
+     "variant": "remote",
+     "runsAt": "other",
+     "logging": [
+      {
+       "statedBy": "manifest",
+       "holder": "Example Holder G",
+       "keeps": "none",
+       "statementUrl": "https://holder-g.example/privacy",
+       "readOn": "an example date"
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "kind": "pack",
+   "sourceId": "data_datacenterresearch_org",
+   "alias": "data_datacenterresearch_org",
+   "displayName": "The Data Center Open Data",
+   "freshness": "Live: queries reach the portal when they are made (a dataset's metadata or a single record may be reused for up to five minutes); each dataset updates on its publisher's schedule.",
+   "base": "socrata",
+   "consentDefault": "on",
+   "hostings": [
+    {
+     "kind": "remote",
+     "variant": "remote",
+     "runsAt": "other",
+     "logging": [
+      {
+       "statedBy": "manifest",
+       "holder": "Example Holder G",
+       "keeps": "none",
+       "statementUrl": "https://holder-g.example/privacy",
+       "readOn": "an example date"
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "kind": "pack",
+   "sourceId": "opendata_fcc_gov",
+   "alias": "opendata_fcc_gov",
+   "displayName": "Open Data Federal Communications Comission",
+   "freshness": "Live: queries reach the portal when they are made (a dataset's metadata or a single record may be reused for up to five minutes); each dataset updates on its publisher's schedule.",
+   "base": "socrata",
+   "consentDefault": "on",
+   "hostings": [
+    {
+     "kind": "remote",
+     "variant": "remote",
+     "runsAt": "other",
+     "logging": [
+      {
+       "statedBy": "manifest",
+       "holder": "Example Holder G",
+       "keeps": "none",
+       "statementUrl": "https://holder-g.example/privacy",
+       "readOn": "an example date"
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "kind": "pack",
+   "sourceId": "performance_cookcountyil_gov",
+   "alias": "performance_cookcountyil_gov",
+   "displayName": "Cook County, Illinois Open Data Portal",
+   "freshness": "Live: queries reach the portal when they are made (a dataset's metadata or a single record may be reused for up to five minutes); each dataset updates on its publisher's schedule.",
+   "base": "socrata",
+   "consentDefault": "on",
+   "hostings": [
+    {
+     "kind": "remote",
+     "variant": "remote",
+     "runsAt": "other",
+     "logging": [
+      {
+       "statedBy": "manifest",
+       "holder": "Example Holder G",
+       "keeps": "none",
+       "statementUrl": "https://holder-g.example/privacy",
+       "readOn": "an example date"
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "kind": "pack",
+   "sourceId": "data_nj_gov",
+   "alias": "data_nj_gov",
+   "displayName": "NJOIT Open Data Center",
+   "freshness": "Live: queries reach the portal when they are made (a dataset's metadata or a single record may be reused for up to five minutes); each dataset updates on its publisher's schedule.",
+   "base": "socrata",
+   "consentDefault": "on",
+   "hostings": [
+    {
+     "kind": "remote",
+     "variant": "remote",
+     "runsAt": "other",
+     "logging": [
+      {
+       "statedBy": "manifest",
+       "holder": "Example Holder G",
+       "keeps": "none",
+       "statementUrl": "https://holder-g.example/privacy",
+       "readOn": "an example date"
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "kind": "pack",
+   "sourceId": "data_waterpointdata_org",
+   "alias": "data_waterpointdata_org",
+   "displayName": "Water Point Data Exchange",
+   "freshness": "Live: queries reach the portal when they are made (a dataset's metadata or a single record may be reused for up to five minutes); each dataset updates on its publisher's schedule.",
+   "base": "socrata",
+   "consentDefault": "on",
+   "hostings": [
+    {
+     "kind": "remote",
+     "variant": "remote",
+     "runsAt": "other",
+     "logging": [
+      {
+       "statedBy": "manifest",
+       "holder": "Example Holder G",
+       "keeps": "none",
+       "statementUrl": "https://holder-g.example/privacy",
+       "readOn": "an example date"
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "kind": "pack",
+   "sourceId": "citydata_mesaaz_gov_2",
+   "alias": "citydata_mesaaz_gov_2",
+   "displayName": "City of Mesa Internal Performance Portal",
+   "freshness": "Live: queries reach the portal when they are made (a dataset's metadata or a single record may be reused for up to five minutes); each dataset updates on its publisher's schedule.",
+   "base": "socrata",
+   "consentDefault": "on",
+   "hostings": [
+    {
+     "kind": "remote",
+     "variant": "remote",
+     "runsAt": "other",
+     "logging": [
+      {
+       "statedBy": "manifest",
+       "holder": "Example Holder G",
+       "keeps": "none",
+       "statementUrl": "https://holder-g.example/privacy",
+       "readOn": "an example date"
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "kind": "pack",
+   "sourceId": "data_skeenasalmon_info",
+   "alias": "data_skeenasalmon_info",
+   "displayName": "Skeena Salmon Data Catalogue",
+   "freshness": "Live: each call would query the portal's CKAN API as it stands; each dataset updates on its publisher's schedule.",
+   "base": "boston-opencontext",
+   "consentDefault": "on",
+   "hostings": [
+    {
+     "kind": "remote",
+     "variant": "remote",
+     "runsAt": "other",
+     "logging": [
+      {
+       "statedBy": "manifest",
+       "holder": "Example Holder T",
+       "keeps": "not-stated",
+       "statementUrl": "https://holder-t.example/privacy",
+       "readOn": "an example date"
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "kind": "pack",
+   "sourceId": "data_smcgov_org",
+   "alias": "data_smcgov_org",
+   "displayName": "San Mateo County, Ca Open Data",
+   "freshness": "Live: queries reach the portal when they are made (a dataset's metadata or a single record may be reused for up to five minutes); each dataset updates on its publisher's schedule.",
+   "base": "socrata",
+   "consentDefault": "on",
+   "hostings": [
+    {
+     "kind": "remote",
+     "variant": "remote",
+     "runsAt": "other",
+     "logging": [
+      {
+       "statedBy": "manifest",
+       "holder": "Example Holder G",
+       "keeps": "none",
+       "statementUrl": "https://holder-g.example/privacy",
+       "readOn": "an example date"
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "kind": "pack",
+   "sourceId": "data_oregon_gov",
+   "alias": "data_oregon_gov",
+   "displayName": "Oregon Open Data",
+   "freshness": "Live: queries reach the portal when they are made (a dataset's metadata or a single record may be reused for up to five minutes); each dataset updates on its publisher's schedule.",
+   "base": "socrata",
+   "consentDefault": "on",
+   "hostings": [
+    {
+     "kind": "remote",
+     "variant": "remote",
+     "runsAt": "other",
+     "logging": [
+      {
+       "statedBy": "manifest",
+       "holder": "Example Holder G",
+       "keeps": "none",
+       "statementUrl": "https://holder-g.example/privacy",
+       "readOn": "an example date"
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "kind": "pack",
+   "sourceId": "michigan_data_demo_socrata_com",
+   "alias": "michigan_data_demo_socrata_com",
+   "displayName": "Rally - Open Data Portal | Open Data Portal",
+   "freshness": "Live: queries reach the portal when they are made (a dataset's metadata or a single record may be reused for up to five minutes); each dataset updates on its publisher's schedule.",
+   "base": "socrata",
+   "consentDefault": "on",
+   "hostings": [
+    {
+     "kind": "remote",
+     "variant": "remote",
+     "runsAt": "other",
+     "logging": [
+      {
+       "statedBy": "manifest",
+       "holder": "Example Holder G",
+       "keeps": "none",
+       "statementUrl": "https://holder-g.example/privacy",
+       "readOn": "an example date"
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "kind": "pack",
+   "sourceId": "data_ed_gov",
+   "alias": "data_ed_gov",
+   "displayName": "Department of Education Open Data Platform",
+   "freshness": "Live: each call would query the portal's CKAN API as it stands; each dataset updates on its publisher's schedule.",
+   "base": "boston-opencontext",
+   "consentDefault": "on",
+   "hostings": [
+    {
+     "kind": "remote",
+     "variant": "remote",
+     "runsAt": "other",
+     "logging": [
+      {
+       "statedBy": "manifest",
+       "holder": "Example Holder T",
+       "keeps": "not-stated",
+       "statementUrl": "https://holder-t.example/privacy",
+       "readOn": "an example date"
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "kind": "pack",
+   "sourceId": "data_ny_gov",
+   "alias": "data_ny_gov",
+   "displayName": "New York Open Data",
+   "freshness": "Live: queries reach the portal when they are made (a dataset's metadata or a single record may be reused for up to five minutes); each dataset updates on its publisher's schedule.",
+   "base": "socrata",
+   "consentDefault": "on",
+   "hostings": [
+    {
+     "kind": "remote",
+     "variant": "remote",
+     "runsAt": "other",
+     "logging": [
+      {
+       "statedBy": "manifest",
+       "holder": "Example Holder G",
+       "keeps": "none",
+       "statementUrl": "https://holder-g.example/privacy",
+       "readOn": "an example date"
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "kind": "pack",
+   "sourceId": "corstat_coronaca_gov",
+   "alias": "corstat_coronaca_gov",
+   "displayName": "Open Data Portal |  Corona Open Performance",
+   "freshness": "Live: queries reach the portal when they are made (a dataset's metadata or a single record may be reused for up to five minutes); each dataset updates on its publisher's schedule.",
+   "base": "socrata",
+   "consentDefault": "on",
+   "hostings": [
+    {
+     "kind": "remote",
+     "variant": "remote",
+     "runsAt": "other",
+     "logging": [
+      {
+       "statedBy": "manifest",
+       "holder": "Example Holder G",
+       "keeps": "none",
+       "statementUrl": "https://holder-g.example/privacy",
+       "readOn": "an example date"
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "kind": "pack",
+   "sourceId": "data_lacity_org",
+   "alias": "data_lacity_org",
+   "displayName": "Los Angeles Open Data",
+   "freshness": "Live: queries reach the portal when they are made (a dataset's metadata or a single record may be reused for up to five minutes); each dataset updates on its publisher's schedule.",
+   "base": "socrata",
+   "consentDefault": "on",
+   "hostings": [
+    {
+     "kind": "remote",
+     "variant": "remote",
+     "runsAt": "other",
+     "logging": [
+      {
+       "statedBy": "manifest",
+       "holder": "Example Holder G",
+       "keeps": "none",
+       "statementUrl": "https://holder-g.example/privacy",
+       "readOn": "an example date"
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "kind": "pack",
+   "sourceId": "chronicdata_cdc_gov",
+   "alias": "chronicdata_cdc_gov",
+   "displayName": "Data | Centers for Disease Control and Prevention - CDC Chronic Data",
+   "freshness": "Live: queries reach the portal when they are made (a dataset's metadata or a single record may be reused for up to five minutes); each dataset updates on its publisher's schedule.",
+   "base": "socrata",
+   "consentDefault": "on",
+   "hostings": [
+    {
+     "kind": "remote",
+     "variant": "remote",
+     "runsAt": "other",
+     "logging": [
+      {
+       "statedBy": "manifest",
+       "holder": "Example Holder G",
+       "keeps": "none",
+       "statementUrl": "https://holder-g.example/privacy",
+       "readOn": "an example date"
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "kind": "pack",
+   "sourceId": "bloomington_data_socrata_com",
+   "alias": "bloomington_data_socrata_com",
+   "displayName": "City of Bloomington Open Data",
+   "freshness": "Live: queries reach the portal when they are made (a dataset's metadata or a single record may be reused for up to five minutes); each dataset updates on its publisher's schedule.",
+   "base": "socrata",
+   "consentDefault": "on",
+   "hostings": [
+    {
+     "kind": "remote",
+     "variant": "remote",
+     "runsAt": "other",
+     "logging": [
+      {
+       "statedBy": "manifest",
+       "holder": "Example Holder G",
+       "keeps": "none",
+       "statementUrl": "https://holder-g.example/privacy",
+       "readOn": "an example date"
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "kind": "pack",
+   "sourceId": "data_commons_pack",
+   "alias": "data_commons_pack",
+   "displayName": "Google Data Commons MCP Server (pack)",
+   "freshness": "Live API over published statistical releases: a figure changes only when an agency publishes a new release, and each carries its release vintage (the ACS releases annually).",
+   "base": "data-commons",
+   "consentDefault": "on",
+   "hostings": [
+    {
+     "kind": "remote",
+     "variant": "remote",
+     "runsAt": "other",
+     "logging": [
+      {
+       "statedBy": "manifest",
+       "holder": "Example Holder S",
+       "keeps": "none",
+       "statementUrl": "https://holder-s.example/privacy",
+       "readOn": "an example date"
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "kind": "pack",
+   "sourceId": "data_sonomacounty_ca_gov",
+   "alias": "data_sonomacounty_ca_gov",
+   "displayName": "County of Sonoma | Open Data | Open Data | Sonoma County",
+   "freshness": "Live: queries reach the portal when they are made (a dataset's metadata or a single record may be reused for up to five minutes); each dataset updates on its publisher's schedule.",
+   "base": "socrata",
+   "consentDefault": "on",
+   "hostings": [
+    {
+     "kind": "remote",
+     "variant": "remote",
+     "runsAt": "other",
+     "logging": [
+      {
+       "statedBy": "manifest",
+       "holder": "Example Holder G",
+       "keeps": "none",
+       "statementUrl": "https://holder-g.example/privacy",
+       "readOn": "an example date"
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "kind": "pack",
+   "sourceId": "data_napacounty_gov",
+   "alias": "data_napacounty_gov",
+   "displayName": "Napa County HHSA Open Data Portal",
+   "freshness": "Live: queries reach the portal when they are made (a dataset's metadata or a single record may be reused for up to five minutes); each dataset updates on its publisher's schedule.",
+   "base": "socrata",
+   "consentDefault": "on",
+   "hostings": [
+    {
+     "kind": "remote",
+     "variant": "remote",
+     "runsAt": "other",
+     "logging": [
+      {
+       "statedBy": "manifest",
+       "holder": "Example Holder G",
+       "keeps": "none",
+       "statementUrl": "https://holder-g.example/privacy",
+       "readOn": "an example date"
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "kind": "pack",
+   "sourceId": "data_wprdc_org",
+   "alias": "data_wprdc_org",
+   "displayName": "data.wprdc.org (Western Pennsylvania Regional Data Center)",
+   "freshness": "Live: each call would query the portal's CKAN API as it stands; each dataset updates on its publisher's schedule.",
+   "base": "boston-opencontext",
+   "consentDefault": "on",
+   "hostings": [
+    {
+     "kind": "remote",
+     "variant": "remote",
+     "runsAt": "other",
+     "logging": [
+      {
+       "statedBy": "manifest",
+       "holder": "Example Holder T",
+       "keeps": "not-stated",
+       "statementUrl": "https://holder-t.example/privacy",
+       "readOn": "an example date"
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "kind": "pack",
+   "sourceId": "data_oaklandca_gov",
+   "alias": "data_oaklandca_gov",
+   "displayName": "City of Oakland Open Data Platform",
+   "freshness": "Live: queries reach the portal when they are made (a dataset's metadata or a single record may be reused for up to five minutes); each dataset updates on its publisher's schedule.",
+   "base": "socrata",
+   "consentDefault": "on",
+   "hostings": [
+    {
+     "kind": "remote",
+     "variant": "remote",
+     "runsAt": "other",
+     "logging": [
+      {
+       "statedBy": "manifest",
+       "holder": "Example Holder G",
+       "keeps": "none",
+       "statementUrl": "https://holder-g.example/privacy",
+       "readOn": "an example date"
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "kind": "server",
+   "sourceId": "nyc-budget",
+   "alias": "nyc_budget",
+   "displayName": "@betanyc/nyc-budget-mcp \u2014 NYC Budget MCP server",
+   "freshness": "Bundled database in package 1.3.1 (published 2026-08-11); coverage varies by dataset and fiscal year.",
+   "consentDefault": "on",
+   "hostings": [
+    {
+     "kind": "npm-package",
+     "variant": "sandbox",
+     "runsAt": "instance-sandbox",
+     "package": "@example/nyc-budget",
+     "version": "0.0.0-example",
+     "outbound": [],
+     "logging": [
+      {
+       "statedBy": "manifest",
+       "holder": "Example Holder P",
+       "keeps": "not-stated",
+       "statementUrl": "https://holder-p.example/privacy",
+       "readOn": "an example date"
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "kind": "pack",
+   "sourceId": "performance_princegeorges_55dd30",
+   "alias": "performance_princegeorges_55dd30",
+   "displayName": "CountyStat | Prince George's CountyStat | CountyStat | Prince George's County",
+   "freshness": "Live: queries reach the portal when they are made (a dataset's metadata or a single record may be reused for up to five minutes); each dataset updates on its publisher's schedule.",
+   "base": "socrata",
+   "consentDefault": "on",
+   "hostings": [
+    {
+     "kind": "remote",
+     "variant": "remote",
+     "runsAt": "other",
+     "logging": [
+      {
+       "statedBy": "manifest",
+       "holder": "Example Holder G",
+       "keeps": "none",
+       "statementUrl": "https://holder-g.example/privacy",
+       "readOn": "an example date"
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "kind": "pack",
+   "sourceId": "data_montgomeryschoolsmd_org",
+   "alias": "data_montgomeryschoolsmd_org",
+   "displayName": "Montgomery County Public Schools data catalog",
+   "freshness": "Live: queries reach the portal when they are made (a dataset's metadata or a single record may be reused for up to five minutes); each dataset updates on its publisher's schedule.",
+   "base": "socrata",
+   "consentDefault": "on",
+   "hostings": [
+    {
+     "kind": "remote",
+     "variant": "remote",
+     "runsAt": "other",
+     "logging": [
+      {
+       "statedBy": "manifest",
+       "holder": "Example Holder G",
+       "keeps": "none",
+       "statementUrl": "https://holder-g.example/privacy",
+       "readOn": "an example date"
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "kind": "pack",
+   "sourceId": "socrata_pack",
+   "alias": "socrata_pack",
+   "displayName": "Socrata MCP Server (pack)",
+   "freshness": "Live: queries reach the portal when they are made (a dataset's metadata or a single record may be reused for up to five minutes); each dataset updates on its publisher's schedule.",
+   "base": "socrata",
+   "consentDefault": "on",
+   "hostings": [
+    {
+     "kind": "remote",
+     "variant": "remote",
+     "runsAt": "other",
+     "logging": [
+      {
+       "statedBy": "manifest",
+       "holder": "Example Holder G",
+       "keeps": "none",
+       "statementUrl": "https://holder-g.example/privacy",
+       "readOn": "an example date"
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "kind": "pack",
+   "sourceId": "data_delaware_gov",
+   "alias": "data_delaware_gov",
+   "displayName": "Delaware Open Data Portal Published Assets",
+   "freshness": "Live: queries reach the portal when they are made (a dataset's metadata or a single record may be reused for up to five minutes); each dataset updates on its publisher's schedule.",
+   "base": "socrata",
+   "consentDefault": "on",
+   "hostings": [
+    {
+     "kind": "remote",
+     "variant": "remote",
+     "runsAt": "other",
+     "logging": [
+      {
+       "statedBy": "manifest",
+       "holder": "Example Holder G",
+       "keeps": "none",
+       "statementUrl": "https://holder-g.example/privacy",
+       "readOn": "an example date"
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "kind": "pack",
+   "sourceId": "data_pompanobeachfl_gov",
+   "alias": "data_pompanobeachfl_gov",
+   "displayName": "City of Pompano Beach Open Data Portal",
+   "freshness": "Live: each call would query the portal's CKAN API as it stands; each dataset updates on its publisher's schedule.",
+   "base": "boston-opencontext",
+   "consentDefault": "on",
+   "hostings": [
+    {
+     "kind": "remote",
+     "variant": "remote",
+     "runsAt": "other",
+     "logging": [
+      {
+       "statedBy": "manifest",
+       "holder": "Example Holder T",
+       "keeps": "not-stated",
+       "statementUrl": "https://holder-t.example/privacy",
+       "readOn": "an example date"
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "kind": "pack",
+   "sourceId": "capecoral_data_socrata_com",
+   "alias": "capecoral_data_socrata_com",
+   "displayName": "City of Cape Coral Open Finance",
+   "freshness": "Live: queries reach the portal when they are made (a dataset's metadata or a single record may be reused for up to five minutes); each dataset updates on its publisher's schedule.",
+   "base": "socrata",
+   "consentDefault": "on",
+   "hostings": [
+    {
+     "kind": "remote",
+     "variant": "remote",
+     "runsAt": "other",
+     "logging": [
+      {
+       "statedBy": "manifest",
+       "holder": "Example Holder G",
+       "keeps": "none",
+       "statementUrl": "https://holder-g.example/privacy",
+       "readOn": "an example date"
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "kind": "pack",
+   "sourceId": "data_dumfriesva_gov",
+   "alias": "data_dumfriesva_gov",
+   "displayName": "Dumfries Open Data Portal",
+   "freshness": "Live: queries reach the portal when they are made (a dataset's metadata or a single record may be reused for up to five minutes); each dataset updates on its publisher's schedule.",
+   "base": "socrata",
+   "consentDefault": "on",
+   "hostings": [
+    {
+     "kind": "remote",
+     "variant": "remote",
+     "runsAt": "other",
+     "logging": [
+      {
+       "statedBy": "manifest",
+       "holder": "Example Holder G",
+       "keeps": "none",
+       "statementUrl": "https://holder-g.example/privacy",
+       "readOn": "an example date"
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "kind": "server",
+   "sourceId": "remjobs",
+   "alias": "remjobs",
+   "displayName": "RemJobs",
+   "freshness": "Not stated: the MCP Registry entry says nothing about how current its data is.",
+   "consentDefault": "on",
+   "hostings": [
+    {
+     "kind": "remote",
+     "variant": "remote",
+     "runsAt": "other",
+     "logging": [
+      {
+       "statedBy": "manifest",
+       "holder": "Example Holder Q",
+       "keeps": "metadata",
+       "retention": "Example: 30 days",
+       "statementUrl": "https://holder-q.example/privacy",
+       "readOn": "an example date"
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "kind": "pack",
+   "sourceId": "performance_smcgov_org",
+   "alias": "performance_smcgov_org",
+   "displayName": "San Mateo Performance Dashboards",
+   "freshness": "Live: queries reach the portal when they are made (a dataset's metadata or a single record may be reused for up to five minutes); each dataset updates on its publisher's schedule.",
+   "base": "socrata",
+   "consentDefault": "on",
+   "hostings": [
+    {
+     "kind": "remote",
+     "variant": "remote",
+     "runsAt": "other",
+     "logging": [
+      {
+       "statedBy": "manifest",
+       "holder": "Example Holder G",
+       "keeps": "none",
+       "statementUrl": "https://holder-g.example/privacy",
+       "readOn": "an example date"
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "kind": "pack",
+   "sourceId": "data_cityofgainesville_org",
+   "alias": "data_cityofgainesville_org",
+   "displayName": "DataGNV - Gainesville's Open Data Portal",
+   "freshness": "Live: queries reach the portal when they are made (a dataset's metadata or a single record may be reused for up to five minutes); each dataset updates on its publisher's schedule.",
+   "base": "socrata",
+   "consentDefault": "on",
+   "hostings": [
+    {
+     "kind": "remote",
+     "variant": "remote",
+     "runsAt": "other",
+     "logging": [
+      {
+       "statedBy": "manifest",
+       "holder": "Example Holder G",
+       "keeps": "none",
+       "statementUrl": "https://holder-g.example/privacy",
+       "readOn": "an example date"
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "kind": "pack",
+   "sourceId": "data_tompsc_com",
+   "alias": "data_tompsc_com",
+   "displayName": "Town of Mount Pleasant Open Data",
+   "freshness": "Live: queries reach the portal when they are made (a dataset's metadata or a single record may be reused for up to five minutes); each dataset updates on its publisher's schedule.",
+   "base": "socrata",
+   "consentDefault": "on",
+   "hostings": [
+    {
+     "kind": "remote",
+     "variant": "remote",
+     "runsAt": "other",
+     "logging": [
+      {
+       "statedBy": "manifest",
+       "holder": "Example Holder G",
+       "keeps": "none",
+       "statementUrl": "https://holder-g.example/privacy",
+       "readOn": "an example date"
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "kind": "pack",
+   "sourceId": "datahub_usac_org",
+   "alias": "datahub_usac_org",
+   "displayName": "USAC | Data Hub",
+   "freshness": "Live: queries reach the portal when they are made (a dataset's metadata or a single record may be reused for up to five minutes); each dataset updates on its publisher's schedule.",
+   "base": "socrata",
+   "consentDefault": "on",
+   "hostings": [
+    {
+     "kind": "remote",
+     "variant": "remote",
+     "runsAt": "other",
+     "logging": [
+      {
+       "statedBy": "manifest",
+       "holder": "Example Holder G",
+       "keeps": "none",
+       "statementUrl": "https://holder-g.example/privacy",
+       "readOn": "an example date"
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "kind": "pack",
+   "sourceId": "performance_ci_janesville_wi_us",
+   "alias": "performance_ci_janesville_wi_us",
+   "displayName": "City of Janesville Open Data Portal",
+   "freshness": "Live: queries reach the portal when they are made (a dataset's metadata or a single record may be reused for up to five minutes); each dataset updates on its publisher's schedule.",
+   "base": "socrata",
+   "consentDefault": "on",
+   "hostings": [
+    {
+     "kind": "remote",
+     "variant": "remote",
+     "runsAt": "other",
+     "logging": [
+      {
+       "statedBy": "manifest",
+       "holder": "Example Holder G",
+       "keeps": "none",
+       "statementUrl": "https://holder-g.example/privacy",
+       "readOn": "an example date"
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "kind": "pack",
+   "sourceId": "data_cstx_gov",
+   "alias": "data_cstx_gov",
+   "displayName": "College Station - Open Data | CSTX Open Data",
+   "freshness": "Live: queries reach the portal when they are made (a dataset's metadata or a single record may be reused for up to five minutes); each dataset updates on its publisher's schedule.",
+   "base": "socrata",
+   "consentDefault": "on",
+   "hostings": [
+    {
+     "kind": "remote",
+     "variant": "remote",
+     "runsAt": "other",
+     "logging": [
+      {
+       "statedBy": "manifest",
+       "holder": "Example Holder G",
+       "keeps": "none",
+       "statementUrl": "https://holder-g.example/privacy",
+       "readOn": "an example date"
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "kind": "pack",
+   "sourceId": "data_nola_gov",
+   "alias": "data_nola_gov",
+   "displayName": "New Orleans, La Open Data",
+   "freshness": "Live: queries reach the portal when they are made (a dataset's metadata or a single record may be reused for up to five minutes); each dataset updates on its publisher's schedule.",
+   "base": "socrata",
+   "consentDefault": "on",
+   "hostings": [
+    {
+     "kind": "remote",
+     "variant": "remote",
+     "runsAt": "other",
+     "logging": [
+      {
+       "statedBy": "manifest",
+       "holder": "Example Holder G",
+       "keeps": "none",
+       "statementUrl": "https://holder-g.example/privacy",
+       "readOn": "an example date"
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "kind": "pack",
+   "sourceId": "performance_cityofcamas_us",
+   "alias": "performance_cityofcamas_us",
+   "displayName": "City of Camas Open Data Portal",
+   "freshness": "Live: queries reach the portal when they are made (a dataset's metadata or a single record may be reused for up to five minutes); each dataset updates on its publisher's schedule.",
+   "base": "socrata",
+   "consentDefault": "on",
+   "hostings": [
+    {
+     "kind": "remote",
+     "variant": "remote",
+     "runsAt": "other",
+     "logging": [
+      {
+       "statedBy": "manifest",
+       "holder": "Example Holder G",
+       "keeps": "none",
+       "statementUrl": "https://holder-g.example/privacy",
+       "readOn": "an example date"
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "kind": "pack",
+   "sourceId": "controllerdata_lacity_org",
+   "alias": "controllerdata_lacity_org",
+   "displayName": "Los Angeles Open Data - Controller Data",
+   "freshness": "Live: queries reach the portal when they are made (a dataset's metadata or a single record may be reused for up to five minutes); each dataset updates on its publisher's schedule.",
+   "base": "socrata",
+   "consentDefault": "on",
+   "hostings": [
+    {
+     "kind": "remote",
+     "variant": "remote",
+     "runsAt": "other",
+     "logging": [
+      {
+       "statedBy": "manifest",
+       "holder": "Example Holder G",
+       "keeps": "none",
+       "statementUrl": "https://holder-g.example/privacy",
+       "readOn": "an example date"
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "kind": "pack",
+   "sourceId": "sharefulton_fultoncountyga_gov",
+   "alias": "sharefulton_fultoncountyga_gov",
+   "displayName": "Fulton County Open Data",
+   "freshness": "Live: queries reach the portal when they are made (a dataset's metadata or a single record may be reused for up to five minutes); each dataset updates on its publisher's schedule.",
+   "base": "socrata",
+   "consentDefault": "on",
+   "hostings": [
+    {
+     "kind": "remote",
+     "variant": "remote",
+     "runsAt": "other",
+     "logging": [
+      {
+       "statedBy": "manifest",
+       "holder": "Example Holder G",
+       "keeps": "none",
+       "statementUrl": "https://holder-g.example/privacy",
+       "readOn": "an example date"
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "kind": "pack",
+   "sourceId": "data_ccrpc_org",
+   "alias": "data_ccrpc_org",
+   "displayName": "Champaign County Regional Planning Commission Data Portal",
+   "freshness": "Live: each call would query the portal's CKAN API as it stands; each dataset updates on its publisher's schedule.",
+   "base": "boston-opencontext",
+   "consentDefault": "on",
+   "hostings": [
+    {
+     "kind": "remote",
+     "variant": "remote",
+     "runsAt": "other",
+     "logging": [
+      {
+       "statedBy": "manifest",
+       "holder": "Example Holder T",
+       "keeps": "not-stated",
+       "statementUrl": "https://holder-t.example/privacy",
+       "readOn": "an example date"
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "kind": "pack",
+   "sourceId": "data_texas_gov",
+   "alias": "data_texas_gov",
+   "displayName": "Texas Open Data Portal",
+   "freshness": "Live: queries reach the portal when they are made (a dataset's metadata or a single record may be reused for up to five minutes); each dataset updates on its publisher's schedule.",
+   "base": "socrata",
+   "consentDefault": "on",
+   "hostings": [
+    {
+     "kind": "remote",
+     "variant": "remote",
+     "runsAt": "other",
+     "logging": [
+      {
+       "statedBy": "manifest",
+       "holder": "Example Holder G",
+       "keeps": "none",
+       "statementUrl": "https://holder-g.example/privacy",
+       "readOn": "an example date"
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "kind": "pack",
+   "sourceId": "hicscdata_hawaii_gov",
+   "alias": "hicscdata_hawaii_gov",
+   "displayName": "Hawaii Campaign Spending Commission Data",
+   "freshness": "Live: queries reach the portal when they are made (a dataset's metadata or a single record may be reused for up to five minutes); each dataset updates on its publisher's schedule.",
+   "base": "socrata",
+   "consentDefault": "on",
+   "hostings": [
+    {
+     "kind": "remote",
+     "variant": "remote",
+     "runsAt": "other",
+     "logging": [
+      {
+       "statedBy": "manifest",
+       "holder": "Example Holder G",
+       "keeps": "none",
+       "statementUrl": "https://holder-g.example/privacy",
+       "readOn": "an example date"
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "kind": "pack",
+   "sourceId": "datainsights_encinitasca_gov",
+   "alias": "datainsights_encinitasca_gov",
+   "displayName": "Encinitas Data & Insights",
+   "freshness": "Live: queries reach the portal when they are made (a dataset's metadata or a single record may be reused for up to five minutes); each dataset updates on its publisher's schedule.",
+   "base": "socrata",
+   "consentDefault": "on",
+   "hostings": [
+    {
+     "kind": "remote",
+     "variant": "remote",
+     "runsAt": "other",
+     "logging": [
+      {
+       "statedBy": "manifest",
+       "holder": "Example Holder G",
+       "keeps": "none",
+       "statementUrl": "https://holder-g.example/privacy",
+       "readOn": "an example date"
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "kind": "pack",
+   "sourceId": "bridgeportct_data_socrata_com",
+   "alias": "bridgeportct_data_socrata_com",
+   "displayName": "Open Bridgeport",
+   "freshness": "Live: queries reach the portal when they are made (a dataset's metadata or a single record may be reused for up to five minutes); each dataset updates on its publisher's schedule.",
+   "base": "socrata",
+   "consentDefault": "on",
+   "hostings": [
+    {
+     "kind": "remote",
+     "variant": "remote",
+     "runsAt": "other",
+     "logging": [
+      {
+       "statedBy": "manifest",
+       "holder": "Example Holder G",
+       "keeps": "none",
+       "statementUrl": "https://holder-g.example/privacy",
+       "readOn": "an example date"
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "kind": "pack",
+   "sourceId": "performance_providenceri_gov",
+   "alias": "performance_providenceri_gov",
+   "displayName": "Open Data Portal",
+   "freshness": "Live: queries reach the portal when they are made (a dataset's metadata or a single record may be reused for up to five minutes); each dataset updates on its publisher's schedule.",
+   "base": "socrata",
+   "consentDefault": "on",
+   "hostings": [
+    {
+     "kind": "remote",
+     "variant": "remote",
+     "runsAt": "other",
+     "logging": [
+      {
+       "statedBy": "manifest",
+       "holder": "Example Holder G",
+       "keeps": "none",
+       "statementUrl": "https://holder-g.example/privacy",
+       "readOn": "an example date"
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "kind": "server",
+   "sourceId": "events_43fa58",
+   "alias": "events_43fa58",
+   "displayName": "Knossot",
+   "freshness": "Not stated: the MCP Registry entry says nothing about how current its data is.",
+   "consentDefault": "on",
+   "hostings": [
+    {
+     "kind": "remote",
+     "variant": "remote",
+     "runsAt": "other",
+     "logging": [
+      {
+       "statedBy": "manifest",
+       "holder": "Example Holder R",
+       "keeps": "content",
+       "retention": "Example: one year",
+       "statementUrl": "https://holder-r.example/privacy",
+       "readOn": "an example date"
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "kind": "server",
+   "sourceId": "data-commons",
+   "alias": "data_commons",
+   "displayName": "Google Data Commons MCP Server",
+   "freshness": "Live API over published statistical releases: a figure changes only when an agency publishes a new release, and each carries its release vintage (the ACS releases annually).",
+   "consentDefault": "on",
+   "hostings": [
+    {
+     "kind": "remote",
+     "variant": "remote",
+     "runsAt": "other",
+     "logging": [
+      {
+       "statedBy": "manifest",
+       "holder": "Example Holder S",
+       "keeps": "none",
+       "statementUrl": "https://holder-s.example/privacy",
+       "readOn": "an example date"
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "kind": "pack",
+   "sourceId": "performance_seattle_gov",
+   "alias": "performance_seattle_gov",
+   "displayName": "Seattle Performance Portal",
+   "freshness": "Live: queries reach the portal when they are made (a dataset's metadata or a single record may be reused for up to five minutes); each dataset updates on its publisher's schedule.",
+   "base": "socrata",
+   "consentDefault": "on",
+   "hostings": [
+    {
+     "kind": "remote",
+     "variant": "remote",
+     "runsAt": "other",
+     "logging": [
+      {
+       "statedBy": "manifest",
+       "holder": "Example Holder G",
+       "keeps": "none",
+       "statementUrl": "https://holder-g.example/privacy",
+       "readOn": "an example date"
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "kind": "pack",
+   "sourceId": "opendata_cityofmesquite_com",
+   "alias": "opendata_cityofmesquite_com",
+   "displayName": "Mesquite Texas Open Data Portal",
+   "freshness": "Live: queries reach the portal when they are made (a dataset's metadata or a single record may be reused for up to five minutes); each dataset updates on its publisher's schedule.",
+   "base": "socrata",
+   "consentDefault": "on",
+   "hostings": [
+    {
+     "kind": "remote",
+     "variant": "remote",
+     "runsAt": "other",
+     "logging": [
+      {
+       "statedBy": "manifest",
+       "holder": "Example Holder G",
+       "keeps": "none",
+       "statementUrl": "https://holder-g.example/privacy",
+       "readOn": "an example date"
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "kind": "pack",
+   "sourceId": "data_somervillema_gov",
+   "alias": "data_somervillema_gov",
+   "displayName": "Somerville, Ma Open Data",
+   "freshness": "Live: queries reach the portal when they are made (a dataset's metadata or a single record may be reused for up to five minutes); each dataset updates on its publisher's schedule.",
+   "base": "socrata",
+   "consentDefault": "on",
+   "hostings": [
+    {
+     "kind": "remote",
+     "variant": "remote",
+     "runsAt": "other",
+     "logging": [
+      {
+       "statedBy": "manifest",
+       "holder": "Example Holder G",
+       "keeps": "none",
+       "statementUrl": "https://holder-g.example/privacy",
+       "readOn": "an example date"
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "kind": "pack",
+   "sourceId": "www_transparentrichmond_org",
+   "alias": "www_transparentrichmond_org",
+   "displayName": "Transparent Richmond",
+   "freshness": "Live: queries reach the portal when they are made (a dataset's metadata or a single record may be reused for up to five minutes); each dataset updates on its publisher's schedule.",
+   "base": "socrata",
+   "consentDefault": "on",
+   "hostings": [
+    {
+     "kind": "remote",
+     "variant": "remote",
+     "runsAt": "other",
+     "logging": [
+      {
+       "statedBy": "manifest",
+       "holder": "Example Holder G",
+       "keeps": "none",
+       "statementUrl": "https://holder-g.example/privacy",
+       "readOn": "an example date"
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "kind": "pack",
+   "sourceId": "nyc_checkbook_pack",
+   "alias": "nyc_checkbook_pack",
+   "displayName": "NYC Checkbook MCP Server (pack)",
+   "freshness": "Live: every call queries Checkbook NYC as it stands, and the server spaces its requests at least 1.1 seconds apart.",
+   "base": "nyc-checkbook",
+   "consentDefault": "ask-first",
+   "hostings": [
+    {
+     "kind": "npm-package",
+     "variant": "sandbox",
+     "runsAt": "instance-sandbox",
+     "package": "@example/nyc-checkbook",
+     "version": "0.0.0-example",
+     "outbound": [],
+     "logging": [
+      {
+       "statedBy": "manifest",
+       "holder": "Example Holder C",
+       "keeps": "none",
+       "statementUrl": "https://holder-c.example/privacy",
+       "readOn": "an example date"
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "kind": "pack",
+   "sourceId": "data_marincounty_gov",
+   "alias": "data_marincounty_gov",
+   "displayName": "County of Marin Open Data Portal",
+   "freshness": "Live: queries reach the portal when they are made (a dataset's metadata or a single record may be reused for up to five minutes); each dataset updates on its publisher's schedule.",
+   "base": "socrata",
+   "consentDefault": "on",
+   "hostings": [
+    {
+     "kind": "remote",
+     "variant": "remote",
+     "runsAt": "other",
+     "logging": [
+      {
+       "statedBy": "manifest",
+       "holder": "Example Holder G",
+       "keeps": "none",
+       "statementUrl": "https://holder-g.example/privacy",
+       "readOn": "an example date"
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "kind": "pack",
+   "sourceId": "data_cityofberkeley_info",
+   "alias": "data_cityofberkeley_info",
+   "displayName": "City of Berkeley Open Data Portal",
+   "freshness": "Live: queries reach the portal when they are made (a dataset's metadata or a single record may be reused for up to five minutes); each dataset updates on its publisher's schedule.",
+   "base": "socrata",
+   "consentDefault": "on",
+   "hostings": [
+    {
+     "kind": "remote",
+     "variant": "remote",
+     "runsAt": "other",
+     "logging": [
+      {
+       "statedBy": "manifest",
+       "holder": "Example Holder G",
+       "keeps": "none",
+       "statementUrl": "https://holder-g.example/privacy",
+       "readOn": "an example date"
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "kind": "pack",
+   "sourceId": "data_kcmo_org",
+   "alias": "data_kcmo_org",
+   "displayName": "Open Data KC",
+   "freshness": "Live: queries reach the portal when they are made (a dataset's metadata or a single record may be reused for up to five minutes); each dataset updates on its publisher's schedule.",
+   "base": "socrata",
+   "consentDefault": "on",
+   "hostings": [
+    {
+     "kind": "remote",
+     "variant": "remote",
+     "runsAt": "other",
+     "logging": [
+      {
+       "statedBy": "manifest",
+       "holder": "Example Holder G",
+       "keeps": "none",
+       "statementUrl": "https://holder-g.example/privacy",
+       "readOn": "an example date"
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "kind": "pack",
+   "sourceId": "bythenumbers_sco_ca_gov",
+   "alias": "bythenumbers_sco_ca_gov",
+   "displayName": "By The Numbers - CA Local Government Financial Data",
+   "freshness": "Live: queries reach the portal when they are made (a dataset's metadata or a single record may be reused for up to five minutes); each dataset updates on its publisher's schedule.",
+   "base": "socrata",
+   "consentDefault": "on",
+   "hostings": [
+    {
+     "kind": "remote",
+     "variant": "remote",
+     "runsAt": "other",
+     "logging": [
+      {
+       "statedBy": "manifest",
+       "holder": "Example Holder G",
+       "keeps": "none",
+       "statementUrl": "https://holder-g.example/privacy",
+       "readOn": "an example date"
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "kind": "pack",
+   "sourceId": "data_montgomerycountymd_gov",
+   "alias": "data_montgomerycountymd_gov",
+   "displayName": "Montgomery County, Md Open Data",
+   "freshness": "Live: queries reach the portal when they are made (a dataset's metadata or a single record may be reused for up to five minutes); each dataset updates on its publisher's schedule.",
+   "base": "socrata",
+   "consentDefault": "on",
+   "hostings": [
+    {
+     "kind": "remote",
+     "variant": "remote",
+     "runsAt": "other",
+     "logging": [
+      {
+       "statedBy": "manifest",
+       "holder": "Example Holder G",
+       "keeps": "none",
+       "statementUrl": "https://holder-g.example/privacy",
+       "readOn": "an example date"
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "kind": "pack",
+   "sourceId": "data_macoupincountyil_gov",
+   "alias": "data_macoupincountyil_gov",
+   "displayName": "Macoupin Open Data Portal | Open Data | Macoupin County",
+   "freshness": "Live: queries reach the portal when they are made (a dataset's metadata or a single record may be reused for up to five minutes); each dataset updates on its publisher's schedule.",
+   "base": "socrata",
+   "consentDefault": "on",
+   "hostings": [
+    {
+     "kind": "remote",
+     "variant": "remote",
+     "runsAt": "other",
+     "logging": [
+      {
+       "statedBy": "manifest",
+       "holder": "Example Holder G",
+       "keeps": "none",
+       "statementUrl": "https://holder-g.example/privacy",
+       "readOn": "an example date"
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "kind": "server",
+   "sourceId": "boston-opencontext",
+   "alias": "boston",
+   "displayName": "Boston OpenContext MCP Server",
+   "freshness": "Live: each call queries the CKAN data store behind data.boston.gov; each dataset updates on the City's schedule (311 daily, crime weekly, assessor annually).",
+   "consentDefault": "on",
+   "hostings": [
+    {
+     "kind": "remote",
+     "variant": "remote",
+     "runsAt": "other",
+     "logging": [
+      {
+       "statedBy": "manifest",
+       "holder": "Example Holder T",
+       "keeps": "not-stated",
+       "statementUrl": "https://holder-t.example/privacy",
+       "readOn": "an example date"
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "kind": "pack",
+   "sourceId": "carsoncity_data_socrata_com",
+   "alias": "carsoncity_data_socrata_com",
+   "displayName": "Performance Carson City Dashboard | Performance Carson City Dashboard",
+   "freshness": "Live: queries reach the portal when they are made (a dataset's metadata or a single record may be reused for up to five minutes); each dataset updates on its publisher's schedule.",
+   "base": "socrata",
+   "consentDefault": "on",
+   "hostings": [
+    {
+     "kind": "remote",
+     "variant": "remote",
+     "runsAt": "other",
+     "logging": [
+      {
+       "statedBy": "manifest",
+       "holder": "Example Holder G",
+       "keeps": "none",
+       "statementUrl": "https://holder-g.example/privacy",
+       "readOn": "an example date"
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "kind": "pack",
+   "sourceId": "data_vermont_gov",
+   "alias": "data_vermont_gov",
+   "displayName": "Vermont Open Data Portal",
+   "freshness": "Live: queries reach the portal when they are made (a dataset's metadata or a single record may be reused for up to five minutes); each dataset updates on its publisher's schedule.",
+   "base": "socrata",
+   "consentDefault": "on",
+   "hostings": [
+    {
+     "kind": "remote",
+     "variant": "remote",
+     "runsAt": "other",
+     "logging": [
+      {
+       "statedBy": "manifest",
+       "holder": "Example Holder G",
+       "keeps": "none",
+       "statementUrl": "https://holder-g.example/privacy",
+       "readOn": "an example date"
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "kind": "pack",
+   "sourceId": "data_bayareametro_gov",
+   "alias": "data_bayareametro_gov",
+   "displayName": "Bay Area Metro Open Data",
+   "freshness": "Live: queries reach the portal when they are made (a dataset's metadata or a single record may be reused for up to five minutes); each dataset updates on its publisher's schedule.",
+   "base": "socrata",
+   "consentDefault": "on",
+   "hostings": [
+    {
+     "kind": "remote",
+     "variant": "remote",
+     "runsAt": "other",
+     "logging": [
+      {
+       "statedBy": "manifest",
+       "holder": "Example Holder G",
+       "keeps": "none",
+       "statementUrl": "https://holder-g.example/privacy",
+       "readOn": "an example date"
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "kind": "pack",
+   "sourceId": "www_dallasopendata_com",
+   "alias": "www_dallasopendata_com",
+   "displayName": "Dallas, Tx Open Data",
+   "freshness": "Live: queries reach the portal when they are made (a dataset's metadata or a single record may be reused for up to five minutes); each dataset updates on its publisher's schedule.",
+   "base": "socrata",
+   "consentDefault": "on",
+   "hostings": [
+    {
+     "kind": "remote",
+     "variant": "remote",
+     "runsAt": "other",
+     "logging": [
+      {
+       "statedBy": "manifest",
+       "holder": "Example Holder G",
+       "keeps": "none",
+       "statementUrl": "https://holder-g.example/privacy",
+       "readOn": "an example date"
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "kind": "pack",
+   "sourceId": "bronx_lehman_cuny_edu",
+   "alias": "bronx_lehman_cuny_edu",
+   "displayName": "Lehman College Community Connect: Bronx Information Portal | Bronx Information Portal | Lehman College",
+   "freshness": "Live: queries reach the portal when they are made (a dataset's metadata or a single record may be reused for up to five minutes); each dataset updates on its publisher's schedule.",
+   "base": "socrata",
+   "consentDefault": "on",
+   "hostings": [
+    {
+     "kind": "remote",
+     "variant": "remote",
+     "runsAt": "other",
+     "logging": [
+      {
+       "statedBy": "manifest",
+       "holder": "Example Holder G",
+       "keeps": "none",
+       "statementUrl": "https://holder-g.example/privacy",
+       "readOn": "an example date"
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "kind": "pack",
+   "sourceId": "cookcounty_data_socrata_com",
+   "alias": "cookcounty_data_socrata_com",
+   "displayName": "Cook County Open Data Catalog",
+   "freshness": "Live: queries reach the portal when they are made (a dataset's metadata or a single record may be reused for up to five minutes); each dataset updates on its publisher's schedule.",
+   "base": "socrata",
+   "consentDefault": "on",
+   "hostings": [
+    {
+     "kind": "remote",
+     "variant": "remote",
+     "runsAt": "other",
+     "logging": [
+      {
+       "statedBy": "manifest",
+       "holder": "Example Holder G",
+       "keeps": "none",
+       "statementUrl": "https://holder-g.example/privacy",
+       "readOn": "an example date"
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "kind": "pack",
+   "sourceId": "stateofalaska_data_socrata_com",
+   "alias": "stateofalaska_data_socrata_com",
+   "displayName": "State of Alaska Financial Reporting",
+   "freshness": "Live: queries reach the portal when they are made (a dataset's metadata or a single record may be reused for up to five minutes); each dataset updates on its publisher's schedule.",
+   "base": "socrata",
+   "consentDefault": "on",
+   "hostings": [
+    {
+     "kind": "remote",
+     "variant": "remote",
+     "runsAt": "other",
+     "logging": [
+      {
+       "statedBy": "manifest",
+       "holder": "Example Holder G",
+       "keeps": "none",
+       "statementUrl": "https://holder-g.example/privacy",
+       "readOn": "an example date"
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "kind": "pack",
+   "sourceId": "performance_franklintn_gov",
+   "alias": "performance_franklintn_gov",
+   "displayName": "Franklin Performance & Financial Reports",
+   "freshness": "Live: queries reach the portal when they are made (a dataset's metadata or a single record may be reused for up to five minutes); each dataset updates on its publisher's schedule.",
+   "base": "socrata",
+   "consentDefault": "on",
+   "hostings": [
+    {
+     "kind": "remote",
+     "variant": "remote",
+     "runsAt": "other",
+     "logging": [
+      {
+       "statedBy": "manifest",
+       "holder": "Example Holder G",
+       "keeps": "none",
+       "statementUrl": "https://holder-g.example/privacy",
+       "readOn": "an example date"
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "kind": "pack",
+   "sourceId": "vdh_richmondcity_demo_soc_cbf1a4",
+   "alias": "vdh_richmondcity_demo_soc_cbf1a4",
+   "displayName": "Richmond City Local Health District | Richmond City Local Health District",
+   "freshness": "Live: queries reach the portal when they are made (a dataset's metadata or a single record may be reused for up to five minutes); each dataset updates on its publisher's schedule.",
+   "base": "socrata",
+   "consentDefault": "on",
+   "hostings": [
+    {
+     "kind": "remote",
+     "variant": "remote",
+     "runsAt": "other",
+     "logging": [
+      {
+       "statedBy": "manifest",
+       "holder": "Example Holder G",
+       "keeps": "none",
+       "statementUrl": "https://holder-g.example/privacy",
+       "readOn": "an example date"
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "kind": "pack",
+   "sourceId": "mi_treasury_data_socrata_com",
+   "alias": "mi_treasury_data_socrata_com",
+   "displayName": "MICommunity Financial Dashboard",
+   "freshness": "Live: queries reach the portal when they are made (a dataset's metadata or a single record may be reused for up to five minutes); each dataset updates on its publisher's schedule.",
+   "base": "socrata",
+   "consentDefault": "on",
+   "hostings": [
+    {
+     "kind": "remote",
+     "variant": "remote",
+     "runsAt": "other",
+     "logging": [
+      {
+       "statedBy": "manifest",
+       "holder": "Example Holder G",
+       "keeps": "none",
+       "statementUrl": "https://holder-g.example/privacy",
+       "readOn": "an example date"
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "kind": "pack",
+   "sourceId": "data_princegeorgescountymd_gov",
+   "alias": "data_princegeorgescountymd_gov",
+   "displayName": "Prince George County, Md - Openpgc",
+   "freshness": "Live: queries reach the portal when they are made (a dataset's metadata or a single record may be reused for up to five minutes); each dataset updates on its publisher's schedule.",
+   "base": "socrata",
+   "consentDefault": "on",
+   "hostings": [
+    {
+     "kind": "remote",
+     "variant": "remote",
+     "runsAt": "other",
+     "logging": [
+      {
+       "statedBy": "manifest",
+       "holder": "Example Holder G",
+       "keeps": "none",
+       "statementUrl": "https://holder-g.example/privacy",
+       "readOn": "an example date"
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "kind": "pack",
+   "sourceId": "data_countyofriverside_us",
+   "alias": "data_countyofriverside_us",
+   "displayName": "Riverside County Open Data | Riverside County Open Data",
+   "freshness": "Live: queries reach the portal when they are made (a dataset's metadata or a single record may be reused for up to five minutes); each dataset updates on its publisher's schedule.",
+   "base": "socrata",
+   "consentDefault": "on",
+   "hostings": [
+    {
+     "kind": "remote",
+     "variant": "remote",
+     "runsAt": "other",
+     "logging": [
+      {
+       "statedBy": "manifest",
+       "holder": "Example Holder G",
+       "keeps": "none",
+       "statementUrl": "https://holder-g.example/privacy",
+       "readOn": "an example date"
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "kind": "pack",
+   "sourceId": "data_sustainablesm_org",
+   "alias": "data_sustainablesm_org",
+   "displayName": "Santa Monica Sustainable City Plan",
+   "freshness": "Live: queries reach the portal when they are made (a dataset's metadata or a single record may be reused for up to five minutes); each dataset updates on its publisher's schedule.",
+   "base": "socrata",
+   "consentDefault": "on",
+   "hostings": [
+    {
+     "kind": "remote",
+     "variant": "remote",
+     "runsAt": "other",
+     "logging": [
+      {
+       "statedBy": "manifest",
+       "holder": "Example Holder G",
+       "keeps": "none",
+       "statementUrl": "https://holder-g.example/privacy",
+       "readOn": "an example date"
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "kind": "pack",
+   "sourceId": "cityoflaramie_data_socrata_com",
+   "alias": "cityoflaramie_data_socrata_com",
+   "displayName": "City of Laramie Open Data",
+   "freshness": "Live: queries reach the portal when they are made (a dataset's metadata or a single record may be reused for up to five minutes); each dataset updates on its publisher's schedule.",
+   "base": "socrata",
+   "consentDefault": "on",
+   "hostings": [
+    {
+     "kind": "remote",
+     "variant": "remote",
+     "runsAt": "other",
+     "logging": [
+      {
+       "statedBy": "manifest",
+       "holder": "Example Holder G",
+       "keeps": "none",
+       "statementUrl": "https://holder-g.example/privacy",
+       "readOn": "an example date"
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "kind": "pack",
+   "sourceId": "data_cincinnati_oh_gov",
+   "alias": "data_cincinnati_oh_gov",
+   "displayName": "Cincinnati Open Data Portal | Tyler Data & Insights",
+   "freshness": "Live: queries reach the portal when they are made (a dataset's metadata or a single record may be reused for up to five minutes); each dataset updates on its publisher's schedule.",
+   "base": "socrata",
+   "consentDefault": "on",
+   "hostings": [
+    {
+     "kind": "remote",
+     "variant": "remote",
+     "runsAt": "other",
+     "logging": [
+      {
+       "statedBy": "manifest",
+       "holder": "Example Holder G",
+       "keeps": "none",
+       "statementUrl": "https://holder-g.example/privacy",
+       "readOn": "an example date"
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "kind": "server",
+   "sourceId": "studiofinder",
+   "alias": "studiofinder",
+   "displayName": "io.github.pooriaarab/studiofinder",
+   "freshness": "Not stated: the MCP Registry entry says nothing about how current its data is.",
+   "consentDefault": "on",
+   "hostings": [
+    {
+     "kind": "remote",
+     "variant": "remote",
+     "runsAt": "other",
+     "logging": [
+      {
+       "statedBy": "manifest",
+       "holder": "Example Holder U",
+       "keeps": "metadata",
+       "retention": "Example: 30 days",
+       "statementUrl": "https://holder-u.example/privacy",
+       "readOn": "an example date"
+      }
+     ]
+    }
+   ]
+  }
+ ]
+}
