@@ -106,6 +106,11 @@ export interface ConsentSnapshot {
   store: boolean | null;
   /** The states the reader set in the panel before a consent, by source id: kept on the page, written by Allow (R9 P2). */
   pending: Record<string, SourceStateValue>;
+  /**
+   * The last write the consent endpoint refused because the signed-out reader's cookie is full (S4 W1, A2;
+   * `consent_cookie_full`): the source whose change it was. Cleared by the next write.
+   */
+  cookieFull: { sourceId: string } | null;
 }
 
 /** A pause the hooks reported, and what has happened to it since. */
@@ -127,7 +132,7 @@ export interface PendingPause {
   afterHold?: true;
 }
 
-const EMPTY: ConsentSnapshot = { loaded: false, status: null, statement: null, writing: false, refusals: 0, failed: false, pauses: {}, routing: null, store: null, pending: {} };
+const EMPTY: ConsentSnapshot = { loaded: false, status: null, statement: null, writing: false, refusals: 0, failed: false, pauses: {}, routing: null, store: null, pending: {}, cookieFull: null };
 
 let snapshot: ConsentSnapshot = EMPTY;
 const listeners = new Set<() => void>();
@@ -382,19 +387,21 @@ export function panelStates(
   return states;
 }
 
-async function write(method: 'PUT' | 'PATCH' | 'DELETE', body?: unknown): Promise<boolean> {
+async function write(method: 'PUT' | 'PATCH' | 'DELETE', body?: unknown, sourceId?: string): Promise<boolean> {
   // The reader has acted since the choice was kept: the line has said what it had to.
   keptOnPage = false;
-  set({ writing: true, failed: false });
+  set({ writing: true, failed: false, cookieFull: null });
   try {
     const response = await fetch('/api/sources/consent', {
       method,
       headers: { 'Content-Type': 'application/json' },
       ...(body === undefined ? {} : { body: JSON.stringify(body) }),
     });
+    // The refusal's code, read before the status is read again (S4 W1, A2): only its code is kept, never its text.
+    const code = response.ok ? undefined : ((await response.json().catch(() => null)) as { code?: unknown } | null)?.code;
     await refreshConsent();
     if (!response.ok) {
-      set({ failed: response.status !== 409 });
+      set({ failed: response.status !== 409, cookieFull: code === 'consent_cookie_full' && sourceId !== undefined ? { sourceId } : null });
       return false;
     }
     // Written: the store now holds what the panel shows, and nothing is pending.
@@ -422,14 +429,20 @@ export async function allowConsent(): Promise<boolean> {
   const status = snapshot.status;
   if (!status) return false;
   const states = panelStates({ status, pending: snapshot.pending }, configured());
-  return write('PUT', { states, flowsVersion: status.flowsVersion });
+  // A source the reader set before the consent is set on its own when Allow writes it (premise 7's exception).
+  const own = Object.keys(snapshot.pending).filter((id) => Object.prototype.hasOwnProperty.call(states, id));
+  return write('PUT', { states, own, flowsVersion: status.flowsVersion });
 }
 
 /**
- * One source's state. With a consent in force it is written with every other
- * state as it is; before one it is kept in `pending`, and nothing is written
+ * One source's state. With a consent in force it is written as one source's
+ * change (`{ change: { scope: 'source' } }`, S4 W1): the endpoint sets that
+ * source, marks it set on its own, and keeps every other state as it is;
+ * before one it is kept in `pending`, and nothing is written
  * (R9 P2), and the answer is true: a caller that confirms a write reads
- * whether a consent was in force when the choice was made.
+ * whether a consent was in force when the choice was made. A change the
+ * endpoint refuses because the cookie is full answers false and sets
+ * `cookieFull` (A2).
  */
 export async function setSourceState(sourceId: string, state: SourceStateValue): Promise<boolean> {
   const status = snapshot.status;
@@ -439,7 +452,7 @@ export async function setSourceState(sourceId: string, state: SourceStateValue):
   }
   const states = { ...currentStates(status, configured()), [sourceId]: state };
   set({ status: { ...status, states: Object.fromEntries(Object.entries(states).map(([id, s]) => [id, { state: s, since: status.states?.[id]?.state === s ? status.states[id].since : '' }])) } });
-  return write('PUT', { states, flowsVersion: status.flowsVersion });
+  return write('PUT', { change: { scope: 'source', sourceId, state }, flowsVersion: status.flowsVersion }, sourceId);
 }
 
 export function revokeConsent(): Promise<boolean> {

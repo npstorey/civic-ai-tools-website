@@ -268,7 +268,8 @@ test('UX-2 P4b criterion 6: allow-all on the cookie path moves every configured 
   const after = cookieFrom(response.headers.get('set-cookie'));
   assert.deepEqual(flat(after.states), Object.fromEntries(ids.map((id: string) => [id, 'on'])), 'not every configured source is On in the cookie');
   for (const id of ids) {
-    assert.equal(after.states[id].version, statement.sources.find((s: { sourceId: string }) => s.sourceId === id).version, `${id}'s entry does not carry its version`);
+    // S4 W1: the second form keeps each version's first 4 bytes.
+    assert.ok(statement.sources.find((s: { sourceId: string }) => s.sourceId === id).version.startsWith(after.states[id].version), `${id}'s entry does not carry its version`);
   }
 });
 

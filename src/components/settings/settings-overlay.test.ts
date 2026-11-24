@@ -248,11 +248,15 @@ test('UX-2 P4b criterion 2: signed out, a change writes PUT /api/sources/consent
   await s.settle();
   const puts = net.sent.filter((r) => r.method === 'PUT' && r.path === '/api/sources/consent');
   assert.equal(puts.length, 1, `the change did not write one PUT (${puts.length})`);
-  const body = JSON.parse(puts[0].body) as { states: Record<string, string>; flowsVersion: string };
-  assert.deepEqual(body.states, { socrata: 'on', 'data-commons': 'on', 'boston-opencontext': 'off', 'nyc-record': 'on' }, 'the PUT does not carry every configured source\'s state');
+  // S4 W1 (npstorey/civic-ai-tools#335): a change writes that one source's change, and the endpoint keeps every other
+  // state; the cookie then holds every configured source's state, with the change.
+  const body = JSON.parse(puts[0].body) as { change: Record<string, string>; flowsVersion: string };
+  assert.deepEqual(body.change, { scope: 'source', sourceId: 'boston-opencontext', state: 'off' }, 'the PUT does not carry the one source\'s change');
   assert.equal(body.flowsVersion, statementHash(statement));
   const cookie = readConsentCookie(new Request(`${ORIGIN}/`, { headers: { cookie: [...net.jar].map(([k, v]) => `${k}=${v}`).join('; ') } }));
   assert.equal(cookie?.states?.['boston-opencontext']?.state, 'off', 'the cookie does not hold the change');
+  const kept = Object.fromEntries(Object.entries((cookie?.states ?? {}) as Record<string, { state: string }>).map(([id, entry]) => [id, entry.state]));
+  assert.deepEqual(kept, { socrata: 'on', 'data-commons': 'on', 'boston-opencontext': 'off', 'nyc-record': 'on' }, 'the cookie does not keep every configured source\'s state');
   s.unmount();
 });
 

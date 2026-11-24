@@ -1,23 +1,31 @@
 import { getServerSession } from 'next-auth';
-import { CIVIC_MANIFEST } from '@typedstandards/civic-typed-router';
 import { authOptions } from '@/lib/auth';
-import { buildFlowsStatement, statementHash, type FlowsStatement } from '@/lib/flows/statement';
+import { buildFlowsStatement, flowsManifest, statementHash, type FlowsStatement } from '@/lib/flows/statement';
 import { deleteConsentRow, readConsentRow, writeConsentRow } from '@/lib/sources/consent-store';
 import {
+  applyConsentMove,
+  applyGivenStates,
   classifyFlowsChange,
   clearConsentCookieHeader,
   consentCookieHeader,
   consentDate,
   cookieConsentInForce,
+  cookieFits,
   encodeConsentCookie,
   isSecureRequest,
   isSourceState,
   noticesOf,
   readConsentCookie,
   reaskOf,
+  setOnItsOwn,
+  type ConsentMove,
   type Reask,
   type SourceState,
+  type StoredEntry,
+  type StoredSourceState,
 } from '@/lib/sources/consent';
+import { classMembers } from '@/lib/sources/classes';
+import { COOKIE_FULL_TEXT } from '@/lib/sources/copy';
 import { errorLogFacts } from '@/lib/streaming';
 import { canAsk } from '@/lib/sources/consent-gate';
 import { sourceRoutingMode } from '@/lib/mcp/source-routing-mode';
@@ -39,12 +47,27 @@ import { decisionStoreFromEnv } from '@/lib/sources/decision';
  *           the statement it holds that ask nothing (D2 = A). Sets no cookie.
  *           `keptFromCookie: true` on the one read that kept a consent given
  *           signed out on the account (below); absent on every other read.
- *   PUT     `{ states: { <source id>: 'on' | 'ask-first' | 'off' }, flowsVersion }`
+ *   PUT     `{ states: { <source id>: 'on' | 'ask-first' | 'off' }, flowsVersion, own? }`
  *           stores the states for the sources this instance configures,
- *           against the flows statement the surface was shown. 400 names any
+ *           against the flows statement the surface was shown (the first
+ *           consent's Allow; `own` names the sources the reader set before
+ *           it, which are set on their own). Every stored state it does not
+ *           name is kept. 400 names any
  *           id this instance does not configure (flag 3: the only boundary
  *           that accepts source ids); 409 when `flowsVersion` is not the
  *           statement in force, so the surface reads it again.
+ *   PUT     `{ change, flowsVersion }` (S4 W1, npstorey/civic-ai-tools#335)
+ *           changes a consent in force and nothing else (A12): `change` is
+ *           `{ scope: 'source', sourceId, state }`, one source by its own
+ *           control, set on its own; `{ scope: 'class', classId, state }`,
+ *           every configured source then in the class that is not set on its
+ *           own; or `{ scope: 'all', state: 'on' }`, "Enable all data
+ *           sources": every configured source On and every flag cleared
+ *           (premise 7). The row keeps the statement it holds and the cookie
+ *           its base version. 409 `consent_required` when no consent is in
+ *           force. Either body answers 422 `consent_cookie_full` and sets no
+ *           cookie when the cookie it would set passes 4,096 bytes (A2).
+ *           GET's `setOnItsOwn` lists the configured sources set on their own.
  *   PATCH   `{ flowsVersion }` dismisses the notices of a row in force: the
  *           row keeps its states and now holds the statement in force, so the
  *           same change is not told again. Nothing is asked (D2 = A).
@@ -94,7 +117,7 @@ const accounts = () => Boolean(process.env.DATABASE_URL);
 function defaultStates(configured: readonly string[]): Record<string, SourceState> {
   const asks = canAsk({ routing: sourceRoutingMode(), store: decisionStoreFromEnv() !== null });
   return Object.fromEntries(
-    configured.map((id) => [id, (asks ? 'ask-first' : (CIVIC_MANIFEST.find((e) => e.sourceId === id)?.consentDefault ?? 'ask-first')) as SourceState]),
+    configured.map((id) => [id, (asks ? 'ask-first' : (flowsManifest().find((e) => e.sourceId === id)?.consentDefault ?? 'ask-first')) as SourceState]),
   );
 }
 
@@ -110,7 +133,7 @@ async function sessionOf(): Promise<Session | null> {
 
 export async function GET(request: Request): Promise<Response> {
   const session = await sessionOf();
-  const { statement, hash, defaults } = await current();
+  const { statement, hash, defaults, configured } = await current();
   const dbId = session?.user?.dbId;
   if (dbId) {
     let row = await readConsentRow(dbId);
@@ -127,6 +150,7 @@ export async function GET(request: Request): Promise<Response> {
       defaults,
       accounts: accounts(),
       states: row.states,
+      setOnItsOwn: ownIds(row.states, configured),
       consentedAt: row.consentedAt,
       updatedAt: row.updatedAt,
       consentedFlowsVersion: row.flowsHash,
@@ -137,7 +161,7 @@ export async function GET(request: Request): Promise<Response> {
       ...(kept ? { keptFromCookie: true } : {}),
     }, 200);
   }
-  const cookie = readConsentCookie(request);
+  const cookie = readConsentCookie(request, configured);
   if (!cookie) return json({ inForce: false, store: 'cookie', flowsVersion: hash, defaults, accounts: accounts() }, 200);
   const verdict = cookieConsentInForce(cookie, statement);
   const states = Object.fromEntries(Object.entries(cookie.states).map(([id, s]) => [id, { state: s.state, since: s.since }]));
@@ -148,6 +172,7 @@ export async function GET(request: Request): Promise<Response> {
     defaults,
     accounts: accounts(),
     states,
+    setOnItsOwn: ownIds(cookie.states, configured),
     ...(verdict.inForce ? { consentedFlowsVersion: hash, consentedBaseVersion: statement.version, consentedFlowsDate: statement.date } : { reask: verdict.reask as Reask }),
   }, 200);
 }
@@ -162,13 +187,16 @@ export async function GET(request: Request): Promise<Response> {
  * touched.
  */
 async function keepCookieConsent(request: Request, dbId: string, statement: FlowsStatement, hash: string): Promise<boolean> {
-  const cookie = readConsentCookie(request);
+  const ids = statement.sources.map((s) => s.sourceId);
+  const cookie = readConsentCookie(request, ids);
   if (!cookie || !cookieConsentInForce(cookie, statement).inForce) return false;
-  const configured = new Set(statement.sources.map((s) => s.sourceId));
+  const configured = new Set(ids);
+  // Each configured source's state, date and flag (S4 W1, A12): a second-form entry carries its flag, a first-form
+  // entry none, which reads the same (`setOnItsOwn`). A source this instance does not configure is dropped, as before.
   const states = Object.fromEntries(
     Object.entries(cookie.states)
       .filter(([id]) => configured.has(id))
-      .map(([id, s]) => [id, { state: s.state, since: s.since }]),
+      .map(([id, s]) => [id, { state: s.state, since: s.since, ...(s.own === undefined ? {} : { own: s.own }) }]),
   );
   try {
     await writeConsentRow(dbId, { states, flowsHash: hash, flowsStatement: statement });
@@ -180,6 +208,34 @@ async function keepCookieConsent(request: Request, dbId: string, statement: Flow
   }
 }
 
+/** A `change` body's move, before the configured sources are known; null for a body that is not one. */
+type ChangeBody = { scope: 'source'; sourceId: string; state: SourceState } | { scope: 'class'; classId: string; state: SourceState } | { scope: 'all'; state: 'on' };
+
+function readChange(value: unknown): ChangeBody | null {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) return null;
+  const change = value as Record<string, unknown>;
+  if (change.scope === 'source' && typeof change.sourceId === 'string' && isSourceState(change.state)) return { scope: 'source', sourceId: change.sourceId, state: change.state };
+  if (change.scope === 'class' && typeof change.classId === 'string' && isSourceState(change.state)) return { scope: 'class', classId: change.classId, state: change.state };
+  if (change.scope === 'all' && change.state === 'on') return { scope: 'all', state: 'on' };
+  return null;
+}
+
+/** The configured sources set on their own, in the statement's order (`setOnItsOwn`), for the GET. */
+function ownIds(states: Readonly<Record<string, { state: SourceState; own?: boolean }>>, configured: readonly string[]): string[] {
+  return configured.filter((id) => Object.hasOwn(states, id) && setOnItsOwn(states[id]));
+}
+
+/** A row's entry: the state, the date and the flag where one is given. */
+const rowEntry = (_id: string, next: StoredEntry): StoredEntry => ({ state: next.state, since: next.since, ...(next.own === undefined ? {} : { own: next.own }) });
+
+const cookieFull = (hash: string) => json({ error: COOKIE_FULL_TEXT.refused, code: 'consent_cookie_full', flowsVersion: hash }, 422);
+
+const unknownSource = (unknown: string[], configured: readonly string[]) => json({
+  error: `This site does not offer ${unknown.map((id) => `"${id}"`).join(', ')}, so no consent can be stored for it. It offers ${configured.map((id) => `"${id}"`).join(', ')}.`,
+  code: 'unknown_source',
+  unknown,
+}, 400);
+
 export async function PUT(request: Request): Promise<Response> {
   let body: unknown;
   try {
@@ -187,7 +243,8 @@ export async function PUT(request: Request): Promise<Response> {
   } catch {
     return json({ error: 'The consent could not be read: send JSON with the states and the flows version shown.', code: 'invalid_consent' }, 400);
   }
-  const { states, flowsVersion } = (body ?? {}) as { states?: unknown; flowsVersion?: unknown };
+  const { states, flowsVersion, own, change } = (body ?? {}) as { states?: unknown; flowsVersion?: unknown; own?: unknown; change?: unknown };
+  if (change !== undefined) return putChange(request, change, flowsVersion);
   if (!states || typeof states !== 'object' || Array.isArray(states) || typeof flowsVersion !== 'string') {
     return json({ error: 'The consent needs a state for each source and the flows version it was shown.', code: 'invalid_consent' }, 400);
   }
@@ -195,15 +252,12 @@ export async function PUT(request: Request): Promise<Response> {
   if (entries.some(([, state]) => !isSourceState(state))) {
     return json({ error: 'Each source must be On, Ask first or Off.', code: 'invalid_consent' }, 400);
   }
+  if (own !== undefined && (!Array.isArray(own) || own.some((id) => typeof id !== 'string' || !Object.hasOwn(states, id)))) {
+    return json({ error: 'Each source set on its own must be one of the states sent.', code: 'invalid_consent' }, 400);
+  }
   const { statement, hash, configured } = await current();
   const unknown = entries.map(([id]) => id).filter((id) => !configured.includes(id));
-  if (unknown.length > 0) {
-    return json({
-      error: `This site does not offer ${unknown.map((id) => `"${id}"`).join(', ')}, so no consent can be stored for it. It offers ${configured.map((id) => `"${id}"`).join(', ')}.`,
-      code: 'unknown_source',
-      unknown,
-    }, 400);
-  }
+  if (unknown.length > 0) return unknownSource(unknown, configured);
   if (flowsVersion !== hash) {
     return json({
       error: 'Where a question goes on this site has changed since this was shown. Read it again before you answer.',
@@ -216,21 +270,72 @@ export async function PUT(request: Request): Promise<Response> {
   const dbId = session?.user?.dbId;
   const today = consentDate();
   const given = entries as Array<[string, SourceState]>;
+  const ownSet = new Set((own as string[] | undefined) ?? []);
 
   if (dbId) {
-    // A state the reader did not change keeps the date it was first given.
+    // Every stored state it does not name is kept (A12); a named state the reader did not change keeps its date.
     const prior = (await readConsentRow(dbId))?.states ?? {};
-    const stored = Object.fromEntries(given.map(([id, state]) => [id, { state, since: prior[id]?.state === state ? prior[id].since : today }]));
+    const stored = applyGivenStates(prior, given, ownSet, today, rowEntry);
     await writeConsentRow(dbId, { states: stored, flowsHash: hash, flowsStatement: statement });
     return json({ inForce: true, store: 'row', flowsVersion: hash, states: stored }, 200);
   }
 
-  const prior = readConsentCookie(request)?.states ?? {};
+  const prior = readConsentCookie(request, configured);
   const version = (id: string) => statement.sources.find((s) => s.sourceId === id)!.version;
-  const cookieStates = Object.fromEntries(given.map(([id, state]) => [id, { state, since: prior[id]?.state === state ? prior[id].since : today, version: version(id) }]));
-  const value = encodeConsentCookie({ v: 1, flows: statement.version, states: cookieStates });
+  const cookieStates = applyGivenStates(prior?.states ?? {}, given, ownSet, today, (id, next): StoredSourceState => ({ ...next, version: version(id) }));
+  const value = encodeConsentCookie({ v: 2, flows: statement.version, states: cookieStates, ...(prior?.unmatched ? { unmatched: prior.unmatched } : {}) });
+  if (!cookieFits(value)) return cookieFull(hash);
   const states2 = Object.fromEntries(given.map(([id]) => [id, { state: cookieStates[id].state, since: cookieStates[id].since }]));
   return json({ inForce: true, store: 'cookie', flowsVersion: hash, states: states2 }, 200, consentCookieHeader(value, isSecureRequest(request)));
+}
+
+/** `PUT { change, flowsVersion }`: one move on a consent in force, nothing else changed (S4 W1). */
+async function putChange(request: Request, value: unknown, flowsVersion: unknown): Promise<Response> {
+  const change = readChange(value);
+  if (!change || typeof flowsVersion !== 'string') {
+    return json({ error: 'The change could not be read: send the source or the class, the state and the flows version shown.', code: 'invalid_consent' }, 400);
+  }
+  const { statement, hash, configured } = await current();
+  let ids: string[];
+  if (change.scope === 'source') {
+    if (!configured.includes(change.sourceId)) return unknownSource([change.sourceId], configured);
+    ids = [change.sourceId];
+  } else if (change.scope === 'class') {
+    ids = classMembers(flowsManifest(), change.classId, configured);
+    if (ids.length === 0) return json({ error: `This site offers no source in "${change.classId}".`, code: 'unknown_class', classId: change.classId }, 400);
+  } else {
+    ids = configured;
+  }
+  if (flowsVersion !== hash) {
+    return json({ error: 'Where a question goes on this site has changed since this was shown. Read it again before you answer.', code: 'flows_version_stale', flowsVersion: hash }, 409);
+  }
+  const move: ConsentMove = { ids, state: change.state, by: change.scope };
+  const notInForce = (reask: Reask) => json({ error: 'There is no consent in force to change: answer the consent first.', code: 'consent_required', flowsVersion: hash, reask }, 409);
+  const session = await sessionOf();
+  const dbId = session?.user?.dbId;
+  const today = consentDate();
+
+  if (dbId) {
+    const row = await readConsentRow(dbId);
+    if (!row) return notInForce({ base: true, sources: [] });
+    const reask = reaskOf(classifyFlowsChange(row.flowsStatement, statement));
+    if (reask.base || reask.sources.length > 0) return notInForce(reask);
+    // The row keeps the statement it holds, as the pause's writer does: a change is not a new consent.
+    const stored = applyConsentMove(row.states, move, today, rowEntry);
+    await writeConsentRow(dbId, { states: stored, flowsHash: row.flowsHash, flowsStatement: row.flowsStatement });
+    return json({ inForce: true, store: 'row', flowsVersion: hash, states: stored }, 200);
+  }
+
+  const cookie = readConsentCookie(request, configured);
+  if (!cookie) return notInForce({ base: true, sources: [] });
+  const verdict = cookieConsentInForce(cookie, statement);
+  if (!verdict.inForce) return notInForce(verdict.reask);
+  const version = (id: string) => statement.sources.find((s) => s.sourceId === id)!.version;
+  const cookieStates = applyConsentMove(cookie.states, move, today, (id, next): StoredSourceState => ({ ...next, version: version(id) }));
+  const encoded = encodeConsentCookie({ v: 2, flows: cookie.flows, states: cookieStates, ...(cookie.unmatched ? { unmatched: cookie.unmatched } : {}) });
+  if (!cookieFits(encoded)) return cookieFull(hash);
+  const shown = Object.fromEntries(Object.entries(cookieStates).map(([id, s]) => [id, { state: s.state, since: s.since }]));
+  return json({ inForce: true, store: 'cookie', flowsVersion: hash, states: shown }, 200, consentCookieHeader(encoded, isSecureRequest(request)));
 }
 
 export async function PATCH(request: Request): Promise<Response> {

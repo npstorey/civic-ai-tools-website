@@ -156,7 +156,8 @@ export async function consentInForce(request: Request, session: ConsentSession |
     states = flatStates(row.states);
   } else {
     store = 'cookie';
-    const cookie = readConsentCookie(request);
+    // Either form; a second-form entry is matched against the sources the statement in force lists (S4 W1).
+    const cookie = readConsentCookie(request, configured);
     if (!cookie) return refusal(store, statement, { base: true, sources: [] });
     const verdict = cookieConsentInForce(cookie, statement);
     if (!verdict.inForce) return refusal(store, statement, verdict.reask);

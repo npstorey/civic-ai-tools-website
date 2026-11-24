@@ -56,7 +56,7 @@
  * (409), so a stranger learns nothing from the status. The decision is
  * written first, and only once it is written does the consent move (fix round
  * 2, item 2): a write that fails or finds no entry leaves the consent as it
- * was. The four values (UX-2 P4b, L10):
+ * was. The six values (UX-2 P4b, L10; S4 W1, npstorey/civic-ai-tools#335):
  *   - `allow` moves that one source On;
  *   - `off`, "Don't allow" at the pause (D7 C), moves that one source Off,
  *     and the run declines it;
@@ -64,7 +64,19 @@
  *     configured source On, and the run loads every later Ask-first source
  *     with no further pause (`routing-mode.ts`);
  *   - `not-now` moves nothing, and the run declines the source. No surface
- *     sends it since P4b; it is kept for a page loaded before the deploy.
+ *     sends it since P4b; it is kept for a page loaded before the deploy;
+ *   - `allow-class` and `off-class`, the class answers (G0-4 = A, C3 = A),
+ *     move On or Off every configured source then in the asking source's
+ *     class (a server and the packs over it, `./classes.ts`) that is not set
+ *     on its own, and the run loads or declines the asking source as for
+ *     `allow` and `off`. They are taken at any size; the surface shows them
+ *     above twelve sources.
+ * "Set on its own" (premise 7): `allow` and `off` set the asking source's
+ * flag; a class answer leaves a flagged source as it is, and clears its flag
+ * when the class is set to the state it has; `allow-all` clears every flag.
+ * A move whose cookie would pass 4,096 bytes sets no cookie and answers 200
+ * `moved: false` with `code: 'consent_cookie_full'` (A2, C4 = A): the
+ * decision is saved, so the run goes on as decided.
  * Each move goes through one writer (`moveSources`), from R6's store's
  * exported pieces, as `PUT /api/sources/consent` composes them: the row (kept
  * with its `flowsHash` and `flowsStatement`) for a session with a `dbId`,
@@ -83,10 +95,22 @@ import { createHmac, randomBytes, timingSafeEqual } from 'node:crypto';
 import { kv } from '@vercel/kv';
 import { CIVIC_MANIFEST } from '@typedstandards/civic-typed-router';
 import { getMissingRateLimitSecretError, RATE_LIMIT_SECRET_VARIABLE } from '../rate-limit.ts';
-import { buildFlowsStatement, type FlowsLinks, type FlowsSource, type FlowsStatement } from '../flows/statement.ts';
+import { buildFlowsStatement, flowsManifest, type FlowsLinks, type FlowsSource, type FlowsStatement } from '../flows/statement.ts';
 import { hostingVariantInForce, type McpRegistryEnv } from '../mcp/registry.ts';
 import { readConsentRow, writeConsentRow } from './consent-store.ts';
-import { consentCookieHeader, consentDate, encodeConsentCookie, isSecureRequest, readConsentCookie } from './consent.ts';
+import {
+  applyConsentMove,
+  consentCookieHeader,
+  consentDate,
+  cookieFits,
+  encodeConsentCookie,
+  isSecureRequest,
+  readConsentCookie,
+  type ConsentMove,
+  type StoredEntry,
+  type StoredSourceState,
+} from './consent.ts';
+import { classIdOfSource, classMembers } from './classes.ts';
 import type { ConsentPause, PauseDecision, PauseResult } from '../mcp/routing-mode.ts';
 import type { ConsentPausePayload } from '../streaming.ts';
 
@@ -116,8 +140,15 @@ const KEY_SHAPE = /^[0-9a-f]{32}$/;
 // --- The store ---------------------------------------------------------------------
 
 /** The answers the decision route takes (UX-2 P4b, L10): see the module's header. */
-export type ConsentDecisionValue = 'allow' | 'off' | 'allow-all' | 'not-now';
-export const CONSENT_DECISION_VALUES: readonly ConsentDecisionValue[] = ['allow', 'off', 'allow-all', 'not-now'];
+export type ConsentDecisionValue = 'allow' | 'off' | 'allow-all' | 'not-now' | 'allow-class' | 'off-class';
+export const CONSENT_DECISION_VALUES: readonly ConsentDecisionValue[] = ['allow', 'off', 'allow-all', 'not-now', 'allow-class', 'off-class'];
+
+/** What the run does with a decision: a class answer loads or declines the asking source as Allow or Don't allow. */
+export function runDecisionOf(decision: ConsentDecisionValue): PauseDecision {
+  if (decision === 'allow-class') return 'allow';
+  if (decision === 'off-class') return 'off';
+  return decision;
+}
 
 function isDecisionValue(value: unknown): value is ConsentDecisionValue {
   return typeof value === 'string' && (CONSENT_DECISION_VALUES as readonly string[]).includes(value);
@@ -301,7 +332,7 @@ export function createConsentPause(input: ConsentPauseInput): ConsentPause {
           } catch {
             return heldWith('no-answer');
           }
-          if (isEntry(value) && value.decision !== undefined) return heldWith(value.decision);
+          if (isEntry(value) && value.decision !== undefined) return heldWith(runDecisionOf(value.decision));
         }
       } finally {
         spentMs += now() - start;
@@ -339,48 +370,36 @@ const json = (body: unknown, status: number, setCookie?: string) =>
   });
 
 /**
- * Move each of `sourceIds` to `state` in the requester's consent, as `PUT
- * /api/sources/consent` would write it, changing nothing else, in one write.
- * A source whose state does not change keeps the date it was given. Returns
- * the cookie to set, or undefined (a row was written, or there is nothing to
- * merge into: no row, or no cookie on the request). On the cookie path a
- * source the statement in force does not carry, and the cookie never held, is
- * left out (it has no version to keep).
+ * Make `move` in the requester's consent, as `PUT /api/sources/consent` makes a change, changing nothing else, in one
+ * write (`applyConsentMove`: a state that does not change keeps its date; "set on its own" as premise 7 says). Returns
+ * the cookie to set; nothing when a row was written or there is nothing to merge into (no row, or no cookie on the
+ * request); `full` when the cookie would pass 4,096 bytes, and is not set. On the cookie path a source the statement in
+ * force does not carry, and the cookie never held, is left out (it has no version to keep).
  */
 async function moveSources(
   request: Request,
   session: DecisionSession | null | undefined,
-  sourceIds: readonly string[],
-  state: 'on' | 'off',
-  statement?: FlowsStatement,
-): Promise<string | undefined> {
+  move: ConsentMove,
+  statement: FlowsStatement,
+): Promise<{ setCookie?: string; full?: true }> {
   const today = consentDate();
   const dbId = session?.user?.dbId;
   if (dbId) {
     const row = await readConsentRow(dbId);
-    if (!row) return undefined;
-    const states = { ...row.states };
-    for (const id of sourceIds) {
-      const prior = row.states[id];
-      states[id] = { state, since: prior?.state === state ? prior.since : today };
-    }
+    if (!row) return {};
+    const states = applyConsentMove(row.states, move, today, (_id, next): StoredEntry => ({ state: next.state, since: next.since, ...(next.own === undefined ? {} : { own: next.own }) }));
     await writeConsentRow(dbId, { states, flowsHash: row.flowsHash, flowsStatement: row.flowsStatement });
-    return undefined;
+    return {};
   }
-  const cookie = readConsentCookie(request);
-  if (!cookie) return undefined;
-  const inForce = statement ?? (await buildFlowsStatement());
-  const states = { ...cookie.states };
-  let moved = 0;
-  for (const id of sourceIds) {
-    const prior = cookie.states[id];
-    const version = inForce.sources.find((s) => s.sourceId === id)?.version ?? prior?.version;
-    if (!version) continue;
-    states[id] = { state, since: prior?.state === state ? prior.since : today, version };
-    moved += 1;
-  }
-  if (moved === 0) return undefined;
-  return consentCookieHeader(encodeConsentCookie({ v: 1, flows: cookie.flows, states }), isSecureRequest(request));
+  const cookie = readConsentCookie(request, statement.sources.map((s) => s.sourceId));
+  if (!cookie) return {};
+  const versionOf = (id: string) => statement.sources.find((s) => s.sourceId === id)?.version ?? (Object.hasOwn(cookie.states, id) ? cookie.states[id].version : undefined);
+  const ids = move.ids.filter((id) => versionOf(id) !== undefined);
+  if (ids.length === 0) return {};
+  const states = applyConsentMove(cookie.states, { ...move, ids }, today, (id, next): StoredSourceState => ({ ...next, version: versionOf(id)! }));
+  const value = encodeConsentCookie({ v: 2, flows: cookie.flows, states, ...(cookie.unmatched ? { unmatched: cookie.unmatched } : {}) });
+  if (!cookieFits(value)) return { full: true };
+  return { setCookie: consentCookieHeader(value, isSecureRequest(request)) };
 }
 
 /** The move a decision makes once it is written: none for `not-now`. */
@@ -389,17 +408,19 @@ async function moveFor(
   request: Request,
   session: DecisionSession | null | undefined,
   sourceId: string,
-): Promise<string | undefined> {
-  if (decision === 'allow') return moveSources(request, session, [sourceId], 'on');
-  if (decision === 'off') return moveSources(request, session, [sourceId], 'off');
-  if (decision === 'allow-all') {
-    const statement = await buildFlowsStatement();
-    return moveSources(request, session, statement.sources.map((s) => s.sourceId), 'on', statement);
-  }
-  return undefined;
+): Promise<{ setCookie?: string; full?: true }> {
+  if (decision === 'not-now') return {};
+  const statement = await buildFlowsStatement();
+  if (decision === 'allow') return moveSources(request, session, { ids: [sourceId], state: 'on', by: 'source' }, statement);
+  if (decision === 'off') return moveSources(request, session, { ids: [sourceId], state: 'off', by: 'source' }, statement);
+  const configured = statement.sources.map((s) => s.sourceId);
+  if (decision === 'allow-all') return moveSources(request, session, { ids: configured, state: 'on', by: 'all' }, statement);
+  const manifest = flowsManifest();
+  const members = classMembers(manifest, classIdOfSource(manifest, sourceId), configured);
+  return moveSources(request, session, { ids: members, state: decision === 'allow-class' ? 'on' : 'off', by: 'class' }, statement);
 }
 
-/** `POST /api/sources/consent/decision`: `{ key, decision }`, `decision` one of `allow`, `off`, `allow-all` and `not-now`. */
+/** `POST /api/sources/consent/decision`: `{ key, decision }`, `decision` one of the six values (`CONSENT_DECISION_VALUES`). */
 export async function answerConsentDecision(
   request: Request,
   session: DecisionSession | null | undefined,
@@ -420,7 +441,7 @@ export async function answerConsentDecision(
   }
   const { key, decision } = (body && typeof body === 'object' ? body : {}) as { key?: unknown; decision?: unknown };
   if (typeof key !== 'string' || !isDecisionValue(decision)) {
-    return json({ error: 'The answer could not be read: send the key and one of allow, off, allow-all or not-now.', code: 'invalid_decision' }, 400);
+    return json({ error: 'The answer could not be read: send the key and one of allow, off, allow-all, allow-class, off-class or not-now.', code: 'invalid_decision' }, 400);
   }
   const unknown = () => json({ error: 'This question is no longer waiting for that answer.', code: 'decision_unknown' }, 404);
   if (!KEY_SHAPE.test(key)) return unknown();
@@ -456,13 +477,15 @@ export async function answerConsentDecision(
   if (written === null) return unknown();
   if (decision === 'not-now') return json({ decision, sourceId: entry.sourceId }, 200);
 
-  let setCookie: string | undefined;
+  let moved: { setCookie?: string; full?: true };
   try {
-    setCookie = await moveFor(decision, request, session, entry.sourceId);
+    moved = await moveFor(decision, request, session, entry.sourceId);
   } catch {
     // The run polls the decision, which is saved; only the consent did not move. No error's text (errors-out-of-logs.test.ts).
     console.error('[consent-decision] the decision was saved, but the consent could not be moved');
     return json({ decision, sourceId: entry.sourceId, moved: false }, 200);
   }
-  return json({ decision, sourceId: entry.sourceId }, 200, setCookie);
+  // The cookie is full (A2, C4 = A): the decision stands for this question; the consent did not move.
+  if (moved.full) return json({ decision, sourceId: entry.sourceId, moved: false, code: 'consent_cookie_full' }, 200);
+  return json({ decision, sourceId: entry.sourceId }, 200, moved.setCookie);
 }
