@@ -299,7 +299,8 @@ test('criterion 1 (home, signed out): before a consent a change is kept, not wri
   await page.check(radio(page, 'socrata', 'ask-first'));
   const now = consentWrites(net.sent);
   assert.deepEqual(now.map((r) => r.method), ['PUT'], 'with a consent in force a change did not write at once');
-  assert.equal((JSON.parse(now[0].body) as { states: Record<string, string> }).states.socrata, 'ask-first');
+  // S4 W1 (npstorey/civic-ai-tools#335): one source's change, which the endpoint applies and marks set on its own.
+  assert.deepEqual((JSON.parse(now[0].body) as { change: Record<string, string> }).change, { scope: 'source', sourceId: 'socrata', state: 'ask-first' });
   page.unmount();
   } finally {
     reading = 'panel';

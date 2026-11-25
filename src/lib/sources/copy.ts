@@ -97,6 +97,17 @@ export const PANEL_PRIVACY_LINK = 'Where a question can go, in full';
 export const PANEL_STATE_CHANGED = { middle: ' is now ', end: '. This applies from your next question.' } as const;
 
 /**
+ * Under a source's control, as a status line, when its change was refused because the signed-out reader's cookie is
+ * full (S4 W1, npstorey/civic-ai-tools#335 A2; C4 = A, words S24 and S25 as ruled): `refused` always; `signIn` after
+ * it on a site that keeps consents on accounts (the consent route's `accounts`). The control shows the stored state
+ * again. The consent endpoint's refusal carries `refused` as its `error`.
+ */
+export const COOKIE_FULL_TEXT = {
+  refused: 'This change was not saved. Your settings are kept in a cookie, and it is full.',
+  signIn: 'If you sign in, your settings are kept on your account instead.',
+} as const;
+
+/**
  * In the Settings overlay, under its lede, as a status line, on the one read
  * that kept a consent given signed out on the account (R9 P4, #662; D5 = A of
  * the UX pass); it moved there from the Sources panel when the panel was

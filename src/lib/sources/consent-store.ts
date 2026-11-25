@@ -17,8 +17,12 @@ import type { SourceState } from './consent.ts';
 
 export interface ConsentRow {
   userId: string;
-  /** Per source id: the state and the calendar date it was given. */
-  states: Record<string, { state: SourceState; since: string }>;
+  /**
+   * Per source id: the state, the calendar date it was given and, since S4, whether it was set on its own (`own`,
+   * premise 7). An entry with no `own`, every entry written before S4, reads by `setOnItsOwn`. The flag sits inside the
+   * entry, so the `states` column needs no migration and a reader that knows no flag ignores it (A13).
+   */
+  states: Record<string, { state: SourceState; since: string; own?: boolean }>;
   /** The hash of the statement the reader was shown. */
   flowsHash: string;
   /** That statement. */

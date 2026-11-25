@@ -7,8 +7,11 @@ import { sourceRoutingMode } from '@/lib/mcp/source-routing-mode';
  * /api/sources/consent/decision — the reader's answer to a pause (#644 W2,
  * D4 (iii)).
  *
- *   POST  `{ key, decision }`, `decision` one of `allow`, `off`, `allow-all`
- *         and `not-now` (UX-2 P4b), the key a pause minted and carried on its
+ *   POST  `{ key, decision }`, `decision` one of `allow`, `off`, `allow-all`,
+ *         `not-now` (UX-2 P4b), and the class answers `allow-class` and
+ *         `off-class` (S4 W1, npstorey/civic-ai-tools#335: every source then in
+ *         the asking source's class that is not set on its own, On or Off),
+ *         the key a pause minted and carried on its
  *         `consent_pause` event. 200 `{ decision, sourceId }` on each
  *         decision; `allow` also moves that one source to On in the reader's
  *         consent (the row, or the cookie set on this response), `off` moves
@@ -22,7 +25,9 @@ import { sourceRoutingMode } from '@/lib/mcp/source-routing-mode';
  *         The decision is written before the consent is moved, so a refused
  *         write moves nothing. 200 `{ decision: 'allow', sourceId, moved:
  *         false }` (any moving decision) when the decision was saved but the
- *         consent could not be moved; `moved` is absent otherwise.
+ *         consent could not be moved, with `code: 'consent_cookie_full'` when
+ *         the cookie it would set passes 4,096 bytes and none is set (A2);
+ *         `moved` is absent otherwise.
  *   GET   `{ routing, store }`, uncached: `routing` is this instance's
  *         `SOURCE_ROUTING` mode (`in-loop` or `all-sources`), so the Sources
  *         panel says a question may stop to ask only where one can (fix round

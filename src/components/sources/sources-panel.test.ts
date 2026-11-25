@@ -196,7 +196,8 @@ test('criterion 1: choosing a state writes it through the consent endpoint, keyb
   await panel.check(off[0]);
   const writes = net.sent.filter((r) => r.path === '/api/sources/consent' && r.method === 'PUT');
   assert.equal(writes.length, 1, 'choosing Off wrote nothing');
-  assert.equal((JSON.parse(writes[0].body) as { states: Record<string, string> }).states['data-commons'], 'off');
+  // S4 W1 (npstorey/civic-ai-tools#335): one source's change, which the endpoint applies and marks set on its own.
+  assert.deepEqual((JSON.parse(writes[0].body) as { change: Record<string, string> }).change, { scope: 'source', sourceId: 'data-commons', state: 'off' });
   const checked = [...within(rowOf(panel, 'data-commons'))].filter((el) => el.type === 'input' && el.props.checked === true);
   assert.deepEqual(checked.map((el) => el.props.value), ['off'], 'the row does not show the state written');
   panel.unmount();

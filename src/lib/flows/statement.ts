@@ -47,7 +47,7 @@
  */
 import { createHash } from 'node:crypto';
 import canonicalize from 'canonicalize';
-import { CIVIC_MANIFEST, CKAN_SERVER_SOURCE_ID, type HostingVariant, type LoggingPosture } from '@typedstandards/civic-typed-router';
+import { CIVIC_MANIFEST, CKAN_SERVER_SOURCE_ID, type HostingVariant, type LoggingPosture, type ManifestEntry } from '@typedstandards/civic-typed-router';
 import type { AnalyticsConfig, AnalyticsService } from '../analytics.tsx';
 import { buildProviders, normalizeIssuer, OIDC_PROVIDER_ID } from '../auth-providers.ts';
 import { toSignInOptions } from '../auth-provider-options.ts';
@@ -307,7 +307,53 @@ function keptByFor(logging: readonly LoggingPosture[], host: string | undefined,
   return lines.length > 0 ? lines : [{ holder: 'not stated', keeps: 'not-read' }];
 }
 
-function sourceRows(configured: McpRegistryEnv): FlowsSource[] {
+// --- The source loop's inputs, and the test hook (S4 W1, npstorey/civic-ai-tools#335 A14) -----------------
+
+/**
+ * What the statement's source loop reads: the manifest, and the configuration read beside it (the variant in force
+ * for an entry, and a remote source's configured address). In the app these are always `CIVIC_MANIFEST` and this
+ * process's environment, read once per build (`processSourceInputs`).
+ */
+export interface FlowsSourceInputs {
+  readonly manifest: readonly ManifestEntry[];
+  variantInForce(entry: ManifestEntry): HostingVariant | undefined;
+  addressFor(sourceId: string): string | undefined;
+}
+
+/**
+ * THE TEST HOOK (A14). A test sets the inputs the statement is built from, so the consent gate, the consent route and
+ * the pause's route, which all build through `buildFlowsStatement`, see a manifest of any size (the 200-source
+ * fixture). It is a module variable set only by `setFlowsSourceInputsForTests`: no request, header, cookie or
+ * environment variable reaches it, and no app module calls the setter
+ * (`src/app/api/sources/consent/consent-stores-s4-driven.test.ts` holds both).
+ */
+let sourceInputsForTests: FlowsSourceInputs | null = null;
+
+/** Tests only: the inputs every statement is built from until reset with `null`. */
+export function setFlowsSourceInputsForTests(inputs: FlowsSourceInputs | null): void {
+  sourceInputsForTests = inputs;
+}
+
+function processSourceInputs(): FlowsSourceInputs {
+  const configured: McpRegistryEnv = readMcpEnvFromProcess();
+  return {
+    manifest: CIVIC_MANIFEST,
+    variantInForce: (entry) => hostingVariantInForce(entry, configured),
+    addressFor: (sourceId) => configuredAddressForSource(configured, sourceId),
+  };
+}
+
+/** The inputs in force: a test's, else this process's. */
+export function flowsSourceInputs(): FlowsSourceInputs {
+  return sourceInputsForTests ?? processSourceInputs();
+}
+
+/** The manifest the statement is built from: `CIVIC_MANIFEST`, unless a test set the hook. */
+export function flowsManifest(): readonly ManifestEntry[] {
+  return sourceInputsForTests?.manifest ?? CIVIC_MANIFEST;
+}
+
+function sourceRows(inputs: FlowsSourceInputs): FlowsSource[] {
   // R8 W3: a hosted variant's upstream host (its `outbound`) is a recipient of
   // its own, after the sandbox: keyed by the outbound-kinds row of a hosted
   // source's own requests (the row's first cell, whose proxy exception reads
@@ -321,10 +367,10 @@ function sourceRows(configured: McpRegistryEnv): FlowsSource[] {
   const upstreamKey = "Hosted source (`<SOURCE>_HOSTING=sandbox`): its sandbox's lifecycle";
   const upstreamReceives = 'the requests the connector makes for data, which can include words from your question';
   const rows: FlowsSource[] = [];
-  for (const entry of CIVIC_MANIFEST) {
-    const variant = hostingVariantInForce(entry, configured);
+  for (const entry of inputs.manifest) {
+    const variant = inputs.variantInForce(entry);
     if (!variant) continue;
-    const address = variant.kind === 'remote' ? configuredAddressForSource(configured, entry.sourceId) : undefined;
+    const address = variant.kind === 'remote' ? inputs.addressFor(entry.sourceId) : undefined;
     const host = address ? hostOf(address) : undefined;
     const outbound = variant.kind === 'npm-package' ? variant.outbound : [];
     const sandboxLogging = outbound.length > 0 ? variant.logging.filter((posture) => posture.statedBy === 'instance') : variant.logging;
@@ -488,7 +534,7 @@ export function buildFlowsStatementFor(analytics: AnalyticsConfig | null): Flows
   const guide = deploymentGuideUrl();
   return assembleFlowsStatement({
     recipients,
-    sources: sourceRows(readMcpEnvFromProcess()),
+    sources: sourceRows(flowsSourceInputs()),
     links: guide ? { privacy: '/privacy', deploymentGuide: guide } : { privacy: '/privacy', deploymentGuideOmitted: NO_GUIDE_SENTENCE },
   });
 }

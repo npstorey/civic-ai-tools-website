@@ -295,7 +295,9 @@ test('criterion 2: allow moves that one source to On in the cookie; the cookie k
   assert.equal(after.flows, before.flows);
   assert.equal(after.states['data-commons'].state, 'on');
   assert.deepEqual(after.states.socrata, before.states.socrata);
-  assert.equal(after.states['data-commons'].version, statement.sources.find((s: { sourceId: string }) => s.sourceId === 'data-commons').version);
+  // S4 W1: the cookie a write sets is the second form, which keeps each version's first 4 bytes.
+  assert.ok(statement.sources.find((s: { sourceId: string }) => s.sourceId === 'data-commons').version.startsWith(after.states['data-commons'].version));
+  assert.equal(after.states['data-commons'].version.length, 8);
   assert.match(setCookie!, /HttpOnly/);
   assert.match(setCookie!, /Secure/, 'a cookie set over https carries Secure');
   void statementHash;
@@ -373,11 +375,20 @@ test('criterion 2: a decision on an entry that expires between the read and the 
 // --- R6-WEB-D's conditions 2 and 3 (the cookie guard's second setter) ------------------------
 
 /** `PUT /api/sources/consent`, as the panel sends it. */
-async function put(states: Record<string, string>, flowsVersion: string, options: { session?: unknown; cookie?: string } = {}): Promise<Response> {
+/**
+ * One source's change, as the Settings control sends it since S4 W1 (npstorey/civic-ai-tools#335):
+ * `{ change: { scope: 'source', sourceId, state }, flowsVersion }`, which sets that source and its "set on its own"
+ * flag and keeps every other state.
+ */
+async function putOne(sourceId: string, state: string, flowsVersion: string, options: { session?: unknown; cookie?: string } = {}): Promise<Response> {
+  return putBody({ change: { scope: 'source', sourceId, state }, flowsVersion }, options);
+}
+
+async function putBody(body: unknown, options: { session?: unknown; cookie?: string } = {}): Promise<Response> {
   globals.__w2Decision.session = options.session ?? null;
   const headers: Record<string, string> = { 'content-type': 'application/json' };
   if (options.cookie) headers.cookie = options.cookie;
-  return consentRoute.PUT(new Request('https://site.fixture.example/api/sources/consent', { method: 'PUT', headers, body: JSON.stringify({ states, flowsVersion }) }));
+  return consentRoute.PUT(new Request('https://site.fixture.example/api/sources/consent', { method: 'PUT', headers, body: JSON.stringify(body) }));
 }
 
 /** A `Set-Cookie` header split into its decoded consent and its attributes, the way a browser keeps them. */
@@ -394,8 +405,9 @@ test('R6-WEB-D condition 2, the cookie branch: Allow sets the cookie PUT /api/so
   const hash = statementHash(statement);
   const cookie = consentCookieForTests({ socrata: 'on', 'data-commons': 'ask-first' }, statement);
 
-  // S2-B: the PUT names every configured source, which since router 0.8.0 includes NYC City Record (On in the cookie).
-  const byPut = await put({ socrata: 'on', 'data-commons': 'on', 'nyc-record': 'on' }, hash, { cookie });
+  // S4 W1: the one-source change the Settings control sends; it keeps every other source's entry, NYC City Record's
+  // among them (S2-B), and sets the flag the pause's Allow sets.
+  const byPut = await putOne('data-commons', 'on', hash, { cookie });
   assert.equal(byPut.status, 200, `PUT answered ${byPut.status}: ${await byPut.text()}`);
   const key = await mint('data-commons');
   const byAllow = await post({ key, decision: 'allow' }, { cookie });
@@ -422,7 +434,7 @@ test('R6-WEB-D condition 2, the row branch: Allow writes the row PUT /api/source
   const written = (row: Row) => ({ states: row.states, flowsHash: row.flowsHash, flowsStatement: row.flowsStatement });
 
   globals.__w2Decision.rows.set(DB_A, starting());
-  const byPut = await put({ socrata: 'on', 'data-commons': 'on' }, hash, { session: signedIn(DB_A) });
+  const byPut = await putOne('data-commons', 'on', hash, { session: signedIn(DB_A) });
   assert.equal(byPut.status, 200, `PUT answered ${byPut.status}: ${await byPut.text()}`);
   assert.equal(byPut.headers.get('set-cookie'), null);
   const expected = written(globals.__w2Decision.rows.get(DB_A)!);

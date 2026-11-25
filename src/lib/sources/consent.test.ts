@@ -155,7 +155,7 @@ test('the cookie round-trips its version, the flows hash and the states, and ref
   const value = encode(cookie);
   assert.match(value, /^[A-Za-z0-9_-]+$/, 'the value is cookie-safe (base64url)');
   assert.deepEqual(decode(value), cookie);
-  for (const bad of [undefined, '', 'not-base64-json', encode({ v: 2, flows: H('a'), states: {} }), encode({ v: 1, flows: 'short', states: {} }), encode({ v: 1, flows: H('a'), states: { socrata: { state: 'maybe', since: '2026-10-19', version: H('b') } } })]) {
+  for (const bad of [undefined, '', 'not-base64-json', Buffer.from(JSON.stringify({ v: 3, flows: H('a'), states: {} }), 'utf8').toString('base64url'), encode({ v: 1, flows: 'short', states: {} }), encode({ v: 1, flows: H('a'), states: { socrata: { state: 'maybe', since: '2026-10-19', version: H('b') } } })]) {
     assert.equal(decode(bad as string | undefined), null, `decoded ${JSON.stringify(bad)}`);
   }
 });
