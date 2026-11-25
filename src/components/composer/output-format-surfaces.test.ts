@@ -106,6 +106,9 @@ const W = { item: 'Output format', auto: 'Auto', autoOption: 'Auto - text as the
 
 const json = (body: unknown, status = 200) => new Response(JSON.stringify(body), { status, headers: { 'Content-Type': 'application/json' } });
 let queries: Array<{ path: string; raw: string }> = [];
+/** The routes' refusal of a format, as each sends it (`output-format-driven.test.ts` drives the real ones). */
+const REFUSAL_CODE = 'output_format_not_offered';
+let refuseFormat = false;
 function answers() {
   queries = [];
   installFetch(ORIGIN, {
@@ -116,11 +119,12 @@ function answers() {
     '/api/rate-limit': () => json({ remaining: 7, limit: 10, resets_at: '2099-01-01T00:00:00.000Z', authenticated: true }),
     '/api/compare-stream': async (request: Request) => {
       queries.push({ path: '/api/compare-stream', raw: await request.text() });
-      return new Response('', { status: 200, headers: { 'Content-Type': 'text/event-stream' } });
+      const body = refuseFormat ? `data: ${JSON.stringify({ type: 'error', panel: 'withMcp', message: 'fixture', code: REFUSAL_CODE })}\n\n` : '';
+      return new Response(body, { status: 200, headers: { 'Content-Type': 'text/event-stream' } });
     },
     '/api/query-notebook': async (request: Request) => {
       queries.push({ path: '/api/query-notebook', raw: await request.text() });
-      return json({ error: 'fixture' }, 500);
+      return refuseFormat ? json({ error: 'fixture', code: REFUSAL_CODE }, 403) : json({ error: 'fixture' }, 500);
     },
   });
 }
@@ -146,7 +150,7 @@ const splitTopology = (child: ReactElement) => h(HostLinksProvider, { value: { m
 const ASK = () => h(QuerySurface, { presentation: 'answer-first', defaultMode: 'notebook' });
 
 const mounted: Surface[] = [];
-beforeEach(() => { storage.clear(); sessions.rows.clear(); });
+beforeEach(() => { storage.clear(); sessions.rows.clear(); refuseFormat = false; });
 afterEach(() => {
   for (const p of mounted.splice(0)) p.unmount();
   cancelConsentPauses();
@@ -345,4 +349,29 @@ test('criterion 4: a stored choice the instance does not offer, or any choice wi
   queries = [];
   const off = await sendFrom(await askPage('off'));
   assert.ok(!('outputFormat' in (JSON.parse(off.raw) as Json)), off.raw);
+});
+
+// --- W2 = A, styled (the owner's words ruling, seat 7168515476): the refusal names its controls as the site does ------
+
+/**
+ * The refusal sentence as ruled (W2 = A), its words unchanged, with "Auto" and "Output format" set off as control
+ * names the way this site's reader prose names a control: in typographic quotation marks (`EvidenceIndex.tsx`'s
+ * click “Publish”; `learn/page.tsx`'s expand “How was the AI guided?”). The three blocks that show a stream error
+ * (`ResponsePanel`, `QuerySurface`, `NotebookOutput`) render the text as text, so the marks are the styling.
+ */
+const W2 = 'This site does not offer the output format you chose, so nothing was sent. Choose “Auto” under “Output format”, then ask again.';
+
+test('W2 (red): the refusal reaches the reader with “Auto” and “Output format” named as controls, in Sandbox and in Standard', async () => {
+  refuseFormat = true;
+  const sandbox = await askPage('on');
+  await ask(sandbox, QUESTION);
+  assert.equal(queries[0]?.path, '/api/query-notebook', 'premise: the Sandbox send');
+  assert.ok(sandbox.text().includes(W2), `Sandbox: the refusal reads ${JSON.stringify(sandbox.text().match(/This site does not offer[^.]*\.[^.]*\./)?.[0] ?? null)}`);
+
+  storage.set('civicaitools.notebookMode', 'standard');
+  queries = [];
+  const standard = await mountPage(withSetting('on', ASK()));
+  await ask(standard, QUESTION);
+  assert.equal(queries[0]?.path, '/api/compare-stream', 'premise: the Standard send');
+  assert.ok(standard.text().includes(W2), `Standard: the refusal reads ${JSON.stringify(standard.text().match(/This site does not offer[^.]*\.[^.]*\./)?.[0] ?? null)}`);
 });
