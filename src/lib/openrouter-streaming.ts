@@ -2,7 +2,7 @@ import type { ChatCompletionMessageParam, ChatCompletionTool } from 'openai/reso
 import { getModelClient, classifyModelError, includeStreamUsage, getModelApiKind } from './model-client.ts';
 import { modelRequestParameters, type ModelIdentity } from './model-catalog.ts';
 import { formatConsentPause, formatToolProgress, formatToolResult, classifyStreamError, errorLogFacts, streamErrorPayload, type ConsentPausePayload, type PanelType, type ProgressPhase, type StreamErrorCode, type StreamErrorKind } from './streaming.ts';
-import { runToolLoop, type LoadStep, type LoopEvent, type SearchStep, type ToolCallRecord, type TraceContext } from './model-loop/run-tool-loop.ts';
+import { runToolLoop, type LoadStep, type LoopEvent, type PresentStep, type SearchStep, type ToolCallRecord, type TraceContext } from './model-loop/run-tool-loop.ts';
 import { describeQueryOutcome } from './evidence/query-step.ts';
 import type { ToolFailureKind } from './notebook-author/tool-to-cell.ts';
 
@@ -349,6 +349,8 @@ export type McpToolTransport =
       loadStep?: LoadStep;
       /** The search step (S3-B W2), when the routing offers `find_source`. */
       searchStep?: SearchStep;
+      /** The present step (OF3a, website #810), in a run asked in a map format; absent under "Auto". */
+      presentStep?: PresentStep;
     };
 
 export async function queryWithMcpStreaming(
@@ -369,8 +371,8 @@ export async function queryWithMcpStreaming(
 ): Promise<void> {
   const startTime = Date.now();
   const panel: PanelType = 'withMcp';
-  const { executeToolCall, dispatchTarget, loadStep, searchStep } = typeof transport === 'function'
-    ? { executeToolCall: transport, dispatchTarget: undefined, loadStep: undefined, searchStep: undefined }
+  const { executeToolCall, dispatchTarget, loadStep, searchStep, presentStep } = typeof transport === 'function'
+    ? { executeToolCall: transport, dispatchTarget: undefined, loadStep: undefined, searchStep: undefined, presentStep: undefined }
     : transport;
 
   try {
@@ -402,6 +404,9 @@ export async function queryWithMcpStreaming(
       // as a load is. Undefined wherever the routing offers no search: every
       // route in S3 (G0-4 = A).
       searchStep,
+      // The present step (OF3a), answered before and outside the transport as a load is; in a map format only, and
+      // undefined under "Auto", so the loop keeps no result.
+      presentStep,
       maxIterations: MAX_ITERATIONS,
       maxTokens: MAX_TOKENS_PER_RESPONSE,
       maxCumulativeTokens: MAX_TOKENS_PER_REQUEST,

@@ -315,7 +315,8 @@ export async function POST(request: NextRequest) {
   }
   // OF2 (website #810): a format this instance does not offer (or any format, with SITE_OUTPUT_FORMAT off) is refused
   // here, at the picks' point and on their channel, 403, before the limiter, the model, the sandbox or any source.
-  const requestFormat = outputFormatFromBody(body);
+  // OF3a (K3 = A): a map format is Standard-session only, so this route refuses one as a format it does not offer.
+  const requestFormat = outputFormatFromBody(body, process.env, { mapFormats: false });
   if (requestFormat.kind === 'refused') {
     return new Response(JSON.stringify(outputFormatRefusalPayload()), { status: 403, headers: { 'Content-Type': 'application/json' } });
   }

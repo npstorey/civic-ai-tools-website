@@ -622,6 +622,10 @@ function packaged(d: Drive): { pkg: Json; hash: string } {
     trace: traceOf(d), prompt: QUESTION, output: ANSWER, toolCalls: toolCallsOf(d) as never, model: 'vendor/model-fixture-1',
     tokenUsage: { promptTokens: 10, completionTokens: 5 }, promptVisibility: 'full_text', title: 'Map', summary: 'Map.',
     type: 'content/analysis/v1', captureMethod: 'chat-flow-stream', contentProfile: 'datHere',
+    // The datHere content rule hashes the notebook (verify-core 0.15.4), as W1-7's record carries one.
+    extensions: { 'org.civicaitools.notebook': { nbformat: 4, nbformat_minor: 5, cells: [], metadata: {} } },
+    // A platform signer, as the publish route names one, under the key id the record states, so host-core can serve it under a registry.
+    signer: { bindingTier: 'platform', identifier: 'fixture-kid', displayName: 'Fixture host' },
   } as never);
   return { pkg: built.pkg as unknown as Json, hash: built.hash };
 }
@@ -645,6 +649,13 @@ test('criterion 4 (red): a map record carries its map, and verifies at verify-co
     assert.equal(result.hashMatch, true, d.name);
     assert.equal(result.signatureValid, true, d.name);
     assert.equal(result.contentHash?.status, 'ok', d.name);
+    // host-core's check (S5) runs outside this repository, which does not depend on host-core: with
+    // OF3A_HOST_DRIVE_DIR set (CI sets nothing), the signed record is written there as the CLI's `sign` prints one.
+    const out = process.env.OF3A_HOST_DRIVE_DIR;
+    if (out) {
+      const signer = pkg.signer as Json;
+      fs.writeFileSync(path.join(out, `${d.name.replace(/\W+/g, '-')}.signed.json`), JSON.stringify({ package: pkg, envelopeHash: packageHash, signature: { ...signature, kid: signer.identifier } }));
+    }
   }
 });
 

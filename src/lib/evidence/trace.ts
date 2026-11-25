@@ -97,6 +97,22 @@ export function outputFormatAttributes(format: { id: string; version: string } |
   return format ? { [OUTPUT_FORMAT_ATTRIBUTE]: JSON.stringify({ id: format.id, version: format.version }) } : {};
 }
 
+/**
+ * What a run in a map format presented (OF3a, website #810): JSON `{ outcome, counts?, map? }`, the record's members
+ * of `extensions["org.civicaitools.output-format"]` beside `preset`, on the root span, written by the route at the
+ * root's end once the run completed. Absent under "Auto", and for a format run that did not complete ("the run
+ * recorded no outcome"). The trace is a publish input, so the record's map is read from here at publish
+ * (`src/lib/output-format/record.ts`) and is in the signed package twice: inside the trace and in the extension.
+ */
+export const OUTPUT_FORMAT_RESULT_ATTRIBUTE = 'analysis.output_format_result';
+
+/** The root-span attribute for what a map-format run presented; none when it presented nothing (an "Auto" run). */
+export function outputFormatResultAttributes(presentation: { outcome: unknown; counts?: unknown; map?: unknown } | undefined): Record<string, string> {
+  if (!presentation) return {};
+  const { outcome, counts, map } = presentation;
+  return { [OUTPUT_FORMAT_RESULT_ATTRIBUTE]: JSON.stringify({ outcome, ...(counts !== undefined ? { counts } : {}), ...(map !== undefined ? { map } : {}) }) };
+}
+
 /** What a run states about itself, before encoding. */
 export interface RunRecordInput {
   assertedDate: string;

@@ -19,8 +19,9 @@ import type { ModelIdentity } from '@/lib/model-catalog';
 import { configuredMcpServers, dispatchTargetOf, getMissingMcpRoutingError, readMcpEnvFromProcess, routedSourceId, skillRoutingTraceAttributes } from '@/lib/mcp/registry';
 import { resolveRunPortal } from '@/lib/site-config';
 import { PORTAL_LOCK_NOT_CONFIGURED_MESSAGE } from '@/lib/portal-lock';
-import { TraceBuilder, hash, CIVICAITOOLS_TRACE_CONFIG, outputFormatAttributes, runRecordAttributes } from '@/lib/evidence/trace';
-import { outputFormatFromBody, outputFormatRefusalPayload } from '@/lib/output-format/registry';
+import { TraceBuilder, hash, CIVICAITOOLS_TRACE_CONFIG, outputFormatAttributes, outputFormatResultAttributes, runRecordAttributes } from '@/lib/evidence/trace';
+import { isMapFormat, outputFormatFromBody, outputFormatRefusalPayload } from '@/lib/output-format/registry';
+import { createPresentStep, withOutputFormatGuidance, withPresentTool } from '@/lib/output-format/present-step';
 import { storeRunPrompt } from '@/lib/evidence/prompt-blob';
 import { startUsageCount, type UsageOutcome } from '@/lib/usage/count';
 
@@ -265,6 +266,8 @@ export async function POST(request: NextRequest) {
       return new Response(encoder.encode(body), { headers: SSE_HEADERS });
     }
     const outputFormat = requestFormat.kind === 'asked' ? requestFormat.format : undefined;
+    // OF3a (website #810): a map format's run carries the site's present step; "Auto" and any other format carry none.
+    const presentStep = outputFormat && isMapFormat(outputFormat) ? createPresentStep() : undefined;
 
     // The rate limit counts a request before it checks it (`consumeRateLimit`).
     const rateLimitInfo = await consumeRateLimit(identifier, isAuthenticated);
@@ -322,7 +325,7 @@ export async function POST(request: NextRequest) {
     // A hold ends when its reader is gone (R9 P1, #668): the request's signal, or a cancelled stream.
     const presence = readerGone(request);
     const inLoop = entersInLoop(routingMode, directory)
-      ? await createInLoopRouting({ portal, lockedPortal, configured, directory, searchable: directory, rule: picked ? READER_PICKED_RULE : DIRECTORY_SET_RULE, selection, pause: streamingRoutePause(consent, session, configured, presence.signal) })
+      ? await createInLoopRouting({ portal, lockedPortal, configured, directory, searchable: directory, rule: picked ? READER_PICKED_RULE : DIRECTORY_SET_RULE, selection, pause: streamingRoutePause(consent, session, configured, presence.signal), outputFormat, presentStep })
       : undefined;
     const composition = inLoop
       ? { prompt: inLoop.firstSystemPrompt, assertedDate: inLoop.assertedDate, sourcesOffered: inLoop.sourcesOffered, components: inLoop.components() }
@@ -330,7 +333,11 @@ export async function POST(request: NextRequest) {
     // Under the lock, one section is appended saying the portal-general
     // guidance does not apply here (#436, D7); unlocked, the prompt is
     // unchanged. In loop, the session's first prompt already carries it.
-    const systemPromptWithMcp = inLoop ? inLoop.firstSystemPrompt : withPortalLockGuidance(composition.prompt, lockedPortal, configured, selection);
+    // OF3a: a map format's guidance follows, on every request (in loop, the routing appends it after the lock section);
+    // "Auto" adds nothing.
+    const systemPromptWithMcp = inLoop
+      ? inLoop.firstSystemPrompt
+      : withOutputFormatGuidance(withPortalLockGuidance(composition.prompt, lockedPortal, configured, selection), outputFormat);
     const systemPromptHash = hash(systemPromptWithMcp);
     // #411, ruling D3: the HASH, not the text. This span goes inline into the
     // bytes an instance signs, and `skill.text` put the whole composed prompt
@@ -358,7 +365,9 @@ export async function POST(request: NextRequest) {
     // `mcpTools` itself when unlocked; under the lock the same schemas with
     // text that stops inviting other portals (#436, D7). Only the sources this
     // instance configures (sprint 238, D2), narrowed by the selection.
-    const offeredTools = inLoop ? inLoop.firstTools : offeredMcpTools(mcpToolsFor(lockedPortal), configured, selection);
+    // OF3a: a map format's run offers `present_result` after every source's tool (in loop, the routing adds it), and a
+    // source's tool of that name is refused here; "Auto" offers what it did.
+    const offeredTools = inLoop ? inLoop.firstTools : withPresentTool(offeredMcpTools(mcpToolsFor(lockedPortal), configured, selection), outputFormat);
 
     // Which source a call went to: the resolver the loop tags each span with,
     // and the one "Where this question went" reads the run's calls through (R6 W4).
@@ -499,9 +508,11 @@ Be honest if you don't have access to current or real-time data.`;
           // selection: the loop core decides a pack's call from it (S2-B F1).
           // In loop (#644 W1), the session: its transport and its target, bound
           // to the loaded set, and its load step.
+          // OF3a: in a map format, the site's present step travels with the transport (in loop, the routing holds it).
           inLoop ?? {
             executeToolCall: (name, args) => callMcpTool(name, args, { selection }),
             dispatchTarget: (name) => dispatchTargetOf(name, configured, selection),
+            ...(presentStep ? { presentStep } : {}),
           },
           systemPromptWithMcp,
           callbacks,
@@ -534,7 +545,9 @@ Be honest if you don't have access to current or real-time data.`;
           // for the record to reference (`src/lib/evidence/prompt-blob.ts`).
           // Before the trace, so a publish finds it; it never throws.
           if (usageOutcome === 'complete') await storeRunPrompt(inLoop ? inLoop.systemPrompt() : systemPromptWithMcp);
-          trace.endRoot(runRecord());
+          // OF3a: what a completed map-format run presented, at the root's end; nothing under "Auto", nothing for a run
+          // that did not complete (its record then states no outcome).
+          trace.endRoot({ ...runRecord(), ...(presentStep && usageOutcome === 'complete' ? outputFormatResultAttributes(presentStep.presentation()) : {}) });
           const traceJson = trace.finalize();
           stopKeepAlive();
           await writeEvent({ type: 'trace' as StreamEvent['type'], panel: 'withMcp', data: traceJson });

@@ -66,9 +66,11 @@ import { findSourceTool, loadSourceTool, mcpToolsFor, offeredMcpTools } from './
 import { sourceIdForToolName } from './operation-types.ts';
 import { classifyStreamError, type ConsentPausePayload } from '../streaming.ts';
 import { callMcpTool, type McpToolCallOptions } from './client.ts';
-import type { LoadStep, SearchStep } from '../model-loop/run-tool-loop.ts';
+import type { LoadStep, PresentStep, SearchStep } from '../model-loop/run-tool-loop.ts';
 import { IN_LOOP_RUN_RECORD_ATTRIBUTE, RUN_RECORD_ATTRIBUTE } from '../evidence/trace.ts';
 import type { SourceRoutingMode } from './source-routing-mode.ts';
+import { withOutputFormatGuidance, withPresentTool } from '../output-format/present-step.ts';
+import type { OutputFormatRef } from '../output-format/registry.ts';
 
 // The mode's reader lives in a leaf module, so a reader of the mode imports
 // nothing else (#644 W2, the seat's ruling): the privacy page reads it there.
@@ -277,6 +279,14 @@ export interface InLoopRoutingInput {
   callTool?: InLoopToolTransport;
   /** The pause (#644 W2); absent, an Ask-first source is declined with no hold. */
   pause?: ConsentPause;
+  /**
+   * The format the question asked for (OF3a, website #810). A map format's guidance follows the lock section on every
+   * system prompt the run composes, and `present_result` follows every other tool on every request; "Auto" (absent)
+   * and any other format compose what they did.
+   */
+  outputFormat?: OutputFormatRef;
+  /** The run's present step (OF3a), in a map format: held for the loop (`InLoopRouting.presentStep`). */
+  presentStep?: PresentStep;
 }
 
 /** What an in-loop run is given, and what it has loaded so far. */
@@ -294,6 +304,8 @@ export interface InLoopRouting {
   /** The loop's search step (`ToolLoopOptions.searchStep`; S3-B W2): present only when the searchable set holds a
    *  source the directory does not list, as is `find_source` in the tools. */
   readonly searchStep: SearchStep | undefined;
+  /** The loop's present step (`ToolLoopOptions.presentStep`; OF3a), as the input gave it: a map format's run only. */
+  readonly presentStep?: PresentStep;
   /** The tool transport: a source's tool is sent only once that source is
    *  loaded; a tool of a listed source that is not loaded is refused
    *  `not_offered` as `SourceNotLoadedError`. */
@@ -397,7 +409,7 @@ export interface InLoopRoutingConfiguration {
  * it does under all-sources. A hosted source is never woken by a load.
  */
 export async function createInLoopRouting(input: InLoopRoutingInput): Promise<InLoopRouting> {
-  const { portal, lockedPortal, configured, searchable, rule, selection, pause, now = new Date() } = input;
+  const { portal, lockedPortal, configured, searchable, rule, selection, pause, outputFormat, now = new Date() } = input;
   const callTool = input.callTool ?? callMcpTool;
   const search: RoutingSearch = input.search ?? ((query) => civicRouter.searchSources(query));
   const firstIds = input.directory.map((entry) => entry.sourceId);
@@ -420,7 +432,10 @@ export async function createInLoopRouting(input: InLoopRoutingInput): Promise<In
   let directoryIds = firstIds;
   // The lock section stays the consumer's and follows the router's text, on
   // every request, over the directory set (the router's flag).
-  const withLock = (prompt: string) => withPortalLockGuidance(prompt, lockedPortal, configured, directoryIds);
+  // A map format's guidance follows it (OF3a); "Auto" adds nothing.
+  const withLock = (prompt: string) => withOutputFormatGuidance(withPortalLockGuidance(prompt, lockedPortal, configured, directoryIds), outputFormat);
+  // A map format's step follows every other tool (OF3a); "Auto" returns the same array.
+  const withStep = (tools: ChatCompletionTool[]) => withPresentTool(tools, outputFormat);
   let loadTool = loadSourceTool(configured, directoryIds);
   // `find_source` beside `load_source`, only where the searchable set is larger (S3-B W2, B1).
   const findTool = searchOffered ? findSourceTool() : undefined;
@@ -436,7 +451,7 @@ export async function createInLoopRouting(input: InLoopRoutingInput): Promise<In
 
   let current: { systemPrompt: string; tools: ChatCompletionTool[]; components: CompositionComponent[] } = {
     systemPrompt: withLock(composeDirectoryPrompt({ configured, directory: directoryIds, now })),
-    tools: stepTools(),
+    tools: withStep(stepTools()),
     components: [routerComponent()],
   };
   const first = current;
@@ -491,7 +506,7 @@ export async function createInLoopRouting(input: InLoopRoutingInput): Promise<In
       loadedIds.push(entry.sourceId);
       current = {
         systemPrompt: withLock(composed.prompt),
-        tools: [...stepTools(), ...offeredMcpTools(mcpToolsFor(lockedPortal), configured, loadedNow())],
+        tools: withStep([...stepTools(), ...offeredMcpTools(mcpToolsFor(lockedPortal), configured, loadedNow())]),
         components: composed.components,
       };
       return { outcome: 'loaded', text: LOAD_RESULT_TEXT.loaded(entry.alias), systemPrompt: current.systemPrompt, tools: current.tools, ...askedPart };
@@ -525,12 +540,12 @@ export async function createInLoopRouting(input: InLoopRoutingInput): Promise<In
           loadTool = loadSourceTool(configured, directoryIds);
           const loaded = loadedNow();
           if (loaded.length === 0) {
-            current = { systemPrompt: withLock(composeDirectoryPrompt({ configured, directory: directoryIds, now })), tools: stepTools(), components: [routerComponent()] };
+            current = { systemPrompt: withLock(composeDirectoryPrompt({ configured, directory: directoryIds, now })), tools: withStep(stepTools()), components: [routerComponent()] };
           } else {
             const composed = await composeInLoopSystemPrompt({ portal, configured, directory: directoryIds, loaded, now });
             current = {
               systemPrompt: withLock(composed.prompt),
-              tools: [...stepTools(), ...offeredMcpTools(mcpToolsFor(lockedPortal), configured, loaded)],
+              tools: withStep([...stepTools(), ...offeredMcpTools(mcpToolsFor(lockedPortal), configured, loaded)]),
               components: composed.components,
             };
           }
@@ -571,6 +586,7 @@ export async function createInLoopRouting(input: InLoopRoutingInput): Promise<In
     firstTools: first.tools,
     loadStep,
     searchStep,
+    ...(input.presentStep ? { presentStep: input.presentStep } : {}),
     async executeToolCall(name, args) {
       try {
         return await callTool(name, args, { selection: loadedNow() });
