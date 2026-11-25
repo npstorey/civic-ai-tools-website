@@ -275,8 +275,10 @@ test('#154: every StreamErrorKind round-trips server -> wire -> render into its 
   // fourteen since S3-B W1 (npstorey/civic-ai-tools#318) added `no_picks_usable`,
   // a question none of whose picks could be used, refused before anything was sent;
   // fifteen since FIX-1 FX-S2 added `session_ended`, a run route's own 401: a
-  // reader whose session ended is asked to sign in again.
-  assert.equal(STREAM_ERROR_KINDS.length, 15, 'the fifteen classified kinds');
+  // reader whose session ended is asked to sign in again; sixteen since OF2
+  // (website #810) added `output_format_not_offered`, a question naming an
+  // output format the site does not offer, refused before anything was sent.
+  assert.equal(STREAM_ERROR_KINDS.length, 16, 'the sixteen classified kinds');
 
   for (const kind of STREAM_ERROR_KINDS) {
     // `streamErrorPayload` is the exact call the server chokepoint

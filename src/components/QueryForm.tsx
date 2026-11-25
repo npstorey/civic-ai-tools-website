@@ -26,6 +26,14 @@ import { readerSourceName } from '@/lib/sources/source-name';
 import { useDefaultPortalArg, usePortalLocked } from '@/components/DefaultPortalProvider';
 import { useNotebooksOffered } from '@/components/NotebookModeProvider';
 import { notebookModeAffordance } from '@/lib/notebook-availability';
+import { useOfferedOutputFormats } from '@/components/OutputFormatProvider';
+import {
+  OUTPUT_FORMAT_STORAGE_KEY,
+  chosenOutputFormat,
+  parseStoredOutputFormat,
+  storedOutputFormatValue,
+  type OutputFormatRef,
+} from '@/lib/output-format/registry';
 
 // Re-exported for existing importers; the type itself lives in
 // src/lib/query-presentation.ts alongside the derivations that use it.
@@ -51,8 +59,11 @@ function useStoredMode(
 }
 
 interface QueryFormProps {
-  /** `picks`: the reader's picks, sent with the question when "Only the ones I pick" is chosen (S3-B W1); else absent. */
-  onSubmit: (query: string, model: string, portal: string, mode: QueryMode, picks?: string[]) => void;
+  /**
+   * `picks`: the reader's picks, sent with the question when "Only the ones I pick" is chosen (S3-B W1); else absent.
+   * `outputFormat`: the format chosen under Output format (OF2), when it is one the instance offers; absent under Auto.
+   */
+  onSubmit: (query: string, model: string, portal: string, mode: QueryMode, picks?: string[], outputFormat?: OutputFormatRef) => void;
   isLoading: boolean;
   queryCount?: number;
   /**
@@ -206,6 +217,12 @@ export default function QueryForm({
   const hideAdvanced = advancedOptions === 'hidden-signed-out' && !isAuthenticated && signInOffered;
   const [models, setModels] = useState<Model[]>([]);
   const [modelsError, setModelsError] = useState(false);
+  // OF2 (website #810): the output format, on an instance with SITE_OUTPUT_FORMAT on (`OutputFormatProvider`; null
+  // off). The choice lasts the browser session, as Session type's (S9's choice a, ruled A at G0b); a stored choice
+  // the instance does not offer, or any with the setting off, is Auto, and Auto sends no format.
+  const offeredFormats = useOfferedOutputFormats();
+  const [storedFormat, setStoredFormat] = useSessionChoice<string>(OUTPUT_FORMAT_STORAGE_KEY, parseStoredOutputFormat);
+  const chosenFormat = chosenOutputFormat(storedFormat, offeredFormats);
 
   useEffect(() => {
     let isMounted = true;
@@ -414,7 +431,8 @@ export default function QueryForm({
     markRefused(false);
     // R4: a send closes the panel.
     closePicker();
-    const args = [query.trim(), model, portal, mode, pickingNow ? [...pickedNow] : undefined] as const;
+    const format = chosenFormat ? { id: chosenFormat.id, version: chosenFormat.version } : undefined;
+    const args = [query.trim(), model, portal, mode, pickingNow ? [...pickedNow] : undefined, format] as const;
     const run = () => {
       lastSentRef.current = () => onSubmit(...args);
       setLastSentQuery(args[0]);
@@ -537,6 +555,9 @@ export default function QueryForm({
           comparison={comparisonControl}
           disabled={isLoading}
           picking
+          outputFormat={offeredFormats
+            ? { formats: offeredFormats, chosen: chosenFormat, onChoose: (choice) => setStoredFormat(storedOutputFormatValue(choice)) }
+            : undefined}
         />
       }
     >

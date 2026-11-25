@@ -20,6 +20,7 @@ import { McpRoutingProvider } from '@/components/McpRoutingProvider';
 import { DefaultPortalProvider } from '@/components/DefaultPortalProvider';
 import { SignInOptionsProvider } from '@/components/SignInOptionsProvider';
 import { NotebookModeProvider } from '@/components/NotebookModeProvider';
+import { OutputFormatSetting } from '@/components/OutputFormatSetting';
 import { AnswerLayoutsProvider } from '@/components/answer-view/AnswerLayoutsProvider';
 import { instanceAnswerLayouts } from '@/lib/answer-layout/reading';
 import { notebooksOffered } from '@/lib/notebook-availability';
@@ -286,6 +287,11 @@ export default function RootLayout({
               unavailable and starts in standard mode. Same reason for a
               context as the two above: the home page is a client component. */}
           <NotebookModeProvider offered={notebooksOffered()}>
+          {/* The output formats this instance offers (SITE_OUTPUT_FORMAT, OF2):
+              on, the query form's menu shows "Output format". A server
+              component: off, it renders its children alone, so the tree and
+              the page's bytes are what they were before the setting existed. */}
+          <OutputFormatSetting>
           {/* This instance's answer layouts (ANSWER_LAYOUT, ANSWER_LAYOUT_PATH;
               LAYOUT-WEB W4 P1): every answer view, on the comparison, the
               executed run and the record page, renders with the default
@@ -402,6 +408,7 @@ export default function RootLayout({
             </footer>
           </div>
           </AnswerLayoutsProvider>
+          </OutputFormatSetting>
           </NotebookModeProvider>
           </SignInOptionsProvider>
           </DefaultPortalProvider>

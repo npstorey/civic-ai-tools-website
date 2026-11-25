@@ -19,7 +19,8 @@ import type { ModelIdentity } from '@/lib/model-catalog';
 import { configuredMcpServers, dispatchTargetOf, getMissingMcpRoutingError, readMcpEnvFromProcess, routedSourceId, skillRoutingTraceAttributes } from '@/lib/mcp/registry';
 import { resolveRunPortal } from '@/lib/site-config';
 import { PORTAL_LOCK_NOT_CONFIGURED_MESSAGE } from '@/lib/portal-lock';
-import { TraceBuilder, hash, CIVICAITOOLS_TRACE_CONFIG, runRecordAttributes } from '@/lib/evidence/trace';
+import { TraceBuilder, hash, CIVICAITOOLS_TRACE_CONFIG, outputFormatAttributes, runRecordAttributes } from '@/lib/evidence/trace';
+import { outputFormatFromBody, outputFormatRefusalPayload } from '@/lib/output-format/registry';
 import { storeRunPrompt } from '@/lib/evidence/prompt-blob';
 import { startUsageCount, type UsageOutcome } from '@/lib/usage/count';
 
@@ -36,6 +37,8 @@ interface CompareRequest {
   mcpOnly?: boolean;
   /** "Only the ones I pick" (S3-B W1): the reader's picks; absent, an Auto question (`picksFromBody`). */
   picks?: unknown;
+  /** The output format asked (OF2): `{ id, version }`; absent, "Auto" (`outputFormatFromBody`). */
+  outputFormat?: unknown;
 }
 
 export async function POST(request: NextRequest) {
@@ -43,6 +46,7 @@ export async function POST(request: NextRequest) {
     const body: CompareRequest = await request.json();
     const { query, model: modelId, portal: rawPortal, mcpOnly = false } = body;
     const requestPicks = picksFromBody(body);
+    const requestFormat = outputFormatFromBody(body);
     // The caller's portal, else this instance's configured default, else NONE
     // (#407). It used to be a literal at both halves of this line, so a caller
     // that named no portal ran against one deployment's city and `analysis.portal`
@@ -249,6 +253,18 @@ export async function POST(request: NextRequest) {
       ? pickedRunOf(requestPicks.ids, readMcpEnvFromProcess(), consent, routingMode === 'in-loop' && canAsk(ask))
       : null;
     if (picked && !picked.usable) return refuse(picksRefusalPayload(consent.statement));
+    // OF2 (website #810): a format this instance does not offer (or any format, with SITE_OUTPUT_FORMAT off) is refused
+    // here, at the picks' point and on their channel, an error event per panel, before the limiter, the model or any
+    // source. Nothing is re-asked, so no flows version travels with it.
+    if (requestFormat.kind === 'refused') {
+      const { error, code } = outputFormatRefusalPayload();
+      const encoder = new TextEncoder();
+      const body = panelsForRun(mcpOnly)
+        .map((panel) => encodeSSE({ type: 'error', panel, message: error, code } as StreamEvent & { message: string; code: StreamErrorCode }))
+        .join('');
+      return new Response(encoder.encode(body), { headers: SSE_HEADERS });
+    }
+    const outputFormat = requestFormat.kind === 'asked' ? requestFormat.format : undefined;
 
     // The rate limit counts a request before it checks it (`consumeRateLimit`).
     const rateLimitInfo = await consumeRateLimit(identifier, isAuthenticated);
@@ -270,6 +286,8 @@ export async function POST(request: NextRequest) {
       // signed package. With no portal configured and none supplied, the key
       // is absent rather than filled with a default the instance never set.
       ...(portal ? { 'analysis.portal': portal } : {}),
+      // The format the question asked for (OF2, S8); nothing under "Auto", so its root span is the base's.
+      ...outputFormatAttributes(outputFormat),
     });
 
     // Fetch skill guidance (with trace span). The composed prompt spans both

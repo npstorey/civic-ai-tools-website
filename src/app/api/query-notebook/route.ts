@@ -42,7 +42,8 @@ import {
   type StreamCallbacks,
 } from '@/lib/openrouter-streaming';
 import { errorClassOf, isStreamErrorKind, notebookExecutionErrorMessage, notebookFailureFacts, notebookTracebackForReader, startSseKeepAlive, streamErrorPayload, withoutCredentialsIn, type ConsentPausePayload, type StreamErrorCode } from '@/lib/streaming';
-import { TraceBuilder, hash as traceHash, CIVICAITOOLS_TRACE_CONFIG, RUN_RECORD_ATTRIBUTE, runRecordAttributes } from '@/lib/evidence/trace';
+import { TraceBuilder, hash as traceHash, CIVICAITOOLS_TRACE_CONFIG, outputFormatAttributes, RUN_RECORD_ATTRIBUTE, runRecordAttributes } from '@/lib/evidence/trace';
+import { outputFormatFromBody, outputFormatRefusalPayload } from '@/lib/output-format/registry';
 import { getConfiguredKeyId } from '@/lib/evidence/signing';
 import { storeRunPrompt } from '@/lib/evidence/prompt-blob';
 import { resolveRunPortal } from '@/lib/site-config';
@@ -64,6 +65,8 @@ interface QueryNotebookRequest {
   model?: string;
   /** "Only the ones I pick" (S3-B W1): the reader's picks; absent, an Auto question (`picksFromBody`). */
   picks?: unknown;
+  /** The output format asked (OF2): `{ id, version }`; absent, "Auto" (`outputFormatFromBody`). */
+  outputFormat?: unknown;
 }
 
 type NotebookEvent =
@@ -310,6 +313,13 @@ export async function POST(request: NextRequest) {
   if (picked && !picked.usable) {
     return new Response(JSON.stringify(picksRefusalPayload(consent.statement)), { status: 403, headers: { 'Content-Type': 'application/json' } });
   }
+  // OF2 (website #810): a format this instance does not offer (or any format, with SITE_OUTPUT_FORMAT off) is refused
+  // here, at the picks' point and on their channel, 403, before the limiter, the model, the sandbox or any source.
+  const requestFormat = outputFormatFromBody(body);
+  if (requestFormat.kind === 'refused') {
+    return new Response(JSON.stringify(outputFormatRefusalPayload()), { status: 403, headers: { 'Content-Type': 'application/json' } });
+  }
+  const outputFormat = requestFormat.kind === 'asked' ? requestFormat.format : undefined;
   // The rate limit counts a request before it checks it (`consumeRateLimit`).
   const rateLimitInfo = await consumeRateLimit(identifier, isAuthenticated);
   if (isRateLimited(rateLimitInfo)) {
@@ -410,6 +420,8 @@ export async function POST(request: NextRequest) {
     // trace leaves here as a publish input, so an absent portal is recorded
     // as absent rather than as a default the instance never set.
     ...(portal ? { 'analysis.portal': portal } : {}),
+    // The format the question asked for (OF2, S8); nothing under "Auto", so its root span is the base's.
+    ...outputFormatAttributes(outputFormat),
     // What this run states about itself (#599 W4, ADR-0033): the date its
     // prompt asserted (#475), the servers its configuration had (#495), the
     // tools it offered, each source's offered-reason and the prompt's

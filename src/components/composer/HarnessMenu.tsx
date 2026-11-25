@@ -37,6 +37,13 @@
  * A mount that does not offer picking (`/explore`) leaves the item out (A5 = hide): its Data sources lists Auto and
  * the Settings link.
  *
+ * OUTPUT FORMAT (OF2, Sprint OF-1, website #810; G0-1 = A, G0-2 = A; S9's choice b, ruled A at G0b, seat 7168515476): directly after
+ * Data sources, in the `full` and `signed-out` variants, never in `sources-only`, and only on a mount that passes
+ * `outputFormat`, which the query form does on an instance with `SITE_OUTPUT_FORMAT` on (`OutputFormatProvider`). It
+ * reads the chosen format's name, or "Auto"; its options are Auto and each format the instance offers (none but Auto
+ * in OF2, G0-9 = A). The mount owns the choice (`QueryForm`, per browser session); the menu reports it, as Session
+ * type's. With the prop absent, the menu is byte for byte what it was before the item existed.
+ *
  * IT HOLDS NO RUN STATE. The model, the session type and the comparison are the mount's; the menu reports choices.
  */
 
@@ -48,6 +55,7 @@ import { SETTINGS_HREF } from '@/lib/sources/copy';
 import { canPauseToAsk, useSourceConsent, type ConsentSnapshot } from '@/components/sources/useSourceConsent';
 import { startSignIn, useSignInAction } from './SignInControl';
 import { chooseAuto, choosePicking, usePicks } from './picks/store';
+import { storedOutputFormatValue, type OfferedOutputFormat, type OutputFormatRef } from '@/lib/output-format/registry';
 import {
   ALL_SETTINGS,
   COMPARE_ITEM,
@@ -58,6 +66,7 @@ import {
   HARNESS_TRIGGER,
   HARNESS_TRIGGER_SEPARATOR,
   MODEL_ITEM,
+  OUTPUT_FORMAT_ITEM,
   SANDBOX_DESCRIPTION,
   SANDBOX_SIGN_IN_REASON,
   SESSION_TYPE_ITEM,
@@ -80,6 +89,11 @@ export interface HarnessMenuProps {
   disabled?: boolean;
   /** S3-B W1: this mount offers "Only the ones I pick" (the picker is its own, `QueryForm`); absent, the item is left out. */
   picking?: boolean;
+  /**
+   * OF2: the formats this instance offers, the mount's choice (null: Auto) and its setter. Absent (the setting off, or a
+   * mount that owns no format, such as `/explore`'s), the item is left out.
+   */
+  outputFormat?: { formats: readonly OfferedOutputFormat[]; chosen: OutputFormatRef | null; onChoose: (choice: OutputFormatRef | null) => void };
 }
 
 /**
@@ -108,6 +122,9 @@ const ID = {
   sourcesAuto: 'data-sources-auto',
   sourcesPick: 'data-sources-pick',
   sourcesSettings: 'data-sources-settings',
+  outputFormat: 'output-format',
+  outputFormatAuto: 'output-format-auto',
+  outputFormatPrefix: 'output-format:',
   session: 'session-type',
   standard: 'session-standard',
   sandbox: 'session-sandbox',
@@ -117,7 +134,7 @@ const ID = {
   signIn: 'sign-in',
 } as const;
 
-export default function HarnessMenu({ variant, models, model, onModel, session, comparison, disabled = false, picking = false }: HarnessMenuProps) {
+export default function HarnessMenu({ variant, models, model, onModel, session, comparison, disabled = false, picking = false, outputFormat }: HarnessMenuProps) {
   // The mount reads the consent (QueryForm, TraceControls); the menu only reads the routing pair it holds.
   const consent = useSourceConsent({ load: false });
   const signInAction = useSignInAction();
@@ -157,6 +174,26 @@ export default function HarnessMenu({ variant, models, model, onModel, session, 
       { id: ID.sourcesSettings, kind: 'footer', label: DATA_SOURCES_ITEM.footer, href: SETTINGS_HREF },
     ],
   };
+  // OF2: the Output format item, after Data sources, where the mount passes one and never in `sources-only`.
+  const chosenFormat = outputFormat?.chosen
+    ? outputFormat.formats.find((f) => f.id === outputFormat.chosen!.id && f.version === outputFormat.chosen!.version) ?? null
+    : null;
+  const formatItem: MenuItem | null = outputFormat && variant !== 'sources-only'
+    ? {
+        id: ID.outputFormat,
+        label: OUTPUT_FORMAT_ITEM.label,
+        value: chosenFormat ? chosenFormat.label : OUTPUT_FORMAT_ITEM.value,
+        children: [
+          { id: ID.outputFormatAuto, label: OUTPUT_FORMAT_ITEM.auto, description: OUTPUT_FORMAT_ITEM.autoDescription, checked: chosenFormat === null },
+          ...outputFormat.formats.map((f) => ({
+            id: `${ID.outputFormatPrefix}${storedOutputFormatValue(f)}`,
+            label: f.label,
+            ...(f.description !== undefined ? { description: f.description } : {}),
+            checked: chosenFormat !== null && chosenFormat.id === f.id && chosenFormat.version === f.version,
+          })),
+        ],
+      }
+    : null;
   const modelItem: MenuItem = variant === 'signed-out'
     ? { id: ID.model, label: MODEL_ITEM.label, value: modelName, disabledReason: MODEL_ITEM.signedOutReason }
     : {
@@ -170,14 +207,14 @@ export default function HarnessMenu({ variant, models, model, onModel, session, 
   if (variant === 'sources-only') {
     items.push(sources);
   } else if (variant === 'signed-out') {
-    items.push(modelItem, sources, rule, {
+    items.push(modelItem, sources, ...(formatItem ? [formatItem] : []), rule, {
       id: ID.signIn,
       kind: 'button',
       label: SIGN_IN_FOR_MORE,
       ...(signInAction?.kind === 'link' ? { href: signInAction.href } : {}),
     });
   } else {
-    items.push(modelItem, sources);
+    items.push(modelItem, sources, ...(formatItem ? [formatItem] : []));
     if (session) {
       const sandbox = session.mode === 'notebook';
       const sandboxReason = session.affordance === 'unavailable' ? NOTEBOOK_MODE_UNAVAILABLE_REASON
@@ -215,6 +252,12 @@ export default function HarnessMenu({ variant, models, model, onModel, session, 
     else if (id === ID.signIn && signInAction?.kind === 'start') startSignIn(signInAction.providerId);
     else if (id === ID.sourcesAuto) chooseAuto();
     else if (id === ID.sourcesPick && picking && inLoopForm && statementRead) choosePicking();
+    else if (id === ID.outputFormatAuto) outputFormat?.onChoose(null);
+    else if (id.startsWith(ID.outputFormatPrefix)) {
+      const value = id.slice(ID.outputFormatPrefix.length);
+      const format = outputFormat?.formats.find((f) => storedOutputFormatValue(f) === value);
+      if (format) outputFormat?.onChoose({ id: format.id, version: format.version });
+    }
   };
 
   return (

@@ -82,6 +82,21 @@ export const IN_LOOP_RUN_RECORD_ATTRIBUTE = {
   routingConfiguration: 'analysis.routing_configuration',
 } as const;
 
+/**
+ * The format a run was asked for (OF2, Sprint OF-1, website #810; the seat's S8): JSON `{ id, version }`, exactly those
+ * keys, on the root span, written by the route when the question named a format and absent under "Auto", so an "Auto"
+ * run's root span is what it was before formats existed. This site's own attribute, not the harness's:
+ * `extractRunAttributes` does not read it; the packager reads it back through `src/lib/output-format/record.ts` into
+ * `extensions["org.civicaitools.output-format"].preset`. Kept beside `RUN_RECORD_ATTRIBUTE` rather than in it, as the
+ * in-loop three are (`run-record-attributes.test.ts` pins that object to six names).
+ */
+export const OUTPUT_FORMAT_ATTRIBUTE = 'analysis.output_format';
+
+/** The root-span attribute for a run asked in `format`; none for an "Auto" run. Exactly the two keys, in order. */
+export function outputFormatAttributes(format: { id: string; version: string } | undefined): Record<string, string> {
+  return format ? { [OUTPUT_FORMAT_ATTRIBUTE]: JSON.stringify({ id: format.id, version: format.version }) } : {};
+}
+
 /** What a run states about itself, before encoding. */
 export interface RunRecordInput {
   assertedDate: string;

@@ -95,7 +95,7 @@ export function useStreamingComparison() {
     query: string,
     model: string,
     portal: string,
-    opts?: { mcpOnly?: boolean; picks?: readonly string[] },
+    opts?: { mcpOnly?: boolean; picks?: readonly string[]; outputFormat?: { id: string; version: string } },
   ) => {
     const mcpOnly = opts?.mcpOnly ?? false;
 
@@ -131,7 +131,13 @@ export function useStreamingComparison() {
         // request body is byte-identical to what the apex has always sent.
         // S3-B W1: the reader's picks, only when the question was sent with "Only the ones I pick", so an Auto body is
         // byte-identical to what it was.
-        body: { query, model, portal, ...(mcpOnly ? { mcpOnly: true } : {}), ...(opts?.picks ? { picks: [...opts.picks] } : {}) },
+        // OF2 (website #810): the output format, only when one other than Auto was chosen; an Auto body is as it was.
+        body: {
+          query, model, portal,
+          ...(mcpOnly ? { mcpOnly: true } : {}),
+          ...(opts?.picks ? { picks: [...opts.picks] } : {}),
+          ...(opts?.outputFormat ? { outputFormat: { id: opts.outputFormat.id, version: opts.outputFormat.version } } : {}),
+        },
         signal: abortControllerRef.current.signal,
         onEvent: (eventData) => {
           // Record MCP-panel events for trace capture

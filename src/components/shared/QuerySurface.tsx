@@ -59,6 +59,7 @@ import { useAnswerArrival, useConsentReplyAnnouncement } from '@/components/shar
 import { useStreamingComparison } from '@/hooks/useStreamingComparison';
 import { useNotebookStream } from '@/hooks/useNotebookStream';
 import { useSessionChoice } from '@/hooks/useSessionChoice';
+import type { OutputFormatRef } from '@/lib/output-format/registry';
 import {
   COMPARISON_STORAGE_KEY,
   isComparisonRunComplete,
@@ -137,6 +138,9 @@ export default function QuerySurface({
   // S3-B W1 (the ORCH's A17): the picks the last question was sent with, which a resend carries, as it carries the
   // question, the model and the portal; undefined for an Auto question, whose body carries no picks.
   const [lastPicks, setLastPicks] = useState<string[] | undefined>(undefined);
+  // OF2 (website #810): the format the last question asked for, which a resend carries, as it carries the picks;
+  // undefined under Auto, whose body carries no format.
+  const [lastOutputFormat, setLastOutputFormat] = useState<OutputFormatRef | undefined>(undefined);
   const [publishDialogOpen, setPublishDialogOpen] = useState(false);
   const resultsRef = useRef<HTMLDivElement>(null);
 
@@ -223,7 +227,7 @@ export default function QuerySurface({
       .join(' ');
   };
 
-  const handleSubmit = async (query: string, model: string, portal: string, mode: QueryMode, picks?: string[]) => {
+  const handleSubmit = async (query: string, model: string, portal: string, mode: QueryMode, picks?: string[], outputFormat?: OutputFormatRef) => {
     // The form's selection, else this instance's configured default, else
     // NONE (#407). '' is the wire's "no portal" — the id of the form's "All
     // portals" entry — and it is what the routes read as absent. It used to
@@ -239,6 +243,7 @@ export default function QuerySurface({
     setLastPortal(effectivePortal);
     setLastMode(mode);
     setLastPicks(picks);
+    setLastOutputFormat(outputFormat);
 
     // Scroll to results after a brief delay to let the loading state render.
     // At once, not smoothly, when the reader asked for reduced motion (R9 P1).
@@ -248,12 +253,13 @@ export default function QuerySurface({
 
     if (mode === 'notebook') {
       streaming.abort();
-      notebook.start(query, model, effectivePortal, picks);
+      notebook.start(query, model, effectivePortal, picks, outputFormat);
     } else {
       notebook.reset();
       streaming.startComparison(query, model, effectivePortal, {
         mcpOnly: shouldRunMcpOnly(presentation, comparisonRestored),
         picks,
+        outputFormat,
       });
     }
     setQueryCount((c) => c + 1);
@@ -267,6 +273,7 @@ export default function QuerySurface({
     streaming.startComparison(continuationPrompt, usedModel, lastPortal, {
       mcpOnly: shouldRunMcpOnly(presentation, comparisonRestored),
       picks: lastPicks,
+      outputFormat: lastOutputFormat,
     });
     setQueryCount((c) => c + 1);
   };
@@ -282,12 +289,12 @@ export default function QuerySurface({
     setTimeout(() => {
       resultsRef.current?.scrollIntoView({ behavior: preferredScrollBehavior(), block: 'start' });
     }, 100);
-    streaming.startComparison(lastQuery, usedModel, lastPortal, { mcpOnly: false, picks: lastPicks });
+    streaming.startComparison(lastQuery, usedModel, lastPortal, { mcpOnly: false, picks: lastPicks, outputFormat: lastOutputFormat });
     setQueryCount((c) => c + 1);
   };
 
   const handleNotebookRetry = () => {
-    if (lastQuery) notebook.start(lastQuery, usedModel, lastPortal, lastPicks);
+    if (lastQuery) notebook.start(lastQuery, usedModel, lastPortal, lastPicks, lastOutputFormat);
   };
 
   // One element, keyed, placed above the results or (docked) below them: React moves it rather than remounting it,

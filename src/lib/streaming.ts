@@ -188,7 +188,7 @@ export interface ErrorEvent extends StreamEvent {
 // place error-to-copy mapping lives, consumed by every SSE-consuming hook.
 
 /**
- * The fifteen kinds every streaming failure classifies into. Single-sourced as
+ * The sixteen kinds every streaming failure classifies into. Single-sourced as
  * an array rather than a bare union so the round-trip test can enumerate them
  * (#154): a new kind is covered by that test the moment it is added here.
  *
@@ -215,6 +215,12 @@ export interface ErrorEvent extends StreamEvent {
  * question was sent with "Only the ones I pick", and none of its picks could
  * be used (none is configured and not Off, or none is On where the run cannot
  * ask), so it was refused before the model or any source was called.
+ *
+ * `output_format_not_offered` (OF2, Sprint OF-1, website #810) is set
+ * explicitly by the routes from the question's format
+ * (`./output-format/registry.ts`): the question named an output format this
+ * site does not offer (or offers none, with `SITE_OUTPUT_FORMAT` off), so it
+ * was refused before the limiter, the model or any source.
  *
  * `not_offered` (R6 W1) is set explicitly by the dispatch, never derived from
  * message text: `SourceNotOfferedError` (`./mcp/registry.ts`) carries it as
@@ -248,13 +254,14 @@ export const STREAM_ERROR_KINDS = [
   'consent_required',
   'no_sources_on',
   'no_picks_usable',
+  'output_format_not_offered',
   'session_ended',
   'generic',
 ] as const;
 
 export type StreamErrorKind = (typeof STREAM_ERROR_KINDS)[number];
 
-/** True for a value that is one of the fifteen kinds (an unknown code is not). */
+/** True for a value that is one of the sixteen kinds (an unknown code is not). */
 export function isStreamErrorKind(value: unknown): value is StreamErrorKind {
   return typeof value === 'string' && (STREAM_ERROR_KINDS as readonly string[]).includes(value);
 }
@@ -434,6 +441,11 @@ const FRIENDLY_STREAM_COPY: Record<StreamErrorKind, string> = {
   no_sources_on: 'Every data source is set to Off or Ask first, so nothing was sent. Turn a source On in Data source settings, then ask again.',
   // S3-B W1 (S10, D9 = A): the reader picked sources for this question and none could be used, so nothing was sent.
   no_picks_usable: 'None of the data sources you picked could be used, so nothing was sent. Pick again, or choose Auto.',
+  // OF2 (website #810): the question named an output format this site does not offer, so nothing was sent. Ruled at G0b,
+  // W2 = A, styled (seat 7168515476): a stale page is the reader's usual way here, so the copy names the way back, and
+  // the two controls it names are set off in typographic quotation marks, as this site's reader prose names a control
+  // (`EvidenceIndex.tsx`'s click “Publish”). Every block that shows it renders it as text.
+  output_format_not_offered: 'This site does not offer the output format you chose, so nothing was sent. Choose “Auto” under “Output format”, then ask again.',
   // FIX-1 FX-S2 (Seat ruling 7072824077, S1): a reader whose session ended is asked to sign in again. The run route
   // refused before the body, the model, the sandbox and the limiter, so nothing was sent.
   session_ended: 'You are no longer signed in, so nothing was sent. Sign in again, then ask your question again.',
