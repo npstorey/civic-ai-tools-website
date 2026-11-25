@@ -441,9 +441,11 @@ const FRIENDLY_STREAM_COPY: Record<StreamErrorKind, string> = {
   no_sources_on: 'Every data source is set to Off or Ask first, so nothing was sent. Turn a source On in Data source settings, then ask again.',
   // S3-B W1 (S10, D9 = A): the reader picked sources for this question and none could be used, so nothing was sent.
   no_picks_usable: 'None of the data sources you picked could be used, so nothing was sent. Pick again, or choose Auto.',
-  // OF2 (website #810): the question named an output format this site does not offer, so nothing was sent. A DRAFT for
-  // the owner's words memo (G0b); a stale page is the reader's usual way here, so the copy names the way back.
-  output_format_not_offered: 'This site does not offer the output format you chose, so nothing was sent. Choose Auto under Output format, then ask again.',
+  // OF2 (website #810): the question named an output format this site does not offer, so nothing was sent. Ruled at G0b,
+  // W2 = A, styled (seat 7168515476): a stale page is the reader's usual way here, so the copy names the way back, and
+  // the two controls it names are set off in typographic quotation marks, as this site's reader prose names a control
+  // (`EvidenceIndex.tsx`'s click “Publish”). Every block that shows it renders it as text.
+  output_format_not_offered: 'This site does not offer the output format you chose, so nothing was sent. Choose “Auto” under “Output format”, then ask again.',
   // FIX-1 FX-S2 (Seat ruling 7072824077, S1): a reader whose session ended is asked to sign in again. The run route
   // refused before the body, the model, the sandbox and the limiter, so nothing was sent.
   session_ended: 'You are no longer signed in, so nothing was sent. Sign in again, then ask your question again.',

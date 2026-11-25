@@ -37,7 +37,7 @@
  * A mount that does not offer picking (`/explore`) leaves the item out (A5 = hide): its Data sources lists Auto and
  * the Settings link.
  *
- * OUTPUT FORMAT (OF2, Sprint OF-1, website #810; G0-1 = A, G0-2 = A; S9's choice b, a draft for G0b): directly after
+ * OUTPUT FORMAT (OF2, Sprint OF-1, website #810; G0-1 = A, G0-2 = A; S9's choice b, ruled A at G0b, seat 7168515476): directly after
  * Data sources, in the `full` and `signed-out` variants, never in `sources-only`, and only on a mount that passes
  * `outputFormat`, which the query form does on an instance with `SITE_OUTPUT_FORMAT` on (`OutputFormatProvider`). It
  * reads the chosen format's name, or "Auto"; its options are Auto and each format the instance offers (none but Auto

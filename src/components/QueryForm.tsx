@@ -218,7 +218,7 @@ export default function QueryForm({
   const [models, setModels] = useState<Model[]>([]);
   const [modelsError, setModelsError] = useState(false);
   // OF2 (website #810): the output format, on an instance with SITE_OUTPUT_FORMAT on (`OutputFormatProvider`; null
-  // off). The choice lasts the browser session, as Session type's (S9's choice a, a draft for G0b); a stored choice
+  // off). The choice lasts the browser session, as Session type's (S9's choice a, ruled A at G0b); a stored choice
   // the instance does not offer, or any with the setting off, is Auto, and Auto sends no format.
   const offeredFormats = useOfferedOutputFormats();
   const [storedFormat, setStoredFormat] = useSessionChoice<string>(OUTPUT_FORMAT_STORAGE_KEY, parseStoredOutputFormat);

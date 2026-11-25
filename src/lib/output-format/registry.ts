@@ -17,7 +17,7 @@
  *     carrying exactly the id and version of a format this instance offers, with the setting on; otherwise the
  *     question is refused, `output_format_not_offered`, at the point the routes refuse unusable picks: before the
  *     limiter, the model or any source.
- *   THE CHOICE, in the page (choice a, a draft for G0b; S9): per browser session, in `sessionStorage` under
+ *   THE CHOICE, in the page (choice a, ruled A at G0b, seat 7168515476; S9): per browser session, in `sessionStorage` under
  *     `OUTPUT_FORMAT_STORAGE_KEY`, as Session type and Compare are. `auto`, or `<id>@<version>`.
  */
 import { friendlyStreamError } from '../streaming.ts';
@@ -28,7 +28,7 @@ export const OUTPUT_FORMAT_SETTING = 'SITE_OUTPUT_FORMAT';
 export const OUTPUT_FORMAT_EXTENSION_KEY = 'org.civicaitools.output-format';
 /** The request body's field: `{ id, version }`, absent under "Auto". */
 export const OUTPUT_FORMAT_BODY_FIELD = 'outputFormat';
-/** Where the page keeps the reader's choice for the browser session (choice a; a draft for G0b). */
+/** Where the page keeps the reader's choice for the browser session (choice a; ruled A at G0b). */
 export const OUTPUT_FORMAT_STORAGE_KEY = 'civicaitools.outputFormat';
 /** The stored value for "Auto". */
 export const AUTO_STORED_VALUE = 'auto';
