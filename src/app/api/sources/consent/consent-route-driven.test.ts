@@ -197,7 +197,11 @@ test('criterion 5: PUT without a dbId stores the states in the session cookie, a
   assert.equal(decoded!.flows, statement.version, 'the cookie holds the base version');
   assert.equal(decoded!.states.socrata.state, 'on');
   assert.equal(decoded!.states['data-commons'].state, 'off');
-  assert.equal(decoded!.states.socrata.version, statement.sources.find((s: { sourceId: string }) => s.sourceId === 'socrata').version);
+  // S4 W1 (npstorey/civic-ai-tools#335): the cookie a write sets is the second form, which keeps the first 4 bytes of
+  // each source's version.
+  assert.equal(decoded!.v, 2, 'the cookie a write sets is the second form');
+  assert.ok(statement.sources.find((s: { sourceId: string }) => s.sourceId === 'socrata').version.startsWith(decoded!.states.socrata.version));
+  assert.equal(decoded!.states.socrata.version.length, 8);
 
   const again = await handler('GET')(call('GET', undefined, `${consentExport<string>('CONSENT_COOKIE_NAME')}=${cookieValue(setCookie!)}`));
   const body = await again.json() as Record<string, any>; // eslint-disable-line @typescript-eslint/no-explicit-any
@@ -209,17 +213,22 @@ test('criterion 5: PUT without a dbId stores the states in the session cookie, a
 
 test('criterion 2: the cookie carries no identifier — the canary account id and network address are absent from its decoded value', async () => {
   reset({ user: { id: CANARY_ACCOUNT, name: 'Canary Reader' } });
-  const { hash } = await current();
+  const { statement, hash } = await current();
   const response = await handler('PUT')(call('PUT', { states: { socrata: 'on', 'data-commons': 'on' }, flowsVersion: hash }));
   const setCookie = setCookieOf(response);
   assert.ok(setCookie, 'no cookie to read');
   const value = cookieValue(setCookie!);
-  const decodedText = Buffer.from(value, 'base64url').toString('utf8');
+  const bytes = Buffer.from(value, 'base64url');
+  const decodedText = bytes.toString('latin1');
   for (const canary of [CANARY_ACCOUNT, CANARY_ADDRESS, 'Canary Reader']) {
     assert.ok(!decodedText.includes(canary), `the consent cookie carries "${canary}": ${decodedText}`);
     assert.ok(!setCookie!.includes(canary), `the Set-Cookie header carries "${canary}"`);
   }
-  assert.deepEqual(Object.keys(JSON.parse(decodedText)).sort(), ['flows', 'states', 'v'], 'the cookie holds a version number, the flows hash and the states, and nothing else');
+  // S4 W1: the second form holds the form's number, the base version and one fixed-width entry per source (a hash of
+  // its id, a hash of its version, its state, its date), and nothing else.
+  assert.equal(bytes[0], 2, 'the cookie holds the form number first');
+  assert.equal(bytes.subarray(1, 33).toString('hex'), statement.version, 'then the base version');
+  assert.equal(bytes.length, 33 + 11 * 2, 'then two entries of 11 bytes, and nothing else');
 });
 
 // --- PUT, the row (dbId) ------------------------------------------------------------------

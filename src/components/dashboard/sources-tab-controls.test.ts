@@ -170,11 +170,15 @@ test('PC criterion 1: a choice on the tab writes every configured source\'s stat
 
   const puts = net.sent.filter((r) => r.path === '/api/sources/consent' && r.method === 'PUT');
   assert.equal(puts.length, 1, `the choice did not write one PUT /api/sources/consent (${puts.length})`);
-  const body = JSON.parse(puts[0].body) as { states: Record<string, string>; flowsVersion: string };
-  assert.deepEqual(body.states, { ...stored, [changed.sourceId]: 'ask-first' }, 'the PUT does not carry every configured source\'s state, with the change');
+  // S4 W1 (npstorey/civic-ai-tools#335): a choice writes that one source's change, and the endpoint keeps every other
+  // state; the account's row then holds every configured source's state, with the change.
+  const body = JSON.parse(puts[0].body) as { change: Record<string, string>; flowsVersion: string };
+  assert.deepEqual(body.change, { scope: 'source', sourceId: changed.sourceId, state: 'ask-first' }, 'the PUT does not carry the one source\'s change');
   assert.equal(body.flowsVersion, statementHash(statement), 'the PUT does not carry the flows version');
   const accountRow = sessions.rows.get(DB_ID) as { states?: Record<string, { state?: string }> } | undefined;
   assert.equal(accountRow?.states?.[changed.sourceId]?.state, 'ask-first', 'the account\'s row does not hold the change');
+  const kept = Object.fromEntries(Object.entries(accountRow?.states ?? {}).map(([id, entry]) => [id, entry.state]));
+  assert.deepEqual(kept, { ...stored, [changed.sourceId]: 'ask-first' }, 'the account\'s row does not keep every other source\'s state');
 
   const row = rowOf(tab, changed.sourceId);
   const status = within(row).filter((el) => el.props.role === 'status');

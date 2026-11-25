@@ -10,6 +10,11 @@
  * `src/components/publish-dialog-test-harness.ts`). It sets no cookie on any
  * response: it builds the `Cookie` request header a browser would send.
  *
+ * THE FORM (S4 W1, npstorey/civic-ai-tools#335): the second, packed form,
+ * which every writer has written since S4, so these suites drive the reader of
+ * the form a reader's next change gets. The first form is still read; the
+ * suites that build a cookie with `encodeConsentCookie({ v: 1, … })` send it.
+ *
  * THE STATEMENT is `buildFlowsStatementFor(null)`: the one the gate reads
  * when no analytics variable is set, which is every suite that uses this. A
  * suite that configures analytics passes the statement it built itself.
@@ -20,7 +25,7 @@ import { CONSENT_COOKIE_NAME, consentDate, encodeConsentCookie, type SourceState
 /** `civic-source-consent=<value>`: every configured source On, unless `states` says otherwise. */
 export function consentCookieForTests(states: Record<string, SourceState> = {}, statement: FlowsStatement = buildFlowsStatementFor(null)): string {
   const value = encodeConsentCookie({
-    v: 1,
+    v: 2,
     flows: statement.version,
     states: Object.fromEntries(
       statement.sources.map((s) => [s.sourceId, { state: states[s.sourceId] ?? 'on', since: consentDate(), version: s.version }]),

@@ -2262,6 +2262,19 @@ same way. The cookie
 holds a format version, the statement's base version, and per source its
 state, the calendar date it was given and that source's own version; never an
 account id, a network address or anything else that identifies a reader.
+It has two forms. The first, base64url JSON naming each source, is still
+read. Every write since S4 sets the second: packed bytes, base64url, one
+11-byte entry per source with a stored state (the first 4 bytes of the
+SHA-256 of its id, the first 4 bytes of its version, its state and whether
+it was set on its own, and the day it was given), after the form's number
+and the 32-byte base version. It holds about 274 sources within the 4,096
+bytes a browser keeps (name, `=` and value), where the first form held about
+22. A write whose cookie would pass that bound sets no cookie and is refused
+(`consent_cookie_full`), and the control says so. An instance rolled back to
+a release before S4 reads only the first form, so a signed-out reader whose
+cookie was rewritten is asked once again. A row's states carry the same
+"set on its own" flag (`own`) inside each entry, in the existing `states`
+column; a row written before S4 has none, and reads an Off as set on its own.
 Only the consent endpoint below writes either store, with one exception: the
 decision route moves the states a pause's answer names (below). The consent
 card and the Settings overlay call the endpoint.
@@ -2269,9 +2282,18 @@ card and the Settings overlay call the endpoint.
 **The consent endpoint: `/api/sources/consent`.** `GET` reports the consent
 in force and the current flows version, and sets no cookie. `PUT` with
 `{ states: { <source id>: "on" | "ask-first" | "off" }, flowsVersion }`
-stores the states; it answers 400 naming any id this instance does not
-configure, and 409 with the current version when `flowsVersion` is stale, so
-the surface reads the statement again. `PATCH` with `{ flowsVersion }` dismisses
+stores the states and keeps every stored state it does not name (the first
+consent's Allow, which also names in `own` the sources the reader set before
+it); `PUT` with `{ change, flowsVersion }` changes a consent in force and
+nothing else: one source by its own control (`{ scope: "source", sourceId,
+state }`, which marks it set on its own), every source of a class (a server
+and the packs over it) not set on its own (`{ scope: "class", classId,
+state }`), or every source On with every mark cleared (`{ scope: "all",
+state: "on" }`, "Enable all data sources"), and answers 409
+`consent_required` when no consent is in force. Either answers 400 naming any
+id this instance does not configure, 409 with the current version when
+`flowsVersion` is stale, so the surface reads the statement again, and 422
+`consent_cookie_full` when the cookie it would set is past the bound. `PATCH` with `{ flowsVersion }` dismisses
 a row's notices (below). `DELETE` revokes: the row is deleted, or the cookie
 expired, and the next question is asked again. This is the only
 boundary that accepts source ids: a question's run takes
@@ -3078,7 +3100,7 @@ When the model loads a source the reader set to Ask first, a run on `/api/compar
 
 - **The entry.** The server writes `consent-decision:<key>` to the key-value store that `KV_REST_API_URL` and `KV_REST_API_TOKEN` name, through the same client the rate limiter uses (`src/lib/sources/decision.ts`). The key is 128 random bits. The entry holds the source's id. For a signed-in reader on an instance with a database, it also holds a reader code: HMAC-SHA256 of the account's database id, keyed by `RATE_LIMIT_SECRET` under the pause's own label, never the limiter's. The id itself is never stored. The entry expires 600 seconds (10 minutes) after it is written, and an answer does not extend it (`SET … XX KEEPTTL`).
 - **The event.** Only once that write has succeeded, the stream carries a `consent_pause` progress event with the key, the source's entry in the flows statement, the hosts it may reach and the statement's links. The reader's card shows it in the run's steps, at the top of the results, and in the source's row in the Settings overlay.
-- **The hold.** The run reads the entry every 500 ms for at most 60 seconds, and holds at most 120 seconds per run and once per source. The card posts the answer to `POST /api/sources/consent/decision` as `{ key, decision }`. `allow` turns that one source On in the reader's consent (the account's row, or the session cookie), and the load goes on as an On source's does. `off` ("Don't allow") turns that one source Off, and the load records `declined`. `allow-all` ("Allow all data sources") turns every configured source On, the load goes on, and no later load in that run stops to ask. `not-now` changes nothing and records `declined`; no surface sends it since the Settings overlay shipped, and it is kept for a page loaded before that. No answer in time records `no-answer`.
+- **The hold.** The run reads the entry every 500 ms for at most 60 seconds, and holds at most 120 seconds per run and once per source. The card posts the answer to `POST /api/sources/consent/decision` as `{ key, decision }`. `allow` turns that one source On in the reader's consent (the account's row, or the session cookie), and the load goes on as an On source's does. `off` ("Don't allow") turns that one source Off, and the load records `declined`. `allow-all` ("Allow all data sources") turns every configured source On, the load goes on, and no later load in that run stops to ask. `not-now` changes nothing and records `declined`; no surface sends it since the Settings overlay shipped, and it is kept for a page loaded before that. The class answers, `allow-class` and `off-class`, turn On or Off every configured source then in the asking source's class (a server and the packs over it) that the reader has not set on its own, and the load goes on, or records `declined`, as for `allow` or `off`. `allow` and `off` mark the asking source set on its own; `allow-all` clears every mark. When the cookie such an answer would set is past the bound, the answer still decides the question, no cookie is set, and the route answers 200 with `moved: false` and `code: "consent_cookie_full"`. No answer in time records `no-answer`.
 - **The decision route** answers 404 for a key the store does not hold, 409 for one already answered, 403 for a key minted under another account, and 503 when the store fails or `RATE_LIMIT_SECRET` is unset. An anonymous reader's key is the only check.
 - **With no store**, because either variable is unset or a store write fails, the run does not stop: the event says so (`holds: false`), the load records `no-answer` at once, and the card says the source can be turned On in Data source settings for the next question. There is no in-memory fallback: a pause and its answer can reach different server instances.
 - **Who never stops.** `/api/compare`, the JSON route, holds no stream: an Ask-first load there records `declined`. Replay asks no reader and loads every source it offers, so no pause and no `declined` arise there.

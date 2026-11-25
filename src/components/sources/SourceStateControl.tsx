@@ -27,6 +27,13 @@
  * since <date>." under the control; the tab passes `sinceLine={false}`,
  * because its own line already carries the date.
  *
+ * A REFUSED CHANGE (S4 W1, npstorey/civic-ai-tools#335 A2; C4 = A). When
+ * the endpoint refuses a change because the signed-out reader's cookie is
+ * full, the same line says so, S24 (`COOKIE_FULL_TEXT.refused`), with S25
+ * after it on a site that keeps consents on accounts; the control shows the
+ * stored state again (the write reads the status before it answers) and
+ * stays live.
+ *
  * TWO COMPONENTS, ONE PROPS OBJECT. A surface mounts `SourceStateRadios` and
  * then `SourceStateConfirmation`, both with the same props, as siblings in the
  * row. Each renders one element (or none), so the row's children are what they
@@ -35,8 +42,8 @@
  */
 
 import { useId } from 'react';
-import { PANEL_STATE_CHANGED } from '@/lib/sources/copy';
-import type { SourceStateValue } from './useSourceConsent';
+import { COOKIE_FULL_TEXT, PANEL_STATE_CHANGED } from '@/lib/sources/copy';
+import { consentSnapshot, type SourceStateValue } from './useSourceConsent';
 
 /** The three states, in the order the control offers them, with their labels. */
 export const STATES: Array<{ value: SourceStateValue; label: string }> = [
@@ -45,8 +52,22 @@ export const STATES: Array<{ value: SourceStateValue; label: string }> = [
   { value: 'off', label: 'Off' },
 ];
 
-/** The last change whose write succeeded, if any. */
-export type ConfirmedChange = { sourceId: string; state: SourceStateValue } | null;
+/**
+ * The last change whose write succeeded, if any; or the last change the endpoint refused because the cookie is full
+ * (`refused`, with whether the site keeps consents on accounts).
+ */
+export type ConfirmedChange =
+  | { sourceId: string; state: SourceStateValue }
+  | { sourceId: string; refused: 'cookie-full'; accounts: boolean }
+  | null;
+
+/** What the line says after a change: confirmed, refused because the cookie is full, or nothing (any other failure). */
+export function changeOutcome(ok: boolean, sourceId: string, state: SourceStateValue): ConfirmedChange {
+  if (ok) return { sourceId, state };
+  const snapshot = consentSnapshot();
+  if (snapshot.cookieFull?.sourceId !== sourceId) return null;
+  return { sourceId, refused: 'cookie-full', accounts: snapshot.status?.accounts === true };
+}
 
 export interface SourceStateControlProps {
   sourceId: string;
@@ -86,7 +107,7 @@ export function SourceStateRadios({ sourceId, name, state, inForce, writing, set
               // Before a consent the choice is kept, not written: nothing to confirm (R9 P2).
               const writes = inForce;
               void setState(sourceId, choice.value).then((ok) => {
-                if (ok && writes) setConfirmed({ sourceId, state: choice.value });
+                if (writes) setConfirmed(changeOutcome(ok, sourceId, choice.value));
               });
             }}
           />
@@ -101,7 +122,10 @@ export function SourceStateRadios({ sourceId, name, state, inForce, writing, set
 export function SourceStateConfirmation({ sourceId, name, state, since, inForce, confirmed, sinceLine = true }: SourceStateControlProps) {
   const label = STATES.find((c) => c.value === state)?.label;
   const setSince = sinceLine && inForce && since ? `Set ${label} since ${since}.` : null;
-  if (inForce && confirmed?.sourceId === sourceId && confirmed.state === state) {
+  if (confirmed?.sourceId === sourceId && 'refused' in confirmed) {
+    return <div role="status">{confirmed.accounts ? `${COOKIE_FULL_TEXT.refused} ${COOKIE_FULL_TEXT.signIn}` : COOKIE_FULL_TEXT.refused}</div>;
+  }
+  if (inForce && confirmed?.sourceId === sourceId && 'state' in confirmed && confirmed.state === state) {
     const changed = `${name}${PANEL_STATE_CHANGED.middle}${label}${PANEL_STATE_CHANGED.end}`;
     return <div role="status">{setSince ? `${changed} ${setSince}` : changed}</div>;
   }
