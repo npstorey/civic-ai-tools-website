@@ -100,7 +100,7 @@ const offeredWhenOn = (): unknown => registry?.offeredOutputFormats?.({ SITE_OUT
 
 // --- The words (each a draft for G0b, but the label "Output format", G0-1 = A) -------------------------------------
 
-const W = { item: 'Output format', auto: 'Auto', autoOption: 'Auto - text as the model writes it', ds: 'Data sources', session: 'Session type', model: 'Model' };
+const W = { item: 'Output format', auto: 'Auto', autoOption: 'Auto - text as the AI writes it', autoDescription: 'The AI\'s answer, with no output format applied.', ds: 'Data sources', session: 'Session type', model: 'Model' };
 
 // --- The answers ---------------------------------------------------------------------------------------------------
 
@@ -374,4 +374,15 @@ test('W2 (red): the refusal reaches the reader with “Auto” and “Output for
   await ask(standard, QUESTION);
   assert.equal(queries[0]?.path, '/api/compare-stream', 'premise: the Standard send');
   assert.ok(standard.text().includes(W2), `Standard: the refusal reads ${JSON.stringify(standard.text().match(/This site does not offer[^.]*\.[^.]*\./)?.[0] ?? null)}`);
+});
+
+// --- W1 = B, W3 = A (the owner's words rulings, seat 7168515476 and 7172131446): Auto's option line, as ruled --------
+
+test('W1 and W3 (red): Auto\'s option reads the ruled label and line, "the AI", on /ask and on the home page', async () => {
+  for (const page of [await askPage('on'), await homePage('on')]) {
+    const panel = await openItem(page, W.item);
+    const autos = within(panel).filter((el) => el.props.role === 'menuitemradio').map((el) => [labelOf(el), byClassIn(el, 'ui-menu-item-description').map(textOf)]);
+    // The first option is Auto; the test-registered format follows it.
+    assert.deepEqual(autos[0], [W.autoOption, [W.autoDescription]]);
+  }
 });
