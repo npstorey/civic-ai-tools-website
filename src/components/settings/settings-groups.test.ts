@@ -640,13 +640,16 @@ async function askedAgainCookie(net: Net, states: Record<string, { state: string
   assert.equal(status.inForce, false, 'premise: the cookie is asked again');
 }
 
-test('FR1 item 1 (red): a states-map write that carries `own` writes no flag but its own; one without `own` reads as today', async () => {
+// Fix round 2 (the seat's ruling 7229359694): round 1's rule applies to a marked write only (`ownComplete: true`, beside
+// `own` in the PUT body), which the base client never sends; an unmarked write reads as the base, `own` present or not.
+test('FR2 (red): a marked write (`ownComplete: true`) writes no flag but its own; an unmarked one reads as the base, with `own: []` or without `own`', async () => {
   const statement = await flows.buildFlowsStatement();
   const ids = (statement.sources as Mod[]).map((s) => s.sourceId as string);
   const states = Object.fromEntries(ids.map((id) => [id, id === 'socrata' ? 'off' : 'ask-first']));
   for (const [label, body, want] of [
-    ['with own: []', { states, own: [], flowsVersion: flows.statementHash(statement) }, []],
-    ['without own', { states, flowsVersion: flows.statementHash(statement) }, ['socrata']],
+    ['marked, own: []', { states, own: [], ownComplete: true, flowsVersion: flows.statementHash(statement) }, []],
+    ['unmarked, own: []', { states, own: [], flowsVersion: flows.statementHash(statement) }, ['socrata']],
+    ['unmarked, without own', { states, flowsVersion: flows.statementHash(statement) }, ['socrata']],
   ] as const) {
     answers();
     const written = await fetch('/api/sources/consent', { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
@@ -668,7 +671,7 @@ test('FR1 item 1 (red): a group\'s Disable before a first consent is not set on 
   s.unmount();
 });
 
-test('FR1 item 1: the new client\'s Allow always sends `own`, empty when nothing is set on its own', async () => {
+test('FR1 item 1, FR2 (red): the new client\'s Allow always sends `own`, empty when nothing is set on its own, and marks the write', async () => {
   const net = answers();
   const s = await overlay();
   const hook = await load('components/sources/useSourceConsent.ts');
@@ -677,6 +680,8 @@ test('FR1 item 1: the new client\'s Allow always sends `own`, empty when nothing
   const body = JSON.parse(putsOf(net)[0].body) as Mod;
   assert.ok(Object.hasOwn(body, 'own'), 'Allow sent no `own`');
   assert.deepEqual(body.own, []);
+  // Fix round 2: the new client marks its write.
+  assert.equal(body.ownComplete, true, 'Allow did not mark its write (`ownComplete: true`)');
   s.unmount();
 });
 
@@ -693,17 +698,44 @@ test('FR1 item 1 (red): on a consent asked again, the new client\'s Allow keeps 
   s.unmount();
 });
 
-test('FR1 item 1 (red; the cost for a page loaded before the deploy): an Allow on a consent asked again that sends `own` without the stored flags clears them', async () => {
-  const net = answers();
-  await askedAgainCookie(net, { socrata: { state: 'on', own: true }, 'nyc-charter': { state: 'off', own: true } });
-  const statement = await flows.buildFlowsStatement();
-  const ids = (statement.sources as Mod[]).map((x) => x.sourceId as string);
-  // The base client's Allow on a consent asked again: the stored states, and `own` the pending ids only (none here).
-  const states = Object.fromEntries(ids.map((id) => [id, id === 'socrata' ? 'on' : id === 'nyc-charter' ? 'off' : 'ask-first']));
-  const written = await fetch('/api/sources/consent', { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ states, own: [], flowsVersion: flows.statementHash(statement) }) });
-  assert.equal(written.status, 200);
-  assert.deepEqual((await stored()).own, [], 'the stored flags survived');
-});
+// Fix round 2 (replaces round 1's cost test, whose expectation is now the opposite): the write the base client at
+// 04c99df sends on a consent asked again (`useSourceConsent.ts:432-434` there): every state, `own` the sources changed
+// before the answer ([] when none), no marker. Driven through the real PUT, for the cookie and for the account.
+const STORED_FLAGS = { socrata: { state: 'on', own: true }, 'nyc-charter': { state: 'off', own: true }, 'nyc-record': { state: 'off', own: false }, 'data-commons': { state: 'ask-first', own: false } } as const;
+for (const store of ['cookie', 'account'] as const) {
+  for (const [shape, own] of [['empty', []], ['partial', ['nyc-checkbook']]] as const) {
+    test(`FR2 (red), ${store}: an unmarked write shaped as the base client sends it, own ${shape}, on a consent asked again, leaves every stored flag as it was`, async () => {
+      const net = answers();
+      const statement = await flows.buildFlowsStatement();
+      const ids = (statement.sources as Mod[]).map((x) => x.sourceId as string);
+      if (store === 'cookie') {
+        await askedAgainCookie(net, STORED_FLAGS);
+      } else {
+        // A row asked again: it holds a statement with one base recipient fewer, so the current one adds a recipient.
+        sessions.server = { user: { id: 'gh-fixture-account', dbId: 'fr2-fixture-row' } };
+        (sessions as unknown as { rows: Map<string, unknown> }).rows.set('fr2-fixture-row', {
+          userId: 'fr2-fixture-row',
+          states: Object.fromEntries(Object.entries(STORED_FLAGS).map(([id, s]) => [id, { ...s, since: '2026-11-01' }])),
+          flowsHash: '0'.repeat(64),
+          flowsStatement: { ...statement, recipients: statement.recipients.slice(1) },
+          consentedAt: new Date(),
+          updatedAt: new Date(),
+        });
+        const status = (await (await fetch('/api/sources/consent', { method: 'GET' })).json()) as Mod;
+        assert.equal(status.inForce, false, 'premise: the row is asked again');
+      }
+      const before = await stored();
+      assert.deepEqual([...before.own].sort(), ['nyc-charter', 'socrata'], 'premise: the stored flags');
+      const states = Object.fromEntries(ids.map((id) => [id, (STORED_FLAGS as Record<string, { state: string }>)[id]?.state ?? (id === 'nyc-checkbook' ? 'on' : 'ask-first')]));
+      const written = await fetch('/api/sources/consent', { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ states, own, flowsVersion: flows.statementHash(statement) }) });
+      assert.equal(written.status, 200, `premise: the write was taken: ${await written.clone().text()}`);
+      const after = await stored();
+      const want = own.length > 0 ? ['nyc-charter', 'nyc-checkbook', 'socrata'] : ['nyc-charter', 'socrata'];
+      assert.deepEqual([...after.own].sort(), want, 'an unmarked write moved a stored flag');
+      sessions.server = null;
+    });
+  }
+}
 
 test('FR1 item 2 (red): "Enable all data sources" before a consent clears every flag once Allow writes', async () => {
   const net = answers();
