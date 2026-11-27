@@ -1,8 +1,8 @@
 'use client';
 
 /**
- * The map part (OF3b, Sprint OF-1, website #810; criteria 8 to 10): beside a map-format answer, under the answer-first
- * layout (`AnswerView.tsx` places it after the answer; K4 = A).
+ * The map part (OF3b, Sprint OF-1, website #810; criteria 8 to 10): beside a map-format answer, under every layout
+ * (`AnswerView.tsx` places it directly after the answer; fold 5, flag 6).
  *
  *   A RUN: the plot, the count line, the table of the mapped rows (in a focusable region, so a keyboard reaches it,
  *   under its caption) and "Download map data"; or W8's sentence. Never an empty plot: a drawn outcome has at least one

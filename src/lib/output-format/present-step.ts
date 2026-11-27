@@ -23,7 +23,7 @@
  * A refusal draws nothing, tells the AI why in one line, and lets it call again.
  *
  * WHAT THE RECORD STATES (`presentation`): the last accepted call's outcome; with none, the last refused call's; with
- * no call at all, `no-result-named` ("the AI did not choose a set of rows this site could use"). A refusal after an
+ * no call at all, `no-result-named` ("No map: the AI did not make a choice this site could use."). A refusal after an
  * accepted call does not undo it. `counts` are carried when rows were read (accepted), and not on `no-result-named` or
  * `result-failed`, where no rows were read.
  */

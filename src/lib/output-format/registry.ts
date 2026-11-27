@@ -8,9 +8,12 @@
  * the format ("not recorded"), since a trace that recorded none looks the same (`record.ts`).
  *
  *   THE SETTING. `SITE_OUTPUT_FORMAT`: `on` or `off` (trimmed, any case), unset meaning off; any other value is off.
- *     Off, the menu shows no "Output format" item, and a question that names a format anyway is refused. Read at call
- *     time, server-side only: the root layout resolves it and hands the offered list to the page
- *     (`OutputFormatProvider`), as `SITE_PORTAL_LOCKED` reaches the form.
+ *     Off, the menu shows no "Output format" item, and a question that names a format anyway is refused. Read
+ *     server-side only: the root layout resolves it and hands the offered list to the page (`OutputFormatProvider`),
+ *     as `SITE_PORTAL_LOCKED` reaches the form. WHEN it is read depends on the page: `/` is statically prerendered,
+ *     so its menu holds what the setting was when the site was built, and changing the setting reaches `/` only with
+ *     a new build; `/ask` is rendered per request and reads it on each one (measured by OF3b, website #810). The
+ *     routes read it per request (`outputFormatFromBody`).
  *   THE FORMATS. Each has an id, a version, the words the menu shows, and whether it is offered. OF3a registered the
  *     plain map; OF3b offers it, with the setting on (G0-9 = A). A test registers its own
  *     (`registerOutputFormatForTests`).

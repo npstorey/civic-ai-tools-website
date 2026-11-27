@@ -40,7 +40,8 @@
  * The server, and a reader who has not chosen, render the instance's default.
  *
  * THE MAP PART (OF3b, website #810): a map-format answer's plot, counts and table (`MapPart.tsx`), placed in the
- * answer part after the answer, under the `answer-first` layout only (K4 = A); every other layout renders as before.
+ * answer part directly after the answer, so every layout places it with the answer (fold 5, flag 6: a reader's layout
+ * choice does not hide the map).
  *
  * WHO WROTE EACH PART. Every author line comes from the model (`AUTHOR` in
  * `view-model.ts`, design §6) and is rendered with `data-author`; this file
@@ -73,7 +74,6 @@ import WhereItWent from '@/components/answer-view/WhereItWent';
 import MapPart from '@/components/answer-view/MapPart';
 import { LAYOUT_STORAGE_KEY } from '@/lib/query-presentation';
 import {
-  ANSWER_FIRST,
   disclosureOrder,
   layoutId,
   pageOrder,
@@ -808,9 +808,10 @@ export default function AnswerView({
           </div>
         )}
 
-        {/* OF3b (website #810; K4 = A): the map part, after the answer, under the answer-first layout only. The
-            answer above is placed whatever the map part holds. */}
-        {model.map !== undefined && layout.name === ANSWER_FIRST.name && <MapPart map={model.map} />}
+        {/* OF3b (website #810): the map part, directly after the answer, wherever a layout places the answer: a
+            reader's layout choice does not hide the map (fold 5, flag 6). The answer above is placed whatever the map
+            part holds. */}
+        {model.map !== undefined && <MapPart map={model.map} />}
       </>
     ),
 

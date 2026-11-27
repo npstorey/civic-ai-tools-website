@@ -160,8 +160,10 @@ for (const [name, layout] of [['answer-first', ANSWER_FIRST], ['envelope-order',
     const html = render(runModel(mapTrace(DRAWN)), layout);
     assert.equal(count(html, 'data-part="map"'), 1, `under ${name} the run's view shows ${count(html, 'data-part="map"')} map parts`);
     assert.equal(count(html, 'data-part="map-plot"'), 1, 'no plot');
-    const answerAt = html.indexOf('data-part="answer"');
+    // The answer the map part follows: the last one before it. Under envelope-order the disclosure, which holds the
+    // answer again as F, comes before the answer part.
     const mapAt = html.indexOf('data-part="map"');
+    const answerAt = html.lastIndexOf('data-part="answer"', mapAt);
     assert.ok(answerAt >= 0 && answerAt < mapAt, 'the map part does not follow the answer');
     assert.equal(count(html.slice(answerAt, mapAt), 'data-part='), 1, 'another part sits between the answer and the map part');
   });

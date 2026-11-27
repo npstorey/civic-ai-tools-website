@@ -41,6 +41,7 @@ import {
   type ToolFailureKind,
 } from '../notebook-author/tool-to-cell.ts';
 import { jcs } from './canonicalization.ts';
+import { PRESENT_STEP_NAME } from '../output-format/attribute-names.ts';
 
 /**
  * A measured duration as a reader reads it (UX pass row 23): seconds, one
@@ -66,6 +67,8 @@ export interface QueryOutcomeInput {
   duration_ms?: number;
   failed?: boolean;
   failureKind?: string;
+  /** The entry's operation type, where the caller has it: `describeRefusedRequests` leaves the map step out (OF3b). */
+  operationType?: string;
 }
 
 function isToolFailureKind(value: string | undefined): value is ToolFailureKind {
@@ -373,16 +376,23 @@ export function describeUnrecordedOutcomes(pkg: RecordOutcomeInput & RecordTrace
  *
  * Returns null when no request is stated as failed, so a caller renders
  * nothing. The executed run and the record page both render through this.
+ *
+ * DATA REQUESTS ONLY (OF3b, website #810; the seat's 7224717454, flag 5): an
+ * entry of operation type `present_result`, the map format's own step, is no
+ * request to a data source, so it is neither counted as failed nor among the
+ * requests. Its index still counts against `refusedInTrace`, which numbers
+ * every entry. Section D keeps the step under its raw signed name (D6).
  */
 export function describeRefusedRequests(
   entries: ReadonlyArray<QueryOutcomeInput>,
   refusedInTrace: ReadonlySet<number> = NOTHING,
 ): string | null {
-  const failed = entries.filter(
-    (entry, i) => describeQueryOutcome(entry, { refusedInTrace: refusedInTrace.has(i) }).kind === 'failed',
+  const requests = entries.map((entry, i) => ({ entry, i })).filter(({ entry }) => entry.operationType !== PRESENT_STEP_NAME);
+  const failed = requests.filter(
+    ({ entry, i }) => describeQueryOutcome(entry, { refusedInTrace: refusedInTrace.has(i) }).kind === 'failed',
   ).length;
   if (failed === 0) return null;
   // "1 of 1 requests" is not English; the singular gets its own sentence.
-  if (entries.length === 1) return 'The only request did not complete.';
-  return `${failed} of ${entries.length} requests did not complete.`;
+  if (requests.length === 1) return 'The only request did not complete.';
+  return `${failed} of ${requests.length} requests did not complete.`;
 }

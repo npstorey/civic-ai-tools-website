@@ -282,7 +282,7 @@ export interface AnswerViewModel {
   /** R6 W4: where the question went. Absent: the run carried no `flows`, or the record has no trace. */
   whereItWent?: WhereItWentModel;
   /**
-   * OF3b (website #810): the map part, beside the answer under the `answer-first` layout only (K4 = A). Absent under
+   * OF3b (website #810): the map part, directly after the answer under every layout (fold 5, flag 6). Absent under
    * "Auto", for a record with no format key, and for a run whose trace has not stated an outcome.
    */
   map?: MapPartModel;

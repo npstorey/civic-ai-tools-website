@@ -214,6 +214,8 @@ export function adaptComparison(input: ComparisonAdapterInput): AnswerViewModel 
       failureKind: t.failureKind,
       resultRows: t.resultSummary?.rows,
       resultColumns: t.resultSummary?.columns,
+      // OF3b (flag 5): the map step is no data request, so the line leaves it out of N and M.
+      operationType: t.operationType,
     })),
   );
   const facts = tracesRun(input) ? [CAPTURED_VIA_WEB_CHAT, NOT_YET_PUBLISHED] : [];
