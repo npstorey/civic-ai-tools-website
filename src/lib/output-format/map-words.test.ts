@@ -64,6 +64,20 @@ test('W9 (C2c = A): the caption, the alternative text and the save action, singu
   assert.equal(W().MAP_DATA_DOWNLOAD, 'Download map data');
 });
 
+test('fold 6 (red; the seat\'s 7225128356): the table\'s "Label" heading, its two lines under the table, and "not stated"', () => {
+  assert.equal(W().MAP_TABLE_HEADINGS.name, 'Label');
+  assert.equal(W().MAP_TABLE_HEADINGS.row, 'Row');
+  assert.equal(W().MAP_TABLE_HEADINGS.latitude, 'Latitude');
+  assert.equal(W().MAP_TABLE_HEADINGS.longitude, 'Longitude');
+  assert.equal(typeof W().mapLabelLine, 'function', 'there is no Label line');
+  assert.equal(W().mapLabelLine('complaint_type'), 'Label: the value in the complaint_type column. The AI chose that column.');
+  assert.equal(typeof W().mapRowLine, 'function', 'there is no Row line');
+  assert.equal(W().mapRowLine(5), 'Row: its place in the 5 rows the data source returned, counting from 1.');
+  assert.equal(W().mapRowLine(1), 'Row: its place in the 1 row the data source returned, counting from 1.');
+  assert.equal(W().mapRowLine(1203), 'Row: its place in the 1,203 rows the data source returned, counting from 1.');
+  assert.equal(W().MAP_VALUE_NOT_STATED, 'not stated');
+});
+
 test('W10: the running line, the steps line (singular and plural), and the summary clause with and without a dataset (the seat, 7175461805)', () => {
   assert.equal(W().MAP_STEP_RUNNING, 'Choosing what to map');
   assert.equal(W().mapStepLine(3, 5, 'dataset abcd-1234'), 'This site mapped 3 of 5 rows from dataset abcd-1234');

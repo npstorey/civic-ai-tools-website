@@ -190,6 +190,43 @@ test('criterion 11 (red): the run\'s steps carry W10\'s line once the trace stat
   assert.deepEqual(model.steps.groups.map((g: { label: string }) => g.label), ['Querying data', 'This site mapped 3 of 5 rows from dataset pts1-0001']);
 });
 
+// Fold 6 (the seat's 7225128356): the table's "Label" heading and its two lines, and "not stated" for a row with no
+// label value, on the map part and on the record page. The label column is the present call's own `label` argument;
+// the fixture's third mapped row carries no name, so an empty cell fails the "not stated" read.
+const LABEL_LINE = 'Label: the value in the complaint_type column. The AI chose that column.';
+const ROW_LINE_5 = 'Row: its place in the 5 rows the data source returned, counting from 1.';
+const ROW_LINE_1 = 'Row: its place in the 1 row the data source returned, counting from 1.';
+const ONE_ROW = {
+  outcome: { drawn: true },
+  counts: { returned: 1, drawn: 1, withoutLocation: 0, beyondCap: 0 },
+  map: { ...DRAWN.map, features: [feature('1', -73.99, 40.71, 'Noise')] },
+};
+function tableHead(html: string): string[] {
+  return [...html.matchAll(/<th[^>]*>([^<]*)<\/th>/g)].map((m) => m[1]);
+}
+
+test('fold 6 (red): the run\'s map part heads its table "Row", "Label", "Latitude", "Longitude", with the Label and Row lines under it, and "not stated" for an empty label', () => {
+  const html = render(runModel(mapTrace(DRAWN)));
+  assert.deepEqual(tableHead(html), ['Row', 'Label', 'Latitude', 'Longitude']);
+  assert.ok(html.includes(`>${LABEL_LINE}<`), 'no Label line');
+  assert.ok(html.includes(`>${ROW_LINE_5}<`), 'no Row line');
+  assert.ok(html.indexOf('</table>') < html.indexOf(LABEL_LINE), 'the Label line is not under the table');
+  assert.ok(html.indexOf('</table>') < html.indexOf(ROW_LINE_5), 'the Row line is not under the table');
+  assert.ok(/<td[^>]*>not stated<\/td>/.test(html), 'a row with no label value does not read "not stated"');
+});
+
+test('fold 6 (red): the record page heads its table the same way, with both lines, "not stated", and the one-row form of the Row line', () => {
+  assert.ok(mapPart, 'there is no map-part module');
+  const html = render({ ...runModel(traceWith({})), map: mapPart!.mapPartFromRecord(RECORD_FIXTURE) });
+  assert.deepEqual(tableHead(html), ['Row', 'Label', 'Latitude', 'Longitude']);
+  assert.ok(html.includes(`>${LABEL_LINE}<`), 'no Label line');
+  assert.ok(html.includes(`>${ROW_LINE_5}<`), 'no Row line');
+  assert.ok(/<td[^>]*>not stated<\/td>/.test(html), 'a row with no label value does not read "not stated"');
+  const one = render({ ...runModel(traceWith({})), map: mapPart!.mapPartFromRecord({ ...RECORD_FIXTURE, extensions: { 'org.civicaitools.output-format': { preset: { id: 'plain-map', version: '1' }, ...ONE_ROW } } }) });
+  assert.ok(one.includes(`>${ROW_LINE_1}<`), 'the Row line\'s one-row form');
+  assert.ok(one.includes('>1 of 1 row mapped.<'), 'premise: the one-row record');
+});
+
 // --- Criterion 9 ---------------------------------------------------------------------------------------------------
 
 test('criterion 9 (red): the plot\'s alternative text is built from the counts, and markup in a row\'s name is shown as text', () => {
