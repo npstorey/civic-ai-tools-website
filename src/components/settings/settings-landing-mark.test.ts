@@ -157,8 +157,11 @@ function overlayList(page: Surface): { list: HostElement; rows: HostElement[] } 
   const dialogs = page.elements().filter((el) => el.props.role === 'dialog');
   assert.equal(dialogs.length, 1, `role="dialog" elements: ${dialogs.length}`);
   const lists = within(dialogs[0]).filter((el) => el.type === 'ul' && within(el).some((x) => x.type === 'li' && x.props['data-source'] !== undefined));
-  assert.equal(lists.length, 1, `the dialog's source lists: ${lists.length}`);
-  return { list: lists[0], rows: childrenOf(lists[0]).filter((el) => el.type === 'li') };
+  // S4 W2a (C1 = A): a group's rows sit in the group's own list, inside the overlay's; the overlay's is the outermost,
+  // and its rows are every source row under it, in the order shown.
+  const outer = lists.filter((l) => !lists.some((o) => o !== l && within(o).includes(l)));
+  assert.equal(outer.length, 1, `the dialog's source lists: ${outer.length}`);
+  return { list: outer[0], rows: within(outer[0]).filter((el) => el.type === 'li' && el.props['data-source'] !== undefined) };
 }
 
 // --- The mark's look, read from globals.css -------------------------------------------------------------------------
@@ -199,7 +202,8 @@ test(`fix round 2, A3 (b): at ?source=<the last of seven> the row carries the di
   const scroll = calls.indexOf(`${LAST.sourceId} scroll`);
   assert.ok(scroll !== -1, `premise: the row was scrolled into view: ${JSON.stringify(calls)}`);
   assert.ok(mark < scroll, `the mark came after the scroll: ${JSON.stringify(calls)}`);
-  const look = declarations('ul[data-target-source] > li[data-landing-target]');
+  // S4 W2a: a row in a group is not a child of the marked list, so the rule names any descendant row.
+  const look = declarations('ul[data-target-source] li[data-landing-target]');
   assert.equal(look.border, MARK_BORDER, `the marked row's border: ${JSON.stringify(look)}`);
   assert.equal(look['background-color'], MARK_TINT, `the marked row's tint: ${JSON.stringify(look)}`);
 });
@@ -216,8 +220,8 @@ test('fix round 2, A3 (b): focus moves to the row itself, named by the source\'s
   const { rows: shown } = overlayList(page);
   const rendered = shown[shown.length - 1];
   assert.equal(textOf(childrenOf(rendered)[0]), name, 'premise: the row shows the reader name first');
-  // The radios sit inside the row; focus is on the row element itself, so no radio holds it.
-  assert.ok(within(rendered).some((el) => el.props.role === 'radiogroup'), 'premise: the row holds its radios');
+  // The control sits inside the row (S4 W2a: two buttons); focus is on the row element itself, so no button holds it.
+  assert.ok(within(rendered).some((el) => el.props['data-part'] === 'enable-disable'), 'premise: the row holds its control');
   assert.deepEqual(calls.filter((c) => / focus/.test(c)), [`${LAST.sourceId} focus (preventScroll)`], `focus calls: ${JSON.stringify(calls)}`);
 });
 

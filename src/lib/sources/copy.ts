@@ -42,11 +42,12 @@ export const NO_GUIDE_SENTENCE = 'This site does not name a deployment guide.';
 /** What Ask first means in R6, in literal words (Q1): the pause is R8's. */
 export const ASK_FIRST_MEANS = 'Ask first: nothing is sent to this source until you turn it On.';
 /**
- * The same, where a question can stop to ask (`SOURCE_ROUTING=in-loop` with the decision store, R8 W2): the owner's
- * card F, as UX-2's item 54 re-words it under D7 C. The panel and the Settings overlay's Data sources rows render it
- * only there, where its "here" names the place it is read (M4).
+ * Under a source not answered yet, whose control shows neither button pressed, where a question can stop to ask
+ * (`SOURCE_ROUTING=in-loop` with the decision store): S86 as ruled (S4, npstorey/civic-ai-tools#335; C1 = A,
+ * C9-L = A; DR-8 A), in place of card F's item 54 words. Settings and the picker render it only there, through
+ * `SourceRow`.
  */
-export const ASK_FIRST_MEANS_WITH_PAUSE = "Ask first: nothing is sent to this source until you turn it On, here or when the site asks you during a question. If you choose Allow then, it stays On for later questions. If you choose Don't allow, it is turned Off.";
+export const ASK_FIRST_MEANS_WITH_PAUSE = 'Not answered yet: the site asks before it uses this source.';
 
 /** The panel's heading, and its lead sentence. */
 export const PANEL_HEADING = 'Data sources';
@@ -155,6 +156,93 @@ export const SETTINGS_TEXT = {
 export function sourcesShownLine(shown: number, total: number): string {
   return `${shown} of ${total} sources shown`;
 }
+
+// --- Settings' groups and each source's control (S4 W2a, npstorey/civic-ai-tools#335) ---
+//
+// The words are the taken forms of the owner's rulings of 2026-11-24 (C1 = A, C2 = B, C3-ALL = A, C6 = B, C9-L = A),
+// byte for byte; where a form carries a count, the count is the site's (`countInWords`, as the lead counts).
+
+/** A count as the site writes it: in words up to twelve, in digits above. */
+export function countInWords(n: number): string {
+  return n < COUNT_WORDS.length ? COUNT_WORDS[n] : String(n);
+}
+
+const capital = (text: string) => text.charAt(0).toUpperCase() + text.slice(1);
+
+/**
+ * A source's control (S109, S118; P-1 = A, C9-L = A): two equal buttons, Enable and Disable, the one set drawn
+ * pressed, each keeping its word; `name` is the control's accessible name.
+ */
+export const SOURCE_CONTROL_TEXT = {
+  enable: 'Enable',
+  disable: 'Disable',
+  name: (source: string) => `${source}: Enable or Disable`,
+} as const;
+
+/** S10 (C2 = B): under the control of a source set on its own, in a group of two or more. */
+export const SET_ON_ITS_OWN_LINE = 'Set on its own: the group\'s control leaves it as it is.';
+
+/** S11 (C2 = B): "About these settings", after the tab's first sentence. */
+export const ABOUT_SET_ON_ITS_OWN = 'A source set on its own follows its group again once you set the group to that source\'s setting.';
+
+/** S96 (C3-ALL = A): Settings' button above the groups. */
+export const ENABLE_ALL_SOURCES = 'Enable all data sources';
+
+/** S97 (C3-ALL = A): the status line after "Enable all data sources", for the configured count. */
+export function enableAllDoneLine(total: number): string {
+  return `All ${countInWords(total)} data sources are now enabled, including any you disabled. A source added later is not enabled until you enable it. This applies from your next question.`;
+}
+
+/** The states a group's line counts. */
+export interface GroupCounts {
+  on: number;
+  askFirst: number;
+  off: number;
+}
+
+/**
+ * A group's words (C1 = A; C2 = B), for a group of two or more sources reached through one server, named by
+ * `groupName` (S42, `source-name.ts`):
+ *   - `count` (S1), after the group's name;
+ *   - `sets` (S2), under the group's control; a group of two reads "both", and its first sentence names the
+ *     exception only when one of the two is set on its own;
+ *   - `controlName` (S3), the control's accessible name;
+ *   - `statesLine` (S4), under the control when it shows neither button pressed: the lead's order with no clause
+ *     while the group's rows show, and on a closed group (above twelve) the sources not answered yet last, with
+ *     S86's condition where the site can ask;
+ *   - `disclosure` (S5), the summary that opens the rows of a group of more than twelve;
+ *   - `changed` (S6, S7, S8), the status line after a change that was saved.
+ */
+export const GROUP_TEXT = {
+  count: (n: number) => `${countInWords(n)} sources`,
+  sets: (n: number, own: number) => {
+    const first = n === 2 ? (own === 1 ? 'Sets both, except one set on its own.' : 'Sets both.') : `Sets all ${countInWords(n)}, except any set on its own.`;
+    return `${first} A source set on its own keeps its own setting.`;
+  },
+  controlName: (group: string, n: number) => `${group}: Enable or Disable, ${n === 2 ? 'for both' : `for all ${countInWords(n)}`}, except any set on its own`,
+  statesLine: (counts: GroupCounts, rowsShown: boolean, canAsk: boolean): string => {
+    const order: Array<[number, string]> = rowsShown
+      ? [[counts.on, 'enabled'], [counts.askFirst, 'not answered yet'], [counts.off, 'disabled']]
+      : [[counts.on, 'enabled'], [counts.off, 'disabled'], [counts.askFirst, 'not answered yet']];
+    const named = order
+      .filter(([n]) => n > 0)
+      .map(([n, state], i) => (i === 0 ? `${capital(countInWords(n))} ${n === 1 ? 'source' : 'sources'} ${state}` : `${countInWords(n)} ${state}`));
+    if (named.length === 0) return '';
+    const clause = !rowsShown && canAsk && counts.askFirst > 0 ? `: the site asks before it uses ${counts.askFirst === 1 ? 'it' : 'them'}` : '';
+    return `${named.join(', ')}${clause}.`;
+  },
+  disclosure: (n: number) => `The ${countInWords(n)} sources in this group`,
+  /**
+   * After a group's change was saved: `changed` sources now hold `state`; `left` set on their own to another setting
+   * were left as they are. `reached` is the group's phrase after "sources", "reached through Socrata".
+   */
+  changed: (changed: number, left: number, reached: string, state: 'enabled' | 'disabled') => {
+    if (changed === 0) return 'Nothing changed. Each source in this group is set on its own. Change each one on its own row.';
+    const now = `${capital(countInWords(changed))} ${changed === 1 ? 'source' : 'sources'} ${reached} ${changed === 1 ? 'is' : 'are'} now ${state}.`;
+    const kept = left === 0 ? '' : ` ${capital(countInWords(left))} set on ${left === 1 ? 'its' : 'their'} own ${left === 1 ? 'was' : 'were'} left as ${left === 1 ? 'it is' : 'they are'}.`;
+    return `${now}${kept} This applies from your next question.`;
+  },
+} as const;
 
 /** The overlay's address: served on both hosts (S1); every pointer opens it with a client-side link. */
 export const SETTINGS_HREF = '/settings';

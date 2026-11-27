@@ -342,7 +342,7 @@ test('criterion 3 (c): while a decision is pending, the panel\'s row for that so
   const row = rowOf('boston-opencontext');
   const inRow = [...within(row)];
   const cardAt = inRow.findIndex((el) => el.props['data-part'] === 'consent-step');
-  const controlAt = inRow.findIndex((el) => el.props.role === 'radiogroup');
+  const controlAt = inRow.findIndex((el) => el.props.role === 'group' && el.props['data-part'] === 'enable-disable');
   assert.ok(cardAt > controlAt && controlAt >= 0, 'the row shows no card below its state control');
   assert.ok(inRow.some((el) => el.type === 'button' && textOf(el) === 'Allow'), 'the row\'s card has no Allow');
   const socrata = [...within(rowOf('socrata'))];

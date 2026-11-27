@@ -341,6 +341,30 @@ export function textOf(node: ReactNode): string {
   return readableText(renderToStaticMarkup(node));
 }
 
+// --- A source's control (S4 W2a, npstorey/civic-ai-tools#335) ------------------------------------------------------
+
+/**
+ * The first two-button control (`role="group"`, Enable and Disable with `aria-pressed`) at or under `node`: a row's,
+ * or a group's head. `shown` is the stored state its pressed button draws: `on` (Enable), `off` (Disable), or
+ * `ask-first` for neither (a source not answered yet). Throws when there is none.
+ */
+export function stateControl(node: HostElement): { group: HostElement; enable: HostElement; disable: HostElement; shown: 'on' | 'off' | 'ask-first' } {
+  const group = [...hostElementsIn(node)].find((el) => el.props.role === 'group' && el.props['data-part'] === 'enable-disable');
+  if (!group) throw new Error(`w3 surface harness: no Enable/Disable control under this element: ${textOf(node).slice(0, 300)}`);
+  const buttons = [...hostElementsIn(group.props.children)].filter((el) => el.type === 'button');
+  const enable = buttons.find((b) => textOf(b) === 'Enable');
+  const disable = buttons.find((b) => textOf(b) === 'Disable');
+  if (!enable || !disable) throw new Error('w3 surface harness: the control has no Enable and Disable buttons');
+  const shown = enable.props['aria-pressed'] === true ? 'on' : disable.props['aria-pressed'] === true ? 'off' : 'ask-first';
+  return { group, enable, disable, shown };
+}
+
+/** Choose a state on the control at or under `node`: a click on Enable (`on`) or Disable (`off`). */
+export async function chooseState(surface: Surface, node: HostElement, state: 'on' | 'off'): Promise<void> {
+  const control = stateControl(node);
+  await surface.click(state === 'on' ? control.enable : control.disable);
+}
+
 // --- Mounting ------------------------------------------------------------------------
 
 export interface Surface {

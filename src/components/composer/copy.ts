@@ -98,16 +98,18 @@ export const DATA_SOURCES_ITEM = {
   /** Shown only in loop with the decision store (`canPauseToAsk`; v2 ruling 1). */
   inLoop: {
     auto: 'Auto - find sources for me',
-    autoDescription: 'The model chooses which data sources to use, from those you set On or Ask first.',
+    /** S110 (S4 W2a; the words W2 uses, "Seen and not carded" item 6, with W3 = A's pair applied). */
+    autoDescription: 'The AI chooses which data sources to use, from those you have not disabled. The site asks before it uses one not answered yet.',
     /** S1 (S3-B W1; D9 = A): "Only the ones I pick", offered in this form only. */
     pickDescription: 'You search for data sources and pick the ones this question can use. The model uses no others.',
   },
   /** Where the read names all-sources, or in loop with no store. While the pair is unread or failed, Auto reads `value` alone (PQ6 = (b)). */
   allSources: {
-    auto: 'Auto - use every source I set On',
-    autoDescription: 'Every data source you set On is given to the model from the start. Sources set to Ask first are not used.',
-    /** D8 = B (S3-B W1): the reason "Only the ones I pick" is not offered here (D5 = A). */
-    pickReason: 'Not offered on this site. Every data source you set On is given to the model.',
+    /** S115, S116, S117 (S4 W2a; the words W2 uses, "Seen and not carded" item 6, with W3 = A's pair applied). */
+    auto: 'Auto - use every enabled source',
+    autoDescription: 'The AI can use every enabled data source. A source not enabled is not used.',
+    /** D8 = B (S3-B W1): the reason "Only the ones I pick" is not offered here (D5 = A); S117's words. */
+    pickReason: 'Not offered on this site. Every enabled data source is given to the AI.',
   },
   /** Rows 1-3: the second option. */
   pick: 'Only the ones I pick',

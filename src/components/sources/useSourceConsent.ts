@@ -86,6 +86,8 @@ export interface ConsentStatus {
   notices?: ConsentNotice[];
   /** True on the one read that kept a consent given signed out on the account (R9 P4, #662); absent otherwise. */
   keptFromCookie?: boolean;
+  /** The configured sources set on their own (S4 W1's GET; premise 7's rule): the mark's reader (S10, S4 W2a). */
+  setOnItsOwn?: string[];
 }
 
 export interface ConsentSnapshot {
@@ -107,10 +109,17 @@ export interface ConsentSnapshot {
   /** The states the reader set in the panel before a consent, by source id: kept on the page, written by Allow (R9 P2). */
   pending: Record<string, SourceStateValue>;
   /**
-   * The last write the consent endpoint refused because the signed-out reader's cookie is full (S4 W1, A2;
-   * `consent_cookie_full`): the source whose change it was. Cleared by the next write.
+   * The sources the reader set by their own control before a consent (S4 W2a): Allow marks these set on their own
+   * (premise 7's exception). A group's control or "Enable all data sources" before a consent sets `pending` and not
+   * this, as neither marks a source.
    */
-  cookieFull: { sourceId: string } | null;
+  pendingOwn: string[];
+  /**
+   * The last write the consent endpoint refused because the signed-out reader's cookie is full (S4 W1, A2;
+   * `consent_cookie_full`): the control whose change it was, a source's id, `group:<class id>` for a group's control,
+   * or `all` for "Enable all data sources" (S4 W2a). Cleared by the next write.
+   */
+  cookieFull: { target: string } | null;
 }
 
 /** A pause the hooks reported, and what has happened to it since. */
@@ -132,7 +141,7 @@ export interface PendingPause {
   afterHold?: true;
 }
 
-const EMPTY: ConsentSnapshot = { loaded: false, status: null, statement: null, writing: false, refusals: 0, failed: false, pauses: {}, routing: null, store: null, pending: {}, cookieFull: null };
+const EMPTY: ConsentSnapshot = { loaded: false, status: null, statement: null, writing: false, refusals: 0, failed: false, pauses: {}, routing: null, store: null, pending: {}, pendingOwn: [], cookieFull: null };
 
 let snapshot: ConsentSnapshot = EMPTY;
 const listeners = new Set<() => void>();
@@ -387,7 +396,7 @@ export function panelStates(
   return states;
 }
 
-async function write(method: 'PUT' | 'PATCH' | 'DELETE', body?: unknown, sourceId?: string): Promise<boolean> {
+async function write(method: 'PUT' | 'PATCH' | 'DELETE', body?: unknown, target?: string): Promise<boolean> {
   // The reader has acted since the choice was kept: the line has said what it had to.
   keptOnPage = false;
   set({ writing: true, failed: false, cookieFull: null });
@@ -401,11 +410,11 @@ async function write(method: 'PUT' | 'PATCH' | 'DELETE', body?: unknown, sourceI
     const code = response.ok ? undefined : ((await response.json().catch(() => null)) as { code?: unknown } | null)?.code;
     await refreshConsent();
     if (!response.ok) {
-      set({ failed: response.status !== 409, cookieFull: code === 'consent_cookie_full' && sourceId !== undefined ? { sourceId } : null });
+      set({ failed: response.status !== 409, cookieFull: code === 'consent_cookie_full' && target !== undefined ? { target } : null });
       return false;
     }
     // Written: the store now holds what the panel shows, and nothing is pending.
-    set({ pending: {} });
+    set({ pending: {}, pendingOwn: [] });
     return true;
   } catch {
     set({ failed: true });
@@ -429,8 +438,9 @@ export async function allowConsent(): Promise<boolean> {
   const status = snapshot.status;
   if (!status) return false;
   const states = panelStates({ status, pending: snapshot.pending }, configured());
-  // A source the reader set before the consent is set on its own when Allow writes it (premise 7's exception).
-  const own = Object.keys(snapshot.pending).filter((id) => Object.prototype.hasOwnProperty.call(states, id));
+  // A source the reader set by its own control before the consent is set on its own when Allow writes it (premise 7's
+  // exception); one a group's control or "Enable all data sources" set is not (S4 W2a).
+  const own = snapshot.pendingOwn.filter((id) => Object.prototype.hasOwnProperty.call(states, id));
   return write('PUT', { states, own, flowsVersion: status.flowsVersion });
 }
 
@@ -447,12 +457,56 @@ export async function allowConsent(): Promise<boolean> {
 export async function setSourceState(sourceId: string, state: SourceStateValue): Promise<boolean> {
   const status = snapshot.status;
   if (!status?.inForce) {
-    set({ pending: { ...snapshot.pending, [sourceId]: state } });
+    set({ pending: { ...snapshot.pending, [sourceId]: state }, pendingOwn: snapshot.pendingOwn.includes(sourceId) ? snapshot.pendingOwn : [...snapshot.pendingOwn, sourceId] });
     return true;
   }
   const states = { ...currentStates(status, configured()), [sourceId]: state };
   set({ status: { ...status, states: Object.fromEntries(Object.entries(states).map(([id, s]) => [id, { state: s, since: status.states?.[id]?.state === s ? status.states[id].since : '' }])) } });
   return write('PUT', { change: { scope: 'source', sourceId, state }, flowsVersion: status.flowsVersion }, sourceId);
+}
+
+/**
+ * The sources set on their own, as the surfaces read them (S4 W2a): the stored flags (`setOnItsOwn`), and before a
+ * consent the sources the reader set by their own control (`pendingOwn`), which Allow will flag.
+ */
+export function ownSources(snapshot: Pick<ConsentSnapshot, 'status' | 'pendingOwn'>): Set<string> {
+  const own = new Set(snapshot.status?.setOnItsOwn ?? []);
+  if (snapshot.status?.inForce !== true) for (const id of snapshot.pendingOwn) own.add(id);
+  return own;
+}
+
+/**
+ * A group's control (S4 W2a, criterion B2): `state` for every source in `members` (the class's configured sources)
+ * not set on its own. With a consent in force it is one write, `{ change: { scope: 'class', classId, state } }` (S4
+ * W1), which sets those sources, leaves a source set on its own as it is (clearing its flag when it already holds
+ * `state`), and keeps every other state; before one, the states are kept in `pending`, and nothing is written (R9 P2),
+ * and the answer is true. A refusal because the cookie is full sets `cookieFull` to `group:<classId>`.
+ */
+export async function setClassState(classId: string, members: readonly string[], state: SourceStateValue): Promise<boolean> {
+  const status = snapshot.status;
+  if (!status?.inForce) {
+    const own = ownSources(snapshot);
+    const pending = { ...snapshot.pending };
+    for (const id of members) if (!own.has(id)) pending[id] = state;
+    set({ pending });
+    return true;
+  }
+  return write('PUT', { change: { scope: 'class', classId, state }, flowsVersion: status.flowsVersion }, `group:${classId}`);
+}
+
+/**
+ * Settings' "Enable all data sources" (S4 W2a; C3-ALL = A): every configured source On, every flag cleared, in one
+ * write, `{ change: { scope: 'all', state: 'on' } }` (S4 W1); before a consent, every source On in `pending` and no
+ * source marked, nothing written, and the answer is true. A refusal because the cookie is full sets `cookieFull` to
+ * `all`.
+ */
+export async function enableAllSources(): Promise<boolean> {
+  const status = snapshot.status;
+  if (!status?.inForce) {
+    set({ pending: Object.fromEntries(configured().map((id) => [id, 'on' as const])), pendingOwn: [] });
+    return true;
+  }
+  return write('PUT', { change: { scope: 'all', state: 'on' }, flowsVersion: status.flowsVersion }, 'all');
 }
 
 export function revokeConsent(): Promise<boolean> {
@@ -522,6 +576,8 @@ export function useSourceConsent(options: { load?: boolean } = {}): ConsentSnaps
   refresh: () => Promise<void>;
   allow: () => Promise<boolean>;
   setState: (sourceId: string, state: SourceStateValue) => Promise<boolean>;
+  setClassState: (classId: string, members: readonly string[], state: SourceStateValue) => Promise<boolean>;
+  enableAll: () => Promise<boolean>;
   revoke: () => Promise<boolean>;
   dismiss: () => Promise<boolean>;
   guard: (run: () => void, ask: () => void) => Promise<GuardResult>;
@@ -538,6 +594,8 @@ export function useSourceConsent(options: { load?: boolean } = {}): ConsentSnaps
     refresh,
     allow: allowConsent,
     setState: setSourceState,
+    setClassState,
+    enableAll: enableAllSources,
     revoke: revokeConsent,
     dismiss: dismissNotices,
     guard: guardQuestion,

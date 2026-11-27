@@ -43,6 +43,7 @@ import {
   readableText,
   registerSurfaceHooks,
   sessions,
+  stateControl,
   textOf,
   type HostElement,
   type Surface,
@@ -112,7 +113,8 @@ const SIGNED_IN_DB = () => {
   sessions.client = { status: 'authenticated', data: { user: { name: 'Fixture' } } };
 };
 
-const STATE_LABEL: Record<string, string> = { on: 'On', 'ask-first': 'Ask first', off: 'Off' };
+/** The control's two words (S4 W2a: S109). */
+const STATE_LABEL: Record<string, string> = { on: 'Enable', off: 'Disable' };
 // S2-B: router 0.8.0 offers NYC City Record (a pack over Socrata) wherever Socrata is.
 const CONFIGURED = ['socrata', 'data-commons', 'boston-opencontext', 'nyc-charter', 'nyc-record'];
 /** T13 (#632 G7): each source's one reader name, written out. */
@@ -162,16 +164,14 @@ for (const state of ['on', 'ask-first', 'off']) {
       for (const keptBy of source.recipients.flatMap((r: { keptBy: Array<{ holder: string }> }) => r.keptBy)) {
         assert.ok(text.includes(keptBy.holder), `${entry.sourceId}'s row does not say who holds its logs (${keptBy.holder}): ${text}`);
       }
-      // The control: a radio group named for the source, its three choices native radios, the stored one checked.
-      const groups = [...within(row)].filter((el) => el.props.role === 'radiogroup');
-      assert.equal(groups.length, 1, `${entry.sourceId}'s row has no radio group`);
-      assert.ok(String(groups[0].props['aria-label'] ?? '').includes(readerName(entry.sourceId)), `${entry.sourceId}'s control is not named for it`);
-      const radios = [...within(groups[0])].filter((el) => el.type === 'input' && el.props.type === 'radio');
-      assert.equal(radios.length, 3, `${entry.sourceId}'s control does not offer three native radio choices`);
-      assert.equal(new Set(radios.map((r) => r.props.name)).size, 1, `${entry.sourceId}'s radios are not one group (arrow keys move within a group of one name)`);
-      const checked = radios.filter((r) => r.props.checked === true);
-      assert.equal(checked.length, 1, `${entry.sourceId}'s control has ${checked.length} choices checked`);
-      assert.equal(checked[0].props.value, state, `${entry.sourceId}'s control shows ${checked[0].props.value}, not ${state}`);
+      // The control (S4 W2a, P-1 = A, C9-L = A): a group named for the source, Enable and Disable as two buttons, the
+      // stored state drawn pressed, neither pressed for a source not answered yet.
+      const groups = [...within(row)].filter((el) => el.props.role === 'group');
+      assert.equal(groups.length, 1, `${entry.sourceId}'s row has no control`);
+      assert.equal(groups[0].props['aria-label'], `${readerName(entry.sourceId)}: Enable or Disable`, `${entry.sourceId}'s control is not named for it`);
+      const buttons = [...within(groups[0])].filter((el) => el.type === 'button');
+      assert.deepEqual(buttons.map((b) => textOf(b)), ['Enable', 'Disable'], `${entry.sourceId}'s control is not Enable and Disable`);
+      assert.equal(stateControl(row).shown, state, `${entry.sourceId}'s control shows ${stateControl(row).shown}, not ${state}`);
       const labelled = readableText(renderToStaticMarkup(groups[0]));
       for (const label of Object.values(STATE_LABEL)) assert.ok(labelled.includes(label), `${entry.sourceId}'s control does not read "${label}"`);
     }
@@ -188,18 +188,17 @@ test('criterion 1: Charter\'s sandbox row says it runs in this site\'s sandbox, 
   panel.unmount();
 });
 
-test('criterion 1: choosing a state writes it through the consent endpoint, keyboard-operable as a native radio', async () => {
+test('criterion 1 (S4 W2a): choosing a state writes it through the consent endpoint, from a native button', async () => {
   ANON();
   const { panel, net } = await panelWith(Object.fromEntries(CONFIGURED.map((id) => [id, 'on'])));
-  const off = [...within(rowOf(panel, 'data-commons'))].filter((el) => el.type === 'input' && el.props.type === 'radio' && el.props.value === 'off');
-  assert.equal(off.length, 1, 'Data Commons\' row has no Off choice');
-  await panel.check(off[0]);
+  const off = stateControl(rowOf(panel, 'data-commons')).disable;
+  assert.equal(off.type, 'button', 'Data Commons\' Disable is not a native button');
+  await panel.click(off);
   const writes = net.sent.filter((r) => r.path === '/api/sources/consent' && r.method === 'PUT');
   assert.equal(writes.length, 1, 'choosing Off wrote nothing');
   // S4 W1 (npstorey/civic-ai-tools#335): one source's change, which the endpoint applies and marks set on its own.
   assert.deepEqual((JSON.parse(writes[0].body) as { change: Record<string, string> }).change, { scope: 'source', sourceId: 'data-commons', state: 'off' });
-  const checked = [...within(rowOf(panel, 'data-commons'))].filter((el) => el.type === 'input' && el.props.checked === true);
-  assert.deepEqual(checked.map((el) => el.props.value), ['off'], 'the row does not show the state written');
+  assert.equal(stateControl(rowOf(panel, 'data-commons')).shown, 'off', 'the row does not show the state written');
   panel.unmount();
 });
 
@@ -356,7 +355,7 @@ for (const id of CONFIGURED) {
     const sentence = id === 'nyc-record' ? packReach(where) : reachSentence(RULED_PUBLISHER[id].text, where);
     assert.ok(lines.includes(RULED_WHAT[id]), `${id}'s row has no line reading "${RULED_WHAT[id]}": ${textOf(row)}`);
     assert.ok(lines.includes(sentence), `${id}'s row has no line reading "${sentence}": ${textOf(row)}`);
-    assert.ok(textOf(row).startsWith(`${readerName(id)} ${RULED_WHAT[id]} On Ask first Off `), `${id}'s row does not read name, what-line, control, in that order: ${textOf(row)}`);
+    assert.ok(textOf(row).startsWith(`${readerName(id)} ${RULED_WHAT[id]} Enable Disable `), `${id}'s row does not read name, what-line, control, in that order: ${textOf(row)}`);
     assert.ok(joined(textOf(drawerOf(row))).startsWith(`More about this source ${sentence} Who holds its logs: `), `${id}'s drawer does not read its summary, the reach sentence, logs, in that order: ${textOf(drawerOf(row))}`);
     const links = [...within(row)].filter((el) => el.type === 'a' && el.props.href === RULED_PUBLISHER[id].link);
     assert.equal(links.length, 1, `${id}'s row does not link ${RULED_PUBLISHER[id].link} once`);
@@ -405,10 +404,10 @@ test('PL criterion 3 (panel): no map entry reads the reach sentence unlinked wit
     const panel = await mount(h(component));
     // R9 P2: the row opens with its name, its what-line (none without a map entry) and its control; the drawer holds the reach sentence.
     const expected: Record<string, { row: string; drawer: string }> = {
-      'fixture-unmapped': { row: 'Fixture Unmapped On Ask first Off ', drawer: `More about this source ${reachSentence('Fixture Publisher', 'unmapped.fixture.example')} Who holds its logs: ` },
-      'fixture-unstated': { row: 'Fixture Unstated On Ask first Off ', drawer: `More about this source ${reachUnstated('unstated.fixture.example')} Who holds its logs: ` },
-      'fixture-proper': { row: "Fixture Proper New York State's fixture records, from a fixture portal. On Ask first Off ", drawer: `More about this source ${reachSentence('Fixture Proper Org', 'proper.fixture.example')} Who holds its logs: ` },
-      'fixture-lower': { row: 'Fixture Lower An example fixture platform, for the case test. On Ask first Off ', drawer: `More about this source ${reachSentence('Fixture Lower Org', 'lower.fixture.example')} Who holds its logs: ` },
+      'fixture-unmapped': { row: 'Fixture Unmapped Enable Disable ', drawer: `More about this source ${reachSentence('Fixture Publisher', 'unmapped.fixture.example')} Who holds its logs: ` },
+      'fixture-unstated': { row: 'Fixture Unstated Enable Disable ', drawer: `More about this source ${reachUnstated('unstated.fixture.example')} Who holds its logs: ` },
+      'fixture-proper': { row: "Fixture Proper New York State's fixture records, from a fixture portal. Enable Disable ", drawer: `More about this source ${reachSentence('Fixture Proper Org', 'proper.fixture.example')} Who holds its logs: ` },
+      'fixture-lower': { row: 'Fixture Lower An example fixture platform, for the case test. Enable Disable ', drawer: `More about this source ${reachSentence('Fixture Lower Org', 'lower.fixture.example')} Who holds its logs: ` },
     };
     for (const f of FIXTURE_SOURCES) {
       const row = rowOf(panel, f.sourceId);

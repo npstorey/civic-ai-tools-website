@@ -49,6 +49,7 @@ import {
   mount,
   registerSurfaceHooks,
   sessions,
+  stateControl,
   textOf,
   type HostElement,
   type Surface,
@@ -208,7 +209,8 @@ function buttonOf(c: CardRead, label: string): HostElement {
 function bostonState(surface: Surface): string | undefined {
   const row = surface.elements().find((el) => el.props['data-source'] === 'boston-opencontext');
   assert.ok(row, 'premise: the panel has no Boston row');
-  return [...within(row!)].find((el) => el.type === 'input' && el.props.checked === true)?.props.value as string | undefined;
+  // S4 W2a: the row's control is two buttons; its pressed one is the state (`ask-first` for neither).
+  return stateControl(row!).shown;
 }
 
 /**

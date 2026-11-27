@@ -34,6 +34,7 @@ import {
   mount,
   registerSurfaceHooks,
   sessions,
+  chooseState,
   textOf,
   type HostElement,
   type Surface,
@@ -467,14 +468,18 @@ test('W1-6 (R6): the × closes the panel, Escape closes it, and choosing the opt
   assert.equal(parts(page, 'pick-panel').length, 0, 'Escape did not close the panel');
 });
 
+/** Settings' order since S4 W2a (C1 = A): by group, NYC City Record in Socrata's group, then the sources alone. */
+const SETTINGS_ORDER = ['socrata', 'nyc-record', 'data-commons', 'boston-opencontext'];
+
 test('W1-6 (R1): before any words, the panel lists the site\'s set-up sources only, in Settings\' order', async () => {
+  assert.deepEqual([...IDS].sort(), [...SETTINGS_ORDER].sort(), 'premise: the configured sources');
   const page = await askPage();
   await choose(page, W.pick);
-  assert.deepEqual(rowIds(page), IDS);
+  assert.deepEqual(rowIds(page), SETTINGS_ORDER);
   assert.ok(!page.text().includes(W.S6a), 'a not-set-up source is listed before any words');
   // A query with no searchable word reads as no words: the same list, and no S3.
   await search(page, 'the of and');
-  assert.deepEqual(rowIds(page), IDS);
+  assert.deepEqual(rowIds(page), SETTINGS_ORDER);
   assert.ok(!page.text().includes(W.S3), 'S3 shows for a query with no searchable word');
 });
 
@@ -489,7 +494,7 @@ test('W1-6 (S3; D2 = A, S6a): S3 only for a searchable query with no hit; a hit 
   assert.equal(charter.props['data-row-kind'], 'not-set-up');
   assert.ok(textOf(charter).includes(W.S6a));
   assert.equal(pickBoxOf(charter), undefined, 'a not-set-up row has a pick control');
-  assert.ok(!within(charter).some((el) => el.props.role === 'radiogroup'), 'a not-set-up row has a state control');
+  assert.ok(!within(charter).some((el) => el.props.role === 'radiogroup' || el.props['data-part'] === 'enable-disable'), 'a not-set-up row has a state control');
   assert.ok(!page.text().includes(W.S3));
 });
 
@@ -516,7 +521,7 @@ test('W1-6 (D2 = A): a set-up hit is the Settings row, with its control and S4, 
   const page = await askPage();
   await choose(page, W.pick);
   const row = rowFor(page, IDS[0]);
-  assert.ok(within(row).some((el) => el.props.role === 'radiogroup' && el.props['aria-label'] === `${NAME[IDS[0]]}: On, Ask first or Off`), 'the row lacks the Settings control');
+  assert.ok(within(row).some((el) => el.props.role === 'group' && el.props['aria-label'] === `${NAME[IDS[0]]}: Enable or Disable`), 'the row lacks the Settings control');
   const box = pickBoxOf(row)!;
   assert.equal(box.props['aria-label'], W.S4name(NAME[IDS[0]]));
   assert.ok(textOf(within(row).find((el) => part(el) === 'pick-control')!).includes(W.S4));
@@ -531,9 +536,8 @@ test('W1-4 (B10): an Off row cannot be picked, and shows S5, until its control r
   const box = pickBoxOf(rowFor(page, off))!;
   assert.equal(box.props.disabled, true, 'an Off row\'s pick control is enabled');
   assert.ok(textOf(rowFor(page, off)).includes(W.S5));
-  // Its own control set to Ask first: now it can be picked.
-  const askFirst = within(rowFor(page, off)).find((el) => el.type === 'input' && el.props.type === 'radio' && el.props.value === 'ask-first')!;
-  await page.check(askFirst);
+  // Its own control set to Enable (S4 W2a: the control has no way back to Ask first): now it can be picked.
+  await chooseState(page, rowFor(page, off), 'on');
   await settle(page, 100);
   assert.equal(pickBoxOf(rowFor(page, off))!.props.disabled, false);
   assert.ok(!textOf(rowFor(page, off)).includes(W.S5));
@@ -563,14 +567,12 @@ test('W1-4 (B10): a picked row set to Off loses its pick, and does not get it ba
   await pick(page, IDS[0]);
   assert.equal(await dataSourcesValue(page), W.S13(1));
   await choose(page, W.pick);
-  const offRadio = within(rowFor(page, IDS[0])).find((el) => el.type === 'input' && el.props.type === 'radio' && el.props.value === 'off')!;
-  await page.check(offRadio);
+  await chooseState(page, rowFor(page, IDS[0]), 'off');
   await settle(page, 100);
   assert.equal(pickBoxOf(rowFor(page, IDS[0]))!.props.checked, false);
   assert.equal(await dataSourcesValue(page), W.S13(0));
   await choose(page, W.pick);
-  const onRadio = within(rowFor(page, IDS[0])).find((el) => el.type === 'input' && el.props.type === 'radio' && el.props.value === 'on')!;
-  await page.check(onRadio);
+  await chooseState(page, rowFor(page, IDS[0]), 'on');
   await settle(page, 100);
   assert.equal(pickBoxOf(rowFor(page, IDS[0]))!.props.checked, false, 'the pick came back');
 });
@@ -594,7 +596,8 @@ test('A13: the picker row\'s control writes what the Settings row writes, and co
   const page = await askPage();
   await choose(page, W.pick);
   const from = sent.length;
-  await page.check(within(rowFor(page, target)).find((el) => el.type === 'input' && el.props.type === 'radio' && el.props.value === 'ask-first')!);
+  // S4 W2a: Disable on a source the consent wrote On (the control has no way back to Ask first).
+  await chooseState(page, rowFor(page, target), 'off');
   await settle(page, 100);
   const pickerWrites = sent.slice(from).filter((r) => r.path === '/api/sources/consent' && r.method !== 'GET').map((r) => ({ method: r.method, body: r.body }));
   const pickerConfirmation = within(rowFor(page, target)).filter((el) => el.props.role === 'status').map(textOf);
@@ -606,7 +609,7 @@ test('A13: the picker row\'s control writes what the Settings row writes, and co
   const settings = await mountPage(h(SettingsOverlay, { mount: 'page', initialTab: 'data-sources' }));
   const settingsRow = settings.elements().find((el) => el.type === 'li' && el.props['data-source'] === target)!;
   const from2 = sent.length;
-  await settings.check(within(settingsRow).find((el) => el.type === 'input' && el.props.type === 'radio' && el.props.value === 'ask-first')!);
+  await chooseState(settings, settingsRow, 'off');
   await settle(settings, 100);
   const settingsWrites = sent.slice(from2).filter((r) => r.path === '/api/sources/consent' && r.method !== 'GET').map((r) => ({ method: r.method, body: r.body }));
   const after = settings.elements().find((el) => el.type === 'li' && el.props['data-source'] === target)!;

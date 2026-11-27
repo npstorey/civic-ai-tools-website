@@ -364,6 +364,8 @@ test('criterion 2 (S2; UX-2 P4b D6 B): the card lists no endpoint row, set or un
 // --- The panel: no consent; in force; a re-ask with stored states -----------------------------------
 
 const CONFIGURED = ['socrata', 'data-commons', 'nyc-charter', 'nyc-record'];
+/** Settings lists the sources by group (S4 W2a, C1 = A): NYC City Record under Socrata's group, then the two alone. */
+const GROUPED = ['socrata', 'nyc-record', 'data-commons', 'nyc-charter'];
 
 test('criterion 1, the panel with no consent: T9\'s lead, T12\'s link and T13\'s names', async () => {
   await under({}, async () => {
@@ -485,7 +487,7 @@ test('criterion 1, Data sources in the Settings overlay (UX-2 P4b), with notices
     const tab = await sourcesTab();
     assert.deepEqual([...noticeLines(tab)].sort(), [...expectedNotices(statement)].sort(), 'the tab\'s notice lines are not as ruled');
     assert.ok(tab.text().includes(T12_TAB(held.version, held.date)), `the tab does not read "${T12_TAB(held.version, held.date)}": ${tab.text().slice(0, 600)}`);
-    assertRowNames(tab, 'the Sources tab', CONFIGURED);
+    assertRowNames(tab, 'the Sources tab', GROUPED);
     assertNoneReplaced(readWithLinks(tab), 'the Sources tab (with notices)');
     tab.unmount();
   });
@@ -500,7 +502,7 @@ test('criterion 1, Data sources in the Settings overlay (UX-2 P4b), in force: T1
     const statement = await buildFlowsStatement();
     const tab = await sourcesTab();
     assert.ok(tab.text().includes(T12_TAB(statement.version, statement.date)), `the tab does not read "${T12_TAB(statement.version, statement.date)}": ${tab.text().slice(0, 600)}`);
-    assertRowNames(tab, 'the Sources tab', CONFIGURED);
+    assertRowNames(tab, 'the Sources tab', GROUPED);
     assertNoneReplaced(readWithLinks(tab), 'the Sources tab (in force)');
     tab.unmount();
   });

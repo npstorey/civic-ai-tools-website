@@ -44,6 +44,19 @@ export function readerSourceName(source: NamedSource): string {
   return name.endsWith(SUFFIX) ? name.slice(0, -SUFFIX.length) : name;
 }
 
+/**
+ * A group of two or more sources reached through one server, wherever it is named (S42; C6 = B): "Sources reached
+ * through {Server}", the server named as `readerSourceName` names it. A source alone keeps its own name.
+ */
+export function groupName(server: string): string {
+  return `Sources reached through ${server}`;
+}
+
+/** The group's phrase after a count of sources, in the line after a group's change (S6, S7): "reached through {Server}". */
+export function reachedThrough(server: string): string {
+  return `reached through ${server}`;
+}
+
 /** Where a source or a recipient runs, in reader words. */
 const RUNS_AT: Readonly<Record<string, string>> = {
   'instance-sandbox': "this site's sandbox",

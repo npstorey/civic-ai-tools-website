@@ -531,6 +531,93 @@ test('C1 (red): the picker, before any words, lists Settings\' grouping: the Soc
   s.unmount();
 });
 
+// =====================================================================================================================
+// The paths the criteria pass through (fix commit): before a consent, at the cookie's bound, a landing, a flagged Ask
+// first
+// =====================================================================================================================
+
+test('B2, before a consent: a group\'s control keeps its states on the page and writes nothing; Allow then marks only the source set by its own control', async () => {
+  const net = answers();
+  const s = await overlay();
+  assert.equal(s.elements().some((el) => el.props.role === 'status'), false, 'premise: nothing confirmed');
+  net.clear();
+  await choose(s, rowOf(s, 'nyc-charter'), 'Disable');
+  await choose(s, groupOf(s, 'socrata'), 'Disable');
+  assert.deepEqual(net.sent.filter((r) => r.method !== 'GET').map((r) => `${r.method} ${r.path}`), [], 'a change before a consent wrote');
+  assert.deepEqual(pressedOf(groupOf(s, 'socrata')), ['Disable'], 'the group\'s pending state is not shown');
+  assert.deepEqual(statusIn(groupOf(s, 'socrata')), [], 'a pending group change was confirmed');
+  const hook = await load('components/sources/useSourceConsent.ts');
+  assert.equal(await hook.allowConsent(), true, 'premise: Allow wrote');
+  const put = net.sent.filter((r) => r.method === 'PUT' && r.path === '/api/sources/consent').pop()!;
+  const body = JSON.parse(put.body) as { states: Record<string, string>; own: string[] };
+  assert.deepEqual([body.states.socrata, body.states['nyc-record'], body.states['nyc-charter']], ['off', 'off', 'off']);
+  assert.deepEqual(body.own, ['nyc-charter'], 'Allow marked a source a group\'s control set');
+  s.unmount();
+});
+
+test('B2 at the cookie\'s bound: a group\'s write the endpoint refuses says S24 under the group\'s control, which stays live', async () => {
+  const socrata = fixture.entries.find((e) => e.sourceId === 'socrata')!;
+  const entries = [
+    ...fixture.entries,
+    ...Array.from({ length: 100 }, (_, i) => ({ kind: 'pack', sourceId: `example-pack-${String(i).padStart(3, '0')}`, alias: `example_pack_${i}`, displayName: `Example pack ${i}`, freshness: 'Example: an example pack.', base: 'socrata', consentDefault: 'on', hostings: socrata.hostings })),
+  ];
+  flows.setFlowsSourceInputsForTests({ manifest: entries, variantInForce: (e: Mod) => e.hostings[0], addressFor: (id: string) => fixture.addresses[entries.find((e) => e.sourceId === id)?.base ?? id] });
+  groups?.setGroupManifestForTests?.(entries);
+  const net = answers();
+  const consent = await load('lib/sources/consent.ts');
+  const statement = await flows.buildFlowsStatement();
+  const ids = (statement.sources as Mod[]).map((x) => x.sourceId as string);
+  assert.equal(ids.length, 300, 'premise: 300 sources');
+  // 274 stored states, the most the second form holds: every source outside the Socrata class, then Socrata's own until
+  // the cookie is full, so the class's write adds entries for the 26 members with none, which the cookie cannot hold.
+  const socrataClass = new Set(entries.filter((e) => (e.base ?? e.sourceId) === 'socrata').map((e) => e.sourceId as string));
+  const stored = [...ids.filter((id) => !socrataClass.has(id)), ...ids.filter((id) => socrataClass.has(id))].slice(0, 274);
+  const value = consent.encodeConsentCookie({ v: 2, flows: statement.version, states: Object.fromEntries(stored.map((id) => [id, { state: 'ask-first', since: '2026-11-01', version: (statement.sources as Mod[]).find((x) => x.sourceId === id)!.version }])) });
+  net.jar.set(consent.CONSENT_COOKIE_NAME, value);
+  const s = await overlay();
+  net.clear();
+  await choose(s, groupOf(s, 'socrata'), 'Enable');
+  assert.equal(putsOf(net).length, 1, 'premise: the click wrote once');
+  assert.equal(net.jar.get(consent.CONSENT_COOKIE_NAME), value, 'the cookie changed');
+  assert.deepEqual(statusIn(groupOf(s, 'socrata')), ['This change was not saved. Your settings are kept in a cookie, and it is full.']);
+  const control = controlOf(groupOf(s, 'socrata'));
+  assert.deepEqual(control.buttons.filter((b) => b.el.props.disabled === true), [], 'the group\'s control is held after the refusal');
+  s.unmount();
+});
+
+test('B1, a landing: Settings opened for a source inside a closed group opens that group', async () => {
+  at200();
+  answers();
+  await consented({});
+  const location = (globalThis as unknown as { window: { location: { search: string } } }).window.location;
+  location.search = `?source=${AUSTIN}`;
+  try {
+    const s = await overlay();
+    const socrata = within(groupOf(s, 'socrata')).find((el) => el.type === 'details' && textOf(el).startsWith(S.S5[157]))!;
+    assert.equal(attr(socrata, 'open'), '', 'the group holding the landed source is closed');
+    const boston = within(groupOf(s, 'boston-opencontext')).find((el) => el.type === 'details' && textOf(el).startsWith(S.S5[22]))!;
+    assert.equal(attr(boston, 'open'), null, 'another group opened');
+    s.unmount();
+  } finally {
+    location.search = '';
+  }
+});
+
+test('#826\'s cost, read: a stored Ask first that carries the flag renders neither button pressed, S86, and the mark in its group', async () => {
+  answers();
+  await consented({ 'nyc-record': 'ask-first' }, ['nyc-record']);
+  const s = await overlay();
+  const record = rowOf(s, 'nyc-record');
+  assert.deepEqual(pressedOf(record), []);
+  assert.ok(textOf(record).includes(S.S86), 'no S86');
+  assert.ok(textOf(record).includes(S.S10), 'no mark');
+  // A group's Enable leaves it as it is (premise 7's "Honoured"), and says so.
+  await choose(s, groupOf(s, 'socrata'), 'Enable');
+  assert.deepEqual(statusIn(groupOf(s, 'socrata')), [S.S7.one]);
+  assert.deepEqual(pressedOf(rowOf(s, 'nyc-record')), []);
+  s.unmount();
+});
+
 test('A14\'s rule for the groups\' hook: no app module calls setGroupManifestForTests', () => {
   const offenders: string[] = [];
   const walk = (dir: string): void => {

@@ -45,8 +45,10 @@ import {
   h,
   installFetch,
   mount,
+  chooseState,
   registerSurfaceHooks,
   sessions,
+  stateControl,
   textOf,
   type HostElement,
   type Surface,
@@ -136,20 +138,22 @@ const rowOf = (tab: Surface, sourceId: string): HostElement => {
   return rows[0];
 };
 
-test('PC criterion 1: with a consent in force, the Sources tab renders one radio group per configured source, named for it, showing its stored state', async () => {
+/** The controls in the sources' rows (S4 W2a: a group's head carries one too, outside any row). */
+const rowControls = (tab: Surface): HostElement[] =>
+  tab.elements().filter((el) => el.props['data-source'] !== undefined).map((row) => stateControl(row).group);
+
+test('PC criterion 1 (S4 W2a): with a consent in force, the Sources tab renders one control per configured source, named for it, showing its stored state', async () => {
   const { tab, statement, stored } = await tabInForce();
   const sources = statement.sources as Mod[];
   assert.ok(sources.length >= 2, `premise: more than one source is configured (${sources.length})`);
-  const groups = tab.elements().filter((el) => el.props.role === 'radiogroup');
-  assert.equal(groups.length, sources.length, `the tab has ${groups.length} radio group(s) for ${sources.length} configured sources: ${tab.text().slice(0, 400)}`);
+  const groups = rowControls(tab);
+  assert.equal(groups.length, sources.length, `the tab has ${groups.length} row control(s) for ${sources.length} configured sources: ${tab.text().slice(0, 400)}`);
   for (const source of sources) {
     const name = readerSourceName(source) as string;
-    const inRow = within(rowOf(tab, source.sourceId)).filter((el) => el.props.role === 'radiogroup');
-    assert.equal(inRow.length, 1, `${source.sourceId}'s row carries no radio group`);
-    assert.equal(inRow[0].props['aria-label'], `${name}: On, Ask first or Off`, `${source.sourceId}'s radio group is not named for it`);
-    const radios = within(inRow[0]).filter((el) => el.type === 'input' && el.props.type === 'radio');
-    assert.deepEqual(radios.map((r) => r.props.value), ['on', 'ask-first', 'off'], `${source.sourceId}'s radio group does not offer On, Ask first and Off`);
-    assert.deepEqual(radios.filter((r) => r.props.checked === true).map((r) => r.props.value), [stored[source.sourceId]], `${source.sourceId}'s control does not show its stored state`);
+    const control = stateControl(rowOf(tab, source.sourceId));
+    assert.equal(control.group.props['aria-label'], `${name}: Enable or Disable`, `${source.sourceId}'s control is not named for it`);
+    assert.deepEqual([textOf(control.enable), textOf(control.disable)], ['Enable', 'Disable'], `${source.sourceId}'s control does not offer Enable and Disable`);
+    assert.equal(control.shown, stored[source.sourceId], `${source.sourceId}'s control does not show its stored state`);
   }
   tab.unmount();
 });
@@ -161,11 +165,10 @@ test('PC criterion 1: a choice on the tab writes every configured source\'s stat
   const changed = sources[1];
   const name = readerSourceName(changed) as string;
   assert.equal(stored[changed.sourceId], 'off', 'premise: the changed source is stored Off');
-  assert.ok(!Object.values(stored).includes('ask-first'), 'premise: no source is Ask first before the change');
+  // S4 W2a: the control has no Ask first (DR-8 A), so the change is Off to On, and the source is one of several Off.
+  assert.ok(Object.values(stored).filter((s) => s === 'off').length >= 2, 'premise: more than one source is Off before the change');
 
-  const choice = within(rowOf(tab, changed.sourceId)).filter((el) => el.type === 'input' && el.props.type === 'radio' && el.props.value === 'ask-first');
-  assert.equal(choice.length, 1, `the tab has no Ask first choice for ${changed.sourceId}: ${textOf(rowOf(tab, changed.sourceId))}`);
-  await tab.check(choice[0]);
+  await chooseState(tab, rowOf(tab, changed.sourceId), 'on');
   await tab.settle();
 
   const puts = net.sent.filter((r) => r.path === '/api/sources/consent' && r.method === 'PUT');
@@ -173,20 +176,20 @@ test('PC criterion 1: a choice on the tab writes every configured source\'s stat
   // S4 W1 (npstorey/civic-ai-tools#335): a choice writes that one source's change, and the endpoint keeps every other
   // state; the account's row then holds every configured source's state, with the change.
   const body = JSON.parse(puts[0].body) as { change: Record<string, string>; flowsVersion: string };
-  assert.deepEqual(body.change, { scope: 'source', sourceId: changed.sourceId, state: 'ask-first' }, 'the PUT does not carry the one source\'s change');
+  assert.deepEqual(body.change, { scope: 'source', sourceId: changed.sourceId, state: 'on' }, 'the PUT does not carry the one source\'s change');
   assert.equal(body.flowsVersion, statementHash(statement), 'the PUT does not carry the flows version');
   const accountRow = sessions.rows.get(DB_ID) as { states?: Record<string, { state?: string }> } | undefined;
-  assert.equal(accountRow?.states?.[changed.sourceId]?.state, 'ask-first', 'the account\'s row does not hold the change');
+  assert.equal(accountRow?.states?.[changed.sourceId]?.state, 'on', 'the account\'s row does not hold the change');
   const kept = Object.fromEntries(Object.entries(accountRow?.states ?? {}).map(([id, entry]) => [id, entry.state]));
-  assert.deepEqual(kept, { ...stored, [changed.sourceId]: 'ask-first' }, 'the account\'s row does not keep every other source\'s state');
+  assert.deepEqual(kept, { ...stored, [changed.sourceId]: 'on' }, 'the account\'s row does not keep every other source\'s state');
 
   const row = rowOf(tab, changed.sourceId);
   const status = within(row).filter((el) => el.props.role === 'status');
   assert.equal(status.length, 1, `the row has no status line after the change: ${textOf(row)}`);
-  const sentence = `${name}${PANEL_STATE_CHANGED.middle}${LABEL['ask-first']}${PANEL_STATE_CHANGED.end}`;
+  const sentence = `${name}${PANEL_STATE_CHANGED.middle}${LABEL.on}${PANEL_STATE_CHANGED.end}`;
   // Ruled at Leg B: the tab omits the panel's "Set <State> since <date>." line, since its list line carries the date.
   assert.equal(textOf(status[0]), sentence, 'the row\'s status line is not the panel\'s confirmation alone');
-  assert.ok(!textOf(row).includes(`Set ${LABEL['ask-first']} since`), `the row repeats the since date under the control: ${textOf(row)}`);
+  assert.ok(!textOf(row).includes(`Set ${LABEL.on} since`), `the row repeats the since date under the control: ${textOf(row)}`);
   assert.equal(tab.elements().filter((el) => el.props.role === 'status' && textOf(el).includes(PANEL_STATE_CHANGED.end)).length, 1, 'more than one row confirms a change');
   tab.unmount();
 });
@@ -198,18 +201,16 @@ test('PC criterion 2 (UX-2 P4b, the panel\'s before-consent rule): with no conse
   const statement = await buildFlowsStatement();
   const sources = statement.sources as Mod[];
   const tab = await openTab();
-  const groups = tab.elements().filter((el) => el.props.role === 'radiogroup');
-  assert.equal(groups.length, sources.length, `with no consent in force the overlay has ${groups.length} radio group(s) for ${sources.length} configured sources: ${tab.text().slice(0, 300)}`);
+  const groups = rowControls(tab);
+  assert.equal(groups.length, sources.length, `with no consent in force the overlay has ${groups.length} row control(s) for ${sources.length} configured sources: ${tab.text().slice(0, 300)}`);
   const changed = sources[0];
-  const choice = within(rowOf(tab, changed.sourceId)).filter((el) => el.type === 'input' && el.props.type === 'radio' && el.props.value === 'off');
-  assert.equal(choice.length, 1, `no Off choice for ${changed.sourceId}`);
-  assert.ok(choice[0].props.disabled !== true, 'the control is not live before a consent');
+  const choice = stateControl(rowOf(tab, changed.sourceId)).disable;
+  assert.ok(choice.props.disabled !== true, 'the control is not live before a consent');
   net.clear();
-  await tab.check(choice[0]);
+  await tab.click(choice);
   await tab.settle();
   assert.deepEqual(net.sent.filter((r) => r.method !== 'GET').map((r) => `${r.method} ${r.path}`), [], 'a choice before a consent wrote something');
-  const checked = within(rowOf(tab, changed.sourceId)).filter((el) => el.type === 'input' && el.props.type === 'radio' && el.props.checked === true).map((el) => el.props.value);
-  assert.deepEqual(checked, ['off'], 'the choice is not kept on the page (pending)');
+  assert.equal(stateControl(rowOf(tab, changed.sourceId)).shown, 'off', 'the choice is not kept on the page (pending)');
   assert.equal(tab.buttons('Withdraw consent').length, 0, 'the overlay offers a withdrawal with no consent in force');
   tab.unmount();
 });

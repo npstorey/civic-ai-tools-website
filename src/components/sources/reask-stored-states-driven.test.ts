@@ -34,7 +34,7 @@ import {
   mount,
   registerSurfaceHooks,
   sessions,
-  type HostElement,
+  stateControl,
   type Surface,
 } from './surface-test-harness.ts';
 
@@ -78,22 +78,11 @@ const NONE = 'nyc-charter';
 // S2-B: NYC City Record, offered wherever Socrata is since router 0.8.0 (a pack), has no stored state either.
 const EXPECTED = { socrata: 'off', 'data-commons': 'on', 'nyc-charter': 'ask-first', 'nyc-record': 'ask-first' };
 
-function* within(node: unknown): Generator<HostElement> {
-  if (Array.isArray(node)) { for (const child of node) yield* within(child); return; }
-  if (node === null || typeof node !== 'object' || !('props' in (node as object))) return;
-  const el = node as HostElement;
-  if (typeof el.type === 'string') yield el;
-  yield* within((el.props as { children?: unknown }).children);
-}
 
-/** The state each row's control shows: its one checked radio. */
+/** The state each row's control shows (S4 W2a): its pressed button, `ask-first` for neither. */
 function shownStates(panel: Surface): Record<string, string> {
   const rows = panel.elements().filter((el) => typeof el.props['data-source'] === 'string');
-  return Object.fromEntries(rows.map((row) => {
-    const checked = [...within(row)].filter((el) => el.type === 'input' && el.props.type === 'radio' && el.props.checked === true);
-    assert.equal(checked.length, 1, `${String(row.props['data-source'])}'s control has ${checked.length} choices checked`);
-    return [String(row.props['data-source']), String(checked[0].props.value)];
-  }));
+  return Object.fromEntries(rows.map((row) => [String(row.props['data-source']), stateControl(row).shown]));
 }
 
 async function premises(): Promise<Mod> {

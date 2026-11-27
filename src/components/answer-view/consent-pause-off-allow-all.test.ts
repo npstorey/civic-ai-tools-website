@@ -48,6 +48,7 @@ import {
   mount,
   registerSurfaceHooks,
   sessions,
+  stateControl,
   textOf,
   type HostElement,
   type Surface,
@@ -167,7 +168,8 @@ function buttonOf(page: Surface, which: Rendering, label: string): HostElement {
 function stateIn(page: Surface, sourceId: string): unknown {
   const row = page.elements().find((el) => el.props['data-source'] === sourceId);
   assert.ok(row, `premise: the panel has no ${sourceId} row`);
-  return [...within(row!.props.children)].find((el) => el.type === 'input' && el.props.checked === true)?.props.value;
+  // S4 W2a: the row's control is two buttons; its pressed one is the state (`ask-first` for neither).
+  return stateControl(row!).shown;
 }
 function cookieStates(net: ReturnType<typeof answers>): Record<string, string> {
   const cookie = readConsentCookie(new Request(`${ORIGIN}/`, { headers: { cookie: [...net.jar].map(([k, v]) => `${k}=${v}`).join('; ') } }));

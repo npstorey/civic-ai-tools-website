@@ -50,6 +50,7 @@ import {
   mount,
   registerSurfaceHooks,
   sessions,
+  stateControl,
   textOf,
   type HostElement,
   type Surface,
@@ -350,11 +351,12 @@ test('criterion 1: a write from the Settings overlay holds the form\'s submit un
   let release = () => {};
   holdWrites = new Promise<void>((resolve) => { release = resolve; });
   try {
-    const off = page.elements().filter((el) => el.type === 'input' && el.props.type === 'radio' && el.props.value === 'off'
-      && String(el.props.name ?? '').includes('data-commons'));
-    assert.equal(off.length, 1, 'the Settings overlay offers no Off choice for Data Commons');
+    // S4 W2a: the row's control is two buttons; Disable is the Off choice.
+    const rows = page.elements().filter((el) => el.props['data-source'] === 'data-commons');
+    assert.equal(rows.length, 1, 'the Settings overlay offers no row for Data Commons');
+    const off = stateControl(rows[0]).disable;
     // The change is made, and its write has not been answered yet.
-    void page.check(off[0]);
+    void page.click(off);
     await new Promise((resolve) => setImmediate(resolve));
     await askOnQueryForm(page);
     assert.equal(queryRequests(net.sent).length, 1, 'the form sent a question while the Settings overlay\'s write was still pending');
@@ -463,7 +465,7 @@ test('flag 9 (/explore), UX-2 P4b: no Sources panel beside the live question inp
   assert.ok(page.elements().some((el) => el.props['data-part'] === 'composer'), `premise: /explore's live question box is shown: ${page.text().slice(0, 300)}`);
   const rows = page.elements().filter((el) => typeof el.props['data-source'] === 'string');
   assert.equal(rows.length, 0, `/explore shows source rows: ${page.text().slice(0, 300)}`);
-  assert.ok(!page.elements().some((el) => el.props.role === 'radiogroup'), '/explore shows a source control');
+  assert.ok(!page.elements().some((el) => el.props.role === 'radiogroup' || el.props['data-part'] === 'enable-disable'), '/explore shows a source control');
   assert.ok(!page.text().includes('Data sources this site can use'), '/explore names "Data sources this site can use"');
   page.unmount();
 });

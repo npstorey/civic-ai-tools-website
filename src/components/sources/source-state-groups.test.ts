@@ -1,24 +1,18 @@
-// UX-2 P4b: each mounted source-state control is its own radio group.
+// UX-2 P4b, as S4 W2a changes the control: each mounted source-state control is its own control.
 //
-// THE DEFECT (a mechanism read from the code, shown in a browser by planning
-// `temp/ux-2/p4bf-measure/`). `SourceStateRadios` names every group
-// `source-state-<sourceId>`. The Sources panel and the Settings overlay both
-// mount it through `SourceRow`, outside any form, and the overlay opens over
-// the page that holds the panel. A browser keeps one checked radio per name
-// per document (and per form owner), so the two mounts for one source are one
-// group: checking a choice in one unchecks the other's.
+// THE DEFECT (UX-2 P4b, a mechanism read from the code, shown in a browser by planning `temp/ux-2/p4bf-measure/`). The
+// control was a radio group named `source-state-<sourceId>`, and the Sources panel and the Settings overlay both mount
+// it through `SourceRow`, outside any form, the overlay over the page that holds the panel. A browser keeps one checked
+// radio per name per document, so the two mounts for one source were one group: checking a choice in one unchecked the
+// other's. UX-2 P4b named each mount's group apart.
 //
-// WHAT IS ASSERTED. The property the browser acts on: the radios' `name`s.
-// React's `checked` prop is also read, but it cannot fail here, because the
-// harness has no DOM and each mount computes its own prop; those reads are
-// labelled as premises.
-//   - The class: two `SourceStateRadios` for one source, in different states,
-//     mounted together on one surface.
-//   - The surfaces: the Sources panel and the Settings overlay mounted
-//     together, through the real consent and flows routes.
+// S4 W2a (npstorey/civic-ai-tools#335; P-1 = A, C9-L = A) makes the control two buttons with `aria-pressed`. A button
+// has no name a browser groups by, so the defect's class is gone with the radios. WHAT IS ASSERTED NOW: no source
+// control renders a radio (the class the defect lived in), and two mounts for one source, in different states, each
+// draw their own state; the panel and the overlay mounted together hold one control per source each.
 //
-// THE DECOY. Within one mount, a group's three radios still share one name,
-// so the arrow keys move within it.
+// THE SHAPE THAT CAN FAIL. The two mounts hold different states, so a control that drew one state for both, or a
+// control still rendering radios, is seen.
 //
 // Run with: npm test
 
@@ -38,6 +32,7 @@ import {
   type HostElement,
   type Surface,
 } from './surface-test-harness.ts';
+import { attr, within } from '../ui/ui-test-helpers.ts';
 
 registerSurfaceHooks(CONSENT_SURFACE_STUBS);
 
@@ -59,29 +54,20 @@ Object.assign(globalThis as Record<string, unknown>, {
 
 type Mod = Record<string, any>; // eslint-disable-line @typescript-eslint/no-explicit-any
 const load = async (rel: string): Promise<Mod> => (await import(pathToFileURL(path.join(SRC, rel)).href)) as Mod;
-const { SourceStateRadios } = await load('components/sources/SourceStateControl.tsx');
+const { SourceStateButtons } = await load('components/sources/SourceStateControl.tsx');
 const SourcesPanel = (await load('components/sources/SourcesPanel.tsx')).default as ComponentType<Record<string, unknown>>;
 const SettingsOverlay = (await load('components/settings/SettingsOverlay.tsx')).default as ComponentType<Record<string, unknown>>;
 const flowsRoute = await load('app/api/flows/route.ts');
 const consentRoute = await load('app/api/sources/consent/route.ts');
 const decisionRoute = await load('app/api/sources/consent/decision/route.ts');
 const { buildFlowsStatement, statementHash } = await load('lib/flows/statement.ts');
+const { readerSourceName } = await load('lib/sources/source-name.ts');
 
 const radios = (s: Surface): HostElement[] => s.elements().filter((el) => el.type === 'input' && el.props.type === 'radio');
-const groups = (s: Surface): HostElement[] => s.elements().filter((el) => el.props.role === 'radiogroup');
-/** The radios inside one radiogroup element, read from its own subtree. */
-function radiosIn(group: HostElement): HostElement[] {
-  const out: HostElement[] = [];
-  const walk = (node: unknown): void => {
-    if (Array.isArray(node)) { for (const n of node) walk(n); return; }
-    if (node === null || typeof node !== 'object' || !('props' in (node as object))) return;
-    const el = node as HostElement;
-    if (el.type === 'input' && el.props.type === 'radio') out.push(el);
-    walk((el.props as { children?: unknown }).children);
-  };
-  walk((group.props as { children?: unknown }).children);
-  return out;
-}
+/** Every source control: a `role="group"` named "{name}: Enable or Disable" (S118). */
+const controls = (s: Surface, name?: string): HostElement[] =>
+  s.elements().filter((el) => attr(el, 'role') === 'group' && (name === undefined ? / Enable or Disable$/.test(attr(el, 'aria-label') ?? '') : attr(el, 'aria-label') === `${name}: Enable or Disable`));
+const pressed = (group: HostElement) => within(group).filter((el) => el.type === 'button' && attr(el, 'aria-pressed') === 'true').map((el) => el.props.children);
 
 const SOURCE = 'socrata';
 const control = (state: string) => ({
@@ -89,40 +75,20 @@ const control = (state: string) => ({
   setState: async () => true, confirmed: null, setConfirmed: () => undefined,
 });
 
-async function twoMounts(): Promise<{ s: Surface; a: HostElement[]; b: HostElement[] }> {
-  const s = await mount(h('div', null, h(SourceStateRadios, control('on')), h(SourceStateRadios, control('off'))));
-  const [ga, gb] = groups(s);
-  assert.equal(groups(s).length, 2, 'premise: two radio groups are mounted');
-  return { s, a: radiosIn(ga), b: radiosIn(gb) };
-}
-
-test('UX-2 P4b: two mounted controls for one source are two radio groups (their names differ)', async () => {
-  const { a, b } = await twoMounts();
-  // Premise, React's prop: each mount's checked radio is its own state. It cannot fail in this harness.
-  assert.deepEqual(a.filter((r) => r.props.checked).map((r) => r.props.value), ['on'], 'premise: the first mount checks On');
-  assert.deepEqual(b.filter((r) => r.props.checked).map((r) => r.props.value), ['off'], 'premise: the second mount checks Off');
-  const nameA = a[0].props.name;
-  const nameB = b[0].props.name;
-  assert.notEqual(nameA, nameB, `both mounts name their radios ${JSON.stringify(nameA)}, so a browser makes them one group`);
+test('S4 W2a (UX-2 P4b\'s property): two mounted controls for one source, in different states, each draw their own state', async () => {
+  const s = await mount(h('div', null, h(SourceStateButtons, control('on')), h(SourceStateButtons, control('off'))));
+  const both = controls(s, 'Socrata');
+  assert.equal(both.length, 2, 'premise: two controls are mounted');
+  assert.deepEqual(pressed(both[0]), ['Enable'], 'the first mount does not draw Enable pressed');
+  assert.deepEqual(pressed(both[1]), ['Disable'], 'the second mount does not draw Disable pressed');
 });
 
-test('UX-2 P4b: no radio of one mount shares a name with a radio of another mount', async () => {
-  const { a, b } = await twoMounts();
-  const namesA = new Set(a.map((r) => r.props.name));
-  const shared = b.filter((r) => namesA.has(r.props.name)).map((r) => `${r.props.name}=${r.props.value}`);
-  assert.deepEqual(shared, [], `radios of the second mount share the first mount's name: ${shared.join(', ')}`);
+test('S4 W2a (UX-2 P4b\'s class): a source control renders no radio, so no browser joins two mounts by name', async () => {
+  const s = await mount(h('div', null, h(SourceStateButtons, control('on')), h(SourceStateButtons, control('ask-first'))));
+  assert.deepEqual(radios(s), [], 'a source control renders a radio');
 });
 
-test('UX-2 P4b, decoy: within one mount, the three radios share one name (the arrow keys move within the group)', async () => {
-  const { a, b } = await twoMounts();
-  for (const [which, group] of [['first', a], ['second', b]] as const) {
-    assert.equal(group.length, 3, `premise: the ${which} group has three radios`);
-    assert.equal(new Set(group.map((r) => r.props.name)).size, 1, `the ${which} group's radios do not share one name: ${group.map((r) => r.props.name).join(', ')}`);
-    assert.ok(String(group[0].props.name).length > 0, `the ${which} group's radios have no name`);
-  }
-});
-
-test('UX-2 P4b: the Sources panel and the Settings overlay, mounted together, name each source\'s group apart', async () => {
+test('UX-2 P4b, as S4 W2a changes it: the Sources panel and the Settings overlay, mounted together, hold one control per source each and no radio', async () => {
   sessions.server = null;
   sessions.client = { status: 'unauthenticated', data: null };
   installFetch(ORIGIN, {
@@ -135,18 +101,14 @@ test('UX-2 P4b: the Sources panel and the Settings overlay, mounted together, na
   const stored = await fetch('/api/sources/consent', { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ states, flowsVersion: statementHash(statement) }) });
   assert.equal(stored.status, 200, `premise: the consent was not stored: ${await stored.text()}`);
   const s = await mount(h('div', null, h(SourcesPanel, {}), h(SettingsOverlay, { mount: 'intercepted' })));
-  const ids = (statement.sources as Mod[]).map((src) => src.sourceId as string);
-  assert.ok(ids.length >= 1, 'premise: a source is configured');
-  assert.equal(groups(s).length, ids.length * 2, `premise: each source has a group in the panel and in the overlay: ${groups(s).length} groups for ${ids.length} sources`);
-  const byName = new Map<string, number>();
-  for (const group of groups(s)) {
-    const names = new Set(radiosIn(group).map((r) => r.props.name as string));
-    assert.equal(names.size, 1, 'premise: one group, one name');
-    const [name] = names;
-    byName.set(name, (byName.get(name) ?? 0) + 1);
+  const sources = statement.sources as Mod[];
+  assert.ok(sources.length >= 1, 'premise: a source is configured');
+  for (const source of sources) {
+    const name = readerSourceName(source);
+    const mine = controls(s, name);
+    assert.equal(mine.length, 2, `${name}: ${mine.length} controls, not one in the panel and one in the overlay`);
+    for (const group of mine) assert.deepEqual(pressed(group), ['Enable'], `${name}: a mount does not draw the stored state`);
   }
-  const shared = [...byName].filter(([, count]) => count > 1).map(([name, count]) => `${name} x${count}`);
-  assert.deepEqual(shared, [], `groups in the panel and the overlay share a name: ${shared.join(', ')}`);
-  assert.equal(radios(s).length, ids.length * 6, 'premise: three radios per group');
+  assert.deepEqual(radios(s), [], 'a radio is rendered');
   s.unmount();
 });
