@@ -386,3 +386,114 @@ test('W1 and W3 (red): Auto\'s option reads the ruled label and line, "the AI", 
     assert.deepEqual(autos[0], [W.autoOption, [W.autoDescription]]);
   }
 });
+
+// --- OF3b (website #810; criterion 7, and the seat's folds): "Map" in the menu, Compare and Sandbox beside it -------
+//
+// WHAT MAKES THESE ABLE TO FAIL. At OF3a's head the plain map is registered with `offered: false`, so no menu offers
+// "Map", Compare is never off for a format, and a Sandbox session offers every format: each red fails at its first read.
+// Compare's value is driven On first, so "comes back" can fail; Sandbox is the mount's default, so "offered again" is
+// read after a real switch to Standard.
+
+const MAP = {
+  label: 'Map',
+  line: 'This site maps rows the AI chose from the data. No map service receives anything.',
+  cap: 'The map shows at most 1,000 points.',
+  compareReason: 'Not offered while a map format is chosen. Switch Output format to Auto to compare.',
+  sandboxReason: 'Not offered in a Sandbox session. Switch Session type to Standard to use a map.',
+} as const;
+const COMPARE = 'Compare with a second harness';
+const reasonOf = (el: HostElement): string | null => {
+  const r = byClassIn(el, 'ui-menu-item-reason')[0];
+  return r ? textOf(r) : null;
+};
+async function formatOptions(page: Surface): Promise<Array<{ label: string; description: string[]; reason: string | null; disabled: boolean; checked: unknown }>> {
+  const panel = await openItem(page, W.item);
+  const rows = within(panel).filter((el) => el.props.role === 'menuitemradio').map((el) => ({
+    label: labelOf(el),
+    description: byClassIn(el, 'ui-menu-item-description').map(textOf),
+    reason: reasonOf(el),
+    disabled: el.props['aria-disabled'] === true,
+    checked: el.props['aria-checked'],
+  }));
+  await page.click(within(menuOf(page)).find((el) => el.props['aria-haspopup'] === 'menu')!);
+  await settle(page);
+  return rows;
+}
+async function compareRow(page: Surface): Promise<{ value: string | null; reason: string | null; disabled: boolean }> {
+  const panel = await openMenu(page);
+  const row = within(panel).find((el) => el.props.role === 'menuitem' && labelOf(el) === COMPARE);
+  assert.ok(row, 'premise: /ask\'s menu has the Compare item');
+  const out = { value: valueOf(row!), reason: reasonOf(row!), disabled: row!.props['aria-disabled'] === true };
+  await page.click(within(menuOf(page)).find((el) => el.props['aria-haspopup'] === 'menu')!);
+  await settle(page);
+  return out;
+}
+async function standardAsk(): Promise<Surface> {
+  storage.set('civicaitools.notebookMode', 'standard');
+  return askPage('on');
+}
+
+for (const [name, page] of [['/ask, signed in (full)', () => standardAsk()], ['the home page, signed out (signed-out)', () => homePage('on')]] as const) {
+  test(`OF3b criterion 7 (red): ${name}: "Map" follows "Auto" under Output format, with its line and the cap line`, async () => {
+    const rows = await formatOptions(await page());
+    const at = rows.findIndex((r) => r.label === MAP.label);
+    assert.ok(at > 0, `"Map" is not offered: ${JSON.stringify(rows.map((r) => r.label))}`);
+    assert.equal(rows[0].label, W.autoOption, 'Auto is not first');
+    assert.equal(at, 1, '"Map" does not directly follow "Auto"');
+    assert.equal(rows[at].disabled, false);
+    assert.deepEqual(rows[at].description, [`${MAP.line} ${MAP.cap}`], 'the line and the cap line');
+  });
+}
+
+test('OF3b criterion 7 (red): choosing "Map" shows no card, and the item reads "Map"', async () => {
+  const page = await standardAsk();
+  const before = page.elements().filter((el) => el.props.role === 'dialog' || el.props.role === 'alertdialog' || String(el.props['data-part'] ?? '').includes('card')).length;
+  await chooseIn(page, W.item, MAP.label);
+  const after = page.elements().filter((el) => el.props.role === 'dialog' || el.props.role === 'alertdialog' || String(el.props['data-part'] ?? '').includes('card')).length;
+  assert.equal(after, before, 'choosing "Map" opened a card');
+  assert.equal((await topRows(page)).find(([label]) => label === W.item)?.[1], MAP.label);
+  assert.equal(storage.get('civicaitools.outputFormat'), 'plain-map@1');
+});
+
+test('OF3b criterion 7 (red; fold 1 of the brief): with "Map" chosen Compare is off with its reason; "Auto" offers it again with its earlier value', async () => {
+  storage.set('civicaitools.showComparison', 'on');
+  const page2 = await standardAsk();
+  assert.deepEqual(await compareRow(page2), { value: 'On', reason: null, disabled: false }, 'premise: Compare is On before a map is chosen');
+  await chooseIn(page2, W.item, MAP.label);
+  assert.deepEqual(await compareRow(page2), { value: 'Off', reason: MAP.compareReason, disabled: true });
+  await chooseIn(page2, W.item, W.autoOption);
+  assert.deepEqual(await compareRow(page2), { value: 'On', reason: null, disabled: false }, 'Compare did not come back with its earlier value');
+});
+
+test('OF3b criterion 7 (red; fold 2 of the brief): in a Sandbox session "Map" is off with its reason; Standard offers it again', async () => {
+  const page = await askPage('on');
+  assert.equal((await topRows(page)).find(([label]) => label === W.session)?.[1], 'Sandbox', 'premise: /ask starts in Sandbox');
+  const inSandbox = (await formatOptions(page)).find((r) => r.label === MAP.label);
+  assert.deepEqual(inSandbox && { reason: inSandbox.reason, disabled: inSandbox.disabled }, { reason: MAP.sandboxReason, disabled: true });
+  await chooseIn(page, W.session, 'Standard');
+  const inStandard = (await formatOptions(page)).find((r) => r.label === MAP.label);
+  assert.deepEqual(inStandard && { reason: inStandard.reason, disabled: inStandard.disabled }, { reason: null, disabled: false }, '"Map" is not offered again in Standard');
+});
+
+test('OF3b (red): a stored "Map" is not sent from Sandbox, and the item reads "Auto" there; in Standard it is sent with one panel', async () => {
+  storage.set('civicaitools.outputFormat', 'plain-map@1');
+  const sandbox = await askPage('on');
+  assert.equal((await topRows(sandbox)).find(([label]) => label === W.item)?.[1], W.auto, 'the item does not read Auto in Sandbox');
+  const sent = await sendFrom(sandbox);
+  assert.equal(sent.path, '/api/query-notebook');
+  assert.ok(!('outputFormat' in (JSON.parse(sent.raw) as Json)), sent.raw);
+  queries = [];
+  const standard = await sendFrom(await standardAsk());
+  assert.equal(standard.path, '/api/compare-stream');
+  const body = JSON.parse(standard.raw) as Json;
+  assert.deepEqual(body.outputFormat, { id: 'plain-map', version: '1' });
+  assert.equal(body.mcpOnly, true, 'a map question was sent with the comparison\'s second panel');
+});
+
+test('OF3b (red; the seat\'s 7175166118 item 3): the home page sends a map question with one panel, as the compare route requires', async () => {
+  storage.set('civicaitools.outputFormat', 'plain-map@1');
+  const home = await sendFrom(await homePage('on'));
+  const body = JSON.parse(home.raw) as Json;
+  assert.deepEqual(body.outputFormat, { id: 'plain-map', version: '1' });
+  assert.equal(body.mcpOnly, true, 'the home page sent a map question with both panels');
+});

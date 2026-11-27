@@ -277,8 +277,10 @@ test('#154: every StreamErrorKind round-trips server -> wire -> render into its 
   // fifteen since FIX-1 FX-S2 added `session_ended`, a run route's own 401: a
   // reader whose session ended is asked to sign in again; sixteen since OF2
   // (website #810) added `output_format_not_offered`, a question naming an
-  // output format the site does not offer, refused before anything was sent.
-  assert.equal(STREAM_ERROR_KINDS.length, 16, 'the sixteen classified kinds');
+  // output format the site does not offer, refused before anything was sent;
+  // seventeen since OF3b (website #810) added `map_format_compare_not_offered`,
+  // a map format asked with the comparison's second panel, refused the same way.
+  assert.equal(STREAM_ERROR_KINDS.length, 17, 'the seventeen classified kinds');
 
   for (const kind of STREAM_ERROR_KINDS) {
     // `streamErrorPayload` is the exact call the server chokepoint

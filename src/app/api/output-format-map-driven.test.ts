@@ -35,10 +35,18 @@ import { fileURLToPath, pathToFileURL } from 'node:url';
 
 mock.timers.enable({ apis: ['Date'], now: Date.parse('2026-11-20T12:00:00.000Z') });
 let randomCounter = 0;
+/**
+ * OF3b: the sequence above repeats every 256 bytes, so a long run can mint a span id equal to the root's, and the trace
+ * then loses its root span. OF3a's drives keep it (their "Auto" pins were measured with it); OF3b's drives, which run
+ * after them, switch to a sequence that does not repeat within a run.
+ */
+let wideRandom = false;
 const fixedRandomValues = <T extends ArrayBufferView | null>(array: T): T => {
   if (array) {
     const bytes = new Uint8Array(array.buffer, array.byteOffset, array.byteLength);
-    for (let i = 0; i < bytes.length; i++) bytes[i] = (randomCounter++ * 131 + 7) & 0xff;
+    for (let i = 0; i < bytes.length; i++) {
+      bytes[i] = wideRandom ? (Math.imul(randomCounter++ + 1, 2654435761) >>> 24) & 0xff : (randomCounter++ * 131 + 7) & 0xff;
+    }
   }
   return array;
 };
@@ -244,6 +252,12 @@ const model = http.createServer((req, res) => {
       return;
     }
     const next = Array.isArray(body.tools) && body.tools.length > 0 ? SCRIPT[turn] : undefined;
+    // OF3b: a scripted turn the model endpoint fails, so the run does not complete.
+    if (next?.name === '__fail__') {
+      res.writeHead(500, { 'Content-Type': 'application/json' });
+      res.end(JSON.stringify({ error: { message: 'fixture: the model endpoint failed' } }));
+      return;
+    }
     const toolCalls = next ? [{ id: `call-of3a-${turn}`, type: 'function', function: { name: next.name, arguments: JSON.stringify(next.args) } }] : undefined;
     res.writeHead(200, { 'Content-Type': 'application/json' });
     res.end(JSON.stringify({
@@ -325,19 +339,21 @@ const recordsRoute = (await import('./records/route.ts')) as unknown as { POST: 
 const getData = (dataset: string): ScriptedCall => ({ name: 'socrata__get_data', args: { type: 'query', dataset_id: dataset, query: 'SELECT *' } });
 const present = (result: unknown, label: unknown): ScriptedCall => ({ name: 'present_result', args: { result, label } });
 
-async function drive(name: string, script: ScriptedCall[], options: { format?: boolean; routing?: 'in-loop' } = {}): Promise<Drive> {
+async function drive(name: string, script: ScriptedCall[], options: { format?: boolean | { id: string; version: string }; routing?: 'in-loop'; bothPanels?: boolean; requester?: number } = {}): Promise<Drive> {
   process.env.SITE_OUTPUT_FORMAT = 'on';
   if (options.routing) process.env.SOURCE_ROUTING = options.routing;
   SCRIPT = script;
   MODEL_REQUESTS = [];
   MCP_REQUESTS = [];
   randomCounter = 0;
-  OF3A.requester += 1;
+  if (options.requester !== undefined) OF3A.requester = options.requester;
+  else OF3A.requester += 1;
+  const format = options.format === true ? { ...MAP_FORMAT } : options.format || undefined;
   try {
     const response = await compareStreamRoute.POST(new Request('http://localhost/api/compare-stream', {
       method: 'POST',
       headers: { cookie: COOKIE },
-      body: JSON.stringify({ query: QUESTION, model: 'fixture-fast', portal: PORTAL, mcpOnly: true, ...(options.format ? { outputFormat: { ...MAP_FORMAT } } : {}) }),
+      body: JSON.stringify({ query: QUESTION, model: 'fixture-fast', portal: PORTAL, mcpOnly: options.bothPanels !== true, ...(format ? { outputFormat: format } : {}) }),
     }) as never);
     const text = await response.text();
     return { name, status: response.status, text, modelRequests: MODEL_REQUESTS, mcpRequests: MCP_REQUESTS };
@@ -382,6 +398,22 @@ async function sandboxMapDrive(): Promise<{ status: number; body: string; modelR
 }
 const SANDBOX_MAP = await sandboxMapDrive();
 const MAP_RUNS = [MAP_POINTS, MAP_CAP, MAP_IN_LOOP, MAP_NO_SUCH_RESULT, MAP_NO_SUCH_LABEL, MAP_NOT_CALLED, MAP_NO_LOCATION_COLUMNS, MAP_NONE_LOCATED_2, MAP_NONE_LOCATED_1, MAP_NO_ROWS, MAP_RESULT_FAILED];
+
+// OF3b's drives (website #810), here with OF3a's: node:test starts each test as it is declared, so a drive made after the
+// first test() runs beside tests that reset the shared random sequence (`publish`).
+const PLAIN_MAP = { id: 'plain-map', version: '1' } as const;
+wideRandom = true;
+const MAP_PLAIN = await drive('map: the site\'s own plain map', [getData('cnt0-0001'), getData('pts1-0001'), present(2, 'complaint_type')], { format: PLAIN_MAP });
+const MAP_BOTH_PANELS = await drive('map: with the comparison\'s second panel', [getData('pts1-0001'), present(1, 'complaint_type')], { format: true, bothPanels: true });
+/** A requester of its own, as the anonymous limit counts one: eleven refusals, then an "Auto" question. */
+const LIMIT_REQUESTER = 9000;
+const LIMIT_REFUSALS: Drive[] = [];
+for (let i = 0; i < 11; i++) LIMIT_REFUSALS.push(await drive(`map: refusal ${i + 1} for one requester`, [], { format: PLAIN_MAP, bothPanels: true, requester: LIMIT_REQUESTER }));
+const LIMIT_AFTER = await drive('Auto, after eleven refusals', [getData('cnt0-0001')], { requester: LIMIT_REQUESTER });
+const MAP_ACCEPTED_THEN_REFUSED = await drive('map: accepted, then refused', [getData('pts1-0001'), present(1, 'complaint_type'), present(1, 'not_a_column')], { format: true });
+const MAP_REFUSED_TWICE = await drive('map: refused twice, the last for a failed call', [getData('pts1-0001'), present(7, 'complaint_type'), getData('fail-0001'), present(3, 'complaint_type')], { format: true });
+const MAP_NOT_COMPLETED = await drive('map: the run does not complete', [getData('pts1-0001'), present(1, 'complaint_type'), { name: '__fail__', args: {} }], { format: true });
+
 
 // --- Readers --------------------------------------------------------------------------------------------------------
 
@@ -757,4 +789,163 @@ test('K3 = A (red): a Sandbox question in a map format is refused as a format th
   assert.equal(SANDBOX_MAP.status, 403, SANDBOX_MAP.body.slice(0, 300));
   assert.equal((JSON.parse(SANDBOX_MAP.body) as Json).code, 'output_format_not_offered');
   assert.equal(SANDBOX_MAP.modelRequests, 0);
+});
+
+// --- OF3b (website #810): the site's own "Map", the compare route's refusal, the run's lines, the five readings ------
+//
+// WHAT MAKES THESE ABLE TO FAIL. At OF3a's head the plain map is not offered (its drive is refused), the compare route
+// runs a map format with both panels, and there is no map-part module, so each red fails at its first assertion. The
+// refusal's "before the limiter" is driven, not read: one requester sends more refusals than the anonymous limit
+// allows, then an "Auto" question, which a limiter that had counted the refusals would answer 429.
+
+const mapPartModule = await importOrNull('lib/output-format/map-part.ts');
+const { buildNarrativeSummary } = await import('../../lib/streaming.ts');
+
+test('OF3b criterion 7 (red): the site\'s own "Map" is offered with the setting on: its run completes and its record states the plain map', async () => {
+  assert.equal(MAP_PLAIN.status, 200);
+  toolCallsOf(MAP_PLAIN);
+  const ext = await formatOf(MAP_PLAIN);
+  assert.deepEqual(ext.preset, PLAIN_MAP);
+  assert.deepEqual(ext.outcome, { drawn: true });
+});
+
+test('OF3b (red; the seat\'s 7175166118 item 3): a map format with the comparison\'s second panel is refused before the limiter, the model and any source', () => {
+  const errors = events(MAP_BOTH_PANELS).filter((e) => e.type === 'error');
+  assert.deepEqual(errors.map((e) => [e.panel, e.code]).sort(), [['withMcp', 'map_format_compare_not_offered'], ['withoutMcp', 'map_format_compare_not_offered']], MAP_BOTH_PANELS.text.slice(0, 400));
+  for (const e of errors) assert.equal(e.message, 'Not offered while a map format is chosen. Switch Output format to Auto to compare.');
+  assert.equal(MAP_BOTH_PANELS.modelRequests.length, 0, 'the model was called');
+  assert.equal(MAP_BOTH_PANELS.mcpRequests.length, 0, 'a source was called');
+  assert.ok(!events(MAP_BOTH_PANELS).some((e) => e.type === 'trace'), 'a run was traced');
+  for (const d of LIMIT_REFUSALS) assert.ok(events(d).some((e) => e.code === 'map_format_compare_not_offered'), `${d.name}: ${d.text.slice(0, 200)}`);
+  assert.equal(LIMIT_AFTER.status, 200, `the refusals were counted by the limiter: ${LIMIT_AFTER.text.slice(0, 200)}`);
+  toolCallsOf(LIMIT_AFTER);
+});
+
+test('OF3b criterion 11 (red): the run\'s real calls read W10\'s lines in the summary and the map part, and name no source for the step', () => {
+  assert.ok(mapPartModule, 'there is no map-part module');
+  const calls = toolCallsOf(MAP_PLAIN);
+  const summary = buildNarrativeSummary(calls as never);
+  assert.ok(summary.endsWith(', then chose rows from dataset pts1-0001 for this site to map.'), summary);
+  const part = mapPartModule!.mapPartFromTrace(traceOf(MAP_PLAIN), calls);
+  assert.equal(part.stepLine, 'This site mapped 3 of 5 rows from dataset pts1-0001');
+  assert.equal(part.outcome.countLine, '3 of 5 rows mapped; 2 had no location.');
+  assert.equal(part.outcome.alt, 'Map of 3 points from dataset pts1-0001. 2 rows had no location.');
+  const complete = events(MAP_PLAIN).find((e) => e.type === 'complete' && e.panel === 'withMcp')?.data as { flows?: { reached?: Array<{ kind: string; sourceId?: string; calls?: number }> } } | undefined;
+  const sources = (complete?.flows?.reached ?? []).filter((r) => r.kind === 'source');
+  assert.deepEqual(sources.map((r) => [r.sourceId, r.calls]), [['socrata', 2]], `"Where this question went" counts the step: ${JSON.stringify(sources)}`);
+});
+
+test('OF3b criterion 10 (red): the published record\'s bytes give the record page\'s lines: "Output format: Map", the count line, the rows', async () => {
+  assert.ok(mapPartModule, 'there is no map-part module');
+  const part = mapPartModule!.mapPartFromRecord(await recordOf(MAP_PLAIN));
+  assert.equal(part.formatLine, 'Output format: Map');
+  assert.equal(part.notShownLine, 'This page lists the mapped rows. It does not show the map.');
+  assert.equal(part.outcome.countLine, '3 of 5 rows mapped; 2 had no location.');
+  assert.equal(part.outcome.caption, 'The 3 mapped rows from dataset pts1-0001');
+  assert.deepEqual(part.outcome.points.map((p: { id: string }) => p.id), ['1', '2', '4']);
+  assert.equal(part.stepLine, 'This site mapped 3 of 5 rows from dataset pts1-0001');
+  const over = mapPartModule!.mapPartFromRecord(await recordOf(MAP_CAP));
+  const located = expectedLocated(CAP_ROWS).length;
+  assert.equal(over.outcome.countLine,
+    `1,000 of 1,203 rows mapped. Of the rows with a location, the map shows the first 1,000 the data source returned. ${located - 1000} more rows with a location are not shown. The rows not shown may come from other places or dates. ${1203 - located} had no location.`);
+  for (const [d, sentence] of [
+    [MAP_NO_SUCH_RESULT, 'No map: the AI did not make a choice this site could use.'],
+    [MAP_NOT_CALLED, 'No map: the AI did not make a choice this site could use.'],
+    [MAP_NO_LOCATION_COLUMNS, 'No map: the data chosen for the map has no location column.'],
+    [MAP_NONE_LOCATED_2, 'No map: none of the 2 rows had a location.'],
+    [MAP_NONE_LOCATED_1, 'No map: the one row returned had no location.'],
+    [MAP_NO_ROWS, 'No map: the data chosen for the map returned no rows.'],
+    [MAP_RESULT_FAILED, 'No map: the data for the map did not arrive or could not be read.'],
+  ] as const) {
+    assert.deepEqual(mapPartModule!.mapPartFromRecord(await recordOf(d)).outcome, { kind: 'none', sentence }, d.name);
+  }
+});
+
+test('OF3b criterion 11 (red): the record page\'s steps and section D state the map step by W10\'s line, and its sources line names no source for it', async () => {
+  const { adaptRecord } = await import('../../components/answer-view/adapt-record.ts');
+  const pkg = await recordOf(MAP_PLAIN);
+  const model = adaptRecord({ stored: pkg as never, resolution: null, row: { slug: 'of3b', summary: 'S', contentProfile: 'default', captureMethod: 'chat-flow-stream' }, instance: null, servedStatement: null });
+  const steps = (model.steps as { view: { steps: Array<{ label: string; calls: Array<{ outcome: string }> }> } }).view.steps;
+  const mapStep = steps[steps.length - 1];
+  assert.equal(mapStep.label, 'Choosing what to map');
+  assert.equal(mapStep.calls[0].outcome, 'This site mapped 3 of 5 rows from dataset pts1-0001.');
+  const d = model.disclosure.recordTrace!;
+  assert.equal(d[d.length - 1].outcome, 'This site mapped 3 of 5 rows from dataset pts1-0001.');
+  assert.equal((model as { map?: { formatLine?: string } }).map?.formatLine, 'Output format: Map');
+  const used = model.disclosure.environment!.find((e) => e.label.startsWith('Data sources'));
+  assert.ok(used && !used.value.includes('present_result') && !/unknown/i.test(used.value), JSON.stringify(used));
+});
+
+// The five readings OF3a asked to confirm, accepted as readings by the seat (7175166118): each pinned on a real run.
+
+test('OF3b reading 1 (pin): `result` counts every tool call from 1, the site\'s own steps included', async () => {
+  // In loop the load is call 1 and the query call 2: `result: 2` names the query and maps its rows.
+  const ext = await formatOf(MAP_IN_LOOP);
+  assert.deepEqual(ext.outcome, { drawn: true });
+  assert.equal((ext.counts as Json).returned, POINT_ROWS.length);
+  assert.equal(toolCallsOf(MAP_IN_LOOP)[0].name, 'load_source', 'premise: the load is the first call');
+});
+
+test('OF3b reading 2 (pin): a label the named result lacks is no-result-named', async () => {
+  assert.deepEqual((await formatOf(MAP_NO_SUCH_LABEL)).outcome, { drawn: false, reason: 'no-result-named' });
+});
+
+test('OF3b reading 3 (pin): the record takes the last accepted call, else the last refused one, else no-result-named', async () => {
+  assert.deepEqual((await formatOf(MAP_ACCEPTED_THEN_REFUSED)).outcome, { drawn: true }, 'a refusal after an accepted call undid it');
+  assert.deepEqual(toolCallsOf(MAP_ACCEPTED_THEN_REFUSED).filter((c) => c.name === 'present_result').map((c) => c.presentOutcome), ['accepted', 'refused'], 'premise');
+  assert.deepEqual((await formatOf(MAP_REFUSED_TWICE)).outcome, { drawn: false, reason: 'result-failed' }, 'not the last refused call');
+  assert.deepEqual((await formatOf(MAP_NOT_CALLED)).outcome, { drawn: false, reason: 'no-result-named' });
+});
+
+test('OF3b reading 4 (pin): a format run that does not complete writes no outcome; its record carries preset alone', async () => {
+  assert.ok(!events(MAP_NOT_COMPLETED).some((e) => e.type === 'complete' && e.panel === 'withMcp'), 'premise: the run did not complete');
+  const root = (traceOf(MAP_NOT_COMPLETED) as { resourceSpans: Array<{ scopeSpans: Array<{ spans: Span[] }> }> }).resourceSpans[0].scopeSpans[0].spans.find((s) => !s.parentSpanId)!;
+  const keys = root.attributes.map((a) => a.key);
+  assert.ok(keys.includes('analysis.output_format'), 'premise: the run states its format');
+  assert.ok(!keys.includes('analysis.output_format_result'), 'a run that did not complete states an outcome');
+  const { withOutputFormatExtension } = await import('../../lib/output-format/record.ts');
+  assert.deepEqual(withOutputFormatExtension(undefined, traceOf(MAP_NOT_COMPLETED)), { [KEY]: { preset: { ...MAP_FORMAT } } });
+});
+
+test('OF3b reading 5 (pin): a feature\'s properties carry only name; the map\'s description is empty, its basemap and legend null', async () => {
+  const map = (await formatOf(MAP_PLAIN)).map as { description: unknown; basemap: unknown; legend: unknown; features: Array<{ properties: Json }> };
+  assert.equal(map.description, '');
+  assert.equal(map.basemap, null);
+  assert.equal(map.legend, null);
+  for (const f of map.features) assert.deepEqual(Object.keys(f.properties), ['name']);
+});
+
+// The seat's 7175166118 item 2: the map is in the signed package twice. Measured here at the cap; nothing changes.
+test('OF3b (measure): the package at the cap, with and without the root attribute\'s copy of the map', async (t) => {
+  const pkg = await recordOf(MAP_CAP);
+  const bytes = (v: unknown) => Buffer.byteLength(JSON.stringify(v), 'utf8');
+  const ext = (pkg.extensions as Json)[KEY] as Json;
+  type TraceShape = { resourceSpans: Array<{ scopeSpans: Array<{ spans: Span[] }> }> };
+  const rootOf = (trace: unknown) => (trace as TraceShape).resourceSpans[0].scopeSpans[0].spans.find((s) => !s.parentSpanId)!;
+  const attribute = rootOf(pkg.trace).attributes.find((a) => a.key === 'analysis.output_format_result')!;
+  const withoutAttribute = structuredClone(pkg);
+  const r2 = rootOf(withoutAttribute.trace);
+  r2.attributes = r2.attributes.filter((a) => a.key !== 'analysis.output_format_result');
+  const measured = {
+    features: (ext.map as { features: unknown[] }).features.length,
+    packageBytes: bytes(pkg),
+    packageBytesWithoutRootAttribute: bytes(withoutAttribute),
+    rootAttributeValueBytes: Buffer.byteLength(attribute.value.stringValue!, 'utf8'),
+    extensionMapBytes: bytes(ext.map),
+  };
+  t.diagnostic(`OF3b size at the cap: ${JSON.stringify(measured)}`);
+  assert.equal(measured.features, 1000);
+  assert.ok(measured.packageBytesWithoutRootAttribute < measured.packageBytes);
+  const out = process.env.OF3B_DUMP_DIR;
+  if (out) fs.writeFileSync(path.join(out, 'size-at-cap.json'), JSON.stringify(measured, null, 2));
+});
+
+// With OF3B_DUMP_DIR set (CI sets nothing), the plain map's stream and record are written there, for the browser
+// reads in `scripts/layout-measure` (check 7) and the record page's read.
+test('OF3b (dump): the plain map run\'s stream and its record, when asked', async () => {
+  const out = process.env.OF3B_DUMP_DIR;
+  if (!out) return;
+  fs.writeFileSync(path.join(out, 'map-plain.events.json'), JSON.stringify(events(MAP_PLAIN), null, 2));
+  fs.writeFileSync(path.join(out, 'map-plain.record.json'), JSON.stringify(await recordOf(MAP_PLAIN), null, 2));
+  fs.writeFileSync(path.join(out, 'auto.events.json'), JSON.stringify(events(AUTO_ALL), null, 2));
 });
