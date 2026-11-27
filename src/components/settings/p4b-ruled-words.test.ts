@@ -80,7 +80,8 @@ const ALLOWED_NOT_MOVED = 'You chose Allow. This question is sent to it, but it 
 const ALLOWED_AFTER_NOT_MOVED = 'You chose Allow, but it could not be turned On. You can turn it On in Data source settings.'; // 40
 const FAILED = 'Your answer could not be saved. You can set this source in Data source settings.'; // 40
 const PRIVACY_777 = 'The source is not used for that question. You can turn it On in Data source settings for your next question.'; // 40
-const ASK_FIRST_WITH_PAUSE = "Ask first: nothing is sent to this source until you turn it On, here or when the site asks you during a question. If you choose Allow then, it stays On for later questions. If you choose Don't allow, it is turned Off."; // 54
+// Item 54's place, moved by S4 W2a (npstorey/civic-ai-tools#335; 7227321296 A2): S86 replaces card F's words.
+const ASK_FIRST_WITH_PAUSE = 'Not answered yet: the site asks before it uses this source.'; // S86
 
 // Part E: the refusal (42/50), read here because it is a "panel" sentence of item 40.
 const NO_SOURCES_ON = 'Every data source is set to Off or Ask first, so nothing was sent. Turn a source On in Data source settings, then ask again.';
@@ -158,7 +159,7 @@ test('criterion 3 (D): the pause\'s sentences equal the ruled text', () => {
   assert.equal(STEP.allowedNotMoved, ALLOWED_NOT_MOVED, 'item 40: allowedNotMoved');
   assert.equal(STEP.allowedAfterNotMoved, ALLOWED_AFTER_NOT_MOVED, 'item 40: allowedAfterNotMoved');
   assert.equal(STEP.failed, FAILED, 'item 40: failed');
-  assert.equal(copy.ASK_FIRST_MEANS_WITH_PAUSE, ASK_FIRST_WITH_PAUSE, 'item 54');
+  assert.equal(copy.ASK_FIRST_MEANS_WITH_PAUSE, ASK_FIRST_WITH_PAUSE, 'item 54\'s place: S86 (S4 W2a)');
   assert.equal(copy.ALLOW_ALL_SOURCES, ALLOW_ALL, 'item 9: the third button');
 });
 

@@ -109,9 +109,10 @@ const W = {
   S9: 'No data source is picked, so nothing was sent. Pick at least one, or choose Auto.',
   S12: 'Pick the data sources for this question',
   S13: (n: number) => `${n} picked`,
-  D8: 'Not offered on this site. Every data source you set On is given to the model.',
+  // S4 W2a (npstorey/civic-ai-tools#335): D8's place, S117's words ("Seen and not carded" item 6).
+  D8: 'Not offered on this site. Every enabled data source is given to the AI.',
   inLoopAuto: 'Auto - find sources for me',
-  allSourcesAuto: 'Auto - use every source I set On',
+  allSourcesAuto: 'Auto - use every enabled source',
   footer: 'All data sources and your consent',
   settingsLink: 'Select sources',
   /** The menu's reasons before W1, which leave with the commit that enables the option (B13). */

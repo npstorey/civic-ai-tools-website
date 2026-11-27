@@ -68,8 +68,11 @@ const consentRoute = await load('app/api/sources/consent/route.ts');
 const decisionRoute = await load('app/api/sources/consent/decision/route.ts');
 const { buildFlowsStatement, statementHash } = await load('lib/flows/statement.ts');
 
-/** The owner's ruled words for Ask first, card F = A (2026-10-22), as UX-2's item 54 re-words them under D7 C, pinned here byte for byte. */
-const F_RULED = "Ask first: nothing is sent to this source until you turn it On, here or when the site asks you during a question. If you choose Allow then, it stays On for later questions. If you choose Don't allow, it is turned Off.";
+/**
+ * The ruled line under a source not answered yet where the site can ask: card F = A's place (2026-10-22, item 54 under
+ * D7 C), whose words S86 replaces (S4 W2a, npstorey/civic-ai-tools#335; C9-L = A), pinned here byte for byte.
+ */
+const F_RULED = 'Not answered yet: the site asks before it uses this source.';
 /** The words true on every instance (R6's T6, `consent-texts-ruled.test.ts`). */
 const T6 = 'Ask first: nothing is sent to this source until you turn it On.';
 
@@ -137,8 +140,8 @@ test('item 1: the decision route\'s GET answers all-sources with the variable un
 
 // --- The pin ---------------------------------------------------------------------------------
 
-test('item 1: ASK_FIRST_MEANS_WITH_PAUSE is card F\'s ruled words, and ASK_FIRST_MEANS the words true on every instance', () => {
-  assert.equal(copy.ASK_FIRST_MEANS_WITH_PAUSE, F_RULED, 'ASK_FIRST_MEANS_WITH_PAUSE is not card F\'s words');
+test('item 1 (S4 W2a): ASK_FIRST_MEANS_WITH_PAUSE is S86, and ASK_FIRST_MEANS the words true on every instance', () => {
+  assert.equal(copy.ASK_FIRST_MEANS_WITH_PAUSE, F_RULED, 'ASK_FIRST_MEANS_WITH_PAUSE is not S86');
   assert.equal(copy.ASK_FIRST_MEANS, T6, 'ASK_FIRST_MEANS is not the words true on every instance');
 });
 
@@ -179,15 +182,16 @@ async function panelUnder(answer: ModeAnswer): Promise<{ panel: Surface; row: ()
   const panel = await mount(h(panelModule.default as ComponentType));
   await panel.settle();
   const row = () => textOf(panel.elements().find((el) => el.props['data-source'] === 'boston-opencontext')!);
-  assert.ok(row().includes(T6.slice(0, -1)), `premise: the Boston row is not Ask first: ${row()}`);
+  // Ask first: card F's line or the bare line (both begin with the bare line's words), or S86 (S4 W2a).
+  assert.ok(row().includes(T6.slice(0, -1)) || row().includes(F_RULED), `premise: the Boston row is not Ask first: ${row()}`);
   return { panel, row };
 }
 
-test('item 1: the panel on an in-loop instance: the Ask first row reads card F\'s words, not the bare line alone', async () => {
+test('item 1 (S4 W2a): the panel on an in-loop instance: the row not answered yet reads S86, not the bare line', async () => {
   assert.equal(typeof copy.ASK_FIRST_MEANS_WITH_PAUSE, 'string', 'copy.ts exports no ASK_FIRST_MEANS_WITH_PAUSE');
   const { panel, row } = await panelUnder(ANSWERS.inLoop);
-  assert.ok(row().includes(copy.ASK_FIRST_MEANS_WITH_PAUSE), `the in-loop Ask first row: ${row()}`);
-  assert.ok(row().includes('when the site asks you') && row().includes('If you choose Allow'), `the in-loop Ask first row: ${row()}`);
+  assert.ok(row().includes(F_RULED), `the in-loop row: ${row()}`);
+  assert.ok(!row().includes(T6), `the in-loop row reads the bare line: ${row()}`);
   panel.unmount();
 });
 
@@ -203,6 +207,7 @@ for (const key of ['inLoopNoStore', 'allSources', 'allSourcesStore', 'unset', 'u
     assert.ok(row().includes(T6), `the Ask first row: ${row()}`);
     assert.ok(!row().includes('when the site asks you'), `the Ask first row promises an ask: ${row()}`);
     assert.ok(!row().includes('If you choose Allow'), `the Ask first row promises an ask: ${row()}`);
+    assert.ok(!row().includes(F_RULED), `the Ask first row promises an ask (S86): ${row()}`);
     panel.unmount();
   });
 }

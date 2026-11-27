@@ -98,7 +98,8 @@ const SEARCH_LABEL = 'Search data sources';
 const NO_MATCH = 'No data source matches.';
 const ABOUT_KEPT_WITH = 'If you are signed in, your consent is kept on your account. If not, it is kept in a cookie until this browser session ends. The privacy page names the cookie.';
 const ABOUT_KEPT_WITHOUT = 'Your consent is kept in a cookie until this browser session ends. The privacy page names the cookie.';
-const ASK_FIRST_WITH_PAUSE = "Ask first: nothing is sent to this source until you turn it On, here or when the site asks you during a question. If you choose Allow then, it stays On for later questions. If you choose Don't allow, it is turned Off.";
+// Item 54's place, moved by S4 W2a (npstorey/civic-ai-tools#335): S86 replaces card F's words.
+const ASK_FIRST_WITH_PAUSE = 'Not answered yet: the site asks before it uses this source.';
 
 function answers() {
   return installFetch(ORIGIN, {
