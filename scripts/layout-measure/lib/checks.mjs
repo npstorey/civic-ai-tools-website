@@ -436,7 +436,8 @@ export async function check6(ctx) {
 
 // --- 7. OF3b (website #810): a "Map" answer, in a real browser, and the hosts it makes the page contact ---------------
 //
-// Criteria 8, 9 and 12. On the home page's surface (Standard), one run as "Auto" (the base's answer: `chat-plain`) and
+// Criteria 8, 9 and 12. On /ask's surface (Standard; fold 7: the home page offers no format), with the local session
+// check 8 uses, one run as "Auto" (the base's answer: `chat-plain`) and
 // one as "Map" (`chat-map`, the real route's stream for the plain map), each in its own session, each recording every
 // request its page starts (`notes.requests`). Then:
 //   8   the map part follows the answer: the plot, the count line, the table under its caption, "Download map data";
@@ -469,17 +470,20 @@ const MAP_READ = `(() => {${LIB}
 
 export async function check7(ctx) {
   const lines = []; const data = []; let pass = true;
+  if (!ctx.sessionCookie) {
+    return { id: '7', title: 'OF3b: a "Map" answer', sizes: '', pass: null, lines: ['ERROR: no LAYOUT_MEASURE_SESSION_COOKIE: /ask renders its sign-in panel without a session'], data };
+  }
   const file = ctx.events.chatMap;
   const judge = (ok, text) => { pass = pass && ok; lines.push(`${text}  ${verdict(ok)}`); };
   for (const size of [SIZES.phone, SIZES.laptop]) {
     let base; let map; let envelope;
     try {
-      base = await load(ctx, `7 auto@${size[0]}`, size, '/', { mode: 'standard', answer: answerOf(ctx.events.chatPlain) });
+      base = await load(ctx, `7 auto@${size[0]}`, size, '/ask', { mode: 'standard', signedIn: true, answer: answerOf(ctx.events.chatPlain) });
       await finishedRun(base, ctx.events.chatPlain);
       await base.settle();
       const baseHosts = hostsOf(base.notes);
 
-      map = await load(ctx, `7 map@${size[0]}`, size, '/', { mode: 'standard', outputFormat: 'plain-map@1' });
+      map = await load(ctx, `7 map@${size[0]}`, size, '/ask', { mode: 'standard', signedIn: true, outputFormat: 'plain-map@1' });
       await ask(map, QUESTION);
       const sent = await map.ev('window.__lm.streams[0]');
       await feed(map, file);
@@ -509,7 +513,7 @@ export async function check7(ctx) {
       judge(extra.length === 0, `${w}  12: hosts the "Map" answer contacted that the "Auto" answer did not: ${JSON.stringify(extra)} (Auto ${JSON.stringify(baseHosts)}; Map ${JSON.stringify(mapHosts)})`);
       if (ctx.shots) await map.shot(ctx.shots(`check7-map-${w}`));
 
-      envelope = await load(ctx, `7 envelope@${size[0]}`, size, '/', { mode: 'standard', outputFormat: 'plain-map@1', layout: 'envelope-order@2' });
+      envelope = await load(ctx, `7 envelope@${size[0]}`, size, '/ask', { mode: 'standard', signedIn: true, outputFormat: 'plain-map@1', layout: 'envelope-order@2' });
       await ask(envelope, QUESTION);
       await feed(envelope, file);
       await envelope.settle();
@@ -528,7 +532,7 @@ export async function check7(ctx) {
       await closeAll(base); await closeAll(map); await closeAll(envelope);
     }
   }
-  return { id: '7', title: 'OF3b: a "Map" answer shows its map part, its text and table as text, and contacts no new host', sizes: '390x844, 1280x720; the home page, Standard, the chat path', pass, lines, data };
+  return { id: '7', title: 'OF3b: a "Map" answer shows its map part, its text and table as text, and contacts no new host', sizes: '390x844, 1280x720; /ask signed in (a local session), Standard, the chat path', pass, lines, data };
 }
 
 // --- 8. OF3b (website #810): the menu on /ask, signed in (criterion 7 and the brief's folds 1 and 2) ----------------
@@ -540,12 +544,29 @@ export async function check7(ctx) {
 
 const MENU_ROW = (label) => `(() => { const e = ${Q.item(label)}; if (!e) return null; const q = (c) => { const x = e.querySelector(c); return x ? x.textContent.replace(/\\s+/g, ' ').trim() : null; }; return { value: q('.ui-menu-item-value'), description: q('.ui-menu-item-description'), reason: q('.ui-menu-item-reason'), disabled: e.getAttribute('aria-disabled') === 'true' }; })()`;
 
+async function c8OpenMenu(c) {
+  await c.click(Q.trigger, 'the harness menu trigger');
+  await c.until(`Boolean(${Q.menu})`, 5000, 'the harness menu');
+  await c.settle();
+}
+
 export async function check8(ctx) {
   const lines = []; const data = []; let pass = true;
   const judge = (ok, text) => { pass = pass && ok; lines.push(`${text}  ${verdict(ok)}`); };
   if (!ctx.sessionCookie) {
     return { id: '8', title: 'OF3b: the menu on /ask', sizes: '', pass: null, lines: ['ERROR: no LAYOUT_MEASURE_SESSION_COOKIE: /ask renders its sign-in panel without a session'], data };
   }
+  // Fold 7 (the owner's D+C, OA-1283): the home page offers no format, and a "Map" stored on /ask is not sent from it.
+  let home;
+  try {
+    home = await load(ctx, '8 home', SIZES.laptop, '/', { mode: 'standard', outputFormat: 'plain-map@1' });
+    await c8OpenMenu(home);
+    const items = await home.ev(`[...document.querySelectorAll('[data-part="harness-menu"] [role="menu"] .ui-menu-item-label')].map((e) => e.textContent.trim())`);
+    await home.key('Escape');
+    await ask(home, QUESTION);
+    const sent = await home.ev('window.__lm.streams[0]');
+    judge(!items.includes('Output format') && sent?.outputFormat === null && sent?.mcpOnly === false, `fold 7: the home page's menu ${JSON.stringify(items)}; with "Map" stored it sends ${JSON.stringify({ outputFormat: sent?.outputFormat, mcpOnly: sent?.mcpOnly })}`);
+  } finally { await closeAll(home); }
   let c;
   try {
     c = await load(ctx, '8 /ask', SIZES.laptop, '/ask', { mode: 'standard', comparison: 'on', signedIn: true });

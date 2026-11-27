@@ -276,7 +276,10 @@ for (const setting of ['off', 'on'] as const) {
 
 // --- Criterion 2: the item, where it shows ---------------------------------------------------------------------------
 
-for (const [name, page] of [['/ask, signed in (full)', () => askPage('on')], ['the home page, signed out (signed-out)', () => homePage('on')]] as const) {
+// OF3b fold 7 (the owner's D+C, OA-1283; the seat's 7225696434): the home page offers no format, and the signed-out
+// variant carries no Output format item. This moves G0b's S9 choice b for the signed-out variant: criterion 2 holds on
+// /ask only.
+for (const [name, page] of [['/ask, signed in (full)', () => askPage('on')]] as const) {
   test(`criterion 2 (red): setting on, ${name}: "Output format" reads "Auto", directly after "Data sources"`, async () => {
     const rows = await topRows(await page());
     const labels = rows.map(([label]) => label);
@@ -293,13 +296,13 @@ test('criterion 2 (decoy): setting off, neither page\'s menu holds the item', as
   }
 });
 
-test('criterion 2 (red): the item is in the full and signed-out variants, and not in sources-only', async () => {
+test('criterion 2 (red), as fold 7 moves it: the item is in the full variant, and not in signed-out or sources-only', async () => {
   answers();
   const formats = offeredWhenOn();
   const prop = { formats: formats ?? [], chosen: null, onChoose: () => {} };
   const labelsFor = async (variant: string) => (await topRows(await mountPage(h(HarnessMenu, { variant, models: [], model: '', outputFormat: prop })))).map(([label]) => label);
   assert.ok((await labelsFor('full')).includes(W.item), 'full');
-  assert.ok((await labelsFor('signed-out')).includes(W.item), 'signed-out');
+  assert.ok(!(await labelsFor('signed-out')).includes(W.item), 'signed-out: fold 7 (D) leaves the item out');
   assert.ok(!(await labelsFor('sources-only')).includes(W.item), 'sources-only');
 });
 
@@ -379,7 +382,7 @@ test('W2 (red): the refusal reaches the reader with “Auto” and “Output for
 // --- W1 = B, W3 = A (the owner's words rulings, seat 7168515476 and 7172131446): Auto's option line, as ruled --------
 
 test('W1 and W3 (red): Auto\'s option reads the ruled label and line, "the AI", on /ask and on the home page', async () => {
-  for (const page of [await askPage('on'), await homePage('on')]) {
+  for (const page of [await askPage('on')]) {
     const panel = await openItem(page, W.item);
     const autos = within(panel).filter((el) => el.props.role === 'menuitemradio').map((el) => [labelOf(el), byClassIn(el, 'ui-menu-item-description').map(textOf)]);
     // The first option is Auto; the test-registered format follows it.
@@ -433,7 +436,7 @@ async function standardAsk(): Promise<Surface> {
   return askPage('on');
 }
 
-for (const [name, page] of [['/ask, signed in (full)', () => standardAsk()], ['the home page, signed out (signed-out)', () => homePage('on')]] as const) {
+for (const [name, page] of [['/ask, signed in (full)', () => standardAsk()]] as const) {
   test(`OF3b criterion 7 (red): ${name}: "Map" follows "Auto" under Output format, with its line and the cap line`, async () => {
     const rows = await formatOptions(await page());
     const at = rows.findIndex((r) => r.label === MAP.label);
@@ -490,10 +493,40 @@ test('OF3b (red): a stored "Map" is not sent from Sandbox, and the item reads "A
   assert.equal(body.mcpOnly, true, 'a map question was sent with the comparison\'s second panel');
 });
 
-test('OF3b (red; the seat\'s 7175166118 item 3): the home page sends a map question with one panel, as the compare route requires', async () => {
+// --- Fold 7 (the owner's D+C, OA-1283; the seat's 7225696434): the home page offers no format to any reader ----------
+//
+// WHAT MAKES THESE ABLE TO FAIL. At fold 6's head the home page's form offers the formats the instance offers, signed
+// in (full) and signed out (signed-out), and sends a stored "Map" with one panel; each red below fails at its read.
+
+async function homeSignedIn(): Promise<Surface> {
+  SIGNED_IN();
+  answers();
+  await consentAllOn();
+  return mountPage(withSetting('on', splitTopology(h(Home))));
+}
+
+test('fold 7 (red, D and C): the home page shows no "Output format" item, signed out (signed-out) or signed in (full)', async () => {
+  const out = await topRows(await homePage('on'));
+  assert.ok(!out.some(([label]) => label === W.item), `signed out: ${JSON.stringify(out)}`);
+  const inn = await topRows(await homeSignedIn());
+  assert.ok(inn.some(([label]) => label === W.session), `premise: signed in, the home page's menu is the full one: ${JSON.stringify(inn)}`);
+  assert.ok(!inn.some(([label]) => label === W.item), `signed in: ${JSON.stringify(inn)}`);
+});
+
+test('fold 7 (red, C): with "Map" stored (as /ask stores it), the home page sends no format and runs both panels: the base\'s bytes', async () => {
   storage.set('civicaitools.outputFormat', 'plain-map@1');
-  const home = await sendFrom(await homePage('on'));
-  const body = JSON.parse(home.raw) as Json;
+  const out = await sendFrom(await homePage('on'));
+  assert.deepEqual(out, { path: '/api/compare-stream', raw: BASE_BODY.home }, 'signed out');
+  queries = [];
+  storage.set('civicaitools.notebookMode', 'standard');
+  const inn = await sendFrom(await homeSignedIn());
+  assert.deepEqual(inn, { path: '/api/compare-stream', raw: BASE_BODY.home }, 'signed in');
+});
+
+test('fold 7 (pin): /ask is unchanged: with "Map" stored it still offers it and sends it with one panel', async () => {
+  storage.set('civicaitools.outputFormat', 'plain-map@1');
+  const sent = await sendFrom(await standardAsk());
+  const body = JSON.parse(sent.raw) as Json;
   assert.deepEqual(body.outputFormat, { id: 'plain-map', version: '1' });
-  assert.equal(body.mcpOnly, true, 'the home page sent a map question with both panels');
+  assert.equal(body.mcpOnly, true);
 });
