@@ -47,12 +47,14 @@ import { decisionStoreFromEnv } from '@/lib/sources/decision';
  *           the statement it holds that ask nothing (D2 = A). Sets no cookie.
  *           `keptFromCookie: true` on the one read that kept a consent given
  *           signed out on the account (below); absent on every other read.
- *   PUT     `{ states: { <source id>: 'on' | 'ask-first' | 'off' }, flowsVersion, own? }`
+ *   PUT     `{ states: { <source id>: 'on' | 'ask-first' | 'off' }, flowsVersion, own?, ownComplete? }`
  *           stores the states for the sources this instance configures,
  *           against the flows statement the surface was shown (the first
- *           consent's Allow; `own` names every source set on its own, and
- *           each other source it names is written not set on its own, S4 W2a
- *           fix round 1; without `own` the flags read as before). Every stored state it does not
+ *           consent's Allow). `own` names the sources set on their own. With
+ *           `ownComplete: true` (S4 W2a fix rounds 1 and 2; only the client
+ *           since then sends it) `own` is the whole set, and each other
+ *           source the body names is written not set on its own; without it
+ *           (every client before) the flags read as before. Every stored state it does not
  *           name is kept. 400 names any
  *           id this instance does not configure (flag 3: the only boundary
  *           that accepts source ids); 409 when `flowsVersion` is not the
@@ -244,7 +246,7 @@ export async function PUT(request: Request): Promise<Response> {
   } catch {
     return json({ error: 'The consent could not be read: send JSON with the states and the flows version shown.', code: 'invalid_consent' }, 400);
   }
-  const { states, flowsVersion, own, change } = (body ?? {}) as { states?: unknown; flowsVersion?: unknown; own?: unknown; change?: unknown };
+  const { states, flowsVersion, own, change, ownComplete } = (body ?? {}) as { states?: unknown; flowsVersion?: unknown; own?: unknown; change?: unknown; ownComplete?: unknown };
   if (change !== undefined) return putChange(request, change, flowsVersion);
   if (!states || typeof states !== 'object' || Array.isArray(states) || typeof flowsVersion !== 'string') {
     return json({ error: 'The consent needs a state for each source and the flows version it was shown.', code: 'invalid_consent' }, 400);
@@ -271,20 +273,21 @@ export async function PUT(request: Request): Promise<Response> {
   const dbId = session?.user?.dbId;
   const today = consentDate();
   const given = entries as Array<[string, SourceState]>;
-  // S4 W2a fix round 1: a body that carries `own` names every source set on its own; one without it reads as before.
-  const ownSet = own === undefined ? undefined : new Set(own as string[]);
+  const ownSet = new Set((own as string[] | undefined) ?? []);
+  // S4 W2a fix round 2: only a write marked `ownComplete: true` names every source set on its own (`applyGivenStates`).
+  const complete = ownComplete === true;
 
   if (dbId) {
     // Every stored state it does not name is kept (A12); a named state the reader did not change keeps its date.
     const prior = (await readConsentRow(dbId))?.states ?? {};
-    const stored = applyGivenStates(prior, given, ownSet, today, rowEntry);
+    const stored = applyGivenStates(prior, given, ownSet, today, rowEntry, complete);
     await writeConsentRow(dbId, { states: stored, flowsHash: hash, flowsStatement: statement });
     return json({ inForce: true, store: 'row', flowsVersion: hash, states: stored }, 200);
   }
 
   const prior = readConsentCookie(request, configured);
   const version = (id: string) => statement.sources.find((s) => s.sourceId === id)!.version;
-  const cookieStates = applyGivenStates(prior?.states ?? {}, given, ownSet, today, (id, next): StoredSourceState => ({ ...next, version: version(id) }));
+  const cookieStates = applyGivenStates(prior?.states ?? {}, given, ownSet, today, (id, next): StoredSourceState => ({ ...next, version: version(id) }), complete);
   const value = encodeConsentCookie({ v: 2, flows: statement.version, states: cookieStates, ...(prior?.unmatched ? { unmatched: prior.unmatched } : {}) });
   if (!cookieFits(value)) return cookieFull(hash);
   const states2 = Object.fromEntries(given.map(([id]) => [id, { state: cookieStates[id].state, since: cookieStates[id].since }]));

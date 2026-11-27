@@ -448,8 +448,10 @@ export async function allowConsent(): Promise<boolean> {
   // source it is given not set on its own. So it holds the stored flags (a consent asked again keeps them) less those a
   // change before the consent cleared, and the sources the reader set by their own control before it (premise 7's
   // exception); never one a group's control or "Enable all data sources" set.
+  // The write is marked `ownComplete: true` (fix round 2), which no client before S4 W2a sends: only a marked write
+  // writes each other source not set on its own.
   const own = [...ownSources(snapshot)].filter((id) => Object.prototype.hasOwnProperty.call(states, id));
-  return write('PUT', { states, own, flowsVersion: status.flowsVersion });
+  return write('PUT', { states, own, ownComplete: true, flowsVersion: status.flowsVersion });
 }
 
 /**

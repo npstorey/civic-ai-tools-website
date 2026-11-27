@@ -162,25 +162,30 @@ export function applyConsentMove<E extends StoredEntry>(
  * The states a states-map write gives (the first consent's Allow, and a page loaded before S4), every stored entry
  * it does not name kept as it is. A named id whose state does not change keeps its date.
  *
- * THE FLAG. When the write carries `own` (S4 W2a fix round 1, the seat's ruling 7228846086), `own` is the whole set
- * the reader holds as set on its own: a named id in it is set on its own, and every other named id is written with
- * `own: false`. Without it each id's flag was left to its state, and an Off with no flag reads as set on its own
- * (`setOnItsOwn`), so a group's Disable given before a first consent came out set on its own. A write with no `own`
- * (`undefined`: a page loaded before S4) reads as before: a named id whose state does not change keeps its flag, and
- * any other is written with no flag.
+ * THE FLAG, by whether the write is marked (`complete`: the body's `ownComplete: true`, S4 W2a fix rounds 1 and 2, the
+ * seat's rulings 7228846086 and 7229359694):
+ *   - a marked write's `own` is the whole set the reader holds as set on its own: a named id in it is set on its own,
+ *     and every other named id is written with `own: false`. Only the client since S4 W2a marks its write; without
+ *     this a group's Disable given before a first consent came out set on its own, as an Off with no flag reads
+ *     (`setOnItsOwn`);
+ *   - an unmarked write (every client before S4 W2a, whose `own` is only the sources changed before the answer, or
+ *     none) reads as before: a named id in `own` is set on its own, a named id whose state does not change keeps its
+ *     flag, and any other is written with no flag. So a page loaded before the deploy that answers a consent asked
+ *     again leaves every stored flag as it was.
  */
 export function applyGivenStates<E extends StoredEntry>(
   stored: Readonly<Record<string, E>>,
   given: ReadonlyArray<readonly [string, SourceState]>,
-  own: ReadonlySet<string> | undefined,
+  own: ReadonlySet<string>,
   today: string,
   entry: (id: string, next: StoredEntry, prior: E | undefined) => E,
+  complete = false,
 ): Record<string, E> {
   const out: Record<string, E> = { ...stored };
   for (const [id, state] of given) {
     const prior = Object.hasOwn(stored, id) ? stored[id] : undefined;
     const same = prior?.state === state;
-    const flag = own !== undefined ? own.has(id) : same ? prior?.own : undefined;
+    const flag = complete ? own.has(id) : own.has(id) ? true : same ? prior?.own : undefined;
     out[id] = entry(id, { state, since: same ? prior!.since : today, ...(flag === undefined ? {} : { own: flag }) }, prior);
   }
   return out;
