@@ -183,6 +183,16 @@ export interface PresentStep {
   present(args: Record<string, unknown> | undefined, context: PresentStepContext): PresentStepResult;
 }
 
+/**
+ * The line that begins every answer the model receives in a run with a present step (OF3-FX1, website #810): the
+ * call's number, its position in the run's calls counting from 1 with the site's own steps included, which is the
+ * number the present step's `result` names. Model-facing only; no reader sees it, and no record carries it. A run
+ * with no present step ("Auto", and any format that is not a map) sends every answer as it did before.
+ */
+export function callNumberLine(position: number): string {
+  return `[call ${position}]\n`;
+}
+
 /** Whether a tool's name, in either spelling, is the present step's. */
 function namesPresentResult(tool: ChatCompletionTool): boolean {
   if (tool.type !== 'function') return false;
@@ -1017,6 +1027,15 @@ export async function runToolLoop(options: ToolLoopOptions): Promise<ToolLoopRes
   // Each call's whole result, by its position in `toolCalls`, kept only for a present step (OF3a): the model sees a
   // truncated result, and the step reads the rows the source returned.
   const results: (string | undefined)[] = [];
+  // OF3-FX1 (website #810): under a present step every answer the model receives begins with its call's number, the
+  // position `toolCalls.push` returns, so the AI names a call by the number it was shown instead of counting. With no
+  // present step every answer is sent as before. A source's result is cut to the bound less the number's line, so the
+  // number is never cut and the answer stays within `maxToolResultChars`.
+  const numbered = (position: number, text: string): string => (presentStep ? `${callNumberLine(position)}${text}` : text);
+  const boundedAnswer = (position: number, result: string): string =>
+    presentStep
+      ? numbered(position, truncateToolResult(result, maxToolResultChars - callNumberLine(position).length))
+      : truncateToolResult(result, maxToolResultChars);
   const emit = (event: LoopEvent) => onEvent?.(event);
 
   const messages: ChatCompletionMessageParam[] = [];
@@ -1135,7 +1154,7 @@ export async function runToolLoop(options: ToolLoopOptions): Promise<ToolLoopRes
           operationType: LOAD_SOURCE_OPERATION_TYPE,
           reason: generateToolReason(args, name),
         };
-        toolCalls.push(loadEntry);
+        const loadPosition = toolCalls.push(loadEntry);
         results.push(undefined);
         const loadPriorCalls = toolCalls.slice(0, -1);
         emit({ type: 'tool_start', iteration: currentIteration, call: loadEntry, priorCalls: loadPriorCalls });
@@ -1166,7 +1185,7 @@ export async function runToolLoop(options: ToolLoopOptions): Promise<ToolLoopRes
         }
         emit({ type: 'tool_complete', iteration: currentIteration, call: loadEntry, priorCalls: loadPriorCalls, durationMs: loadDuration });
         emit({ type: 'tool_result', iteration: currentIteration, call: loadEntry });
-        messages.push({ role: 'tool', tool_call_id: toolCall.id, content: answer.text });
+        messages.push({ role: 'tool', tool_call_id: toolCall.id, content: numbered(loadPosition, answer.text) });
         if (answer.outcome === 'loaded') {
           if (answer.systemPrompt !== undefined) replaceSystemPrompt(answer.systemPrompt);
           if (answer.tools !== undefined) {
@@ -1196,7 +1215,7 @@ export async function runToolLoop(options: ToolLoopOptions): Promise<ToolLoopRes
           operationType: FIND_SOURCE_OPERATION_TYPE,
           reason: generateToolReason(args, name),
         };
-        toolCalls.push(searchEntry);
+        const searchPosition = toolCalls.push(searchEntry);
         results.push(undefined);
         const searchPriorCalls = toolCalls.slice(0, -1);
         emit({ type: 'tool_start', iteration: currentIteration, call: searchEntry, priorCalls: searchPriorCalls });
@@ -1221,7 +1240,7 @@ export async function runToolLoop(options: ToolLoopOptions): Promise<ToolLoopRes
         }
         emit({ type: 'tool_complete', iteration: currentIteration, call: searchEntry, priorCalls: searchPriorCalls, durationMs: searchDuration });
         emit({ type: 'tool_result', iteration: currentIteration, call: searchEntry });
-        messages.push({ role: 'tool', tool_call_id: toolCall.id, content: found.text });
+        messages.push({ role: 'tool', tool_call_id: toolCall.id, content: numbered(searchPosition, found.text) });
         if (found.systemPrompt !== undefined) replaceSystemPrompt(found.systemPrompt);
         if (found.tools !== undefined) {
           assertPresentAnswered(found.tools, presentStep);
@@ -1249,7 +1268,7 @@ export async function runToolLoop(options: ToolLoopOptions): Promise<ToolLoopRes
         };
         const presentPriorCalls = toolCalls.slice();
         const priorResults = results.slice();
-        toolCalls.push(presentEntry);
+        const presentPosition = toolCalls.push(presentEntry);
         results.push(undefined);
         emit({ type: 'tool_start', iteration: currentIteration, call: presentEntry, priorCalls: presentPriorCalls });
         const presentSpanId = trace?.builder.startSpan('mcp_tool_call', trace.parentSpanId, {
@@ -1270,7 +1289,7 @@ export async function runToolLoop(options: ToolLoopOptions): Promise<ToolLoopRes
         }
         emit({ type: 'tool_complete', iteration: currentIteration, call: presentEntry, priorCalls: presentPriorCalls, durationMs: presentDuration });
         emit({ type: 'tool_result', iteration: currentIteration, call: presentEntry });
-        messages.push({ role: 'tool', tool_call_id: toolCall.id, content: answer.text });
+        messages.push({ role: 'tool', tool_call_id: toolCall.id, content: numbered(presentPosition, answer.text) });
         continue;
       }
 
@@ -1380,7 +1399,7 @@ export async function runToolLoop(options: ToolLoopOptions): Promise<ToolLoopRes
       // `args` goes onto the record BY REFERENCE and is handed to
       // `executeToolCall` unchanged — see this file's header.
       const toolEntry: ToolCallRecord = { name, args, operationType, reason };
-      toolCalls.push(toolEntry);
+      const toolPosition = toolCalls.push(toolEntry);
       const resultPosition = results.push(undefined) - 1;
       const priorCalls = toolCalls.slice(0, -1);
       emit({ type: 'tool_start', iteration: currentIteration, call: toolEntry, priorCalls });
@@ -1453,7 +1472,7 @@ export async function runToolLoop(options: ToolLoopOptions): Promise<ToolLoopRes
         messages.push({
           role: 'tool',
           tool_call_id: toolCall.id,
-          content: truncateToolResult(result, maxToolResultChars),
+          content: boundedAnswer(toolPosition, result),
         });
       } catch (error) {
         // #321: record the rejection ON the tool-call entry, here, where it is
@@ -1529,7 +1548,7 @@ export async function runToolLoop(options: ToolLoopOptions): Promise<ToolLoopRes
         messages.push({
           role: 'tool',
           tool_call_id: toolCall.id,
-          content: describeToolFailureForLlm(name, error),
+          content: numbered(toolPosition, describeToolFailureForLlm(name, error)),
         });
       }
     }
