@@ -93,7 +93,9 @@ function signedIn(): void {
   sessions.client = { status: 'authenticated', data: { user: { name: 'Fixture' } } };
 }
 
-const LABEL: Record<string, string> = { on: 'On', 'ask-first': 'Ask first', off: 'Off' };
+// Moved by S4 W2a fix round 1 (item 3): the row's confirmation names the state by the ruled pairs (On to enabled, Off to
+// disabled), drafted for the words check.
+const LABEL: Record<string, string> = { on: 'enabled', 'ask-first': 'not answered yet', off: 'disabled' };
 
 /** Every host element under `node`, in document order (the node itself excluded). */
 function within(node: HostElement): HostElement[] {
@@ -189,7 +191,8 @@ test('PC criterion 1: a choice on the tab writes every configured source\'s stat
   const sentence = `${name}${PANEL_STATE_CHANGED.middle}${LABEL.on}${PANEL_STATE_CHANGED.end}`;
   // Ruled at Leg B: the tab omits the panel's "Set <State> since <date>." line, since its list line carries the date.
   assert.equal(textOf(status[0]), sentence, 'the row\'s status line is not the panel\'s confirmation alone');
-  assert.ok(!textOf(row).includes(`Set ${LABEL.on} since`), `the row repeats the since date under the control: ${textOf(row)}`);
+  // Moved by S4 W2a fix round 1 (item 3): the since line's drafted form, "Enabled since <date>.".
+  assert.ok(!textOf(row).includes('Enabled since') && !textOf(row).includes('Set On since'), `the row repeats the since date under the control: ${textOf(row)}`);
   assert.equal(tab.elements().filter((el) => el.props.role === 'status' && textOf(el).includes(PANEL_STATE_CHANGED.end)).length, 1, 'more than one row confirms a change');
   tab.unmount();
 });

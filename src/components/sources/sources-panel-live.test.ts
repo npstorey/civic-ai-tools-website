@@ -311,17 +311,19 @@ test('criterion 1 (home, signed out): before a consent a change is kept, not wri
 // --- Criterion 2: the lead before a consent counts what Allow will use -------------------------------
 
 const LEAD_END = ' Set them now, or change them after you allow.';
+// Moved by S4 W2a fix round 1 (item 3): every lead below names its states by the ruled pairs (On to enabled, Ask first
+// to "not answered yet", Off to disabled); the card's Allow keeps its word.
 
 test('criterion 2: the lead before a consent counts the six defaults and follows a change (the in-force lead after Allow is read in criterion 1)', async () => {
   configure('six');
   ANON();
   answers();
   const page = await mount(h(Panel));
-  assert.equal(leadOf(page), `These are the settings Allow will use: four sources On, two Ask first.${LEAD_END}`);
+  assert.equal(leadOf(page), `These are the settings Allow will use: four sources enabled, two not answered yet.${LEAD_END}`);
   await page.click(radio(page, 'socrata', 'off'));
-  assert.equal(leadOf(page), `These are the settings Allow will use: three sources On, two Ask first, one Off.${LEAD_END}`, 'the lead does not follow the panel');
+  assert.equal(leadOf(page), `These are the settings Allow will use: three sources enabled, two not answered yet, one disabled.${LEAD_END}`, 'the lead does not follow the panel');
   await page.click(radio(page, 'socrata', 'on'));
-  assert.equal(leadOf(page), `These are the settings Allow will use: four sources On, two Ask first.${LEAD_END}`);
+  assert.equal(leadOf(page), `These are the settings Allow will use: four sources enabled, two not answered yet.${LEAD_END}`);
   await endPending(page);
 });
 
@@ -331,7 +333,7 @@ test('criterion 2: the lead at the three fixture sources, all On by default', as
   answers();
   const page = await mount(h(Panel));
   assert.deepEqual(shown(page, THREE), { socrata: 'on', 'data-commons': 'on', 'nyc-charter': 'on' }, 'premise: the three default On');
-  assert.equal(leadOf(page), `These are the settings Allow will use: four sources On.${LEAD_END}`);
+  assert.equal(leadOf(page), `These are the settings Allow will use: four sources enabled.${LEAD_END}`);
   page.unmount();
 });
 
@@ -341,10 +343,10 @@ test('criterion 2: the lead at a configuration with a source Off by default, one
   answers({ socrata: 'on', 'data-commons': 'ask-first', 'nyc-charter': 'off' });
   const page = await mount(h(Panel));
   assert.deepEqual(shown(page, THREE), { socrata: 'on', 'data-commons': 'ask-first', 'nyc-charter': 'off' }, 'premise: the stubbed defaults are shown');
-  assert.equal(leadOf(page), `These are the settings Allow will use: one source On, two Ask first, one Off.${LEAD_END}`);
+  assert.equal(leadOf(page), `These are the settings Allow will use: one source enabled, two not answered yet, one disabled.${LEAD_END}`);
   // With no source On, the first group named carries the noun.
   await page.click(radio(page, 'socrata', 'off'));
-  assert.equal(leadOf(page), `These are the settings Allow will use: two sources Ask first, two Off.${LEAD_END}`);
+  assert.equal(leadOf(page), `These are the settings Allow will use: two sources not answered yet, two disabled.${LEAD_END}`);
   await endPending(page);
 });
 

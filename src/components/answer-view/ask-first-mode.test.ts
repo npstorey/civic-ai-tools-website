@@ -74,7 +74,9 @@ const { buildFlowsStatement, statementHash } = await load('lib/flows/statement.t
  */
 const F_RULED = 'Not answered yet: the site asks before it uses this source.';
 /** The words true on every instance (R6's T6, `consent-texts-ruled.test.ts`). */
-const T6 = 'Ask first: nothing is sent to this source until you turn it On.';
+// Moved by S4 W2a fix round 1 (item 3): T6's drafted form, the ruled pairs applied (Ask first to "Not answered yet", as
+// S86 has it; On to enabled).
+const T6 = 'Not answered yet: nothing is sent to this source until you enable it.';
 
 /**
  * `SOURCE_ROUTING` set to `value` (or unset) for the length of `run`, and every warning the server logs meanwhile;
@@ -182,8 +184,8 @@ async function panelUnder(answer: ModeAnswer): Promise<{ panel: Surface; row: ()
   const panel = await mount(h(panelModule.default as ComponentType));
   await panel.settle();
   const row = () => textOf(panel.elements().find((el) => el.props['data-source'] === 'boston-opencontext')!);
-  // Ask first: card F's line or the bare line (both begin with the bare line's words), or S86 (S4 W2a).
-  assert.ok(row().includes(T6.slice(0, -1)) || row().includes(F_RULED), `premise: the Boston row is not Ask first: ${row()}`);
+  // Not answered yet: a line that says nothing is sent to it (card F's, the bare line, old or drafted), or S86.
+  assert.ok(row().includes('nothing is sent to this source') || row().includes(F_RULED), `premise: the Boston row is not Ask first: ${row()}`);
   return { panel, row };
 }
 

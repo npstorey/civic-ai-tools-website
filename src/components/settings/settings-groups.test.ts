@@ -97,6 +97,9 @@ const S = {
     all22: 'Sets all 22, except any set on its own. A source set on its own keeps its own setting.',
     bothOneOwn: 'Sets both, except one set on its own. A source set on its own keeps its own setting.',
     both: 'Sets both. A source set on its own keeps its own setting.',
+    // Drafted in S4 W2a fix round 1 (item 4), built as S2[1] and S2[2] are, for a group of two with both set on their
+    // own; no ruled form. The owner rules it at W2's gate.
+    bothBothOwn: 'Sets both, except any set on its own. A source set on its own keeps its own setting.',
   },
   S3: {
     all157: 'Sources reached through Socrata: Enable or Disable, for all 157, except any set on its own',
@@ -131,7 +134,8 @@ const S = {
 };
 /** Card F's words, the line under an Ask-first row at the base (item 54). */
 const CARD_F = "Ask first: nothing is sent to this source until you turn it On, here or when the site asks you during a question. If you choose Allow then, it stays On for later questions. If you choose Don't allow, it is turned Off.";
-const PANEL_LEAD = 'Set each data source to On, Ask first or Off. Your choice applies from your next question.';
+// Moved by S4 W2a fix round 1 (item 3): PANEL_LEAD's drafted form, the ruled pairs applied.
+const PANEL_LEAD = 'Set each data source to enabled or disabled. Your choice applies from your next question.';
 
 const SEVEN = ['socrata', 'data-commons', 'nyc-charter', 'nyc-checkbook', 'nyc-record', 'nys-legislation', 'ckan-server'];
 const ALONE_AT_SEVEN = ['data-commons', 'nyc-charter', 'nyc-checkbook', 'nys-legislation', 'ckan-server'];
@@ -503,7 +507,7 @@ test('C2 = B (red): "About these settings" reads S11 after the tab\'s first sent
   const s = await overlay({ initialTab: 'about' });
   const text = s.text();
   const lead = text.indexOf(PANEL_LEAD);
-  assert.ok(lead >= 0, 'premise: the tab\'s first sentence');
+  assert.ok(lead >= 0, 'the tab\'s first sentence is not PANEL_LEAD\'s drafted form (moved by S4 W2a fix round 1)');
   assert.ok(text.indexOf(S.S11) > lead, `S11 does not follow it: ${text.slice(0, 500)}`);
   s.unmount();
 });
@@ -615,6 +619,112 @@ test('#826\'s cost, read: a stored Ask first that carries the flag renders neith
   await choose(s, groupOf(s, 'socrata'), 'Enable');
   assert.deepEqual(statusIn(groupOf(s, 'socrata')), [S.S7.one]);
   assert.deepEqual(pressedOf(rowOf(s, 'nyc-record')), []);
+  s.unmount();
+});
+
+// =====================================================================================================================
+// Fix round 1 (the seat's ruling, hub #335 comment 7228846086)
+// =====================================================================================================================
+
+/** A consent cookie asked again (its base version is not the statement's), holding `states` with their flags. */
+async function askedAgainCookie(net: Net, states: Record<string, { state: string; own?: boolean }>): Promise<void> {
+  const consent = await load('lib/sources/consent.ts');
+  const statement = await flows.buildFlowsStatement();
+  const value = consent.encodeConsentCookie({
+    v: 2,
+    flows: '0'.repeat(64),
+    states: Object.fromEntries(Object.entries(states).map(([id, s]) => [id, { ...s, since: '2026-11-01', version: (statement.sources as Mod[]).find((x) => x.sourceId === id)!.version }])),
+  });
+  net.jar.set(consent.CONSENT_COOKIE_NAME, value);
+  const status = (await (await fetch('/api/sources/consent', { method: 'GET' })).json()) as Mod;
+  assert.equal(status.inForce, false, 'premise: the cookie is asked again');
+}
+
+test('FR1 item 1 (red): a states-map write that carries `own` writes no flag but its own; one without `own` reads as today', async () => {
+  const statement = await flows.buildFlowsStatement();
+  const ids = (statement.sources as Mod[]).map((s) => s.sourceId as string);
+  const states = Object.fromEntries(ids.map((id) => [id, id === 'socrata' ? 'off' : 'ask-first']));
+  for (const [label, body, want] of [
+    ['with own: []', { states, own: [], flowsVersion: flows.statementHash(statement) }, []],
+    ['without own', { states, flowsVersion: flows.statementHash(statement) }, ['socrata']],
+  ] as const) {
+    answers();
+    const written = await fetch('/api/sources/consent', { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
+    assert.equal(written.status, 200, `premise (${label})`);
+    assert.deepEqual((await stored()).own, want, `${label}: the sources read as set on their own`);
+  }
+});
+
+test('FR1 item 1 (red): a group\'s Disable before a first consent is not set on its own after Allow', async () => {
+  const net = answers();
+  const s = await overlay();
+  await choose(s, groupOf(s, 'socrata'), 'Disable');
+  const hook = await load('components/sources/useSourceConsent.ts');
+  net.clear();
+  assert.equal(await hook.allowConsent(), true, 'premise: Allow wrote');
+  const after = await stored();
+  assert.deepEqual([after.states.socrata, after.states['nyc-record']], ['off', 'off'], 'premise: the group\'s Disable was written');
+  assert.deepEqual(after.own, [], 'a group\'s Disable came out set on its own');
+  s.unmount();
+});
+
+test('FR1 item 1: the new client\'s Allow always sends `own`, empty when nothing is set on its own', async () => {
+  const net = answers();
+  const s = await overlay();
+  const hook = await load('components/sources/useSourceConsent.ts');
+  net.clear();
+  assert.equal(await hook.allowConsent(), true);
+  const body = JSON.parse(putsOf(net)[0].body) as Mod;
+  assert.ok(Object.hasOwn(body, 'own'), 'Allow sent no `own`');
+  assert.deepEqual(body.own, []);
+  s.unmount();
+});
+
+test('FR1 item 1 (red): on a consent asked again, the new client\'s Allow keeps the stored flags, sending them in `own`', async () => {
+  const net = answers();
+  await askedAgainCookie(net, { socrata: { state: 'on', own: true }, 'nyc-charter': { state: 'off', own: true }, 'data-commons': { state: 'on', own: false } });
+  const s = await overlay();
+  const hook = await load('components/sources/useSourceConsent.ts');
+  net.clear();
+  assert.equal(await hook.allowConsent(), true);
+  assert.deepEqual([...(JSON.parse(putsOf(net)[0].body) as Mod).own].sort(), ['nyc-charter', 'socrata'], 'Allow did not send the stored flags');
+  const after = await stored();
+  assert.deepEqual([...after.own].sort(), ['nyc-charter', 'socrata'], 'a stored flag was lost or added');
+  s.unmount();
+});
+
+test('FR1 item 1 (red; the cost for a page loaded before the deploy): an Allow on a consent asked again that sends `own` without the stored flags clears them', async () => {
+  const net = answers();
+  await askedAgainCookie(net, { socrata: { state: 'on', own: true }, 'nyc-charter': { state: 'off', own: true } });
+  const statement = await flows.buildFlowsStatement();
+  const ids = (statement.sources as Mod[]).map((x) => x.sourceId as string);
+  // The base client's Allow on a consent asked again: the stored states, and `own` the pending ids only (none here).
+  const states = Object.fromEntries(ids.map((id) => [id, id === 'socrata' ? 'on' : id === 'nyc-charter' ? 'off' : 'ask-first']));
+  const written = await fetch('/api/sources/consent', { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ states, own: [], flowsVersion: flows.statementHash(statement) }) });
+  assert.equal(written.status, 200);
+  assert.deepEqual((await stored()).own, [], 'the stored flags survived');
+});
+
+test('FR1 item 2 (red): "Enable all data sources" before a consent clears every flag once Allow writes', async () => {
+  const net = answers();
+  await askedAgainCookie(net, { socrata: { state: 'on', own: true }, 'nyc-charter': { state: 'off', own: true } });
+  const s = await overlay();
+  await s.click(s.button(S.S96));
+  await s.settle();
+  assert.deepEqual(net.sent.filter((r) => r.method === 'PUT'), [], 'premise: nothing written before Allow');
+  const hook = await load('components/sources/useSourceConsent.ts');
+  assert.equal(await hook.allowConsent(), true);
+  const after = await stored();
+  assert.deepEqual(SEVEN.filter((id) => after.states[id] !== 'on'), [], 'a source is not enabled');
+  assert.deepEqual(after.own, [], 'a flag survived "Enable all data sources"');
+  s.unmount();
+});
+
+test('FR1 item 4 (red): a group of two with both set on their own reads the drafted S2 form', async () => {
+  answers();
+  await consented({ socrata: 'off', 'nyc-record': 'off' }, ['socrata', 'nyc-record']);
+  const s = await overlay();
+  assert.ok(textOf(groupOf(s, 'socrata')).includes(S.S2.bothBothOwn), `S2: ${textOf(groupOf(s, 'socrata')).slice(0, 300)}`);
   s.unmount();
 });
 

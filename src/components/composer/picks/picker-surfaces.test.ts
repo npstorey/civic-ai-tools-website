@@ -103,7 +103,8 @@ const W = {
   S3: 'No data source matches.',
   S4: 'Pick for this question',
   S4name: (name: string) => `Pick ${name} for this question`,
-  S5: 'Off. Set it to On or Ask first to pick it.',
+  // Moved by S4 W2a fix round 1 (item 3): drafted by the ruled pairs, naming only a state the two buttons can set.
+  S5: 'Disabled. Enable it to pick it.',
   S6a: 'Not set up on this site.',
   S7: (names: string) => `Your question can use only these data sources: ${names}.`,
   S8: 'Change',

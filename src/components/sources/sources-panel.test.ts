@@ -209,7 +209,8 @@ test('criterion 15 (Q1, T6): an Ask first row says, in literal words, that nothi
   const { panel } = await panelWith({ socrata: 'on', 'data-commons': 'ask-first', 'boston-opencontext': 'on', 'nyc-charter': 'on' });
   assert.ok(copy && typeof copy.ASK_FIRST_MEANS === 'string', `${COPY} exports no ASK_FIRST_MEANS`);
   assert.match(copy!.ASK_FIRST_MEANS, /nothing is sent to this source/i);
-  assert.match(copy!.ASK_FIRST_MEANS, /until[^.]*\bOn\b/);
+  // Moved by S4 W2a fix round 1 (item 3): "until you turn it On" reads "until you enable it" (On to enabled).
+  assert.match(copy!.ASK_FIRST_MEANS, /until you enable it/);
   assert.ok(textOf(rowOf(panel, 'data-commons')).includes(copy!.ASK_FIRST_MEANS), 'the Ask first row does not say what Ask first means');
   assert.ok(!textOf(rowOf(panel, 'socrata')).includes(copy!.ASK_FIRST_MEANS), 'an On row says what Ask first means');
   panel.unmount();

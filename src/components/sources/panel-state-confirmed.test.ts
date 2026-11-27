@@ -97,7 +97,8 @@ test('row 5: before any change there is no status line; after a successful chang
   await panel.click(offFor(panel, 'data-commons'));
   const lines = statusLines(panel);
   assert.equal(lines.length, 1, `after the change there is not one status line: ${panel.text().slice(0, 300)}`);
-  assert.equal(textOf(lines[0]), `Data Commons is now Off. This applies from your next question. Set Off since ${today()}.`);
+  // Moved by S4 W2a fix round 1 (item 3): the confirmation and the since line, drafted by the ruled pairs.
+  assert.equal(textOf(lines[0]), `Data Commons is now disabled. This applies from your next question. Disabled since ${today()}.`);
   const row = panel.elements().find((el) => el.props['data-source'] === 'data-commons');
   assert.ok(row && textOf(row).includes(textOf(lines[0])), 'the status line is not under that source\'s control');
   panel.unmount();
@@ -129,7 +130,7 @@ test('row 5: a refused write shows no confirmation', async () => {
   } finally {
     refuseWrites = false;
   }
-  assert.ok(!panel.text().includes('is now Off'), `a refused write was confirmed: ${panel.text().slice(0, 300)}`);
+  assert.ok(!panel.text().includes('is now Off') && !panel.text().includes('is now disabled'), `a refused write was confirmed: ${panel.text().slice(0, 300)}`);
   assert.deepEqual(statusLines(panel), []);
   panel.unmount();
 });

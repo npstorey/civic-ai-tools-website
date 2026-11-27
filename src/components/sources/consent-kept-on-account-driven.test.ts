@@ -121,8 +121,9 @@ test('R9 P4 criterion 1: the first signed-in read keeps the cookie\'s choice on 
   // The second read finds the row and carries no flag; the page keeps the line until a write.
   assert.deepEqual(net.sent.filter((r) => r.path === '/api/sources/consent').map((r) => r.method), ['GET', 'GET'], 'the mount did not read the consent twice, so the line was not seen surviving a read without the flag');
   const markup = panel.markup();
-  const lead = markup.indexOf('Set each data source to On, Ask first or Off. Your choice applies from your next question.');
-  assert.ok(lead >= 0, 'premise: the panel shows the lead for a consent in force');
+  // Moved by S4 W2a fix round 1 (item 3): PANEL_LEAD's drafted form.
+  const lead = markup.indexOf('Set each data source to enabled or disabled. Your choice applies from your next question.');
+  assert.ok(lead >= 0, 'the panel does not show the lead for a consent in force, in PANEL_LEAD\'s drafted form');
   assert.ok(lead < markup.indexOf(LINE) && markup.indexOf(LINE) < markup.indexOf('<li'), 'the line is not under the lead, above the rows');
   assert.ok(sessions.rows.has(DB_ID), 'the read wrote no row');
   for (const [id, state] of Object.entries(states)) assert.equal(checked(panel, id), state, `${id} does not show the cookie's state`);
