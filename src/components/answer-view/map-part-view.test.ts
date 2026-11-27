@@ -8,8 +8,8 @@
 //
 // WHAT MAKES IT ABLE TO FAIL. At OF3a's head the view has no map part: every red fails at its first markup read. A
 // row's name carries markup (`<img …>`, `<b>…</b>`), so a part that rendered the data as HTML would put the elements in
-// the markup. The envelope-order pin compares a view with the map part to the same view without it, so any byte the
-// part adds there fails it.
+// the markup. Fold 5 (flag 6) replaced the envelope-order pin: the map part now renders under every built-in layout,
+// and each layout is driven on both surfaces.
 //
 // Run with: npm test
 
@@ -151,14 +151,30 @@ test('criterion 8 (red): a run that mapped nothing shows W8\'s sentence and no p
   for (const part of ['map-plot', 'map-table', 'map-download', 'map-count-line']) assert.ok(!html.includes(`data-part="${part}"`), part);
 });
 
-test('criterion 8 (pin): the envelope-order layout is unchanged: a map run renders there byte for byte as with no map part', () => {
-  const model = runModel(mapTrace(DRAWN));
-  assert.ok(model.map, 'premise: the model carries the map part');
-  const { map: _map, ...without } = model; // eslint-disable-line @typescript-eslint/no-unused-vars
-  const html = render(model, ENVELOPE_ORDER);
-  assert.ok(!html.includes('data-part="map'), 'a map part renders under envelope-order');
-  assert.equal(html, render(without, ENVELOPE_ORDER));
-});
+// Fold 5, flag 6 (the seat's 7224717454): a reader's layout choice does not hide the map. Under each built-in layout the
+// map part renders with the answer, directly after it, on the run's view and on the record page; and it renders once
+// (the disclosure's F places the answer again, never the map).
+const RECORD_FIXTURE = { extensions: { 'org.civicaitools.output-format': { preset: { id: 'plain-map', version: '1' }, ...DRAWN } }, queries: [{ tool: 'socrata__get_data', operationType: 'query', arguments: { dataset_id: 'pts1-0001' } }, { tool: 'present_result', operationType: 'present_result', arguments: { result: 1, label: 'complaint_type' } }], trace: { resourceSpans: [{ scopeSpans: [{ spans: [{ name: 'mcp_tool_call', attributes: [attr('tool.operation_type', 'present_result'), attr('tool.present_outcome', 'accepted')] }] }] }] } };
+for (const [name, layout] of [['answer-first', ANSWER_FIRST], ['envelope-order', ENVELOPE_ORDER]] as const) {
+  test(`fold 5, flag 6 (red under envelope-order): under ${name}, the run's map part renders once, directly after the answer`, () => {
+    const html = render(runModel(mapTrace(DRAWN)), layout);
+    assert.equal(count(html, 'data-part="map"'), 1, `under ${name} the run's view shows ${count(html, 'data-part="map"')} map parts`);
+    assert.equal(count(html, 'data-part="map-plot"'), 1, 'no plot');
+    const answerAt = html.indexOf('data-part="answer"');
+    const mapAt = html.indexOf('data-part="map"');
+    assert.ok(answerAt >= 0 && answerAt < mapAt, 'the map part does not follow the answer');
+    assert.equal(count(html.slice(answerAt, mapAt), 'data-part='), 1, 'another part sits between the answer and the map part');
+  });
+
+  test(`fold 5, flag 6 (red under envelope-order): under ${name}, the record page's map part renders once, directly after the answer`, () => {
+    assert.ok(mapPart, 'there is no map-part module');
+    const html = render({ ...runModel(traceWith({})), map: mapPart!.mapPartFromRecord(RECORD_FIXTURE) }, layout);
+    assert.equal(count(html, 'data-part="map"'), 1, `under ${name} the record page shows ${count(html, 'data-part="map"')} map parts`);
+    assert.ok(html.includes('>Output format: Map<') && html.includes('>3 of 5 rows mapped; 2 had no location.<'));
+    assert.ok(html.indexOf('data-part="answer"') < html.indexOf('data-part="map"'), 'the map part does not follow the answer');
+    assert.ok(!html.includes('data-part="map-plot"'), 'the record page draws a plot');
+  });
+}
 
 test('criterion 8 (pin): under "Auto" the view is byte for byte the view with no format at all', () => {
   const auto = runModel(traceWith({}));

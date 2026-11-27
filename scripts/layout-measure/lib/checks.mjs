@@ -441,7 +441,7 @@ export async function check6(ctx) {
 // request its page starts (`notes.requests`). Then:
 //   8   the map part follows the answer: the plot, the count line, the table under its caption, "Download map data";
 //       the table's region is reached by the keyboard (Tab from the count line); the written answer shows;
-//       under envelope-order (a third session) no map part renders;
+//       under envelope-order (a third session) the map part renders too, once, after the answer (fold 5, flag 6);
 //   9   the plot's alternative text is the counts' sentence; the row whose name carries markup shows it as text, and
 //       no element of that markup exists in the page;
 //   12  every host the "Map" session contacted is one the "Auto" session contacted.
@@ -513,8 +513,16 @@ export async function check7(ctx) {
       await ask(envelope, QUESTION);
       await feed(envelope, file);
       await envelope.settle();
-      const e = await envelope.ev(`(() => ({ map: document.querySelectorAll('[data-part^="map"]').length, layout: (document.querySelector('[data-part="layout-line"]') || {}).textContent || null, answer: document.querySelectorAll('[data-part="answer"]').length }))()`);
-      judge(e.map === 0 && /envelope-order/.test(String(e.layout)) && e.answer > 0, `${w}  8 (pin): under envelope-order no map part renders (${e.map} map elements; "${e.layout}")`);
+      // Fold 5, flag 6 (the seat's 7224717454): a reader's layout choice does not hide the map; under envelope-order the
+      // map part renders once, with its plot, after the answer it belongs to.
+      const e = await envelope.ev(`(() => {
+        const maps = [...document.querySelectorAll('[data-part="map"]')];
+        const answer = [...document.querySelectorAll('[data-part="answer"]')][0] || null;
+        return { map: maps.length, plots: document.querySelectorAll('svg[data-part="map-plot"]').length,
+          afterAnswer: !!(answer && maps[0] && (answer.compareDocumentPosition(maps[0]) & Node.DOCUMENT_POSITION_FOLLOWING)),
+          layout: (document.querySelector('[data-part="layout-line"]') || {}).textContent || null };
+      })()`);
+      judge(e.map === 1 && e.plots === 1 && e.afterAnswer && /envelope-order/.test(String(e.layout)), `${w}  8 (fold 5): under envelope-order the map part renders once, after the answer (${e.map} map parts, ${e.plots} plots; "${e.layout}")`);
       data.push({ size, sent, read: r, focused, baseHosts, mapHosts, extra, envelope: e, requests: { base: base.notes.requests, map: map.notes.requests } });
     } finally {
       await closeAll(base); await closeAll(map); await closeAll(envelope);

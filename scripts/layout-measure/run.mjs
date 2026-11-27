@@ -22,7 +22,7 @@
 //   6  #786 item 3: after the picker panel is open, the Settings overlay opens over it, a refresh closes the panel
 //      and the overlay closes, the focused element's box is inside the viewport at 390 (reported at 1280 too);
 //   7  OF3b (website #810): a "Map" answer's map part (plot, count line, table reached by Tab, save action), its
-//      alternative text and a name with markup shown as text, no map part under envelope-order, and every host the
+//      alternative text and a name with markup shown as text, the map part under envelope-order too, and every host the
 //      "Map" answer made the page contact is one the "Auto" answer did (criteria 8, 9 and 12; needs a build served
 //      with SITE_OUTPUT_FORMAT=on);
 //   8  OF3b: "Map" in /ask's menu, Compare off with its reason and back with its value on "Auto", "Map" off in

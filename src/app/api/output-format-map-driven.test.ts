@@ -413,6 +413,9 @@ const LIMIT_AFTER = await drive('Auto, after eleven refusals', [getData('cnt0-00
 const MAP_ACCEPTED_THEN_REFUSED = await drive('map: accepted, then refused', [getData('pts1-0001'), present(1, 'complaint_type'), present(1, 'not_a_column')], { format: true });
 const MAP_REFUSED_TWICE = await drive('map: refused twice, the last for a failed call', [getData('pts1-0001'), present(7, 'complaint_type'), getData('fail-0001'), present(3, 'complaint_type')], { format: true });
 const MAP_NOT_COMPLETED = await drive('map: the run does not complete', [getData('pts1-0001'), present(1, 'complaint_type'), { name: '__fail__', args: {} }], { format: true });
+/** Fold 5 (the seat's 7224717454, flag 5): a failed request beside the map step, with a second request and alone. */
+const MAP_ONE_OF_TWO_FAILED = await drive('map: one of two requests failed, then the step', [getData('fail-0001'), getData('pts1-0001'), present(2, 'complaint_type')], { format: true });
+const MAP_ONLY_REQUEST_FAILED = await drive('map: the only request failed, then the step', [getData('fail-0001'), present(1, 'complaint_type')], { format: true });
 
 
 // --- Readers --------------------------------------------------------------------------------------------------------
@@ -858,6 +861,31 @@ test('OF3b criterion 10 (red): the published record\'s bytes give the record pag
     [MAP_RESULT_FAILED, 'No map: the data for the map did not arrive or could not be read.'],
   ] as const) {
     assert.deepEqual(mapPartModule!.mapPartFromRecord(await recordOf(d)).outcome, { kind: 'none', sentence }, d.name);
+  }
+});
+
+// Fold 5, flag 5 (the seat's 7224717454): "N of M requests did not complete" counts data requests only; the map step
+// is neither N nor M, on the run's view and on the record page. Driven on real runs whose step follows a failed request,
+// so a count that includes the step reads "1 of 3" and "1 of 2" instead.
+test('fold 5, flag 5 (red): the refused-request line leaves the map step out of N and M, on the run\'s view and the record page', async () => {
+  const { adaptComparison } = await import('../../components/answer-view/adapt-comparison.ts');
+  const { adaptRecord } = await import('../../components/answer-view/adapt-record.ts');
+  for (const [d, line] of [
+    [MAP_ONE_OF_TWO_FAILED, '1 of 2 requests did not complete.'],
+    [MAP_ONLY_REQUEST_FAILED, 'The only request did not complete.'],
+  ] as const) {
+    const calls = toolCallsOf(d);
+    assert.equal(calls.filter((c) => c.name === 'present_result').length, 1, `${d.name}: premise: one map step`);
+    assert.equal(calls.filter((c) => c.failed === true).length, 1, `${d.name}: premise: one failed request`);
+    const run = adaptComparison({
+      content: ANSWER, isComplete: true, isActive: false, queryText: QUESTION, toolsCalled: calls as never, progressGroups: [], progressLog: [],
+      model: 'vendor/model-fixture-1', evidenceTrace: traceOf(d), instance: null,
+    });
+    assert.equal(run.status?.refused, line, `${d.name}: the run's view`);
+    const record = adaptRecord({ stored: (await recordOf(d)) as never, resolution: null, row: { slug: 'of3b', summary: 'S', contentProfile: 'default', captureMethod: 'chat-flow-stream' }, instance: null, servedStatement: null });
+    assert.equal(record.status?.refused, line, `${d.name}: the record page`);
+    // Section D keeps the step under its raw signed name (ruling D6).
+    assert.ok(record.disclosure.recordTrace!.some((e) => e.label.startsWith('present_result')), `${d.name}: section D lost the step`);
   }
 });
 
