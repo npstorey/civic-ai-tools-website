@@ -39,8 +39,12 @@ export const NO_GUIDE_SENTENCE = 'This site does not name a deployment guide.';
 
 // --- The Sources panel ---
 
-/** What Ask first means in R6, in literal words (Q1): the pause is R8's. */
-export const ASK_FIRST_MEANS = 'Ask first: nothing is sent to this source until you turn it On.';
+/**
+ * What not answered yet means, in literal words (Q1), where a question cannot stop to ask. Drafted in S4 W2a fix round
+ * 1 by the ruled pairs (Ask first to "Not answered yet", as S86 has it; On to enabled), for the words check; it was
+ * "Ask first: nothing is sent to this source until you turn it On.".
+ */
+export const ASK_FIRST_MEANS = 'Not answered yet: nothing is sent to this source until you enable it.';
 /**
  * Under a source not answered yet, whose control shows neither button pressed, where a question can stop to ask
  * (`SOURCE_ROUTING=in-loop` with the decision store): S86 as ruled (S4, npstorey/civic-ai-tools#335; C1 = A,
@@ -49,9 +53,13 @@ export const ASK_FIRST_MEANS = 'Ask first: nothing is sent to this source until 
  */
 export const ASK_FIRST_MEANS_WITH_PAUSE = 'Not answered yet: the site asks before it uses this source.';
 
-/** The panel's heading, and its lead sentence. */
+/**
+ * The panel's heading, and its lead sentence ("About these settings", first). The lead is drafted in S4 W2a fix round
+ * 1 by the ruled pairs (On to enabled, Off to disabled; "not answered yet" is a condition, not a setting, DR-8 A), for
+ * the words check; it was "Set each data source to On, Ask first or Off. …".
+ */
 export const PANEL_HEADING = 'Data sources';
-export const PANEL_LEAD = 'Set each data source to On, Ask first or Off. Your choice applies from your next question.';
+export const PANEL_LEAD = 'Set each data source to enabled or disabled. Your choice applies from your next question.';
 
 /**
  * The panel's lead before a consent is given (R9 P2, #661): the states Allow
@@ -74,7 +82,9 @@ const COUNT_WORDS = ['no', 'one', 'two', 'three', 'four', 'five', 'six', 'seven'
 
 /** The lead before a consent, for these counts; empty when there is no source to count. */
 export function panelLeadBeforeConsent(counts: { on: number; askFirst: number; off: number }): string {
-  const groups = ([[counts.on, 'On'], [counts.askFirst, 'Ask first'], [counts.off, 'Off']] as const).filter(([n]) => n > 0);
+  // S4 W2a fix round 1: the states by the ruled pairs (`STATE_WORDS`), drafted for the words check; Allow, the card's
+  // button, keeps its word.
+  const groups = ([[counts.on, STATE_WORDS.on], [counts.askFirst, STATE_WORDS['ask-first']], [counts.off, STATE_WORDS.off]] as const).filter(([n]) => n > 0);
   if (groups.length === 0) return '';
   const named = groups.map(([n, state], i) => {
     const count = n < COUNT_WORDS.length ? COUNT_WORDS[n] : String(n);
@@ -96,6 +106,19 @@ export const PANEL_PRIVACY_LINK = 'Where a question can go, in full';
  * question." The row's "Set <State> since <date>." follows on the same line.
  */
 export const PANEL_STATE_CHANGED = { middle: ' is now ', end: '. This applies from your next question.' } as const;
+
+/**
+ * A stored state in words (S4 W2a fix round 1, the ruled pairs: On to enabled, Off to disabled, Ask first to "not
+ * answered yet", as S86 has it), drafted for the words check: the row's confirmation ("{name} is now enabled. …"),
+ * the lead before a consent, and the since line.
+ */
+export const STATE_WORDS = { on: 'enabled', 'ask-first': 'not answered yet', off: 'disabled' } as const;
+
+/** The panel's since line, drafted in S4 W2a fix round 1 ("Enabled since <date>."); it was "Set On since <date>.". */
+export function sinceLine(state: keyof typeof STATE_WORDS, since: string): string {
+  const word = STATE_WORDS[state];
+  return `${word.charAt(0).toUpperCase()}${word.slice(1)} since ${since}.`;
+}
 
 /**
  * Under a source's control, as a status line, when its change was refused because the signed-out reader's cookie is
@@ -216,7 +239,11 @@ export interface GroupCounts {
 export const GROUP_TEXT = {
   count: (n: number) => `${countInWords(n)} sources`,
   sets: (n: number, own: number) => {
-    const first = n === 2 ? (own === 1 ? 'Sets both, except one set on its own.' : 'Sets both.') : `Sets all ${countInWords(n)}, except any set on its own.`;
+    // A group of two with both set on their own: drafted in S4 W2a fix round 1 (item 4), built as S2[1] and S2[2] are,
+    // for the owner at W2's gate; no ruled form.
+    const first = n === 2
+      ? (own === 1 ? 'Sets both, except one set on its own.' : own === 2 ? 'Sets both, except any set on its own.' : 'Sets both.')
+      : `Sets all ${countInWords(n)}, except any set on its own.`;
     return `${first} A source set on its own keeps its own setting.`;
   },
   controlName: (group: string, n: number) => `${group}: Enable or Disable, ${n === 2 ? 'for both' : `for all ${countInWords(n)}`}, except any set on its own`,

@@ -720,6 +720,19 @@ test('FR1 item 2 (red): "Enable all data sources" before a consent clears every 
   s.unmount();
 });
 
+test('FR1 item 1, premise 7\'s "Cleared" before a consent: a group\'s Disable clears the flag of a member already disabled on its own, once Allow writes', async () => {
+  const net = answers();
+  await askedAgainCookie(net, { socrata: { state: 'on', own: false }, 'nyc-record': { state: 'off', own: true }, 'nyc-charter': { state: 'off', own: true } });
+  const s = await overlay();
+  await choose(s, groupOf(s, 'socrata'), 'Disable');
+  const hook = await load('components/sources/useSourceConsent.ts');
+  assert.equal(await hook.allowConsent(), true);
+  const after = await stored();
+  assert.deepEqual([after.states.socrata, after.states['nyc-record']], ['off', 'off']);
+  assert.deepEqual(after.own, ['nyc-charter'], 'the member\'s flag was not cleared, or a flag outside the group was');
+  s.unmount();
+});
+
 test('FR1 item 4 (red): a group of two with both set on their own reads the drafted S2 form', async () => {
   answers();
   await consented({ socrata: 'off', 'nyc-record': 'off' }, ['socrata', 'nyc-record']);

@@ -34,15 +34,9 @@
  */
 
 import { useId } from 'react';
-import { COOKIE_FULL_TEXT, PANEL_STATE_CHANGED, SOURCE_CONTROL_TEXT } from '@/lib/sources/copy';
+import { COOKIE_FULL_TEXT, PANEL_STATE_CHANGED, SOURCE_CONTROL_TEXT, STATE_WORDS, sinceLine as sinceLineText } from '@/lib/sources/copy';
 import { consentSnapshot, type SourceStateValue } from './useSourceConsent';
 
-/** The three stored states, with the word the confirmation and the since line name each by. */
-export const STATES: Array<{ value: SourceStateValue; label: string }> = [
-  { value: 'on', label: 'On' },
-  { value: 'ask-first', label: 'Ask first' },
-  { value: 'off', label: 'Off' },
-];
 
 /**
  * The last change whose write succeeded, if any; or the last change the endpoint refused because the cookie is full
@@ -159,12 +153,13 @@ export function useLineId(part: string): string {
 
 /** The line under the control: the confirmation of a change (a status line), else the since line, else nothing. */
 export function SourceStateConfirmation({ sourceId, name, state, since, inForce, confirmed, sinceLine = true }: SourceStateControlProps) {
-  const label = STATES.find((c) => c.value === state)?.label;
-  const setSince = sinceLine && inForce && since ? `Set ${label} since ${since}.` : null;
+  // S4 W2a fix round 1: the state in words by the ruled pairs ("is now enabled"), and the since line's drafted form.
+  const word = STATE_WORDS[state];
+  const setSince = sinceLine && inForce && since ? sinceLineText(state, since) : null;
   const mine = confirmed !== null && 'sourceId' in confirmed && confirmed.sourceId === sourceId ? confirmed : null;
   if (mine && 'refused' in mine) return <div role="status">{refusedLine(mine.accounts)}</div>;
   if (inForce && mine && 'state' in mine && mine.state === state) {
-    const changed = `${name}${PANEL_STATE_CHANGED.middle}${label}${PANEL_STATE_CHANGED.end}`;
+    const changed = `${name}${PANEL_STATE_CHANGED.middle}${word}${PANEL_STATE_CHANGED.end}`;
     return <div role="status">{setSince ? `${changed} ${setSince}` : changed}</div>;
   }
   return setSince ? <div>{setSince}</div> : null;

@@ -187,7 +187,9 @@ export const PICKER_TEXT = {
   pick: 'Pick for this question',
   pickName: (name: string) => `Pick ${name} for this question`,
   /** S5: an Off row, why it cannot be picked. */
-  offReason: 'Off. Set it to On or Ask first to pick it.',
+  // S4 W2a fix round 1: drafted by the ruled pairs, naming only a state the two buttons can set; for the words check.
+  // It was "Off. Set it to On or Ask first to pick it.".
+  offReason: 'Disabled. Enable it to pick it.',
   /** S6a: a hit this site has not set up. */
   notSetUp: 'Not set up on this site.',
   /** S7: under the box, once sources are picked; the names in the statement's order, "A", "A and B", "A, B and C". */

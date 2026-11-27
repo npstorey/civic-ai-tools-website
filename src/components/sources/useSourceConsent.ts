@@ -115,6 +115,12 @@ export interface ConsentSnapshot {
    */
   pendingOwn: string[];
   /**
+   * The stored flags a change before a consent has cleared (S4 W2a fix round 1): "Enable all data sources" clears
+   * every flag, and a group's control the flag of a member that already holds the group's new state (premise 7,
+   * "Cleared"). Allow leaves these out of `own`, so its write clears them.
+   */
+  pendingUnflag: string[];
+  /**
    * The last write the consent endpoint refused because the signed-out reader's cookie is full (S4 W1, A2;
    * `consent_cookie_full`): the control whose change it was, a source's id, `group:<class id>` for a group's control,
    * or `all` for "Enable all data sources" (S4 W2a). Cleared by the next write.
@@ -141,7 +147,7 @@ export interface PendingPause {
   afterHold?: true;
 }
 
-const EMPTY: ConsentSnapshot = { loaded: false, status: null, statement: null, writing: false, refusals: 0, failed: false, pauses: {}, routing: null, store: null, pending: {}, pendingOwn: [], cookieFull: null };
+const EMPTY: ConsentSnapshot = { loaded: false, status: null, statement: null, writing: false, refusals: 0, failed: false, pauses: {}, routing: null, store: null, pending: {}, pendingOwn: [], pendingUnflag: [], cookieFull: null };
 
 let snapshot: ConsentSnapshot = EMPTY;
 const listeners = new Set<() => void>();
@@ -414,7 +420,7 @@ async function write(method: 'PUT' | 'PATCH' | 'DELETE', body?: unknown, target?
       return false;
     }
     // Written: the store now holds what the panel shows, and nothing is pending.
-    set({ pending: {}, pendingOwn: [] });
+    set({ pending: {}, pendingOwn: [], pendingUnflag: [] });
     return true;
   } catch {
     set({ failed: true });
@@ -438,9 +444,11 @@ export async function allowConsent(): Promise<boolean> {
   const status = snapshot.status;
   if (!status) return false;
   const states = panelStates({ status, pending: snapshot.pending }, configured());
-  // A source the reader set by its own control before the consent is set on its own when Allow writes it (premise 7's
-  // exception); one a group's control or "Enable all data sources" set is not (S4 W2a).
-  const own = snapshot.pendingOwn.filter((id) => Object.prototype.hasOwnProperty.call(states, id));
+  // `own` is every source set on its own, always sent, empty too (S4 W2a fix round 1): the endpoint writes each other
+  // source it is given not set on its own. So it holds the stored flags (a consent asked again keeps them) less those a
+  // change before the consent cleared, and the sources the reader set by their own control before it (premise 7's
+  // exception); never one a group's control or "Enable all data sources" set.
+  const own = [...ownSources(snapshot)].filter((id) => Object.prototype.hasOwnProperty.call(states, id));
   return write('PUT', { states, own, flowsVersion: status.flowsVersion });
 }
 
@@ -457,7 +465,11 @@ export async function allowConsent(): Promise<boolean> {
 export async function setSourceState(sourceId: string, state: SourceStateValue): Promise<boolean> {
   const status = snapshot.status;
   if (!status?.inForce) {
-    set({ pending: { ...snapshot.pending, [sourceId]: state }, pendingOwn: snapshot.pendingOwn.includes(sourceId) ? snapshot.pendingOwn : [...snapshot.pendingOwn, sourceId] });
+    set({
+      pending: { ...snapshot.pending, [sourceId]: state },
+      pendingOwn: snapshot.pendingOwn.includes(sourceId) ? snapshot.pendingOwn : [...snapshot.pendingOwn, sourceId],
+      pendingUnflag: snapshot.pendingUnflag.filter((id) => id !== sourceId),
+    });
     return true;
   }
   const states = { ...currentStates(status, configured()), [sourceId]: state };
@@ -466,12 +478,15 @@ export async function setSourceState(sourceId: string, state: SourceStateValue):
 }
 
 /**
- * The sources set on their own, as the surfaces read them (S4 W2a): the stored flags (`setOnItsOwn`), and before a
- * consent the sources the reader set by their own control (`pendingOwn`), which Allow will flag.
+ * The sources set on their own, as the surfaces read them and Allow sends them (S4 W2a): the stored flags
+ * (`setOnItsOwn`); before a consent less those a change has cleared (`pendingUnflag`), and with the sources the reader
+ * set by their own control (`pendingOwn`), which Allow will flag.
  */
-export function ownSources(snapshot: Pick<ConsentSnapshot, 'status' | 'pendingOwn'>): Set<string> {
+export function ownSources(snapshot: Pick<ConsentSnapshot, 'status' | 'pendingOwn' | 'pendingUnflag'>): Set<string> {
   const own = new Set(snapshot.status?.setOnItsOwn ?? []);
-  if (snapshot.status?.inForce !== true) for (const id of snapshot.pendingOwn) own.add(id);
+  if (snapshot.status?.inForce === true) return own;
+  for (const id of snapshot.pendingUnflag) own.delete(id);
+  for (const id of snapshot.pendingOwn) own.add(id);
   return own;
 }
 
@@ -485,10 +500,21 @@ export function ownSources(snapshot: Pick<ConsentSnapshot, 'status' | 'pendingOw
 export async function setClassState(classId: string, members: readonly string[], state: SourceStateValue): Promise<boolean> {
   const status = snapshot.status;
   if (!status?.inForce) {
+    // As the class write does: a member set on its own is left as it is, and its flag cleared when it already holds
+    // `state` (premise 7, "Honoured" and "Cleared").
     const own = ownSources(snapshot);
+    const shown = panelStates(snapshot, configured());
     const pending = { ...snapshot.pending };
-    for (const id of members) if (!own.has(id)) pending[id] = state;
-    set({ pending });
+    const cleared: string[] = [];
+    for (const id of members) {
+      if (!own.has(id)) pending[id] = state;
+      else if (shown[id] === state) cleared.push(id);
+    }
+    set({
+      pending,
+      pendingOwn: snapshot.pendingOwn.filter((id) => !cleared.includes(id)),
+      pendingUnflag: [...new Set([...snapshot.pendingUnflag, ...cleared])],
+    });
     return true;
   }
   return write('PUT', { change: { scope: 'class', classId, state }, flowsVersion: status.flowsVersion }, `group:${classId}`);
@@ -503,7 +529,9 @@ export async function setClassState(classId: string, members: readonly string[],
 export async function enableAllSources(): Promise<boolean> {
   const status = snapshot.status;
   if (!status?.inForce) {
-    set({ pending: Object.fromEntries(configured().map((id) => [id, 'on' as const])), pendingOwn: [] });
+    // Every flag cleared (C3-ALL = A, fix round 1 item 2): Allow then sends `own` without them, and its one write clears
+    // them, stored ones too.
+    set({ pending: Object.fromEntries(configured().map((id) => [id, 'on' as const])), pendingOwn: [], pendingUnflag: configured() });
     return true;
   }
   return write('PUT', { change: { scope: 'all', state: 'on' }, flowsVersion: status.flowsVersion }, 'all');

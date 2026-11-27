@@ -50,8 +50,9 @@ import { decisionStoreFromEnv } from '@/lib/sources/decision';
  *   PUT     `{ states: { <source id>: 'on' | 'ask-first' | 'off' }, flowsVersion, own? }`
  *           stores the states for the sources this instance configures,
  *           against the flows statement the surface was shown (the first
- *           consent's Allow; `own` names the sources the reader set before
- *           it, which are set on their own). Every stored state it does not
+ *           consent's Allow; `own` names every source set on its own, and
+ *           each other source it names is written not set on its own, S4 W2a
+ *           fix round 1; without `own` the flags read as before). Every stored state it does not
  *           name is kept. 400 names any
  *           id this instance does not configure (flag 3: the only boundary
  *           that accepts source ids); 409 when `flowsVersion` is not the
@@ -270,7 +271,8 @@ export async function PUT(request: Request): Promise<Response> {
   const dbId = session?.user?.dbId;
   const today = consentDate();
   const given = entries as Array<[string, SourceState]>;
-  const ownSet = new Set((own as string[] | undefined) ?? []);
+  // S4 W2a fix round 1: a body that carries `own` names every source set on its own; one without it reads as before.
+  const ownSet = own === undefined ? undefined : new Set(own as string[]);
 
   if (dbId) {
     // Every stored state it does not name is kept (A12); a named state the reader did not change keeps its date.
