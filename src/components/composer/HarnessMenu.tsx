@@ -55,7 +55,7 @@ import { SETTINGS_HREF } from '@/lib/sources/copy';
 import { canPauseToAsk, useSourceConsent, type ConsentSnapshot } from '@/components/sources/useSourceConsent';
 import { startSignIn, useSignInAction } from './SignInControl';
 import { chooseAuto, choosePicking, usePicks } from './picks/store';
-import { storedOutputFormatValue, type OfferedOutputFormat, type OutputFormatRef } from '@/lib/output-format/registry';
+import { isMapChoice, outputFormatInForce, storedOutputFormatValue, type OfferedOutputFormat, type OutputFormatRef } from '@/lib/output-format/registry';
 import {
   ALL_SETTINGS,
   COMPARE_ITEM,
@@ -175,9 +175,15 @@ export default function HarnessMenu({ variant, models, model, onModel, session, 
     ],
   };
   // OF2: the Output format item, after Data sources, where the mount passes one and never in `sources-only`.
-  const chosenFormat = outputFormat?.chosen
+  const sandbox = session?.mode === 'notebook';
+  const storedFormat = outputFormat?.chosen
     ? outputFormat.formats.find((f) => f.id === outputFormat.chosen!.id && f.version === outputFormat.chosen!.version) ?? null
     : null;
+  // OF3b (K3 = A): in a Sandbox session a map format is not in force; the item reads Auto, and the stored choice comes
+  // back when Session type is Standard again, as Compare's does.
+  const chosenFormat = outputFormatInForce(storedFormat, sandbox);
+  // OF3b (C3 = A): while a map format is in force, Compare is off with its reason; its stored value comes back on Auto.
+  const mapChosen = isMapChoice(chosenFormat);
   const formatItem: MenuItem | null = outputFormat && variant !== 'sources-only'
     ? {
         id: ID.outputFormat,
@@ -185,12 +191,25 @@ export default function HarnessMenu({ variant, models, model, onModel, session, 
         value: chosenFormat ? chosenFormat.label : OUTPUT_FORMAT_ITEM.value,
         children: [
           { id: ID.outputFormatAuto, label: OUTPUT_FORMAT_ITEM.auto, description: OUTPUT_FORMAT_ITEM.autoDescription, checked: chosenFormat === null },
-          ...outputFormat.formats.map((f) => ({
-            id: `${ID.outputFormatPrefix}${storedOutputFormatValue(f)}`,
-            label: f.label,
-            ...(f.description !== undefined ? { description: f.description } : {}),
-            checked: chosenFormat !== null && chosenFormat.id === f.id && chosenFormat.version === f.version,
-          })),
+          ...outputFormat.formats.map((f): MenuItem => (sandbox && f.kind === 'map'
+            ? { id: `${ID.outputFormatPrefix}${storedOutputFormatValue(f)}`, label: f.label, checked: false, disabledReason: OUTPUT_FORMAT_ITEM.sandboxMapReason }
+            : {
+                id: `${ID.outputFormatPrefix}${storedOutputFormatValue(f)}`,
+                label: f.label,
+                ...(f.description !== undefined || f.capLine !== undefined
+                  ? {
+                      // OF3b (C4's note): the cap is stated where the format is described, as a second line.
+                      description: f.capLine === undefined ? f.description : (
+                        <>
+                          {f.description}
+                          {f.description !== undefined ? ' ' : null}
+                          <span data-part="format-cap-line" style={{ display: 'block' }}>{f.capLine}</span>
+                        </>
+                      ),
+                    }
+                  : {}),
+                checked: chosenFormat !== null && chosenFormat.id === f.id && chosenFormat.version === f.version,
+              })),
         ],
       }
     : null;
@@ -216,7 +235,6 @@ export default function HarnessMenu({ variant, models, model, onModel, session, 
   } else {
     items.push(modelItem, sources, ...(formatItem ? [formatItem] : []));
     if (session) {
-      const sandbox = session.mode === 'notebook';
       const sandboxReason = session.affordance === 'unavailable' ? NOTEBOOK_MODE_UNAVAILABLE_REASON
         : session.affordance === 'sign-in' ? SANDBOX_SIGN_IN_REASON : undefined;
       items.push({
@@ -234,10 +252,11 @@ export default function HarnessMenu({ variant, models, model, onModel, session, 
         items.push({
           id: ID.compare,
           label: COMPARE_ITEM.label,
-          // In Sandbox, Compare is disabled (#735), and its value never reads On, whatever the stored choice says.
-          value: comparison.restored && !sandbox ? COMPARE_VALUE_ON : COMPARE_VALUE_OFF,
+          // In Sandbox, Compare is disabled (#735), and its value never reads On, whatever the stored choice says. So
+          // while a map format is chosen (OF3b, C3 = A): its stored value stays, and comes back when Auto is chosen.
+          value: comparison.restored && !sandbox && !mapChosen ? COMPARE_VALUE_ON : COMPARE_VALUE_OFF,
           description: COMPARE_ITEM.description,
-          ...(sandbox ? { disabledReason: COMPARE_ITEM.sandboxReason } : {}),
+          ...(sandbox ? { disabledReason: COMPARE_ITEM.sandboxReason } : mapChosen ? { disabledReason: COMPARE_ITEM.mapReason } : {}),
         });
       }
     }

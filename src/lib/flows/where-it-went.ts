@@ -47,6 +47,7 @@ import { statementHash, type FlowsKeptBy, type FlowsRecipient, type FlowsStateme
 import { recipientWhere, roleLabel } from '../sources/source-name.ts';
 import { WHERE_IT_WENT_REASONS } from '../sources/copy.ts';
 import { SEARCH_OPERATION } from './search-words.ts';
+import { PRESENT_STEP_NAME } from '../output-format/attribute-names.ts';
 import { NOTEBOOK_EXTENSION_KEY, readNotebookProvenanceOfNotebook } from '../notebook-author/notebook-provenance-reading.ts';
 import { CIVIC_MANIFEST, civicRouter, retiredPack } from '@typedstandards/civic-typed-router';
 import { aliasOf, attributesOf, chooserFromPackage, NOT_RECEIVED, sourceReaderName, spansOfTrace, type SourceChooser } from './source-chooser.ts';
@@ -355,6 +356,8 @@ function readSpans(spans: readonly unknown[]): { contacts: Contact[]; model: str
     } else if (span.name === 'mcp_tool_call') {
       // A search (S3-B W2) is the instance's own step: no source saw it, so it is no contact.
       if (attrs.get('tool.operation_type') === SEARCH_OPERATION) continue;
+      // OF3b (website #810): the map format's step is the site's own; no source saw it, so it is no contact.
+      if (attrs.get('tool.operation_type') === PRESENT_STEP_NAME) continue;
       if (attrs.get('tool.operation_type') === LOAD_OPERATION) {
         contacts.push({ kind: 'load', alias: aliasOf(text(attrs.get('tool.arguments'))), outcome: text(attrs.get('tool.load_outcome')) ?? '' });
       } else {
@@ -406,7 +409,8 @@ export function whereItWentFromCalls(input: {
   executed?: boolean;
 }): WhereItWentModel {
   // A search (S3-B W2) is no contact with any source, whatever the resolver would make of its name.
-  const contacts: Contact[] = input.toolCalls.filter((call) => call.operationType !== SEARCH_OPERATION).map((call): Contact =>
+  // OF3b: nor is the map format's step, the site's own (`present_result`).
+  const contacts: Contact[] = input.toolCalls.filter((call) => call.operationType !== SEARCH_OPERATION && call.operationType !== PRESENT_STEP_NAME).map((call): Contact =>
     call.operationType === LOAD_OPERATION
       ? { kind: 'load', alias: text(call.args?.alias), outcome: call.loadOutcome ?? '' }
       : (() => {

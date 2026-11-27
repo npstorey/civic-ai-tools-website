@@ -11,7 +11,7 @@ import { decisionStoreFromEnv, readerGone, streamingRoutePause } from '@/lib/sou
 import { createInLoopRouting, DIRECTORY_SET_RULE, directorySet, entersInLoop, READER_PICKED_RULE, sourceRoutingMode } from '@/lib/mcp/routing-mode';
 import { consumeRateLimit, getMissingRateLimitSecretError, isRateLimited } from '@/lib/rate-limit';
 import { headers } from 'next/headers';
-import { encodeSSE, errorLogFacts, panelsForRun, startSseKeepAlive, streamErrorPayload, type StreamErrorCode, type PanelType, type StreamEvent } from '@/lib/streaming';
+import { encodeSSE, errorLogFacts, friendlyStreamError, panelsForRun, startSseKeepAlive, streamErrorPayload, type StreamErrorCode, type PanelType, type StreamEvent } from '@/lib/streaming';
 import { getGenAiSystem, getMissingModelCredentialError, ModelConfigurationError } from '@/lib/model-client';
 import { packOfDispatchTarget, whereItWentFromCalls } from '@/lib/flows/where-it-went';
 import { resolveModelIdentity, ModelNotOfferedError } from '@/lib/model-resolver';
@@ -266,6 +266,17 @@ export async function POST(request: NextRequest) {
       return new Response(encoder.encode(body), { headers: SSE_HEADERS });
     }
     const outputFormat = requestFormat.kind === 'asked' ? requestFormat.format : undefined;
+    // OF3b (website #810; C3 = A, the seat's 7175166118 item 3): a map format runs with data tools only. Asked with the
+    // comparison's second panel, it is refused here, as a format not offered is, an error event per panel, before the
+    // limiter, the model or any source, with the menu's own reason line (`MAP_COMPARE_REASON`).
+    if (outputFormat && isMapFormat(outputFormat) && !mcpOnly) {
+      const code: StreamErrorCode = 'map_format_compare_not_offered';
+      const encoder = new TextEncoder();
+      const body = panelsForRun(mcpOnly)
+        .map((panel) => encodeSSE({ type: 'error', panel, message: friendlyStreamError({ code }), code } as StreamEvent & { message: string; code: StreamErrorCode }))
+        .join('');
+      return new Response(encoder.encode(body), { headers: SSE_HEADERS });
+    }
     // OF3a (website #810): a map format's run carries the site's present step; "Auto" and any other format carry none.
     const presentStep = outputFormat && isMapFormat(outputFormat) ? createPresentStep() : undefined;
 

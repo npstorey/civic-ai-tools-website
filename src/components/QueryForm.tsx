@@ -30,6 +30,7 @@ import { useOfferedOutputFormats } from '@/components/OutputFormatProvider';
 import {
   OUTPUT_FORMAT_STORAGE_KEY,
   chosenOutputFormat,
+  outputFormatInForce,
   parseStoredOutputFormat,
   storedOutputFormatValue,
   type OutputFormatRef,
@@ -431,7 +432,9 @@ export default function QueryForm({
     markRefused(false);
     // R4: a send closes the panel.
     closePicker();
-    const format = chosenFormat ? { id: chosenFormat.id, version: chosenFormat.version } : undefined;
+    // OF3b (K3 = A): a map format is not sent from a Sandbox session; the menu reads Auto there.
+    const inForce = outputFormatInForce(chosenFormat, mode === 'notebook');
+    const format = inForce ? { id: inForce.id, version: inForce.version } : undefined;
     const args = [query.trim(), model, portal, mode, pickingNow ? [...pickedNow] : undefined, format] as const;
     const run = () => {
       lastSentRef.current = () => onSubmit(...args);

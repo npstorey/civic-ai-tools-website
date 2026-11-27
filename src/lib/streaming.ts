@@ -10,6 +10,7 @@ import type { ToolFailureKind } from './notebook-author/tool-to-cell.ts';
 import type { FlowsLinks, FlowsSource } from './flows/statement.ts';
 import { readerSourceName } from './sources/source-name.ts';
 import { FIND_SOURCE_WORDS } from './sources/copy.ts';
+import { MAP_COMPARE_REASON, MAP_STEP_RUNNING, mapSummaryClause } from './output-format/map-words.ts';
 import { searchProgressLine, searchResultLine } from './flows/search-words.ts';
 import type { WhereItWentModel } from './flows/where-it-went.ts';
 export type StreamEventType = 'progress' | 'token' | 'complete' | 'error' | 'trace';
@@ -222,6 +223,11 @@ export interface ErrorEvent extends StreamEvent {
  * site does not offer (or offers none, with `SITE_OUTPUT_FORMAT` off), so it
  * was refused before the limiter, the model or any source.
  *
+ * `map_format_compare_not_offered` (OF3b, website #810; C3 = A) is set
+ * explicitly by the compare route: the question named a map format and asked
+ * for the comparison's second panel too, so it was refused before the limiter,
+ * the model or any source. Its copy is Compare's reason line in the menu.
+ *
  * `not_offered` (R6 W1) is set explicitly by the dispatch, never derived from
  * message text: `SourceNotOfferedError` (`./mcp/registry.ts`) carries it as
  * its `code`, which the first branch of `classifyStreamError` reads. It is a
@@ -255,6 +261,7 @@ export const STREAM_ERROR_KINDS = [
   'no_sources_on',
   'no_picks_usable',
   'output_format_not_offered',
+  'map_format_compare_not_offered',
   'session_ended',
   'generic',
 ] as const;
@@ -446,6 +453,9 @@ const FRIENDLY_STREAM_COPY: Record<StreamErrorKind, string> = {
   // the two controls it names are set off in typographic quotation marks, as this site's reader prose names a control
   // (`EvidenceIndex.tsx`'s click “Publish”). Every block that shows it renders it as text.
   output_format_not_offered: 'This site does not offer the output format you chose, so nothing was sent. Choose “Auto” under “Output format”, then ask again.',
+  // OF3b (website #810; C3 = A, the seat's 7175166118 item 3): a map format asked with the comparison's second panel.
+  // The menu's own reason line for Compare, so the menu states what the route enforces.
+  map_format_compare_not_offered: MAP_COMPARE_REASON,
   // FIX-1 FX-S2 (Seat ruling 7072824077, S1): a reader whose session ended is asked to sign in again. The run route
   // refused before the body, the model, the sandbox and the limiter, so nothing was sent.
   session_ended: 'You are no longer signed in, so nothing was sent. Sign in again, then ask your question again.',
@@ -1298,6 +1308,9 @@ export function formatToolProgress(
     case 'find_source':
       // The instance's own search (S3-B W2): the words as the span records them.
       return searchProgressLine(args);
+    case 'present_result':
+      // OF3b (website #810; W10): the site's own step in a map format; no source is asked anything.
+      return MAP_STEP_RUNNING;
     default:
       // `fetch` derives to no operation type by design (see
       // mcp/operation-types.ts): the identifier's shape decides, server-side,
@@ -1343,6 +1356,20 @@ export function getPortalCity(portal: string | undefined): string {
   };
 
   return portalCities[portal] || 'open data';
+}
+
+/**
+ * The dataset a `present_result` call named (OF3b, website #810): `result` counts every tool call of the run from 1,
+ * as the step reads it (`output-format/present-step.ts`), and the named call's `dataset_id` (or CKAN `resource_id`) is
+ * named as `getDatasetName` names it, as the map's own name was built (`plain-map.ts`, `datasetOfCall`). Undefined
+ * when the call names no earlier call, or the call it names named no dataset or resource.
+ */
+export function presentedDatasetName(args: Record<string, unknown>, calls: ReadonlyArray<{ args?: Record<string, unknown> }>): string | undefined {
+  const n = args.result;
+  if (typeof n !== 'number' || !Number.isInteger(n) || n < 1 || n > calls.length) return undefined;
+  const named = calls[n - 1]?.args ?? {};
+  const id = named.dataset_id ?? named.resource_id;
+  return typeof id === 'string' && id.length > 0 ? getDatasetName(id) : undefined;
 }
 
 export function getDatasetName(datasetId: string | undefined): string {
@@ -1756,6 +1783,9 @@ export function generateToolReason(args: Record<string, unknown>, name?: string)
     }
     case 'find_source':
       return FIND_SOURCE_WORDS.purpose;
+    case 'present_result':
+      // OF3b (website #810): the site's own step in a map format, in W10's words (unchecked as a purpose phrase).
+      return 'to choose what to map';
     default:
       if (isTool(name, 'fetch')) return id ? `to look up ${id}` : 'to look up one item';
       // A tool whose operation neither its name nor its arguments state: the
@@ -1995,6 +2025,9 @@ export function buildBreadcrumbLabel(
     }
     case 'find_source':
       return FIND_SOURCE_WORDS.breadcrumb;
+    case 'present_result':
+      // OF3b (website #810): the map format's step, in W10's running words.
+      return MAP_STEP_RUNNING;
     default: {
       if (isTool(tool.name, 'fetch')) {
         const id = tool.args.id as string | undefined;
@@ -2017,6 +2050,9 @@ function describeToolNarrative(
   const query = tool.args.query as string | undefined;
 
   switch (opType) {
+    case 'present_result':
+      // OF3b (website #810; W10, the seat's 7175461805): the dataset the call named, or none.
+      return mapSummaryClause(presentedDatasetName(tool.args, allTools));
     case 'catalog':
       return query ? `searched for datasets about "${query}"` : 'searched the data catalog';
     case 'search': {

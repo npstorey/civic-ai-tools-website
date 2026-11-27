@@ -228,6 +228,12 @@ const TOOL_OPERATION_TYPES: Record<string, string> = {
   // search span by, and every renderer that switches on the type has a case
   // for it. The router reserves the name, so no source's tool has it.
   find_source: 'find_source',
+  //
+  // `present_result`, the map format's step (OF3a/OF3b, website #810, harness 0.16.0), is the instance's own step as
+  // the two above are: no source answers it and it reads no data from one. Its operation type is its own name, the
+  // value the harness reads a present span by, and every renderer that switches on the type has a case for it. A
+  // source's tool of that name is refused when a map run's tools are composed (`present-step.ts`).
+  present_result: 'present_result',
 };
 
 /**

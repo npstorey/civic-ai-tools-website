@@ -59,7 +59,7 @@ import { useAnswerArrival, useConsentReplyAnnouncement } from '@/components/shar
 import { useStreamingComparison } from '@/hooks/useStreamingComparison';
 import { useNotebookStream } from '@/hooks/useNotebookStream';
 import { useSessionChoice } from '@/hooks/useSessionChoice';
-import type { OutputFormatRef } from '@/lib/output-format/registry';
+import { isMapFormat, type OutputFormatRef } from '@/lib/output-format/registry';
 import {
   COMPARISON_STORAGE_KEY,
   isComparisonRunComplete,
@@ -165,7 +165,12 @@ export default function QuerySurface({
   // mid-result must not reshape an already-rendered answer (a restored
   // comparison has nothing to show for a run whose without-data arm never
   // executed). The next submit picks the toggle up.
-  const answerFirstActive = answerFirstConfigured && streaming.mcpOnly;
+  // OF3b (website #810; C3 = A): a map format runs with data tools only, on every mount, so its run is shown answer
+  // first, with no comparison to run (the compare route refuses a map format with the second panel).
+  const lastRunMapped = lastOutputFormat !== undefined && isMapFormat(lastOutputFormat);
+  const answerFirstActive = (answerFirstConfigured || lastRunMapped) && streaming.mcpOnly;
+  /** One arm only when the mount is answer-first without the comparison restored, or the question asks for a map. */
+  const mcpOnlyFor = (format: OutputFormatRef | undefined) => shouldRunMcpOnly(presentation, comparisonRestored) || (format !== undefined && isMapFormat(format));
 
   // The dock (UX-2 P3b-1 leg H): the first send that starts a run docks the form, for good (`handleSubmit`).
   const [docked, setDocked] = useState(false);
@@ -257,7 +262,7 @@ export default function QuerySurface({
     } else {
       notebook.reset();
       streaming.startComparison(query, model, effectivePortal, {
-        mcpOnly: shouldRunMcpOnly(presentation, comparisonRestored),
+        mcpOnly: mcpOnlyFor(outputFormat),
         picks,
         outputFormat,
       });
@@ -271,7 +276,7 @@ export default function QuerySurface({
       resultsRef.current?.scrollIntoView({ behavior: preferredScrollBehavior(), block: 'start' });
     }, 100);
     streaming.startComparison(continuationPrompt, usedModel, lastPortal, {
-      mcpOnly: shouldRunMcpOnly(presentation, comparisonRestored),
+      mcpOnly: mcpOnlyFor(lastOutputFormat),
       picks: lastPicks,
       outputFormat: lastOutputFormat,
     });
@@ -388,7 +393,9 @@ export default function QuerySurface({
             onPublishDialogChange={setPublishDialogOpen}
             onContinue={handleContinue}
             answerFirst={answerFirstActive}
-            onRunComparison={answerFirstConfigured ? handleRunComparison : undefined}
+            onRunComparison={answerFirstConfigured && !lastRunMapped ? handleRunComparison : undefined}
+            // OF3b (C3 = A): a map run offers no comparison to run.
+            comparisonOffered={!lastRunMapped}
           />
         </div>
       )}

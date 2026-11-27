@@ -25,9 +25,10 @@
  * the plot itself, with no basemap and no other host.
  */
 import { getDatasetName } from '../streaming.ts';
+import { MAP_POINT_CAP, mapCaption } from './map-words.ts';
 
-/** The most points a plain map draws (C4 = A). */
-export const MAP_POINT_CAP = 1000;
+/** The most points a plain map draws (C4 = A), defined beside the sentences that state it (`map-words.ts`). */
+export { MAP_POINT_CAP };
 
 /** Why no map was drawn (the record's `outcome.reason`). */
 export type NoMapReason = 'no-result-named' | 'no-location-columns' | 'no-located-rows' | 'result-failed';
@@ -200,9 +201,10 @@ export function datasetOfCall(call: { args: Record<string, unknown> }): string {
   return typeof id === 'string' && id.length > 0 ? getDatasetName(id) : UNNAMED_DATA;
 }
 
-/** The map's name (at most 100 characters, the schema's limit): W9's caption, "The {drawn} mapped rows from {dataset}". */
+/** The map's name (at most 100 characters, the schema's limit): W9's caption, "The {drawn} mapped rows from {dataset}",
+ *  built by the one caption builder (`map-words.ts`, the number rule C2c = A). */
 export function mapName(drawn: number, dataset: string): string {
-  const name = `The ${drawn} mapped rows from ${dataset}`;
+  const name = mapCaption(drawn, dataset);
   return name.length <= 100 ? name : `${name.slice(0, 99)}…`;
 }
 

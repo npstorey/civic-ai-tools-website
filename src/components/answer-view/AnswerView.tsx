@@ -39,6 +39,9 @@
  * the line that names the layout (rule 5). Both sit outside the disclosure.
  * The server, and a reader who has not chosen, render the instance's default.
  *
+ * THE MAP PART (OF3b, website #810): a map-format answer's plot, counts and table (`MapPart.tsx`), placed in the
+ * answer part after the answer, under the `answer-first` layout only (K4 = A); every other layout renders as before.
+ *
  * WHO WROTE EACH PART. Every author line comes from the model (`AUTHOR` in
  * `view-model.ts`, design §6) and is rendered with `data-author`; this file
  * places the lines and never writes one. An honest-provenance sentence the
@@ -67,8 +70,10 @@ import { secondsText } from '@/lib/evidence/query-step';
 import { useSessionChoice } from '@/hooks/useSessionChoice';
 import { useAnswerLayouts } from '@/components/answer-view/AnswerLayoutsProvider';
 import WhereItWent from '@/components/answer-view/WhereItWent';
+import MapPart from '@/components/answer-view/MapPart';
 import { LAYOUT_STORAGE_KEY } from '@/lib/query-presentation';
 import {
+  ANSWER_FIRST,
   disclosureOrder,
   layoutId,
   pageOrder,
@@ -802,6 +807,10 @@ export default function AnswerView({
             {answerElement}
           </div>
         )}
+
+        {/* OF3b (website #810; K4 = A): the map part, after the answer, under the answer-first layout only. The
+            answer above is placed whatever the map part holds. */}
+        {model.map !== undefined && layout.name === ANSWER_FIRST.name && <MapPart map={model.map} />}
       </>
     ),
 

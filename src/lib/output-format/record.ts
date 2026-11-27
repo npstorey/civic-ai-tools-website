@@ -32,7 +32,7 @@
  * enforce it). An outcome with no `preset` throws too. With no such attribute, a format run's record carries `preset`
  * alone: the run recorded no outcome.
  */
-import { OUTPUT_FORMAT_ATTRIBUTE, OUTPUT_FORMAT_RESULT_ATTRIBUTE } from '../evidence/trace.ts';
+import { OUTPUT_FORMAT_ATTRIBUTE, OUTPUT_FORMAT_RESULT_ATTRIBUTE } from './attribute-names.ts';
 import { OUTPUT_FORMAT_EXTENSION_KEY, type OutputFormatRef } from './registry.ts';
 import { assertUniqueFeatureIds, NO_MAP_REASONS, type MapPresentation } from './plain-map.ts';
 

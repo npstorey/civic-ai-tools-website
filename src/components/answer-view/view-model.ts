@@ -17,6 +17,7 @@ import type { NotebookProvenanceState } from '../../lib/notebook-author/notebook
 import { PAGE_PART_VIEWS, type PagePartView } from '../../lib/answer-layout/index.ts';
 import type { PublishedLayout } from '../../lib/answer-layout/published-line.ts';
 import type { WhereItWentModel } from '../../lib/flows/where-it-went.ts';
+import type { MapPartModel } from '../../lib/output-format/map-part.ts';
 
 // --- The order -------------------------------------------------------------------
 
@@ -280,4 +281,9 @@ export interface AnswerViewModel {
   publishedLayout?: PublishedLayout;
   /** R6 W4: where the question went. Absent: the run carried no `flows`, or the record has no trace. */
   whereItWent?: WhereItWentModel;
+  /**
+   * OF3b (website #810): the map part, beside the answer under the `answer-first` layout only (K4 = A). Absent under
+   * "Auto", for a record with no format key, and for a run whose trace has not stated an outcome.
+   */
+  map?: MapPartModel;
 }

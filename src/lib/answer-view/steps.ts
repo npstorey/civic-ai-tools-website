@@ -30,6 +30,8 @@ import { describeQueryOutcome, secondsText } from '../evidence/query-step.ts';
 import { FIND_SOURCE_WORDS, LOAD_STEP_LABEL } from '../sources/copy.ts';
 import { SEARCH_OPERATION, searchQueryOf, searchStepOutcome, type SearchReading } from '../flows/search-words.ts';
 import { loadAliasReaderName } from '../flows/source-chooser.ts';
+import { MAP_STEP_RUNNING } from '../output-format/map-words.ts';
+import { PRESENT_STEP_NAME } from '../output-format/attribute-names.ts';
 // Type-only: erased at compile time. The kind vocabulary is declared once,
 // beside the table that turns it into reader-facing copy.
 import type { ToolFailureKind } from '../notebook-author/tool-to-cell.ts';
@@ -277,7 +279,21 @@ export function openStepLabel(entries: ProgressLogEntry[]): string {
   const first = entries.find((entry) => entry.phase === 'tool_start');
   if (first !== undefined && isLoadStart(first)) return loadStepLabel(entries, true);
   if (first !== undefined && entryOperationType(first) === SEARCH_OPERATION) return FIND_SOURCE_WORDS.stepLabel;
+  // OF3b (W10): the map format's own step, while it runs.
+  if (first !== undefined && entryOperationType(first) === PRESENT_STEP_NAME) return MAP_STEP_RUNNING;
   return OPEN_STEP_LABEL;
+}
+
+/**
+ * The steps with each map step (OF3b, website #810; W10) labelled `line`: "This site mapped {drawn} of {returned} rows
+ * from {dataset}", or W8's sentence, once the run's trace says what was presented. A group is a map step when every
+ * call it started is the site's `present_result`; until the trace arrives it keeps "Choosing what to map".
+ */
+export function withMapStepLabel(groups: ProgressGroup[], line: string): ProgressGroup[] {
+  return groups.map((group) => {
+    const starts = group.entries.filter((e) => e.phase === 'tool_start');
+    return starts.length > 0 && starts.every((e) => entryOperationType(e) === PRESENT_STEP_NAME) ? { ...group, label: line } : group;
+  });
 }
 
 /**
@@ -309,6 +325,8 @@ export function generateGroupLabel(entries: ProgressLogEntry[], previousEntries?
     if (operationType === LOAD_OPERATION) return loadStepLabel(toolStarts, false);
     // The instance's own search (S3-B W2, S1): never "Gathering data", since it gathered none.
     if (operationType === SEARCH_OPERATION) return FIND_SOURCE_WORDS.stepLabel;
+    // OF3b (W10): the map format's own step; `withMapStepLabel` writes what it mapped once the trace says.
+    if (operationType === PRESENT_STEP_NAME) return MAP_STEP_RUNNING;
     if (operationType !== undefined && operationType !== NO_STATED_OPERATION) {
       return OPERATION_WORDS[operationType] ?? OPEN_STEP_LABEL;
     }
@@ -832,6 +850,8 @@ export function buildRecordStepView(
   queries: readonly RecordStepQuery[],
   refused: ReadonlySet<number> = new Set(),
   searches: ReadonlyMap<number, SearchReading> = new Map(),
+  /** OF3b (W10): what a map step states, from the record's format extension; absent, a map step states nothing more. */
+  mapLine?: string,
 ): StepView {
   const calls: StepCall[] = queries.map((q) => ({
     name: q.tool,
@@ -840,6 +860,10 @@ export function buildRecordStepView(
     ...(q.failed !== undefined ? { failed: q.failed } : {}),
   }));
   return oneStepPerCall(calls, (call, i) => {
+    // OF3b: the map format's step is the site's own; its outcome is W10's line, never "no result summary".
+    if (queries[i].operationType === PRESENT_STEP_NAME && mapLine !== undefined) {
+      return { sentence: stepSentence(call), outcome: /[.!?]$/.test(mapLine) ? mapLine : `${mapLine}.`, failed: false };
+    }
     if (queries[i].operationType === SEARCH_OPERATION) {
       return { sentence: stepSentence(call), outcome: searchStepOutcome(searches.get(i)), failed: false };
     }
