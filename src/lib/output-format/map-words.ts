@@ -98,8 +98,24 @@ export function mapAltText(drawn: number, withoutLocation: number, dataset: stri
 /** W9's save action (the file is the map data as the record keeps it). */
 export const MAP_DATA_DOWNLOAD = 'Download map data';
 
-/** The table's column headings (new, unchecked). */
-export const MAP_TABLE_HEADINGS = { row: 'Row', name: 'Name', latitude: 'Latitude', longitude: 'Longitude' } as const;
+/**
+ * The table's column headings, and the two lines under the table that say what "Label" and "Row" hold (the seat's
+ * 7225128356, from the words check's replacement lines; "Latitude" and "Longitude" stay as built).
+ */
+export const MAP_TABLE_HEADINGS = { row: 'Row', name: 'Label', latitude: 'Latitude', longitude: 'Longitude' } as const;
+
+/** Under the table: "Label: the value in the {column} column. The AI chose that column." */
+export function mapLabelLine(column: string): string {
+  return `Label: the value in the ${column} column. The AI chose that column.`;
+}
+
+/** Under the table: "Row: its place in the {returned} rows the data source returned, counting from 1." (rule C2c). */
+export function mapRowLine(returned: number): string {
+  return `Row: its place in the ${counted(returned, 'row', 'rows')} the data source returned, counting from 1.`;
+}
+
+/** A row's empty label value (the ORCH's proposal, ruled by the seat, 7225128356; Appendix B's words for an absent value). */
+export const MAP_VALUE_NOT_STATED = 'not stated';
 
 // --- W10: the run's lines --------------------------------------------------------------------------------------------
 

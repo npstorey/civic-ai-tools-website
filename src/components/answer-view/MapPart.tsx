@@ -17,7 +17,7 @@
  * carries markup shows as text.
  */
 import type { MapPartModel, MapPoint } from '@/lib/output-format/map-part';
-import { MAP_DATA_DOWNLOAD, MAP_TABLE_HEADINGS } from '@/lib/output-format/map-words';
+import { MAP_DATA_DOWNLOAD, MAP_TABLE_HEADINGS, MAP_VALUE_NOT_STATED } from '@/lib/output-format/map-words';
 import { saveBlobAsFile } from '@/lib/evidence/package-download';
 
 const VIEW_WIDTH = 640;
@@ -82,7 +82,10 @@ function Table({ points, caption }: { points: MapPoint[]; caption: string }) {
           {points.map((p) => (
             <tr key={p.id}>
               <td style={{ padding: '3px 10px', fontFamily: 'monospace' }}>{p.id}</td>
-              <td style={{ padding: '3px 10px' }}>{p.name ?? ''}</td>
+              {/* Fold 6: an empty label value is stated as such, never an empty cell. */}
+              <td style={{ padding: '3px 10px', ...(p.name === undefined || p.name === '' ? { color: 'var(--text-muted)', fontStyle: 'italic' } : {}) }}>
+                {p.name === undefined || p.name === '' ? MAP_VALUE_NOT_STATED : p.name}
+              </td>
               <td style={{ padding: '3px 10px', fontFamily: 'monospace' }}>{p.latitude}</td>
               <td style={{ padding: '3px 10px', fontFamily: 'monospace' }}>{p.longitude}</td>
             </tr>
@@ -108,6 +111,9 @@ export default function MapPart({ map }: { map: MapPartModel }) {
           {map.surface === 'run' && <Plot points={outcome.points} alt={outcome.alt} />}
           <p data-part="map-count-line" style={{ ...LINE_STYLE, marginTop: map.surface === 'run' ? '8px' : 0 }}>{outcome.countLine}</p>
           <Table points={outcome.points} caption={outcome.caption} />
+          {/* Fold 6 (the seat's 7225128356): what "Label" and "Row" hold, under the table. */}
+          {outcome.labelLine !== undefined && <p data-part="map-label-line" style={{ ...LINE_STYLE, margin: '8px 0 0', fontSize: '12px' }}>{outcome.labelLine}</p>}
+          <p data-part="map-row-line" style={{ ...LINE_STYLE, margin: '4px 0 0', fontSize: '12px' }}>{outcome.rowLine}</p>
           {map.surface === 'run' && download !== undefined && (
             <button
               type="button"

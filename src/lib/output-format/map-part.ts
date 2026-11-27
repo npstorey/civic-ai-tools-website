@@ -32,6 +32,8 @@ import {
   mapAltText,
   mapCaption,
   mapCountLine,
+  mapLabelLine,
+  mapRowLine,
   mapStepLine,
   noMapSentence,
   recordFormatLine,
@@ -48,7 +50,12 @@ export interface MapPoint {
 
 /** What was presented, in the reader's words. */
 export type MapOutcomePart =
-  | { kind: 'drawn'; countLine: string; caption: string; alt: string; points: MapPoint[] }
+  | {
+      kind: 'drawn'; countLine: string; caption: string; alt: string; points: MapPoint[];
+      /** Under the table (fold 6): what "Row" counts, and, when the call's label column is known, what "Label" holds. */
+      rowLine: string;
+      labelLine?: string;
+    }
   | { kind: 'none'; sentence: string };
 
 /** The map part. */
@@ -77,9 +84,18 @@ interface CallLike {
 
 const isPresent = (call: CallLike): boolean => call.operationType === PRESENT_STEP_NAME || call.name === PRESENT_STEP_NAME;
 
+const lastAccepted = (calls: readonly CallLike[]): CallLike | undefined =>
+  [...calls].reverse().find((c) => isPresent(c) && c.presentOutcome === 'accepted');
+
+/** The label column the presented rows were labelled by: the last accepted present call's `label` argument (fold 6). */
+export function presentedLabelColumn(calls: readonly CallLike[]): string | undefined {
+  const label = lastAccepted(calls)?.args?.label;
+  return typeof label === 'string' && label.length > 0 ? label : undefined;
+}
+
 /** The dataset the presented rows came from: see the header. */
 export function presentedDataset(calls: readonly CallLike[]): string {
-  const accepted = [...calls].reverse().find((c) => isPresent(c) && c.presentOutcome === 'accepted');
+  const accepted = lastAccepted(calls);
   const named = accepted ? presentedDatasetName(accepted.args ?? {}, calls.map((c) => ({ args: c.args ?? {} }))) : undefined;
   return named ?? UNNAMED_DATA;
 }
@@ -101,7 +117,7 @@ export function pointsOfMap(map: Pick<PlainMapSpec, 'features'>): MapPoint[] {
 }
 
 /** The outcome in the reader's words (W7, W8, W9), from what was presented and the dataset's name. */
-export function mapOutcomePart(presented: MapPresentation, dataset: string): MapOutcomePart {
+export function mapOutcomePart(presented: MapPresentation, dataset: string, labelColumn?: string): MapOutcomePart {
   if (presented.outcome.drawn && presented.counts && presented.map && presented.map.features.length > 0) {
     const c = presented.counts;
     return {
@@ -110,6 +126,8 @@ export function mapOutcomePart(presented: MapPresentation, dataset: string): Map
       caption: mapCaption(c.drawn, dataset),
       alt: mapAltText(c.drawn, c.withoutLocation, dataset),
       points: pointsOfMap(presented.map),
+      rowLine: mapRowLine(c.returned),
+      ...(labelColumn !== undefined ? { labelLine: mapLabelLine(labelColumn) } : {}),
     };
   }
   const why = presented.outcome.drawn ? 'no-located-rows' : presented.outcome.reason;
@@ -141,7 +159,7 @@ export function mapPartFromTrace(trace: unknown, calls: readonly CallLike[]): Ma
   const dataset = presentedDataset(calls);
   return {
     surface: 'run',
-    outcome: mapOutcomePart(presented, dataset),
+    outcome: mapOutcomePart(presented, dataset, presentedLabelColumn(calls)),
     stepLine: mapStepWords(presented, dataset),
     ...(presented.map ? { download: { fileName: MAP_DATA_FILE_NAME, json: JSON.stringify(presented.map, null, 2) } } : {}),
   };
@@ -205,7 +223,7 @@ export function mapPartFromRecord(pkg: { extensions?: Record<string, unknown>; q
   });
   const dataset = presentedDataset(calls);
   try {
-    const outcome = mapOutcomePart(presented, dataset);
+    const outcome = mapOutcomePart(presented, dataset, presentedLabelColumn(calls));
     // C2a = A: the page lists the mapped rows and draws no map; said only where there are rows to list.
     return { ...base, ...(outcome.kind === 'drawn' ? { notShownLine: RECORD_MAP_NOT_SHOWN } : {}), outcome, stepLine: mapStepWords(presented, dataset) };
   } catch {
