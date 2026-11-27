@@ -165,10 +165,12 @@ export default function QuerySurface({
   // mid-result must not reshape an already-rendered answer (a restored
   // comparison has nothing to show for a run whose without-data arm never
   // executed). The next submit picks the toggle up.
-  // OF3b (website #810; C3 = A): a map format runs with data tools only, on every mount, so its run is shown answer
-  // first, with no comparison to run (the compare route refuses a map format with the second panel).
+  // OF3b (website #810; C3 = A): a map format runs with data tools only, with no comparison to run (the compare route
+  // refuses a map format with the second panel). Fold 7 (the owner's D+C, OA-1283): a format is offered only where the
+  // mount is answer-first (`/ask`), so a map run is always shown answer first there; the home page offers none, sends
+  // none, and always compares.
   const lastRunMapped = lastOutputFormat !== undefined && isMapFormat(lastOutputFormat);
-  const answerFirstActive = (answerFirstConfigured || lastRunMapped) && streaming.mcpOnly;
+  const answerFirstActive = answerFirstConfigured && streaming.mcpOnly;
   /** One arm only when the mount is answer-first without the comparison restored, or the question asks for a map. */
   const mcpOnlyFor = (format: OutputFormatRef | undefined) => shouldRunMcpOnly(presentation, comparisonRestored) || (format !== undefined && isMapFormat(format));
 
@@ -322,6 +324,8 @@ export default function QuerySurface({
             }
           : undefined
       }
+      // Fold 7 (the owner's D+C, OA-1283): the output formats are offered on the answer-first mount (`/ask`) only.
+      outputFormatOffered={answerFirstConfigured}
       docked={docked}
       showFirstTimeLine={showFirstTimeLine}
       prefillFromAddress={prefillFromAddress}
