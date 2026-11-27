@@ -43,6 +43,10 @@ export function pageInit(cfg) {
   });
   try {
     if (cfg.mode) window.sessionStorage.setItem('civicaitools.notebookMode', cfg.mode);
+    // OF3b: the reader's Output format and answer layout for the session, as the menu and the toggle store them.
+    if (cfg.outputFormat) window.sessionStorage.setItem('civicaitools.outputFormat', cfg.outputFormat);
+    if (cfg.layout) window.sessionStorage.setItem('civicaitools.answerLayout', cfg.layout);
+    if (cfg.comparison) window.sessionStorage.setItem('civicaitools.showComparison', cfg.comparison);
   } catch {
     /* storage refused: the mount's default applies, and the check reads it */
   }
@@ -156,7 +160,7 @@ export function pageInit(cfg) {
     if (RUN_ROUTES.includes(p)) {
       if (cfg.answerRuns === false) return real(input, init);
       const body = bodyOf();
-      S.streams.push({ path: p, method, picks: body && body.picks ? body.picks : null, mcpOnly: body ? body.mcpOnly === true : null });
+      S.streams.push({ path: p, method, picks: body && body.picks ? body.picks : null, mcpOnly: body ? body.mcpOnly === true : null, outputFormat: body && body.outputFormat ? body.outputFormat : null });
       await statementInForce();
       const stream = new ReadableStream({ start(c) { S.controller = c; } });
       return new Response(stream, { status: 200, headers: { 'Content-Type': 'text/event-stream' } });

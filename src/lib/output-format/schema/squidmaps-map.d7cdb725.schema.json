@@ -1,0 +1,1187 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://raw.githubusercontent.com/squidmaps-io/squidmaps-map-spec/main/schema/map.schema.json",
+  "title": "Map",
+  "type": "object",
+  "properties": {
+    "name": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 100,
+      "description": "Shown at the top of the map's page and in link previews. Its page's address is made from it."
+    },
+    "description": {
+      "type": "string",
+      "maxLength": 100000,
+      "description": "Markdown, shown under the name in the panel over the published map. HTML is escaped."
+    },
+    "basemap": {
+      "anyOf": [
+        {
+          "$ref": "#/$defs/Basemap"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "description": "The map under the features. Null shows none."
+    },
+    "extent": {
+      "$ref": "#/$defs/Extent"
+    },
+    "view": {
+      "anyOf": [
+        {
+          "$ref": "#/$defs/View"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "description": "Where the published map opens, unless its extent has initialBounds. Null until the map is first viewed in the editor; it then fits the features."
+    },
+    "legend": {
+      "anyOf": [
+        {
+          "$ref": "#/$defs/Legend"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "description": "A panel in the corner explaining the map's symbols. Null shows none."
+    },
+    "panel": {
+      "default": {
+        "visible": true,
+        "featureList": false,
+        "search": false
+      },
+      "description": "The panel over the published map, with its name and description: whether it's shown, and whether it lists and searches the features. Left out, it's shown, without either.",
+      "$ref": "#/$defs/Panel"
+    },
+    "controls": {
+      "default": {
+        "zoom": true,
+        "fullscreen": false
+      },
+      "description": "Buttons over the published map, top right: zoom buttons and a fullscreen button. Left out, it has zoom buttons and no fullscreen button.",
+      "$ref": "#/$defs/Controls"
+    },
+    "features": {
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/Feature"
+      },
+      "description": "The map's features, top of the list first. Points (and text) are drawn above lines, areas and images; within each, features earlier in the list are drawn on top."
+    }
+  },
+  "required": [
+    "name",
+    "description",
+    "basemap",
+    "extent",
+    "view",
+    "legend",
+    "features"
+  ],
+  "additionalProperties": false,
+  "description": "One map: its details, how it's viewed, and its features.",
+  "$defs": {
+    "Basemap": {
+      "oneOf": [
+        {
+          "type": "object",
+          "properties": {
+            "type": {
+              "type": "string",
+              "const": "SQUIDMAPS"
+            },
+            "style": {
+              "type": "string",
+              "enum": [
+                "streets",
+                "light",
+                "gray",
+                "dark"
+              ],
+              "description": "Which of squidmaps' basemaps."
+            },
+            "opacity": {
+              "default": 1,
+              "description": "From 0 (invisible) to 1 (opaque).",
+              "type": "number",
+              "minimum": 0,
+              "maximum": 1
+            },
+            "labelVisibility": {
+              "default": true,
+              "description": "Whether the basemap's own labels are shown.",
+              "type": "boolean"
+            }
+          },
+          "required": [
+            "type",
+            "style"
+          ],
+          "additionalProperties": false,
+          "description": "One of squidmaps' own basemaps, by name."
+        },
+        {
+          "type": "object",
+          "properties": {
+            "type": {
+              "type": "string",
+              "const": "CUSTOM"
+            },
+            "id": {
+              "type": "string",
+              "format": "uuid",
+              "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$",
+              "description": "The custom basemap's id."
+            },
+            "opacity": {
+              "default": 1,
+              "description": "From 0 (invisible) to 1 (opaque).",
+              "type": "number",
+              "minimum": 0,
+              "maximum": 1
+            },
+            "labelVisibility": {
+              "default": true,
+              "description": "Whether the basemap's own labels are shown.",
+              "type": "boolean"
+            }
+          },
+          "required": [
+            "type",
+            "id"
+          ],
+          "additionalProperties": false,
+          "description": "A custom basemap: one of squidmaps' basemaps with its colors and layers changed, saved to someone's account. Changes to it reach the maps that use it."
+        },
+        {
+          "type": "object",
+          "properties": {
+            "type": {
+              "type": "string",
+              "const": "STYLE"
+            },
+            "name": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 100,
+              "description": "What the editor calls the basemap."
+            },
+            "url": {
+              "type": "string",
+              "format": "uri",
+              "description": "Where the basemap is served."
+            },
+            "opacity": {
+              "default": 1,
+              "description": "From 0 (invisible) to 1 (opaque).",
+              "type": "number",
+              "minimum": 0,
+              "maximum": 1
+            },
+            "provider": {
+              "description": "Who provides the style, for credit.",
+              "type": "string"
+            }
+          },
+          "required": [
+            "type",
+            "name",
+            "url"
+          ],
+          "additionalProperties": false,
+          "description": "A MapLibre style, by its style JSON's URL."
+        },
+        {
+          "type": "object",
+          "properties": {
+            "type": {
+              "type": "string",
+              "const": "XYZ"
+            },
+            "name": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 100,
+              "description": "What the editor calls the basemap."
+            },
+            "url": {
+              "type": "string",
+              "format": "uri",
+              "description": "Where the basemap is served."
+            },
+            "opacity": {
+              "default": 1,
+              "description": "From 0 (invisible) to 1 (opaque).",
+              "type": "number",
+              "minimum": 0,
+              "maximum": 1
+            },
+            "token": {
+              "description": "An access token for the tiles, if they need one.",
+              "type": "string"
+            },
+            "tms": {
+              "default": false,
+              "description": "Whether tile rows count up from the south (TMS).",
+              "type": "boolean"
+            }
+          },
+          "required": [
+            "type",
+            "name",
+            "url"
+          ],
+          "additionalProperties": false,
+          "description": "Raster tiles, by a URL template with {z}, {x} and {y} in it."
+        },
+        {
+          "type": "object",
+          "properties": {
+            "type": {
+              "type": "string",
+              "const": "TILEJSON"
+            },
+            "name": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 100,
+              "description": "What the editor calls the basemap."
+            },
+            "url": {
+              "type": "string",
+              "format": "uri",
+              "description": "Where the basemap is served."
+            },
+            "opacity": {
+              "default": 1,
+              "description": "From 0 (invisible) to 1 (opaque).",
+              "type": "number",
+              "minimum": 0,
+              "maximum": 1
+            },
+            "token": {
+              "description": "An access token for the tiles, if they need one.",
+              "type": "string"
+            }
+          },
+          "required": [
+            "type",
+            "name",
+            "url"
+          ],
+          "additionalProperties": false,
+          "description": "Raster tiles described by a TileJSON URL."
+        }
+      ],
+      "title": "Basemap",
+      "description": "The map under the features, chosen by its type."
+    },
+    "Extent": {
+      "type": "object",
+      "properties": {
+        "zoom": {
+          "$ref": "#/$defs/ZoomLimit"
+        },
+        "bounds": {
+          "default": null,
+          "description": "An area visitors can't pan the middle of the map out of, so anything in it can be brought to the middle of the screen, and they can't zoom out past where it fills the screen. Null lets them pan anywhere.",
+          "anyOf": [
+            {
+              "$ref": "#/$defs/Bounds"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "initialBounds": {
+          "default": null,
+          "description": "An area the published map opens with fully in view. Null opens it at the saved view.",
+          "anyOf": [
+            {
+              "$ref": "#/$defs/Bounds"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "scrollZoom": {
+          "default": true,
+          "description": "Whether scrolling over the published map zooms it. Off, visitors hold Ctrl or ⌘ while scrolling to zoom, and a notice says so, so a map embedded in a page doesn't catch the page's scrolling. In an embed, touch screens also move the map with two fingers.",
+          "type": "boolean"
+        }
+      },
+      "required": [
+        "zoom"
+      ],
+      "additionalProperties": false,
+      "title": "Extent",
+      "description": "Where the published map opens, and how far visitors can zoom and pan it."
+    },
+    "ZoomLimit": {
+      "oneOf": [
+        {
+          "type": "object",
+          "properties": {
+            "mode": {
+              "type": "string",
+              "const": "range"
+            },
+            "min": {
+              "type": "number",
+              "minimum": 0,
+              "maximum": 22,
+              "description": "The farthest out. Below max."
+            },
+            "max": {
+              "type": "number",
+              "minimum": 0,
+              "maximum": 22,
+              "description": "The farthest in."
+            }
+          },
+          "required": [
+            "mode",
+            "min",
+            "max"
+          ],
+          "additionalProperties": false,
+          "description": "Visitors zoom between two levels."
+        },
+        {
+          "type": "object",
+          "properties": {
+            "mode": {
+              "type": "string",
+              "const": "fixed"
+            },
+            "level": {
+              "type": "number",
+              "minimum": 0,
+              "maximum": 22,
+              "description": "The only zoom level."
+            }
+          },
+          "required": [
+            "mode",
+            "level"
+          ],
+          "additionalProperties": false,
+          "description": "Visitors see one zoom level, and can't zoom."
+        }
+      ],
+      "title": "ZoomLimit",
+      "description": "The zoom levels the published map can be viewed at."
+    },
+    "Bounds": {
+      "type": "array",
+      "prefixItems": [
+        {
+          "type": "number",
+          "minimum": -180,
+          "maximum": 180
+        },
+        {
+          "type": "number",
+          "minimum": -85.051129,
+          "maximum": 85.051129
+        },
+        {
+          "type": "number",
+          "minimum": -180,
+          "maximum": 180
+        },
+        {
+          "type": "number",
+          "minimum": -85.051129,
+          "maximum": 85.051129
+        }
+      ],
+      "items": false,
+      "minItems": 4,
+      "maxItems": 4,
+      "title": "Bounds",
+      "description": "An area as [west, south, east, north], in degrees. South is below north. West is below east, except across the antimeridian (180°), as in GeoJSON: [170, -20, -170, 10] is the area from 170°E to 170°W. Coordinates have at most six decimal places."
+    },
+    "View": {
+      "type": "object",
+      "properties": {
+        "center": {
+          "type": "array",
+          "prefixItems": [
+            {
+              "type": "number",
+              "minimum": -180,
+              "maximum": 180
+            },
+            {
+              "type": "number",
+              "minimum": -90,
+              "maximum": 90
+            }
+          ],
+          "items": false,
+          "minItems": 2,
+          "maxItems": 2,
+          "description": "[longitude, latitude], in degrees."
+        },
+        "zoom": {
+          "type": "number",
+          "minimum": 0,
+          "maximum": 22,
+          "description": "A zoom level, as in MapLibre."
+        }
+      },
+      "required": [
+        "center",
+        "zoom"
+      ],
+      "additionalProperties": false,
+      "title": "View",
+      "description": "Where the map is looking. The editor saves where it was left, and the published map opens there."
+    },
+    "Legend": {
+      "type": "object",
+      "properties": {
+        "title": {
+          "type": "string",
+          "maxLength": 100,
+          "description": "Shown above the rows. Empty for none."
+        },
+        "rows": {
+          "minItems": 1,
+          "maxItems": 50,
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/LegendRow"
+          },
+          "description": "In display order."
+        }
+      },
+      "required": [
+        "title",
+        "rows"
+      ],
+      "additionalProperties": false,
+      "title": "Legend",
+      "description": "A panel in the bottom right corner of the published map, with a row for each symbol worth explaining."
+    },
+    "LegendRow": {
+      "type": "object",
+      "properties": {
+        "label": {
+          "type": "string",
+          "maxLength": 100,
+          "description": "Shown beside the symbol."
+        },
+        "symbol": {
+          "$ref": "#/$defs/LegendSymbol"
+        }
+      },
+      "required": [
+        "label",
+        "symbol"
+      ],
+      "additionalProperties": false,
+      "title": "LegendRow",
+      "description": "A symbol and its label."
+    },
+    "LegendSymbol": {
+      "oneOf": [
+        {
+          "type": "object",
+          "properties": {
+            "type": {
+              "type": "string",
+              "const": "circle"
+            },
+            "fill": {
+              "description": "The circle's color.",
+              "$ref": "#/$defs/Color"
+            },
+            "radius": {
+              "type": "number",
+              "minimum": 2,
+              "maximum": 40,
+              "description": "In pixels, not counting the stroke."
+            },
+            "stroke": {
+              "description": "The ring around the circle.",
+              "$ref": "#/$defs/Color"
+            },
+            "strokeWidth": {
+              "type": "number",
+              "minimum": 0,
+              "maximum": 10,
+              "description": "The ring's width in pixels, outside the radius."
+            },
+            "icon": {
+              "anyOf": [
+                {
+                  "$ref": "#/$defs/Icon"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "A Font Awesome icon in the circle."
+            },
+            "iconColor": {
+              "anyOf": [
+                {
+                  "$ref": "#/$defs/Color"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "The icon's color. Without one, white or dark ink, whichever contrasts the fill."
+            }
+          },
+          "required": [
+            "type",
+            "fill",
+            "radius",
+            "stroke",
+            "strokeWidth",
+            "icon",
+            "iconColor"
+          ],
+          "additionalProperties": false,
+          "description": "A circle point's style."
+        },
+        {
+          "type": "object",
+          "properties": {
+            "type": {
+              "type": "string",
+              "const": "emoji"
+            },
+            "emoji": {
+              "description": "One emoji, drawn as its Twemoji image.",
+              "$ref": "#/$defs/Emoji"
+            },
+            "size": {
+              "type": "number",
+              "minimum": 12,
+              "maximum": 64,
+              "description": "The emoji's width and height in pixels."
+            }
+          },
+          "required": [
+            "type",
+            "emoji",
+            "size"
+          ],
+          "additionalProperties": false,
+          "description": "An emoji point's style."
+        },
+        {
+          "type": "object",
+          "properties": {
+            "type": {
+              "type": "string",
+              "const": "marker"
+            },
+            "shell": {
+              "description": "The pin's outer color.",
+              "$ref": "#/$defs/Color"
+            },
+            "disc": {
+              "description": "The disc in the pin's head.",
+              "$ref": "#/$defs/Color"
+            },
+            "icon": {
+              "anyOf": [
+                {
+                  "$ref": "#/$defs/Icon"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "A Font Awesome icon on the disc. Without one, it's empty."
+            },
+            "iconColor": {
+              "anyOf": [
+                {
+                  "$ref": "#/$defs/Color"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "The icon's color. Without one, white or dark ink, whichever contrasts the disc."
+            },
+            "size": {
+              "anyOf": [
+                {
+                  "type": "number",
+                  "minimum": 16,
+                  "maximum": 96
+                },
+                {
+                  "description": "A preset: small (26px), medium (34px) or large (48px).",
+                  "type": "string",
+                  "enum": [
+                    "small",
+                    "medium",
+                    "large"
+                  ]
+                }
+              ],
+              "description": "The pin's width in pixels, 16 to 96; it's 1.14 times as tall. Or a preset: small, medium or large."
+            }
+          },
+          "required": [
+            "type",
+            "shell",
+            "disc",
+            "icon",
+            "iconColor"
+          ],
+          "additionalProperties": false,
+          "description": "A marker pin's style."
+        },
+        {
+          "type": "object",
+          "properties": {
+            "type": {
+              "type": "string",
+              "const": "custom"
+            },
+            "icon": {
+              "anyOf": [
+                {
+                  "$ref": "#/$defs/CustomIcon"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "The picture, from the account's custom icons. Without one, a placeholder."
+            },
+            "shape": {
+              "type": "string",
+              "enum": [
+                "round",
+                "original"
+              ],
+              "description": "round: cropped to a circle from its center, on the point, with a stroke. original: uncropped with any transparency, standing on the point with its bottom center there, like a pin."
+            },
+            "size": {
+              "anyOf": [
+                {
+                  "type": "number",
+                  "minimum": 16,
+                  "maximum": 96
+                },
+                {
+                  "description": "A preset: small (26px), medium (34px) or large (48px).",
+                  "type": "string",
+                  "enum": [
+                    "small",
+                    "medium",
+                    "large"
+                  ]
+                }
+              ],
+              "description": "Its size in pixels, 16 to 96: a round icon's diameter, inside its stroke, or the height of one drawn as is. Or a preset: small, medium or large."
+            },
+            "stroke": {
+              "description": "The ring around a round icon.",
+              "$ref": "#/$defs/Color"
+            },
+            "strokeWidth": {
+              "type": "number",
+              "minimum": 0,
+              "maximum": 10,
+              "description": "The ring's width in pixels, outside the picture."
+            }
+          },
+          "required": [
+            "type",
+            "icon",
+            "shape",
+            "size",
+            "stroke",
+            "strokeWidth"
+          ],
+          "additionalProperties": false,
+          "description": "A custom icon's style."
+        },
+        {
+          "type": "object",
+          "properties": {
+            "type": {
+              "type": "string",
+              "const": "line"
+            },
+            "color": {
+              "description": "The line's color.",
+              "$ref": "#/$defs/Color"
+            },
+            "width": {
+              "type": "number",
+              "minimum": 0.5,
+              "maximum": 20,
+              "description": "In pixels."
+            },
+            "opacity": {
+              "type": "number",
+              "minimum": 0,
+              "maximum": 1,
+              "description": "From 0 (invisible) to 1 (opaque)."
+            },
+            "dasharray": {
+              "maxItems": 8,
+              "type": "array",
+              "items": {
+                "type": "number",
+                "minimum": 0,
+                "maximum": 100
+              },
+              "description": "Dash and gap lengths in turn, in line widths, like [4, 2]. Empty is solid."
+            },
+            "cap": {
+              "type": "string",
+              "enum": [
+                "butt",
+                "round",
+                "square"
+              ],
+              "description": "How the line's ends are drawn."
+            }
+          },
+          "required": [
+            "type",
+            "color",
+            "width",
+            "opacity",
+            "dasharray",
+            "cap"
+          ],
+          "additionalProperties": false,
+          "description": "A line's style."
+        },
+        {
+          "type": "object",
+          "properties": {
+            "type": {
+              "type": "string",
+              "const": "area"
+            },
+            "color": {
+              "description": "The line's color.",
+              "$ref": "#/$defs/Color"
+            },
+            "width": {
+              "type": "number",
+              "minimum": 0.5,
+              "maximum": 20,
+              "description": "In pixels."
+            },
+            "opacity": {
+              "type": "number",
+              "minimum": 0,
+              "maximum": 1,
+              "description": "From 0 (invisible) to 1 (opaque)."
+            },
+            "dasharray": {
+              "maxItems": 8,
+              "type": "array",
+              "items": {
+                "type": "number",
+                "minimum": 0,
+                "maximum": 100
+              },
+              "description": "Dash and gap lengths in turn, in line widths, like [4, 2]. Empty is solid."
+            },
+            "cap": {
+              "type": "string",
+              "enum": [
+                "butt",
+                "round",
+                "square"
+              ],
+              "description": "How the line's ends are drawn."
+            },
+            "fillColor": {
+              "description": "The area's inside color.",
+              "$ref": "#/$defs/Color"
+            },
+            "fillOpacity": {
+              "type": "number",
+              "minimum": 0,
+              "maximum": 1,
+              "description": "From 0 (no fill) to 1 (opaque)."
+            }
+          },
+          "required": [
+            "type",
+            "color",
+            "width",
+            "opacity",
+            "dasharray",
+            "cap",
+            "fillColor",
+            "fillOpacity"
+          ],
+          "additionalProperties": false,
+          "description": "An area's style."
+        }
+      ],
+      "title": "LegendSymbol",
+      "description": "How a row's symbol is drawn: a copy of a feature's style, with the same fields as the feature properties for its kind. It stays as drawn when features change."
+    },
+    "Color": {
+      "type": "string",
+      "pattern": "^#[0-9a-fA-F]{6}$",
+      "title": "Color",
+      "description": "A color in hex, as \"#rrggbb\", like \"#3F80C4\"."
+    },
+    "Icon": {
+      "type": "string",
+      "pattern": "^(solid|regular|brands)\\/[a-z0-9]+(-[a-z0-9]+)*$",
+      "title": "Icon",
+      "description": "A Font Awesome 6 Free icon as \"style/name\": \"solid/mug-hot\", \"regular/heart\" or \"brands/github\". The style is solid, regular or brands."
+    },
+    "Emoji": {
+      "type": "string",
+      "title": "Emoji",
+      "description": "One emoji, like \"📍\", \"🇯🇵\" or \"👩‍🚒\", including flags and sequences joined with zero-width joiners."
+    },
+    "CustomIcon": {
+      "type": "object",
+      "properties": {
+        "id": {
+          "type": "string",
+          "format": "uuid",
+          "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+        },
+        "url": {
+          "type": "string",
+          "format": "uri",
+          "description": "Its WebP file."
+        },
+        "width": {
+          "type": "integer",
+          "exclusiveMinimum": 0,
+          "maximum": 9007199254740991,
+          "description": "The file's width in pixels."
+        },
+        "height": {
+          "type": "integer",
+          "exclusiveMinimum": 0,
+          "maximum": 9007199254740991,
+          "description": "The file's height in pixels."
+        }
+      },
+      "required": [
+        "id",
+        "url",
+        "width",
+        "height"
+      ],
+      "additionalProperties": false,
+      "title": "CustomIcon",
+      "description": "A picture from an account's custom icons, uploaded in the editor."
+    },
+    "Panel": {
+      "type": "object",
+      "properties": {
+        "visible": {
+          "default": true,
+          "description": "Whether the published map has the panel at all. Off, visitors see just the map, and its legend in the corner.",
+          "type": "boolean"
+        },
+        "featureList": {
+          "default": false,
+          "description": "A list of the map's features by folder, with a checkbox to hide each folder.",
+          "type": "boolean"
+        },
+        "search": {
+          "default": false,
+          "description": "A box to find features by name or description.",
+          "type": "boolean"
+        }
+      },
+      "additionalProperties": false,
+      "title": "Panel",
+      "description": "The panel over the published map: whether it's shown, and what it offers visitors besides the map's name and description."
+    },
+    "Controls": {
+      "type": "object",
+      "properties": {
+        "zoom": {
+          "default": true,
+          "description": "Buttons to zoom in and out. Visitors can still zoom by scrolling, pinching or double-clicking, as the extent allows. A fixed zoom has none.",
+          "type": "boolean"
+        },
+        "fullscreen": {
+          "default": false,
+          "description": "A button that fills the screen with the map, and back. In an embed, the iframe needs allowfullscreen, as squidmaps' embed code has.",
+          "type": "boolean"
+        }
+      },
+      "additionalProperties": false,
+      "title": "Controls",
+      "description": "Buttons over the published map, top right: zoom buttons, on by default, and a fullscreen button, off by default."
+    },
+    "Geometry": {
+      "title": "Geometry",
+      "description": "A GeoJSON geometry (RFC 7946): Point, MultiPoint, LineString, MultiLineString, Polygon, MultiPolygon or GeometryCollection. Coordinates are [longitude, latitude] with at most six decimal places.",
+      "oneOf": [
+        {
+          "type": "object",
+          "properties": {
+            "type": {
+              "type": "string",
+              "const": "Point"
+            },
+            "coordinates": {
+              "minItems": 2,
+              "type": "array",
+              "items": {
+                "type": "number"
+              }
+            }
+          },
+          "required": [
+            "type",
+            "coordinates"
+          ]
+        },
+        {
+          "type": "object",
+          "properties": {
+            "type": {
+              "type": "string",
+              "const": "MultiPoint"
+            },
+            "coordinates": {
+              "type": "array",
+              "items": {
+                "minItems": 2,
+                "type": "array",
+                "items": {
+                  "type": "number"
+                }
+              }
+            }
+          },
+          "required": [
+            "type",
+            "coordinates"
+          ]
+        },
+        {
+          "type": "object",
+          "properties": {
+            "type": {
+              "type": "string",
+              "const": "LineString"
+            },
+            "coordinates": {
+              "type": "array",
+              "items": {
+                "minItems": 2,
+                "type": "array",
+                "items": {
+                  "type": "number"
+                }
+              }
+            }
+          },
+          "required": [
+            "type",
+            "coordinates"
+          ]
+        },
+        {
+          "type": "object",
+          "properties": {
+            "type": {
+              "type": "string",
+              "const": "MultiLineString"
+            },
+            "coordinates": {
+              "type": "array",
+              "items": {
+                "type": "array",
+                "items": {
+                  "minItems": 2,
+                  "type": "array",
+                  "items": {
+                    "type": "number"
+                  }
+                }
+              }
+            }
+          },
+          "required": [
+            "type",
+            "coordinates"
+          ]
+        },
+        {
+          "type": "object",
+          "properties": {
+            "type": {
+              "type": "string",
+              "const": "Polygon"
+            },
+            "coordinates": {
+              "type": "array",
+              "items": {
+                "type": "array",
+                "items": {
+                  "minItems": 2,
+                  "type": "array",
+                  "items": {
+                    "type": "number"
+                  }
+                }
+              }
+            }
+          },
+          "required": [
+            "type",
+            "coordinates"
+          ]
+        },
+        {
+          "type": "object",
+          "properties": {
+            "type": {
+              "type": "string",
+              "const": "MultiPolygon"
+            },
+            "coordinates": {
+              "type": "array",
+              "items": {
+                "type": "array",
+                "items": {
+                  "type": "array",
+                  "items": {
+                    "minItems": 2,
+                    "type": "array",
+                    "items": {
+                      "type": "number"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "required": [
+            "type",
+            "coordinates"
+          ]
+        },
+        {
+          "type": "object",
+          "properties": {
+            "type": {
+              "type": "string",
+              "const": "GeometryCollection"
+            },
+            "geometries": {
+              "type": "array",
+              "items": {
+                "$ref": "#/$defs/Geometry"
+              }
+            }
+          },
+          "required": [
+            "type",
+            "geometries"
+          ]
+        }
+      ]
+    },
+    "__schema0": {
+      "anyOf": [
+        {
+          "type": "string"
+        },
+        {
+          "type": "number"
+        },
+        {
+          "type": "boolean"
+        },
+        {
+          "type": "null"
+        },
+        {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/__schema0"
+          }
+        },
+        {
+          "type": "object",
+          "propertyNames": {
+            "type": "string"
+          },
+          "additionalProperties": {
+            "$ref": "#/$defs/__schema0"
+          }
+        }
+      ]
+    },
+    "Feature": {
+      "type": "object",
+      "properties": {
+        "type": {
+          "type": "string",
+          "const": "Feature"
+        },
+        "id": {
+          "type": "string",
+          "minLength": 1,
+          "description": "Unique within the map."
+        },
+        "geometry": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/Geometry"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "description": "Where the feature is. Null for a feature without one."
+        },
+        "properties": {
+          "type": "object",
+          "propertyNames": {
+            "type": "string"
+          },
+          "additionalProperties": {
+            "$ref": "#/$defs/__schema0"
+          },
+          "description": "Everything about the feature: its data, and how it looks and behaves, under \"@\"-prefixed keys. See Feature properties."
+        }
+      },
+      "required": [
+        "type",
+        "id",
+        "geometry",
+        "properties"
+      ],
+      "additionalProperties": {},
+      "title": "Feature",
+      "description": "A GeoJSON Feature with a required string id. Other members, like bbox, are kept."
+    }
+  }
+}

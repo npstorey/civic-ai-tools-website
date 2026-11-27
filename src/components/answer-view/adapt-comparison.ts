@@ -25,11 +25,16 @@
 // the card joins C once the `trace` event has arrived; before it, and on a
 // surface that keeps no trace (`/explore`), neither shows (P-f).
 //
+// THE MAP PART (OF3b, website #810). Read from the trace alone, as the chooser is: once the `trace` event states a
+// map format and what was presented, the view gets the map part and the map step's label (W10); before it, the step
+// reads "Choosing what to map" and no map part shows.
+//
 // Relative, extension-carrying imports, so the module runs under `node --test`
 // with no loader.
 
 import { AUTHOR, CAPTURED_VIA_WEB_CHAT, NOT_YET_PUBLISHED, type AnswerViewModel, type EnvironmentItem } from './view-model.ts';
-import { stepsAuthorLine, type ProgressGroup, type ProgressLogEntry, type StepCall } from '../../lib/answer-view/steps.ts';
+import { stepsAuthorLine, withMapStepLabel, type ProgressGroup, type ProgressLogEntry, type StepCall } from '../../lib/answer-view/steps.ts';
+import { mapPartFromTrace } from '../../lib/output-format/map-part.ts';
 import { buildProvenanceLine } from '../../lib/streaming.ts';
 import { describeRefusedRequests } from '../../lib/evidence/query-step.ts';
 import { coverPortals } from '../../lib/notebook-author/cover-portals.ts';
@@ -209,6 +214,8 @@ export function adaptComparison(input: ComparisonAdapterInput): AnswerViewModel 
       failureKind: t.failureKind,
       resultRows: t.resultSummary?.rows,
       resultColumns: t.resultSummary?.columns,
+      // OF3b (flag 5): the map step is no data request, so the line leaves it out of N and M.
+      operationType: t.operationType,
     })),
   );
   const facts = tracesRun(input) ? [CAPTURED_VIA_WEB_CHAT, NOT_YET_PUBLISHED] : [];
@@ -221,6 +228,8 @@ export function adaptComparison(input: ComparisonAdapterInput): AnswerViewModel 
   const hash = input.evidenceTrace ? systemPromptHashOfTrace(input.evidenceTrace) : null;
   const servers = input.evidenceTrace ? mcpServersOfTrace(input.evidenceTrace) : [];
   const chooser = input.evidenceTrace ? chooserFromTrace(input.evidenceTrace) : null;
+  const map = input.evidenceTrace ? mapPartFromTrace(input.evidenceTrace, calls) : null;
+  const groups = map?.stepLine !== undefined ? withMapStepLabel(input.progressGroups, map.stepLine) : input.progressGroups;
   const environment: EnvironmentItem[] = [
     ...(input.model ? [{ label: 'Model', value: formatModelName(input.model) }] : []),
     // Shown only when the run holds a portal (R10 P1): never a word for none.
@@ -243,7 +252,7 @@ export function adaptComparison(input: ComparisonAdapterInput): AnswerViewModel 
       ? {
           kind: 'progress-log',
           author: stepsAuthorLine(input.instance),
-          groups: input.progressGroups,
+          groups,
           standaloneEntries: input.progressLog.filter((e) => !e.iteration),
           isComplete: input.isComplete && calls.length > 0,
           ...(input.isComplete ? { toolsCalled: calls, totalDuration_ms: input.duration_ms } : {}),
@@ -257,5 +266,6 @@ export function adaptComparison(input: ComparisonAdapterInput): AnswerViewModel 
       answerAgain: true,
     },
     ...(input.flows ? { whereItWent: chooser ? { ...input.flows, chooser } : input.flows } : {}),
+    ...(map !== null ? { map } : {}),
   };
 }

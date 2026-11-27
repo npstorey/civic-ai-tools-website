@@ -20,7 +20,14 @@
 //      Recorded only: the same three on the chat path, the no-pause run unscrolled (d) and with the same scrolls
 //      (f), the live regions at the arrival (e), and each run's timeline (a);
 //   6  #786 item 3: after the picker panel is open, the Settings overlay opens over it, a refresh closes the panel
-//      and the overlay closes, the focused element's box is inside the viewport at 390 (reported at 1280 too).
+//      and the overlay closes, the focused element's box is inside the viewport at 390 (reported at 1280 too);
+//   7  OF3b (website #810): a "Map" answer's map part (plot, count line, table reached by Tab, save action), its
+//      alternative text and a name with markup shown as text, the map part under envelope-order too, and every host the
+//      "Map" answer made the page contact is one the "Auto" answer did (criteria 8, 9 and 12; needs a build served
+//      with SITE_OUTPUT_FORMAT=on);
+//   8  OF3b: "Map" in /ask's menu, Compare off with its reason and back with its value on "Auto", "Map" off in
+//      Sandbox with its reason and back in Standard (needs LAYOUT_MEASURE_SESSION_COOKIE for a local build).
+// `--plant 7` adds an image from another host to the map part, so check 7's host comparison must read FAIL.
 // `--plant <1|2|3|4|5>` injects that check's planted defect into the page under test (5: a scroll at the arrival, for
 // the pin); `--plant guard` switches off the page's answer for the run routes, so the run must read VOID. `--out
 // <dir>` writes the full record (JSON) and a screenshot per measured state.
@@ -89,10 +96,14 @@ const events = {
   notebookPlain: readJson(path.join(HERE, 'events', 'notebook-plain.json')),
   chatPaused: readJson(path.join(HERE, 'events', 'chat-paused.json')),
   chatPlain: readJson(path.join(HERE, 'events', 'chat-plain.json')),
+  // OF3b: the plain map's run, from the real route's stream (`events/chat-map.json`).
+  chatMap: readJson(path.join(HERE, 'events', 'chat-map.json')),
 };
 const FLOWS_FIXTURE = 'src/lib/flows/fixtures/flows-statement-78c516db.json';
 const flowsFixture = fs.readFileSync(path.join(REPO, FLOWS_FIXTURE), 'utf8');
 const protectionCookie = originUrl.protocol === 'https:' ? process.env.LAYOUT_MEASURE_PROTECTION_COOKIE || null : null;
+// OF3b (check 8): a local build's session cookie, minted for that build's own throwaway secret; never printed.
+const sessionCookie = originUrl.protocol === 'http:' ? process.env.LAYOUT_MEASURE_SESSION_COOKIE || null : null;
 
 const guard = emptyGuard();
 const inPage = [];
@@ -102,7 +113,7 @@ let chromeVersion = null;
 /** Opens a session whose page answers as `cfg` says; its close records what the page answered. */
 async function open(label, cfg) {
   const full = { flows: 'pass', answerRuns: plant !== 'guard', flowsFixture, ...cfg };
-  const c = await openSession({ label, origin, guard, initScript: initScript(full), protectionCookie });
+  const c = await openSession({ label, origin, guard, initScript: initScript(full), protectionCookie, sessionCookie });
   if (chromeVersion === null) chromeVersion = (await c.send('Browser.getVersion')).product;
   const close = c.close;
   c.close = async () => {
@@ -116,7 +127,7 @@ async function open(label, cfg) {
 }
 
 const ctx = {
-  origin: originUrl.origin, plant, events, open,
+  origin: originUrl.origin, plant, events, open, sessionCookie,
   shots: out ? (name) => path.join(out, `${name}${plant ? `-plant-${plant}` : ''}.png`) : null,
 };
 

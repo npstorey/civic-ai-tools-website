@@ -3,7 +3,16 @@
 // C4; Wave N10 #409, criterion 6; Wave N12 #470, criteria 7-9; sprint R2 #599
 // W4; sprint R6 #632 W2; sprint R8 #644 W1; sprint R10 civic-ai-tools#289 P5;
 // sprint S2-B, npstorey/civic-ai-tools#309; S2-B P3R, the same issue; S3-B W2, npstorey/civic-ai-tools#318;
-// CKAN-2-WEB P1, npstorey/civic-ai-tools#329).
+// CKAN-2-WEB P1, npstorey/civic-ai-tools#329; Sprint OF-1 OF3a, website #810).
+//
+// WHAT THE PIN PROTECTS, PART TWELVE — 0.16.0, and why the range moved to it (OF3a, Sprint OF-1, website #810; hub
+// ADR-0033 amendment 6; its CHANGELOG entry of 2026-11-25, read before the move). One thing this instance now relies
+// on: a present span (`tool.operation_type` `present_result`, the site's own step in a run asked in a map format) is
+// read as a load span and a search span are: no source agent, no data-response entity, no `dataSources` entry, the
+// platform's activity, and `civic:presentOutcome`. Below 0.16.0 an untagged present span is credited to a source named
+// `unknown`. Driven through this repository's route and packager in `src/app/api/output-format-map-driven.test.ts`
+// (criterion 4). 0.16.0 keeps produce-core `^0.9.0`, so the core floors stay; a trace with no present span gives
+// 0.15.0's graph and `dataSources[]` (the CHANGELOG's own statement).
 //
 // WHAT THE PIN PROTECTS, PART ELEVEN — 0.15.0, and why the range moved to it (CKAN-2-WEB P1, W4; ruling D1 = A and
 // F1 = (a) on npstorey/civic-ai-tools#329; its CHANGELOG entry of 2026-11-18, read before the move). One thing this
@@ -345,19 +354,19 @@ const REPO_ROOT = path.join(path.dirname(fileURLToPath(import.meta.url)), '..', 
 const HARNESS = '@typedstandards/civic-typed-harness';
 const HARNESS_DIR = path.join(REPO_ROOT, 'node_modules', ...HARNESS.split('/'));
 
-/** The lowest version carrying ALL ELEVEN sets of fixes this file names: the
+/** The lowest version carrying ALL TWELVE sets of fixes this file names: the
  *  0.3.1 graph-builder fixes, the 0.4.0 data-source fix, the 0.5.0
  *  configured-server fixes, 0.7.0's record fields, 0.9.0's two reasons and
  *  flows-statement reference, 0.10.0's routing statement and load span, and
  *  0.11.0's subtype constant, 0.12.0's `civic:packId`, 0.13.0's reported
  *  keys and evaluator words, 0.14.0's search span and routing
- *  configuration, and 0.15.0's per-portal source above. */
-const FLOOR = '0.15.0';
+ *  configuration, 0.15.0's per-portal source, and 0.16.0's present span above. */
+const FLOOR = '0.16.0';
 /** Exclusive ceiling: under semver a 0.x MINOR bump is a breaking change, so
- *  the pin admits later 0.15.x PATCHES (a fix that is still this behaviour)
- *  and refuses 0.16.0, which would be a contract this test has not read. The
- *  assertion is therefore a RANGE (`>=0.15.0 <0.16.0`) rather than equality to
- *  `0.15.0`: pinning the exact string would turn red on a patch release that
+ *  the pin admits later 0.16.x PATCHES (a fix that is still this behaviour)
+ *  and refuses 0.17.0, which would be a contract this test has not read. The
+ *  assertion is therefore a RANGE (`>=0.16.0 <0.17.0`) rather than equality to
+ *  `0.16.0`: pinning the exact string would turn red on a patch release that
  *  changed nothing this file cares about, which is a criterion that fails for
  *  the wrong reason.
  *
@@ -378,12 +387,13 @@ const FLOOR = '0.15.0';
  *  which read 0.14.0's entry (the search span and the routing configuration;
  *  no dependency change, so the core floors stay), and `>=0.14.0 <0.15.0`
  *  until CKAN-2-WEB P1, which read 0.15.0's entry (the per-portal source,
- *  `portalArgument`; no dependency change, so the core floors stay). Each ceiling did its
+ *  `portalArgument`; no dependency change, so the core floors stay), and `>=0.15.0 <0.16.0` until OF3a, which
+ *  read 0.16.0's entry (the present span; no dependency change, so the core floors stay). Each ceiling did its
  *  job: it held the next minor out until someone read the new contract and
  *  said what changed. Both numbers move together, in one commit, with the
  *  paragraph above rewritten — a floor raised without its ceiling would
  *  silently readmit the next unread minor. */
-const CEILING = '0.16.0';
+const CEILING = '0.17.0';
 
 type Semver = [number, number, number];
 
@@ -418,7 +428,7 @@ function readJson(file: string): Record<string, unknown> {
   return JSON.parse(fs.readFileSync(file, 'utf8')) as Record<string, unknown>;
 }
 
-test('harness pin: the INSTALLED civic-typed-harness satisfies >=0.15.0 <0.16.0 (it carries all eleven sets of signed-surface fixes)', () => {
+test('harness pin: the INSTALLED civic-typed-harness satisfies >=0.16.0 <0.17.0 (it carries all twelve sets of signed-surface fixes)', () => {
   const pkgJson = path.join(HARNESS_DIR, 'package.json');
   assert.ok(fs.existsSync(pkgJson), `${HARNESS} is not installed at ${pkgJson} — run npm ci`);
 
@@ -429,6 +439,8 @@ test('harness pin: the INSTALLED civic-typed-harness satisfies >=0.15.0 <0.16.0 
   assert.ok(
     compareSemver(installed, parseSemver(FLOOR, 'floor')) >= 0,
     `installed ${HARNESS} is ${version as string}; ${FLOOR} is the first release that ` +
+      'reads a `present_result` span as the site\'s own step, crediting no source with it (`civic:presentOutcome`; ' +
+      'hub ADR-0033 amendment 6; website #810, OF3a). 0.15.0 is the floor that ' +
       'mints one `dataSources` entry per portal a per-portal source\'s calls named (`portalArgument`; npstorey/civic-ai-tools#329, ' +
       'CKAN-2-WEB P1, W4). 0.14.0 is the floor that ' +
       'records a search as the instance\'s own step and states the routing configuration (`find_source`, ' +

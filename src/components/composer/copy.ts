@@ -23,6 +23,9 @@
  * words check (W2 KEEP, #729 6866525511) and the owner's rulings (6877110969), one constant each.
  */
 
+// OF3b: the map format's two reason lines are kept with the map's other words; relative, so `node --test` reads it.
+import { MAP_COMPARE_REASON, MAP_SANDBOX_REASON } from '../../lib/output-format/map-words.ts';
+
 /** X23: the docked box's placeholder. */
 export const DOCKED_PLACEHOLDER = 'Ask another question';
 
@@ -123,6 +126,8 @@ export const DATA_SOURCES_ITEM = {
  */
 export const OUTPUT_FORMAT_ITEM = {
   label: 'Output format',
+  /** OF3b (K3 = A; the seat's 7172716367): a map format's reason in a Sandbox session (`map-words.ts`). */
+  sandboxMapReason: MAP_SANDBOX_REASON,
   /** The item's value under Auto, as built. */
   value: 'Auto',
   /** Auto's option line: ruled, W1 = B (the built label), W3 = A ("the AI"). */
@@ -149,6 +154,8 @@ export const COMPARE_ITEM = {
   label: 'Compare with a second harness',
   description: 'Adds a second answer from training data alone, side by side. Runs one extra model call per question.',
   sandboxReason: 'Not offered in a Sandbox session. Switch Session type to Standard to compare.',
+  /** OF3b (C3 = A; the seat's 7172716367): while a map format is chosen; the compare route refuses with it too. */
+  mapReason: MAP_COMPARE_REASON,
 } as const;
 /** Compare's value On: kept by the words check (W2 KEEP, #729 6866525511) and the owner's rulings (6877110969). */
 export const COMPARE_VALUE_ON = 'On';

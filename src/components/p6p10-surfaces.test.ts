@@ -387,14 +387,14 @@ for (const [shape, answer] of [
 /** Every kind `classifyStreamError` returns but the limit's, consent's and an ended session's, which have their own tests. */
 const KEPT_KINDS = (STREAM_ERROR_KINDS as readonly string[]).filter((k) => k !== 'rate_limit' && k !== 'consent_required' && k !== 'session_ended');
 
-test('fix round 2, A5 (premise): the kinds are the sixteen, and the thirteen that keep the block are listed here', () => {
+test('fix round 2, A5 (premise): the kinds are the seventeen, and the fourteen that keep the block are listed here', () => {
   // Fifteen since FIX-1 FX-S2 added `session_ended`, which has its own tests below; sixteen since OF2 (website #810)
   // added `output_format_not_offered`, a question naming an output format the site does not offer, which keeps the
-  // block as `no_picks_usable` does.
-  assert.equal(STREAM_ERROR_KINDS.length, 16);
+  // block as `no_picks_usable` does; seventeen since OF3b added `map_format_compare_not_offered`, which keeps it too.
+  assert.equal(STREAM_ERROR_KINDS.length, 17);
   assert.deepEqual(KEPT_KINDS, [
     'model_rate_limited', 'model_not_configured', 'model_auth_rejected', 'mcp_not_configured', 'mcp_timeout', 'mcp_unavailable',
-    'connection', 'notebook_execution', 'not_offered', 'no_sources_on', 'no_picks_usable', 'output_format_not_offered', 'generic',
+    'connection', 'notebook_execution', 'not_offered', 'no_sources_on', 'no_picks_usable', 'output_format_not_offered', 'map_format_compare_not_offered', 'generic',
   ]);
 });
 

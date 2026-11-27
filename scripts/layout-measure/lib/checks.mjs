@@ -2,7 +2,7 @@
 // goes to the JSON record when `--out` is given. A check that throws is reported as ERROR with its message.
 import { ANSWER, LIB, LIVE, Q, SNAP, SURFACE_READY, ask, feed, openMenuGroup } from './reads.mjs';
 import { PLANTS } from './plants.mjs';
-import { sleep } from './browser.mjs';
+import { hostsOf, sleep } from './browser.mjs';
 
 export const SIZES = { phone: [390, 844], laptop: [1280, 720], desktop: [1440, 900] };
 const ALL_SIZES = [SIZES.phone, SIZES.laptop, SIZES.desktop];
@@ -434,4 +434,172 @@ export async function check6(ctx) {
   return { id: '6', title: "#786 item 3: after the sequence, the focused element's box is inside the viewport", sizes: '390x844 (judged), 1280x720 (reported); the home page signed out, the statement from the tracked fixture', pass, lines, data };
 }
 
-export const CHECKS = { 1: check1, 2: check2, 3: check3, 4: check4, 5: check5, 6: check6 };
+// --- 7. OF3b (website #810): a "Map" answer, in a real browser, and the hosts it makes the page contact ---------------
+//
+// Criteria 8, 9 and 12. On /ask's surface (Standard; fold 7: the home page offers no format), with the local session
+// check 8 uses, one run as "Auto" (the base's answer: `chat-plain`) and
+// one as "Map" (`chat-map`, the real route's stream for the plain map), each in its own session, each recording every
+// request its page starts (`notes.requests`). Then:
+//   8   the map part follows the answer: the plot, the count line, the table under its caption, "Download map data";
+//       the table's region is reached by the keyboard (Tab from the count line); the written answer shows;
+//       under envelope-order (a third session) the map part renders too, once, after the answer (fold 5, flag 6);
+//   9   the plot's alternative text is the counts' sentence; the row whose name carries markup shows it as text, and
+//       no element of that markup exists in the page;
+//   12  every host the "Map" session contacted is one the "Auto" session contacted.
+// `--plant 7` adds an image from another host to the map part before the hosts are read, so 12 must read FAIL.
+
+const MAP_PLANT_HOST = 'plant.layout-measure.invalid';
+const PLANT_7 = `(() => { const m = document.querySelector('[data-part="map"]'); if (!m) return false; const i = document.createElement('img'); i.src = 'https://${MAP_PLANT_HOST}/p.png'; i.alt = ''; m.append(i); return true; })()`;
+const MAP_READ = `(() => {${LIB}
+  const m = document.querySelector('[data-part="map"]');
+  const plot = m && m.querySelector('svg[data-part="map-plot"]');
+  const region = m && m.querySelector('[data-part="map-table"]');
+  const caption = region && region.querySelector('caption');
+  const answer = document.querySelector('[data-part="answer"]');
+  const cells = region ? [...region.querySelectorAll('tbody tr')].map((tr) => [...tr.children].map((td) => td.textContent)) : [];
+  return {
+    part: R(m), answer: R(answer), answerText: T(answer).slice(0, 80),
+    plot: R(plot), role: plot && plot.getAttribute('role'), alt: plot && plot.getAttribute('aria-label'), points: plot ? plot.querySelectorAll('circle').length : 0,
+    countLine: T(m && m.querySelector('[data-part="map-count-line"]')), caption: T(caption),
+    region: R(region), regionTabIndex: region ? region.tabIndex : null, rows: cells,
+    download: T(m && m.querySelector('[data-part="map-download"]')),
+    markupElements: m ? m.querySelectorAll('b, img').length : null,
+    answerBeforeMap: !!(answer && m && (answer.compareDocumentPosition(m) & Node.DOCUMENT_POSITION_FOLLOWING)),
+  };
+})()`;
+
+export async function check7(ctx) {
+  const lines = []; const data = []; let pass = true;
+  if (!ctx.sessionCookie) {
+    return { id: '7', title: 'OF3b: a "Map" answer', sizes: '', pass: null, lines: ['ERROR: no LAYOUT_MEASURE_SESSION_COOKIE: /ask renders its sign-in panel without a session'], data };
+  }
+  const file = ctx.events.chatMap;
+  const judge = (ok, text) => { pass = pass && ok; lines.push(`${text}  ${verdict(ok)}`); };
+  for (const size of [SIZES.phone, SIZES.laptop]) {
+    let base; let map; let envelope;
+    try {
+      base = await load(ctx, `7 auto@${size[0]}`, size, '/ask', { mode: 'standard', signedIn: true, answer: answerOf(ctx.events.chatPlain) });
+      await finishedRun(base, ctx.events.chatPlain);
+      await base.settle();
+      const baseHosts = hostsOf(base.notes);
+
+      map = await load(ctx, `7 map@${size[0]}`, size, '/ask', { mode: 'standard', signedIn: true, outputFormat: 'plain-map@1' });
+      await ask(map, QUESTION);
+      const sent = await map.ev('window.__lm.streams[0]');
+      await feed(map, file);
+      await map.until(`Boolean(document.querySelector('[data-part="map"]'))`, 10000, 'the map part');
+      await map.settle();
+      const r = await map.ev(MAP_READ);
+      // Keyboard: from the count line, Tab reaches the table's region.
+      await map.click(`document.querySelector('[data-part="map-count-line"]')`, 'the count line');
+      await map.key('Tab');
+      await map.frames();
+      const focused = await map.ev(`(() => { const a = document.activeElement; return a ? a.getAttribute('data-part') : null; })()`);
+      if (ctx.plant === '7') await map.ev(PLANT_7);
+      await sleep(800);
+      const mapHosts = hostsOf(map.notes);
+      const extra = mapHosts.filter((h) => !baseHosts.includes(h));
+      const w = size[0];
+      judge(sent?.outputFormat?.id === 'plain-map' && sent?.mcpOnly === true, `${w}  the send carries the plain map, with one panel: ${JSON.stringify({ outputFormat: sent?.outputFormat, mcpOnly: sent?.mcpOnly })}`);
+      judge(r.answerText.includes(file.answerMarker) && r.answerBeforeMap, `${w}  8: the written answer shows, before the map part ("${r.answerText.slice(0, 40)}…")`);
+      judge(!!r.plot && r.plot.height > 0 && r.points === 3 && r.role === 'img', `${w}  8: the plot ${box(r.plot)}, ${r.points} points, role ${r.role}`);
+      judge(r.countLine === '3 of 5 rows mapped; 2 had no location.', `${w}  8: the count line "${r.countLine}"`);
+      judge(r.caption === 'The 3 mapped rows from dataset pts1-0001' && r.rows.length === 3, `${w}  8: the table's caption "${r.caption}", ${r.rows.length} rows`);
+      judge(focused === 'map-table' && r.regionTabIndex === 0, `${w}  8: Tab from the count line focuses ${focused} (tabIndex ${r.regionTabIndex})`);
+      judge(r.download === 'Download map data', `${w}  8: the save action "${r.download}"`);
+      judge(r.alt === 'Map of 3 points from dataset pts1-0001. 2 rows had no location.', `${w}  9: the plot's alternative text "${r.alt}"`);
+      const markupRow = r.rows.find((row) => row[1].includes('<b>'));
+      judge(!!markupRow && r.markupElements === (ctx.plant === '7' ? 0 : 0), `${w}  9: the name with markup shows as text ("${markupRow ? markupRow[1].slice(0, 50) : 'absent'}"), elements from it in the map part: ${r.markupElements}`);
+      judge(extra.length === 0, `${w}  12: hosts the "Map" answer contacted that the "Auto" answer did not: ${JSON.stringify(extra)} (Auto ${JSON.stringify(baseHosts)}; Map ${JSON.stringify(mapHosts)})`);
+      if (ctx.shots) await map.shot(ctx.shots(`check7-map-${w}`));
+
+      envelope = await load(ctx, `7 envelope@${size[0]}`, size, '/ask', { mode: 'standard', signedIn: true, outputFormat: 'plain-map@1', layout: 'envelope-order@2' });
+      await ask(envelope, QUESTION);
+      await feed(envelope, file);
+      await envelope.settle();
+      // Fold 5, flag 6 (the seat's 7224717454): a reader's layout choice does not hide the map; under envelope-order the
+      // map part renders once, with its plot, after the answer it belongs to.
+      const e = await envelope.ev(`(() => {
+        const maps = [...document.querySelectorAll('[data-part="map"]')];
+        const answer = [...document.querySelectorAll('[data-part="answer"]')][0] || null;
+        return { map: maps.length, plots: document.querySelectorAll('svg[data-part="map-plot"]').length,
+          afterAnswer: !!(answer && maps[0] && (answer.compareDocumentPosition(maps[0]) & Node.DOCUMENT_POSITION_FOLLOWING)),
+          layout: (document.querySelector('[data-part="layout-line"]') || {}).textContent || null };
+      })()`);
+      judge(e.map === 1 && e.plots === 1 && e.afterAnswer && /envelope-order/.test(String(e.layout)), `${w}  8 (fold 5): under envelope-order the map part renders once, after the answer (${e.map} map parts, ${e.plots} plots; "${e.layout}")`);
+      data.push({ size, sent, read: r, focused, baseHosts, mapHosts, extra, envelope: e, requests: { base: base.notes.requests, map: map.notes.requests } });
+    } finally {
+      await closeAll(base); await closeAll(map); await closeAll(envelope);
+    }
+  }
+  return { id: '7', title: 'OF3b: a "Map" answer shows its map part, its text and table as text, and contacts no new host', sizes: '390x844, 1280x720; /ask signed in (a local session), Standard, the chat path', pass, lines, data };
+}
+
+// --- 8. OF3b (website #810): the menu on /ask, signed in (criterion 7 and the brief's folds 1 and 2) ----------------
+//
+// Needs a local build's session cookie (LAYOUT_MEASURE_SESSION_COOKIE, minted for that build's own throwaway secret and
+// set by CDP; never printed). Reads, on `/ask` in Standard with Compare On: "Map" under Output format with its two
+// lines; choose "Map" (no dialog opens): Compare off with its reason; choose "Auto": Compare offered again, and its
+// value; Session type Sandbox: "Map" off with its reason; Standard: "Map" offered again.
+
+const MENU_ROW = (label) => `(() => { const e = ${Q.item(label)}; if (!e) return null; const q = (c) => { const x = e.querySelector(c); return x ? x.textContent.replace(/\\s+/g, ' ').trim() : null; }; return { value: q('.ui-menu-item-value'), description: q('.ui-menu-item-description'), reason: q('.ui-menu-item-reason'), disabled: e.getAttribute('aria-disabled') === 'true' }; })()`;
+
+async function c8OpenMenu(c) {
+  await c.click(Q.trigger, 'the harness menu trigger');
+  await c.until(`Boolean(${Q.menu})`, 5000, 'the harness menu');
+  await c.settle();
+}
+
+export async function check8(ctx) {
+  const lines = []; const data = []; let pass = true;
+  const judge = (ok, text) => { pass = pass && ok; lines.push(`${text}  ${verdict(ok)}`); };
+  if (!ctx.sessionCookie) {
+    return { id: '8', title: 'OF3b: the menu on /ask', sizes: '', pass: null, lines: ['ERROR: no LAYOUT_MEASURE_SESSION_COOKIE: /ask renders its sign-in panel without a session'], data };
+  }
+  // Fold 7 (the owner's D+C, OA-1283): the home page offers no format, and a "Map" stored on /ask is not sent from it.
+  let home;
+  try {
+    home = await load(ctx, '8 home', SIZES.laptop, '/', { mode: 'standard', outputFormat: 'plain-map@1' });
+    await c8OpenMenu(home);
+    const items = await home.ev(`[...document.querySelectorAll('[data-part="harness-menu"] [role="menu"] .ui-menu-item-label')].map((e) => e.textContent.trim())`);
+    await home.key('Escape');
+    await ask(home, QUESTION);
+    const sent = await home.ev('window.__lm.streams[0]');
+    judge(!items.includes('Output format') && sent?.outputFormat === null && sent?.mcpOnly === false, `fold 7: the home page's menu ${JSON.stringify(items)}; with "Map" stored it sends ${JSON.stringify({ outputFormat: sent?.outputFormat, mcpOnly: sent?.mcpOnly })}`);
+  } finally { await closeAll(home); }
+  let c;
+  try {
+    c = await load(ctx, '8 /ask', SIZES.laptop, '/ask', { mode: 'standard', comparison: 'on', signedIn: true });
+    const closeMenu = async () => { if (await c.ev(`Boolean(${Q.menu})`)) { await c.key('Escape'); await c.settle(); } };
+    const choose = async (group, option) => { await openMenuGroup(c, group); await c.click(Q.item(option), option); await c.settle(); await closeMenu(); };
+    const row = async (label, group) => { await closeMenu(); if (group) await openMenuGroup(c, group); else { await c.click(Q.trigger, 'the menu'); await c.until(`Boolean(${Q.menu})`, 5000, 'the menu'); } const r = await c.ev(MENU_ROW(label)); await closeMenu(); return r; };
+    const COMPARE = 'Compare with a second harness';
+    const compare0 = await row(COMPARE);
+    const map0 = await row('Map', 'Output format');
+    judge(!!map0 && !map0.disabled && map0.description === 'This site maps rows the AI chose from the data. No map service receives anything. The map shows at most 1,000 points.', `7: "Map" under Output format, its lines "${map0?.description}"`);
+    judge(compare0?.value === 'On' && !compare0.disabled, `premise: Compare reads ${compare0?.value} before a map is chosen`);
+    const dialogs0 = await c.ev(`document.querySelectorAll('[role="dialog"], [role="alertdialog"]').length`);
+    await choose('Output format', 'Map');
+    const dialogs1 = await c.ev(`document.querySelectorAll('[role="dialog"], [role="alertdialog"]').length`);
+    judge(dialogs1 === dialogs0, `7: choosing "Map" opens no card (${dialogs0} -> ${dialogs1} dialogs)`);
+    const compare1 = await row(COMPARE);
+    judge(compare1?.disabled === true && compare1.value === 'Off' && compare1.reason === 'Not offered while a map format is chosen. Switch Output format to Auto to compare.', `7: with "Map", Compare ${JSON.stringify(compare1)}`);
+    await choose('Output format', 'Auto - text as the AI writes it');
+    const compare2 = await row(COMPARE);
+    judge(compare2?.disabled === false && compare2.value === 'On', `fold 1: after "Auto", Compare is offered again (${!compare2?.disabled}) and reads its earlier value "${compare2?.value}"`);
+    await choose('Output format', 'Map');
+    await choose('Session type', 'Sandbox');
+    const map1 = await row('Map', 'Output format');
+    judge(map1?.disabled === true && map1.reason === 'Not offered in a Sandbox session. Switch Session type to Standard to use a map.', `7: in Sandbox, "Map" ${JSON.stringify(map1)}`);
+    const formatValue = await row('Output format');
+    lines.push(`      reported: in Sandbox with "Map" stored, Output format reads "${formatValue?.value}"`);
+    await choose('Session type', 'Standard');
+    const map2 = await row('Map', 'Output format');
+    judge(map2?.disabled === false && map2.reason === null, `fold 2: in Standard again, "Map" is offered (${JSON.stringify(map2)})`);
+    data.push({ compare0, map0, compare1, compare2, map1, formatValue, map2 });
+    if (ctx.shots) await c.shot(ctx.shots('check8-ask'));
+  } finally { await closeAll(c); }
+  return { id: '8', title: 'OF3b: "Map" in the menu on /ask, and Compare and Sandbox beside it', sizes: '1280x720; /ask signed in (a local session), Standard, Compare On', pass, lines, data };
+}
+
+export const CHECKS = { 1: check1, 2: check2, 3: check3, 4: check4, 5: check5, 6: check6, 7: check7, 8: check8 };

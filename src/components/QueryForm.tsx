@@ -30,6 +30,7 @@ import { useOfferedOutputFormats } from '@/components/OutputFormatProvider';
 import {
   OUTPUT_FORMAT_STORAGE_KEY,
   chosenOutputFormat,
+  outputFormatInForce,
   parseStoredOutputFormat,
   storedOutputFormatValue,
   type OutputFormatRef,
@@ -82,6 +83,12 @@ interface QueryFormProps {
     restored: boolean;
     onChange: (restored: boolean) => void;
   };
+  /**
+   * OF3b fold 7 (the owner's D+C, OA-1283): whether this mount offers the instance's output formats. Only the
+   * answer-first mount (`/ask`) does. Absent or false (the home page), the menu shows no Output format item and a
+   * question carries no format, a choice stored on `/ask` included, as a Sandbox session carries none (K3).
+   */
+  outputFormatOffered?: boolean;
   /**
    * Whether the signed-in choices are offered to a signed-out reader (UX pass
    * row 7, the owner's ruling of 2026-10-22). Default 'always': every mount as
@@ -148,6 +155,7 @@ export default function QueryForm({
   queryCount = 0,
   defaultMode = 'standard',
   comparisonControl,
+  outputFormatOffered = false,
   advancedOptions = 'always',
   docked = false,
   showFirstTimeLine = false,
@@ -220,7 +228,9 @@ export default function QueryForm({
   // OF2 (website #810): the output format, on an instance with SITE_OUTPUT_FORMAT on (`OutputFormatProvider`; null
   // off). The choice lasts the browser session, as Session type's (S9's choice a, ruled A at G0b); a stored choice
   // the instance does not offer, or any with the setting off, is Auto, and Auto sends no format.
-  const offeredFormats = useOfferedOutputFormats();
+  // Fold 7 (the owner's D+C, OA-1283): only a mount that offers formats reads them (`outputFormatOffered`, `/ask`).
+  const instanceFormats = useOfferedOutputFormats();
+  const offeredFormats = outputFormatOffered ? instanceFormats : null;
   const [storedFormat, setStoredFormat] = useSessionChoice<string>(OUTPUT_FORMAT_STORAGE_KEY, parseStoredOutputFormat);
   const chosenFormat = chosenOutputFormat(storedFormat, offeredFormats);
 
@@ -431,7 +441,9 @@ export default function QueryForm({
     markRefused(false);
     // R4: a send closes the panel.
     closePicker();
-    const format = chosenFormat ? { id: chosenFormat.id, version: chosenFormat.version } : undefined;
+    // OF3b (K3 = A): a map format is not sent from a Sandbox session; the menu reads Auto there.
+    const inForce = outputFormatInForce(chosenFormat, mode === 'notebook');
+    const format = inForce ? { id: inForce.id, version: inForce.version } : undefined;
     const args = [query.trim(), model, portal, mode, pickingNow ? [...pickedNow] : undefined, format] as const;
     const run = () => {
       lastSentRef.current = () => onSubmit(...args);

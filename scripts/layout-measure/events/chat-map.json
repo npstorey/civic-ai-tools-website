@@ -1,0 +1,945 @@
+{
+ "name": "chat-map",
+ "route": "/api/compare-stream",
+ "sources": [
+  "src/app/api/output-format-map-driven.test.ts (the drive \"map: the site's own plain map\", its stream as the real route sent it, written with OF3B_DUMP_DIR set)"
+ ],
+ "changes": [
+  "the second mapped row's name replaced with markup that names an image on another host, in the trace's map only (criterion 9: shown as text, and never fetched)"
+ ],
+ "answerMarker": "ZQXTOKEN",
+ "answer": [],
+ "events": [
+  {
+   "type": "progress",
+   "panel": "withMcp",
+   "message": "Reading your question...",
+   "phase": "analyze"
+  },
+  {
+   "type": "progress",
+   "panel": "withMcp",
+   "message": "Querying dataset cnt0-0001",
+   "phase": "tool_start",
+   "iteration": 1,
+   "args": {
+    "type": "query",
+    "dataset_id": "cnt0-0001",
+    "query": "SELECT *",
+    "portal": "data.example.org"
+   },
+   "toolName": "socrata__get_data",
+   "operationType": "query"
+  },
+  {
+   "type": "progress",
+   "panel": "withMcp",
+   "message": "Querying dataset cnt0-0001",
+   "phase": "tool_complete",
+   "iteration": 1,
+   "duration_ms": 0,
+   "toolName": "socrata__get_data",
+   "operationType": "query"
+  },
+  {
+   "type": "progress",
+   "panel": "withMcp",
+   "message": "Retrieved 1 record from dataset cnt0-0001",
+   "phase": "tool_result",
+   "iteration": 1,
+   "args": {
+    "type": "query",
+    "dataset_id": "cnt0-0001",
+    "query": "SELECT *",
+    "portal": "data.example.org"
+   },
+   "toolName": "socrata__get_data",
+   "operationType": "query"
+  },
+  {
+   "type": "progress",
+   "panel": "withMcp",
+   "message": "Analyzing results and deciding next step...",
+   "phase": "thinking",
+   "iteration": 1
+  },
+  {
+   "type": "progress",
+   "panel": "withMcp",
+   "message": "Querying dataset pts1-0001",
+   "phase": "tool_start",
+   "iteration": 2,
+   "args": {
+    "type": "query",
+    "dataset_id": "pts1-0001",
+    "query": "SELECT *",
+    "portal": "data.example.org"
+   },
+   "toolName": "socrata__get_data",
+   "operationType": "query"
+  },
+  {
+   "type": "progress",
+   "panel": "withMcp",
+   "message": "Querying dataset pts1-0001",
+   "phase": "tool_complete",
+   "iteration": 2,
+   "duration_ms": 0,
+   "toolName": "socrata__get_data",
+   "operationType": "query"
+  },
+  {
+   "type": "progress",
+   "panel": "withMcp",
+   "message": "Retrieved 5 records from dataset pts1-0001",
+   "phase": "tool_result",
+   "iteration": 2,
+   "args": {
+    "type": "query",
+    "dataset_id": "pts1-0001",
+    "query": "SELECT *",
+    "portal": "data.example.org"
+   },
+   "toolName": "socrata__get_data",
+   "operationType": "query"
+  },
+  {
+   "type": "progress",
+   "panel": "withMcp",
+   "message": "Analyzing results and deciding next step...",
+   "phase": "thinking",
+   "iteration": 2
+  },
+  {
+   "type": "progress",
+   "panel": "withMcp",
+   "message": "Choosing what to map",
+   "phase": "tool_start",
+   "iteration": 3,
+   "args": {
+    "result": 2,
+    "label": "complaint_type"
+   },
+   "toolName": "present_result",
+   "operationType": "present_result"
+  },
+  {
+   "type": "progress",
+   "panel": "withMcp",
+   "message": "Choosing what to map",
+   "phase": "tool_complete",
+   "iteration": 3,
+   "duration_ms": 0,
+   "toolName": "present_result",
+   "operationType": "present_result"
+  },
+  {
+   "type": "progress",
+   "panel": "withMcp",
+   "message": "Analyzing results and deciding next step...",
+   "phase": "thinking",
+   "iteration": 3
+  },
+  {
+   "type": "progress",
+   "panel": "withMcp",
+   "message": "Synthesizing findings into response...",
+   "phase": "synthesize"
+  },
+  {
+   "type": "token",
+   "panel": "withMcp",
+   "content": "The ZQXTOKEN complai"
+  },
+  {
+   "type": "token",
+   "panel": "withMcp",
+   "content": "nts cluster near 40."
+  },
+  {
+   "type": "token",
+   "panel": "withMcp",
+   "content": "999111, -73.111999."
+  },
+  {
+   "$arrival": true,
+   "type": "complete",
+   "panel": "withMcp",
+   "data": {
+    "content": "The ZQXTOKEN complaints cluster near 40.999111, -73.111999.",
+    "duration_ms": 0,
+    "tokens_used": 60,
+    "prompt_tokens": 40,
+    "completion_tokens": 20,
+    "tools_called": [
+     {
+      "name": "socrata__get_data",
+      "args": {
+       "type": "query",
+       "dataset_id": "cnt0-0001",
+       "query": "SELECT *",
+       "portal": "data.example.org"
+      },
+      "operationType": "query",
+      "reason": "to query dataset cnt0-0001",
+      "duration_ms": 0,
+      "resultSummary": {
+       "rows": 1,
+       "columns": 1
+      }
+     },
+     {
+      "name": "socrata__get_data",
+      "args": {
+       "type": "query",
+       "dataset_id": "pts1-0001",
+       "query": "SELECT *",
+       "portal": "data.example.org"
+      },
+      "operationType": "query",
+      "reason": "to query dataset pts1-0001",
+      "duration_ms": 0,
+      "resultSummary": {
+       "rows": 5,
+       "columns": 4
+      }
+     },
+     {
+      "name": "present_result",
+      "args": {
+       "result": 2,
+       "label": "complaint_type"
+      },
+      "operationType": "present_result",
+      "reason": "to choose what to map",
+      "duration_ms": 0,
+      "presentOutcome": "accepted"
+     }
+    ],
+    "flows": {
+     "reached": [
+      {
+       "kind": "model",
+       "name": "Model service",
+       "model": "vendor/model-fixture-1",
+       "service": "openai-compatible",
+       "recipients": [
+        {
+         "role": "Model service",
+         "place": "127.0.0.1:47832",
+         "got": "your question, and the data the sources return for it",
+         "keptBy": [
+          {
+           "holder": "127.0.0.1:47832",
+           "keeps": "operator-states"
+          }
+         ]
+        }
+       ]
+      },
+      {
+       "kind": "source",
+       "sourceId": "socrata",
+       "name": "Socrata",
+       "calls": 2,
+       "recipients": [
+        {
+         "role": "Data source",
+         "place": "127.0.0.1:47831",
+         "got": "the searches and queries the AI model writes to answer your question, which can include words from your question",
+         "keptBy": [
+          {
+           "holder": "the operator of 127.0.0.1:47831",
+           "keeps": "operator-states"
+          },
+          {
+           "holder": "Tyler Technologies",
+           "keeps": "not-stated",
+           "statementUrl": "https://www.tylertech.com/privacy",
+           "readOn": "2026-10-19",
+           "basis": [
+            "its privacy statement gives a retention rule for personal information and says nothing about what it keeps of a portal's data requests"
+           ]
+          }
+         ]
+        }
+       ]
+      }
+     ],
+     "notReached": [
+      {
+       "sourceId": "data-commons",
+       "name": "Data Commons",
+       "whyNotSent": "On, not used for this question."
+      },
+      {
+       "sourceId": "boston-opencontext",
+       "name": "Boston OpenContext",
+       "whyNotSent": "Not set up on the site that ran this question."
+      },
+      {
+       "sourceId": "nyc-charter",
+       "name": "NYC Charter, Laws and Rules",
+       "whyNotSent": "Not set up on the site that ran this question."
+      },
+      {
+       "sourceId": "nyc-checkbook",
+       "name": "NYC Checkbook",
+       "whyNotSent": "Not set up on the site that ran this question."
+      },
+      {
+       "sourceId": "nyc-record",
+       "name": "NYC City Record",
+       "whyNotSent": "On, not used for this question."
+      },
+      {
+       "sourceId": "nys-legislation",
+       "name": "NYS Open Legislation",
+       "whyNotSent": "Not set up on the site that ran this question."
+      },
+      {
+       "sourceId": "ckan-server",
+       "name": "CKAN",
+       "whyNotSent": "Not set up on the site that ran this question."
+      }
+     ],
+     "statement": {
+      "kind": "in-force"
+     }
+    }
+   }
+  },
+  {
+   "type": "trace",
+   "panel": "withMcp",
+   "data": {
+    "resourceSpans": [
+     {
+      "resource": {
+       "attributes": [
+        {
+         "key": "service.name",
+         "value": {
+          "stringValue": "civic-ai-tools-website"
+         }
+        },
+        {
+         "key": "service.version",
+         "value": {
+          "stringValue": "0.1.0"
+         }
+        },
+        {
+         "key": "telemetry.sdk.language",
+         "value": {
+          "stringValue": "typescript"
+         }
+        },
+        {
+         "key": "otel.semconv.version",
+         "value": {
+          "stringValue": "1.30.0"
+         }
+        }
+       ]
+      },
+      "scopeSpans": [
+       {
+        "scope": {
+         "name": "civic-ai-tools-evidence",
+         "version": "0.1.0"
+        },
+        "spans": [
+         {
+          "traceId": "9e3cda7817b553f18f2ecc6a08a745e3",
+          "spanId": "811fbe5cfa9836d5",
+          "name": "analysis",
+          "kind": 2,
+          "startTimeUnixNano": "1795176000000000000",
+          "attributes": [
+           {
+            "key": "analysis.prompt_hash",
+            "value": {
+             "stringValue": "bc695e7066379ea638d2c90cb622a47fcbc75168a9500e3f79ed1ec0cbdefe73"
+            }
+           },
+           {
+            "key": "analysis.model",
+            "value": {
+             "stringValue": "vendor/model-fixture-1"
+            }
+           },
+           {
+            "key": "analysis.portal",
+            "value": {
+             "stringValue": "data.example.org"
+            }
+           },
+           {
+            "key": "analysis.output_format",
+            "value": {
+             "stringValue": "{\"id\":\"plain-map\",\"version\":\"1\"}"
+            }
+           },
+           {
+            "key": "analysis.asserted_date",
+            "value": {
+             "stringValue": "2026-11-20"
+            }
+           },
+           {
+            "key": "analysis.mcp_servers",
+            "value": {
+             "stringValue": "[{\"url\":\"http://127.0.0.1:47831/socrata/mcp\",\"name\":\"socrata\"},{\"url\":\"http://127.0.0.1:47831/dc/mcp\",\"name\":\"data-commons\"}]"
+            }
+           },
+           {
+            "key": "analysis.tool_definitions",
+            "value": {
+             "stringValue": "[{\"type\":\"function\",\"function\":{\"name\":\"socrata__get_data\",\"description\":\"Unified Socrata open data access tool. Supports multiple operation types:\\n- catalog: Search the catalog for datasets matching a query on a Socrata portal\\n- metadata: Get detailed metadata about a specific dataset\\n- query: Execute a SoQL query against a dataset to fetch and filter data\\n- metrics: Get row count, view count, last-updated timestamps for a dataset\\n\\nIMPORTANT TIPS:\\n1. For type=metadata and type=metrics, pass the dataset ID in \\\"dataset_id\\\"\\n2. For type=query, ALWAYS start by fetching a sample with no WHERE clause to see actual column values\\n3. NYC 311 data uses field names like: complaint_type, descriptor, created_date, community_board\\n4. Field values are case-sensitive - fetch sample data first to see exact formats\\n\\nExamples:\\n- Search catalog: { \\\"type\\\": \\\"catalog\\\", \\\"portal\\\": \\\"data.cityofnewyork.us\\\", \\\"query\\\": \\\"311 complaints\\\" }\\n- Get metadata: { \\\"type\\\": \\\"metadata\\\", \\\"portal\\\": \\\"data.cityofnewyork.us\\\", \\\"dataset_id\\\": \\\"erm2-nwe9\\\" }\\n- Get metrics: { \\\"type\\\": \\\"metrics\\\", \\\"portal\\\": \\\"data.cityofnewyork.us\\\", \\\"dataset_id\\\": \\\"erm2-nwe9\\\" }\\n- Fetch sample data first: { \\\"type\\\": \\\"query\\\", \\\"portal\\\": \\\"data.cityofnewyork.us\\\", \\\"dataset_id\\\": \\\"erm2-nwe9\\\", \\\"limit\\\": 5 }\\n- Query with filter: { \\\"type\\\": \\\"query\\\", \\\"portal\\\": \\\"data.cityofnewyork.us\\\", \\\"dataset_id\\\": \\\"erm2-nwe9\\\", \\\"select\\\": \\\"complaint_type, COUNT(*) as count\\\", \\\"group\\\": \\\"complaint_type\\\", \\\"order\\\": \\\"count DESC\\\", \\\"limit\\\": 10 }\",\"parameters\":{\"type\":\"object\",\"properties\":{\"type\":{\"type\":\"string\",\"enum\":[\"catalog\",\"metadata\",\"query\",\"metrics\"],\"description\":\"The type of operation to perform\"},\"portal\":{\"type\":\"string\",\"description\":\"Socrata portal domain (e.g., data.cityofnewyork.us, data.sf.gov)\"},\"query\":{\"type\":\"string\",\"description\":\"For type=catalog: search query. For type=metadata: the dataset ID. For type=query: either a full SoQL statement starting with SELECT, which is applied as the entire query and supersedes select/where/order/group (limit and offset are not applied either \u2014 bound the rows with the statement's own LIMIT), or a search phrase, applied as a full-text search within the data alongside the other clauses.\"},\"dataset_id\":{\"type\":\"string\",\"description\":\"Dataset identifier (required for type=query, metadata, and metrics)\"},\"limit\":{\"type\":\"number\",\"description\":\"Maximum number of rows to return (default: 10)\"},\"offset\":{\"type\":\"number\",\"description\":\"Number of rows to skip (for pagination)\"},\"select\":{\"type\":\"string\",\"description\":\"SoQL select clause (for type=query)\"},\"where\":{\"type\":\"string\",\"description\":\"SoQL where clause (for type=query)\"},\"order\":{\"type\":\"string\",\"description\":\"SoQL order clause (for type=query)\"},\"group\":{\"type\":\"string\",\"description\":\"SoQL group clause (for type=query)\"}},\"required\":[\"type\"]}}},{\"type\":\"function\",\"function\":{\"name\":\"socrata__search\",\"description\":\"Search the Socrata portal this instance's MCP server is configured for, returning matching datasets with identifiers that \\\"socrata__fetch\\\" accepts.\\n\\nReturns, per hit: an \\\"id\\\" of the form dataset:<portal>:<dataset_id>, the title, the portal URL, a description snippet, and \u2014 where the dataset allows it \u2014 its column list and a few preview rows.\\n\\nWHICH TOOL TO USE:\\n- This tool searches ONE portal: the one the server is configured with. It takes no portal argument.\\n- To search any OTHER portal, use socrata__get_data with { \\\"type\\\": \\\"catalog\\\", \\\"portal\\\": \\\"...\\\", \\\"query\\\": \\\"...\\\" }, which does take a portal.\",\"parameters\":{\"type\":\"object\",\"additionalProperties\":false,\"properties\":{\"query\":{\"type\":\"string\",\"description\":\"Full-text search phrase, e.g. \\\"311 noise complaints\\\"\"}},\"required\":[\"query\"]}}},{\"type\":\"function\",\"function\":{\"name\":\"socrata__fetch\",\"description\":\"Retrieve a dataset's full metadata, or a single record, by the identifier \\\"socrata__search\\\" returned.\\n\\nThe identifier is normally taken verbatim from a socrata__search hit: dataset:<portal>:<dataset_id> for a dataset, record:<portal>:<dataset_id>:<row_id> for one row. A Socrata dataset URL is also accepted and names its own portal (the URL's hostname). A bare 4x4 dataset ID (or 4x4:<row_id> for one row) names no portal and resolves against the server's configured portal.\\n\\nWHICH TOOL TO USE: this returns metadata and columns, not query results. To read or aggregate rows, use socrata__get_data with type=query.\",\"parameters\":{\"type\":\"object\",\"additionalProperties\":false,\"properties\":{\"id\":{\"type\":\"string\",\"description\":\"Identifier returned by the socrata__search tool, e.g. \\\"dataset:data.cityofnewyork.us:erm2-nwe9\\\"\"}},\"required\":[\"id\"]}}},{\"type\":\"function\",\"function\":{\"name\":\"data_commons__search_indicators\",\"description\":\"Discover statistical variables and topics available in Google Data Commons \u2014 the knowledge graph aggregating US Census Bureau (ACS, Decennial), BLS, CDC, Department of Education, EPA, and many international statistical sources.\\n\\nUse this first when the user asks for demographic, economic, health, education, or environmental statistics and you don't already know the exact variable DCID. The tool returns candidate variable DCIDs that you then pass to data_commons__get_observations.\\n\\nIMPORTANT: Data Commons uses DCIDs (Data Commons identifiers) rather than raw Census field names. Always discover the variable DCID via data_commons__search_indicators before calling data_commons__get_observations \u2014 guessing the DCID silently returns wrong data.\\n\\nPlaces are passed to this tool by name, not by DCID: a DCID in places is answered \\\"no place found\\\". data_commons__get_observations is the one that takes a place DCID.\\n\\nExamples:\\n- { \\\"query\\\": \\\"median household income\\\", \\\"places\\\": [\\\"Kings County, New York\\\"] }  // search scoped to Brooklyn, by name\\n- { \\\"query\\\": \\\"asthma prevalence adults\\\" }  // free-text topic search\",\"parameters\":{\"type\":\"object\",\"properties\":{\"query\":{\"type\":\"string\",\"description\":\"Free-text search query (e.g., \\\"median household income\\\", \\\"poverty rate\\\", \\\"asthma prevalence\\\")\"},\"places\":{\"type\":\"array\",\"items\":{\"type\":\"string\"},\"description\":\"Optional list of place names to scope the search to, qualified so they are unambiguous (e.g., \\\"Kings County, New York\\\", \\\"New York City, USA\\\") \u2014 never DCIDs. The tool returns variables that have observations for those places, and each result's placesWithData lists the DCIDs of the requested places that have data: pass one of those to data_commons__get_observations.\"},\"per_search_limit\":{\"type\":\"number\",\"description\":\"Max results per category (default: 10)\"},\"include_topics\":{\"type\":\"boolean\",\"description\":\"Include topic-level results alongside individual variables (default: true)\"}},\"required\":[\"query\"]}}},{\"type\":\"function\",\"function\":{\"name\":\"data_commons__get_observations\",\"description\":\"Fetch statistical observations for a Data Commons variable at a specified place and time.\\n\\nRequires a variable_dcid (discovered via data_commons__search_indicators) and a place_dcid. Common place DCID patterns:\\n- Country: \\\"country/USA\\\"\\n- State: \\\"geoId/36\\\" (NY)\\n- County: \\\"geoId/36061\\\" (New York County)\\n- Census Tract: \\\"geoId/36061013700\\\" (state + county + tract FIPS)\\n- ZCTA: \\\"zip/10001\\\"\\n\\nOne call returns observations for the one place named in place_dcid. This tool cannot list a place's children: a question about every tract (or every county) in a place needs one call per child DCID, or an answer that says the breakdown is not available here. Never report a parent place's value as if it were each child's.\\n\\nCRITICAL: Data Commons returns wrong data silently if you pick the wrong variable, time range, or place type. Always prefer the latest vintage unless the user explicitly asks for a historical series. Cite the variable DCID and observation date in your summary.\\n\\nExamples:\\n- Latest median household income for a NYC census tract:\\n  { \\\"variable_dcid\\\": \\\"Median_Income_Household\\\", \\\"place_dcid\\\": \\\"geoId/36061013700\\\" }\\n- New York County (Manhattan) as a whole:\\n  { \\\"variable_dcid\\\": \\\"Median_Income_Household\\\", \\\"place_dcid\\\": \\\"geoId/36061\\\" }\\n- Historical range:\\n  { \\\"variable_dcid\\\": \\\"Count_Person\\\", \\\"place_dcid\\\": \\\"country/USA\\\", \\\"date_range_start\\\": \\\"2015\\\", \\\"date_range_end\\\": \\\"2023\\\" }\",\"parameters\":{\"type\":\"object\",\"properties\":{\"variable_dcid\":{\"type\":\"string\",\"description\":\"Data Commons identifier for the statistical variable (e.g., \\\"Median_Income_Household\\\"). Discover via data_commons__search_indicators.\"},\"place_dcid\":{\"type\":\"string\",\"description\":\"Data Commons identifier for the place (e.g., \\\"geoId/36061\\\" for New York County, \\\"country/USA\\\", \\\"zip/10001\\\")\"},\"source_override\":{\"type\":\"string\",\"description\":\"Optional override for the upstream data source when multiple sources provide the same variable.\"},\"date\":{\"type\":\"string\",\"description\":\"Specific observation date (default: \\\"LATEST\\\"). Use ISO year or YYYY-MM format.\"},\"date_range_start\":{\"type\":\"string\",\"description\":\"Start of a date range query (inclusive). Use with date_range_end instead of date.\"},\"date_range_end\":{\"type\":\"string\",\"description\":\"End of a date range query (inclusive).\"}},\"required\":[\"variable_dcid\",\"place_dcid\"]}}},{\"type\":\"function\",\"function\":{\"name\":\"nyc_record__get_data\",\"description\":\"Unified Socrata open data access tool for data.cityofnewyork.us, the one Socrata portal this instance serves. Supports multiple operation types:\\n- catalog: Search data.cityofnewyork.us's catalog for datasets matching a query\\n- metadata: Get detailed metadata about a specific dataset\\n- query: Execute a SoQL query against a dataset to fetch and filter data\\n- metrics: Get row count, view count, last-updated timestamps for a dataset\\n\\nIMPORTANT TIPS:\\n1. For type=metadata and type=metrics, pass the dataset ID in \\\"dataset_id\\\"\\n2. For type=query, ALWAYS start by fetching a sample with no WHERE clause to see actual column values\\n3. Field values are case-sensitive - fetch sample data first to see exact formats\\n4. Omit \\\"portal\\\": every call goes to data.cityofnewyork.us. A call naming any other portal is refused and returns no data.\\n\\nExamples:\\n- Search catalog: { \\\"type\\\": \\\"catalog\\\", \\\"query\\\": \\\"311 complaints\\\" }\\n- Get metadata: { \\\"type\\\": \\\"metadata\\\", \\\"dataset_id\\\": \\\"<dataset-id>\\\" }\\n- Get metrics: { \\\"type\\\": \\\"metrics\\\", \\\"dataset_id\\\": \\\"<dataset-id>\\\" }\\n- Fetch sample data first: { \\\"type\\\": \\\"query\\\", \\\"dataset_id\\\": \\\"<dataset-id>\\\", \\\"limit\\\": 5 }\\n- Query with filter: { \\\"type\\\": \\\"query\\\", \\\"dataset_id\\\": \\\"<dataset-id>\\\", \\\"select\\\": \\\"<column>, COUNT(*) as count\\\", \\\"group\\\": \\\"<column>\\\", \\\"order\\\": \\\"count DESC\\\", \\\"limit\\\": 10 }\\n\\nThis source reads one dataset only, dg92-zbpx on data.cityofnewyork.us: pass it as \\\"dataset_id\\\". A call naming any other dataset is refused and returns no data.\",\"parameters\":{\"type\":\"object\",\"properties\":{\"type\":{\"type\":\"string\",\"enum\":[\"catalog\",\"metadata\",\"query\",\"metrics\"],\"description\":\"The type of operation to perform\"},\"portal\":{\"type\":\"string\",\"enum\":[\"data.cityofnewyork.us\"],\"description\":\"The one Socrata portal this instance serves, data.cityofnewyork.us. Optional: omitted, the call goes there anyway. Any other value is refused.\"},\"query\":{\"type\":\"string\",\"description\":\"For type=catalog: search query. For type=metadata: the dataset ID. For type=query: either a full SoQL statement starting with SELECT, which is applied as the entire query and supersedes select/where/order/group (limit and offset are not applied either \u2014 bound the rows with the statement's own LIMIT), or a search phrase, applied as a full-text search within the data alongside the other clauses.\"},\"dataset_id\":{\"type\":\"string\",\"enum\":[\"dg92-zbpx\"],\"description\":\"The one dataset this source reads, dg92-zbpx. Any other value is refused.\"},\"limit\":{\"type\":\"number\",\"description\":\"Maximum number of rows to return (default: 10)\"},\"offset\":{\"type\":\"number\",\"description\":\"Number of rows to skip (for pagination)\"},\"select\":{\"type\":\"string\",\"description\":\"SoQL select clause (for type=query)\"},\"where\":{\"type\":\"string\",\"description\":\"SoQL where clause (for type=query)\"},\"order\":{\"type\":\"string\",\"description\":\"SoQL order clause (for type=query)\"},\"group\":{\"type\":\"string\",\"description\":\"SoQL group clause (for type=query)\"}},\"required\":[\"type\"]}}},{\"type\":\"function\",\"function\":{\"name\":\"nyc_record__fetch\",\"description\":\"Retrieve a dataset's full metadata, or a single record, by its identifier: dataset:data.cityofnewyork.us:<dataset_id> for a dataset, record:data.cityofnewyork.us:<dataset_id>:<row_id> for one row.\\n\\nWHICH TOOL TO USE: this returns metadata and columns, not query results. To read or aggregate rows, use nyc_record__get_data with type=query.\\n\\nThis source reads one dataset only, dg92-zbpx on data.cityofnewyork.us: an identifier or URL naming any other portal or dataset is refused and returns no data.\",\"parameters\":{\"type\":\"object\",\"additionalProperties\":false,\"properties\":{\"id\":{\"type\":\"string\",\"description\":\"The identifier of a dataset or a record on data.cityofnewyork.us, e.g. \\\"dataset:data.cityofnewyork.us:dg92-zbpx\\\"\",\"pattern\":\"^(?:dataset:data\\\\.cityofnewyork\\\\.us:dg92-zbpx|record:data\\\\.cityofnewyork\\\\.us:dg92-zbpx:.+)$\"}},\"required\":[\"id\"]}}},{\"type\":\"function\",\"function\":{\"name\":\"present_result\",\"description\":\"Name the rows this site should map beside your answer. This site checks both values against your earlier tool calls and draws the map from that call's rows; it never draws anything you write.\",\"parameters\":{\"type\":\"object\",\"properties\":{\"result\":{\"type\":\"integer\",\"minimum\":1,\"description\":\"The number of the tool call whose rows to map: 1 for your first tool call in this run, 2 for the second, counting every tool call.\"},\"label\":{\"type\":\"string\",\"description\":\"The column of that call's rows that names each row, shown beside its point.\"}},\"required\":[\"result\",\"label\"],\"additionalProperties\":false}}}]"
+            }
+           },
+           {
+            "key": "analysis.sources_offered",
+            "value": {
+             "stringValue": "[{\"sourceId\":\"socrata\",\"alias\":\"socrata\",\"reason\":\"selected\"},{\"sourceId\":\"data-commons\",\"alias\":\"data_commons\",\"reason\":\"selected\"},{\"sourceId\":\"boston-opencontext\",\"alias\":\"boston_opencontext\",\"reason\":\"not-configured\"},{\"sourceId\":\"nyc-charter\",\"alias\":\"nyc_charter\",\"reason\":\"not-configured\"},{\"sourceId\":\"nyc-checkbook\",\"alias\":\"nyc_checkbook\",\"reason\":\"not-configured\"},{\"sourceId\":\"nyc-record\",\"alias\":\"nyc_record\",\"reason\":\"selected\"},{\"sourceId\":\"nys-legislation\",\"alias\":\"nys_legislation\",\"reason\":\"not-configured\"},{\"sourceId\":\"ckan-server\",\"alias\":\"ckan\",\"reason\":\"not-configured\"}]"
+            }
+           },
+           {
+            "key": "analysis.components",
+            "value": {
+             "stringValue": "[{\"id\":\"socrata-mcp-server@https://github.com/npstorey/socrata-mcp-server\",\"guidanceHash\":\"5e49906edda0de2599a9e3724a5ddca516bd6a726d7b2c3b874aedf1ba1e48e6\",\"guidanceOrigin\":\"fallback\",\"reportedName\":\"civic-of3a-fixture\",\"reportedVersion\":\"0\"},{\"id\":\"Data Commons MCP Server@https://api.datacommons.org/mcp\",\"guidanceHash\":\"483cbe0ab1ac655ea507339d74bad6965ff022549b0f061f28b6783466577909\",\"guidanceOrigin\":\"inline\"},{\"id\":\"nyc-record@https://data.cityofnewyork.us/d/dg92-zbpx\",\"version\":\"1.1+ef1b4b6089e9\",\"guidanceHash\":\"d8ab619a90e6879b10ba38ccf6115b80b15e37518ea570aabfac2fe898dc6af8\",\"guidanceOrigin\":\"inline\"},{\"id\":\"@typedstandards/civic-typed-router\",\"version\":\"0.12.0\"}]"
+            }
+           },
+           {
+            "key": "analysis.flows_statement",
+            "value": {
+             "stringValue": "{\"url\":\"http://localhost/api/flows\",\"hash\":\"e0e2f5e310af7a7f7a382a2e1a5ad35e96420466036f6f90bfa250d30c0c89b2\",\"date\":\"2026-10-19\"}"
+            }
+           },
+           {
+            "key": "analysis.output_format_result",
+            "value": {
+             "stringValue": "{\"outcome\":{\"drawn\":true},\"counts\":{\"returned\":5,\"drawn\":3,\"withoutLocation\":2,\"beyondCap\":0},\"map\":{\"name\":\"The 3 mapped rows from dataset pts1-0001\",\"description\":\"\",\"basemap\":null,\"extent\":{\"zoom\":{\"mode\":\"range\",\"min\":0,\"max\":22}},\"view\":null,\"legend\":null,\"features\":[{\"type\":\"Feature\",\"id\":\"1\",\"geometry\":{\"type\":\"Point\",\"coordinates\":[-73.990001,40.712801]},\"properties\":{\"name\":\"Noise\"}},{\"type\":\"Feature\",\"id\":\"2\",\"geometry\":{\"type\":\"Point\",\"coordinates\":[-73.980003,40.720002]},\"properties\":{\"name\":\"<img src=\\\"https://plant.layout-measure.invalid/name.png\\\"><b>Heat</b>\"}},{\"type\":\"Feature\",\"id\":\"4\",\"geometry\":{\"type\":\"Point\",\"coordinates\":[-73.950004,40.750005]},\"properties\":{\"name\":\"Rodent\"}}]}}"
+            }
+           }
+          ],
+          "events": [],
+          "status": {
+           "code": 0
+          },
+          "endTimeUnixNano": "1795176000000000000"
+         },
+         {
+          "traceId": "9e3cda7817b553f18f2ecc6a08a745e3",
+          "spanId": "7311af4eec8a28c6",
+          "parentSpanId": "811fbe5cfa9836d5",
+          "name": "skill_fetch",
+          "kind": 1,
+          "startTimeUnixNano": "1795176000000000000",
+          "attributes": [
+           {
+            "key": "skill.text_hash",
+            "value": {
+             "stringValue": "21ba84da0c030b60ff9da4a9ec40d1be45ace8aa97654c55955998bd645c7aa8"
+            }
+           },
+           {
+            "key": "skill.mcp_server_url",
+            "value": {
+             "stringValue": "http://127.0.0.1:47831/socrata/mcp"
+            }
+           },
+           {
+            "key": "skill.data_commons_url",
+            "value": {
+             "stringValue": "http://127.0.0.1:47831/dc/mcp"
+            }
+           }
+          ],
+          "events": [],
+          "status": {
+           "code": 0
+          },
+          "endTimeUnixNano": "1795176000000000000"
+         },
+         {
+          "traceId": "9e3cda7817b553f18f2ecc6a08a745e3",
+          "spanId": "6503a13fde7c1ab8",
+          "parentSpanId": "811fbe5cfa9836d5",
+          "name": "llm_inference",
+          "kind": 1,
+          "startTimeUnixNano": "1795176000000000000",
+          "attributes": [
+           {
+            "key": "gen_ai.system",
+            "value": {
+             "stringValue": "openai-compatible"
+            }
+           },
+           {
+            "key": "gen_ai.request.model",
+            "value": {
+             "stringValue": "vendor/model-fixture-1"
+            }
+           },
+           {
+            "key": "gen_ai.system_prompt_hash",
+            "value": {
+             "stringValue": "21ba84da0c030b60ff9da4a9ec40d1be45ace8aa97654c55955998bd645c7aa8"
+            }
+           },
+           {
+            "key": "gen_ai.inference_index",
+            "value": {
+             "intValue": "0"
+            }
+           },
+           {
+            "key": "gen_ai.response.prompt_tokens",
+            "value": {
+             "intValue": "10"
+            }
+           },
+           {
+            "key": "gen_ai.response.completion_tokens",
+            "value": {
+             "intValue": "5"
+            }
+           },
+           {
+            "key": "gen_ai.response.model",
+            "value": {
+             "stringValue": "fake/model"
+            }
+           }
+          ],
+          "events": [],
+          "status": {
+           "code": 0
+          },
+          "endTimeUnixNano": "1795176000000000000"
+         },
+         {
+          "traceId": "9e3cda7817b553f18f2ecc6a08a745e3",
+          "spanId": "56f59331cf6d0caa",
+          "parentSpanId": "811fbe5cfa9836d5",
+          "name": "mcp_tool_call",
+          "kind": 1,
+          "startTimeUnixNano": "1795176000000000000",
+          "attributes": [
+           {
+            "key": "tool.name",
+            "value": {
+             "stringValue": "socrata__get_data"
+            }
+           },
+           {
+            "key": "tool.operation_type",
+            "value": {
+             "stringValue": "query"
+            }
+           },
+           {
+            "key": "tool.arguments",
+            "value": {
+             "stringValue": "{\"type\":\"query\",\"dataset_id\":\"cnt0-0001\",\"query\":\"SELECT *\",\"portal\":\"data.example.org\"}"
+            }
+           },
+           {
+            "key": "mcp.source",
+            "value": {
+             "stringValue": "socrata"
+            }
+           },
+           {
+            "key": "tool.dataset_id",
+            "value": {
+             "stringValue": "cnt0-0001"
+            }
+           },
+           {
+            "key": "tool.portal_domain",
+            "value": {
+             "stringValue": "data.example.org"
+            }
+           },
+           {
+            "key": "tool.upstream_name",
+            "value": {
+             "stringValue": "get_data"
+            }
+           },
+           {
+            "key": "mcp.alias",
+            "value": {
+             "stringValue": "socrata"
+            }
+           },
+           {
+            "key": "mcp.server.id",
+            "value": {
+             "stringValue": "socrata-mcp-server@https://github.com/npstorey/socrata-mcp-server"
+            }
+           },
+           {
+            "key": "tool.response_hash",
+            "value": {
+             "stringValue": "31205e6db0d450aa61a0445c968b37437a12194c3d3212d720454d4ffadb84c5"
+            }
+           },
+           {
+            "key": "tool.response_size_bytes",
+            "value": {
+             "intValue": "40"
+            }
+           },
+           {
+            "key": "tool.duration_ms",
+            "value": {
+             "intValue": "0"
+            }
+           },
+           {
+            "key": "tool.response_rows",
+            "value": {
+             "intValue": "1"
+            }
+           }
+          ],
+          "events": [],
+          "status": {
+           "code": 0
+          },
+          "endTimeUnixNano": "1795176000000000000"
+         },
+         {
+          "traceId": "9e3cda7817b553f18f2ecc6a08a745e3",
+          "spanId": "48e68523c15ffd9c",
+          "parentSpanId": "811fbe5cfa9836d5",
+          "name": "llm_inference",
+          "kind": 1,
+          "startTimeUnixNano": "1795176000000000000",
+          "attributes": [
+           {
+            "key": "gen_ai.system",
+            "value": {
+             "stringValue": "openai-compatible"
+            }
+           },
+           {
+            "key": "gen_ai.request.model",
+            "value": {
+             "stringValue": "vendor/model-fixture-1"
+            }
+           },
+           {
+            "key": "gen_ai.inference_index",
+            "value": {
+             "intValue": "1"
+            }
+           },
+           {
+            "key": "gen_ai.response.prompt_tokens",
+            "value": {
+             "intValue": "10"
+            }
+           },
+           {
+            "key": "gen_ai.response.completion_tokens",
+            "value": {
+             "intValue": "5"
+            }
+           },
+           {
+            "key": "gen_ai.response.model",
+            "value": {
+             "stringValue": "fake/model"
+            }
+           }
+          ],
+          "events": [],
+          "status": {
+           "code": 0
+          },
+          "endTimeUnixNano": "1795176000000000000"
+         },
+         {
+          "traceId": "9e3cda7817b553f18f2ecc6a08a745e3",
+          "spanId": "3ad87615b351ef8d",
+          "parentSpanId": "811fbe5cfa9836d5",
+          "name": "mcp_tool_call",
+          "kind": 1,
+          "startTimeUnixNano": "1795176000000000000",
+          "attributes": [
+           {
+            "key": "tool.name",
+            "value": {
+             "stringValue": "socrata__get_data"
+            }
+           },
+           {
+            "key": "tool.operation_type",
+            "value": {
+             "stringValue": "query"
+            }
+           },
+           {
+            "key": "tool.arguments",
+            "value": {
+             "stringValue": "{\"type\":\"query\",\"dataset_id\":\"pts1-0001\",\"query\":\"SELECT *\",\"portal\":\"data.example.org\"}"
+            }
+           },
+           {
+            "key": "mcp.source",
+            "value": {
+             "stringValue": "socrata"
+            }
+           },
+           {
+            "key": "tool.dataset_id",
+            "value": {
+             "stringValue": "pts1-0001"
+            }
+           },
+           {
+            "key": "tool.portal_domain",
+            "value": {
+             "stringValue": "data.example.org"
+            }
+           },
+           {
+            "key": "tool.upstream_name",
+            "value": {
+             "stringValue": "get_data"
+            }
+           },
+           {
+            "key": "mcp.alias",
+            "value": {
+             "stringValue": "socrata"
+            }
+           },
+           {
+            "key": "mcp.server.id",
+            "value": {
+             "stringValue": "socrata-mcp-server@https://github.com/npstorey/socrata-mcp-server"
+            }
+           },
+           {
+            "key": "tool.response_hash",
+            "value": {
+             "stringValue": "4bfe3345045fbeda4d41b535c12d52dd0f04d1d654b8beeca7dfe1d88e51fdc7"
+            }
+           },
+           {
+            "key": "tool.response_size_bytes",
+            "value": {
+             "intValue": "456"
+            }
+           },
+           {
+            "key": "tool.duration_ms",
+            "value": {
+             "intValue": "0"
+            }
+           },
+           {
+            "key": "tool.response_rows",
+            "value": {
+             "intValue": "5"
+            }
+           }
+          ],
+          "events": [],
+          "status": {
+           "code": 0
+          },
+          "endTimeUnixNano": "1795176000000000000"
+         },
+         {
+          "traceId": "9e3cda7817b553f18f2ecc6a08a745e3",
+          "spanId": "2cca6806a443e17f",
+          "parentSpanId": "811fbe5cfa9836d5",
+          "name": "llm_inference",
+          "kind": 1,
+          "startTimeUnixNano": "1795176000000000000",
+          "attributes": [
+           {
+            "key": "gen_ai.system",
+            "value": {
+             "stringValue": "openai-compatible"
+            }
+           },
+           {
+            "key": "gen_ai.request.model",
+            "value": {
+             "stringValue": "vendor/model-fixture-1"
+            }
+           },
+           {
+            "key": "gen_ai.inference_index",
+            "value": {
+             "intValue": "2"
+            }
+           },
+           {
+            "key": "gen_ai.response.prompt_tokens",
+            "value": {
+             "intValue": "10"
+            }
+           },
+           {
+            "key": "gen_ai.response.completion_tokens",
+            "value": {
+             "intValue": "5"
+            }
+           },
+           {
+            "key": "gen_ai.response.model",
+            "value": {
+             "stringValue": "fake/model"
+            }
+           }
+          ],
+          "events": [],
+          "status": {
+           "code": 0
+          },
+          "endTimeUnixNano": "1795176000000000000"
+         },
+         {
+          "traceId": "9e3cda7817b553f18f2ecc6a08a745e3",
+          "spanId": "1dbc5af89634d371",
+          "parentSpanId": "811fbe5cfa9836d5",
+          "name": "mcp_tool_call",
+          "kind": 1,
+          "startTimeUnixNano": "1795176000000000000",
+          "attributes": [
+           {
+            "key": "tool.name",
+            "value": {
+             "stringValue": "present_result"
+            }
+           },
+           {
+            "key": "tool.operation_type",
+            "value": {
+             "stringValue": "present_result"
+            }
+           },
+           {
+            "key": "tool.arguments",
+            "value": {
+             "stringValue": "{\"result\":2,\"label\":\"complaint_type\"}"
+            }
+           },
+           {
+            "key": "tool.present_outcome",
+            "value": {
+             "stringValue": "accepted"
+            }
+           },
+           {
+            "key": "tool.duration_ms",
+            "value": {
+             "intValue": "0"
+            }
+           }
+          ],
+          "events": [],
+          "status": {
+           "code": 0
+          },
+          "endTimeUnixNano": "1795176000000000000"
+         },
+         {
+          "traceId": "9e3cda7817b553f18f2ecc6a08a745e3",
+          "spanId": "0fad4bea8826c463",
+          "parentSpanId": "811fbe5cfa9836d5",
+          "name": "llm_inference",
+          "kind": 1,
+          "startTimeUnixNano": "1795176000000000000",
+          "attributes": [
+           {
+            "key": "gen_ai.system",
+            "value": {
+             "stringValue": "openai-compatible"
+            }
+           },
+           {
+            "key": "gen_ai.request.model",
+            "value": {
+             "stringValue": "vendor/model-fixture-1"
+            }
+           },
+           {
+            "key": "gen_ai.inference_index",
+            "value": {
+             "intValue": "3"
+            }
+           },
+           {
+            "key": "gen_ai.response.prompt_tokens",
+            "value": {
+             "intValue": "10"
+            }
+           },
+           {
+            "key": "gen_ai.response.completion_tokens",
+            "value": {
+             "intValue": "5"
+            }
+           },
+           {
+            "key": "gen_ai.response.model",
+            "value": {
+             "stringValue": "fake/model"
+            }
+           }
+          ],
+          "events": [],
+          "status": {
+           "code": 0
+          },
+          "endTimeUnixNano": "1795176000000000000"
+         },
+         {
+          "traceId": "9e3cda7817b553f18f2ecc6a08a745e3",
+          "spanId": "019f3ddb7a18b654",
+          "parentSpanId": "811fbe5cfa9836d5",
+          "name": "synthesis",
+          "kind": 1,
+          "startTimeUnixNano": "1795176000000000000",
+          "attributes": [
+           {
+            "key": "output.hash",
+            "value": {
+             "stringValue": "22d8afa24d09ec25edfc1884925072d5c7aace43edd2f507bf61e337f938091e"
+            }
+           },
+           {
+            "key": "output.length",
+            "value": {
+             "intValue": "59"
+            }
+           }
+          ],
+          "events": [],
+          "status": {
+           "code": 0
+          },
+          "endTimeUnixNano": "1795176000000000000"
+         }
+        ]
+       }
+      ]
+     }
+    ]
+   }
+  },
+  {
+   "$end": true
+  }
+ ]
+}

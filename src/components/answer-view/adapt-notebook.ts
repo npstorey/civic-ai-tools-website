@@ -211,6 +211,8 @@ export function adaptNotebook(input: NotebookAdapterInput): AnswerViewModel {
       failureKind: q.failureKind,
       resultRows: q.resultSummary?.rows,
       resultColumns: q.resultSummary?.columns,
+      // OF3b (flag 5): the map step is no data request, so the line leaves it out of N and M.
+      operationType: q.operationType,
     })),
   );
 

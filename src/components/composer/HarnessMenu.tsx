@@ -38,8 +38,10 @@
  * the Settings link.
  *
  * OUTPUT FORMAT (OF2, Sprint OF-1, website #810; G0-1 = A, G0-2 = A; S9's choice b, ruled A at G0b, seat 7168515476): directly after
- * Data sources, in the `full` and `signed-out` variants, never in `sources-only`, and only on a mount that passes
- * `outputFormat`, which the query form does on an instance with `SITE_OUTPUT_FORMAT` on (`OutputFormatProvider`). It
+ * Data sources, in the `full` variant only, and only on a mount that passes `outputFormat`, which the query form does
+ * on the answer-first mount (`/ask`) of an instance with `SITE_OUTPUT_FORMAT` on (`OutputFormatProvider`). OF3b fold 7
+ * (the owner's D+C, OA-1283; the seat's 7225696434) took it out of the `signed-out` variant on every mount, moving
+ * G0b's S9 choice b for that variant, and out of the home page's mount. It
  * reads the chosen format's name, or "Auto"; its options are Auto and each format the instance offers (none but Auto
  * in OF2, G0-9 = A). The mount owns the choice (`QueryForm`, per browser session); the menu reports it, as Session
  * type's. With the prop absent, the menu is byte for byte what it was before the item existed.
@@ -55,7 +57,7 @@ import { SETTINGS_HREF } from '@/lib/sources/copy';
 import { canPauseToAsk, useSourceConsent, type ConsentSnapshot } from '@/components/sources/useSourceConsent';
 import { startSignIn, useSignInAction } from './SignInControl';
 import { chooseAuto, choosePicking, usePicks } from './picks/store';
-import { storedOutputFormatValue, type OfferedOutputFormat, type OutputFormatRef } from '@/lib/output-format/registry';
+import { isMapChoice, outputFormatInForce, storedOutputFormatValue, type OfferedOutputFormat, type OutputFormatRef } from '@/lib/output-format/registry';
 import {
   ALL_SETTINGS,
   COMPARE_ITEM,
@@ -175,22 +177,41 @@ export default function HarnessMenu({ variant, models, model, onModel, session, 
     ],
   };
   // OF2: the Output format item, after Data sources, where the mount passes one and never in `sources-only`.
-  const chosenFormat = outputFormat?.chosen
+  const sandbox = session?.mode === 'notebook';
+  const storedFormat = outputFormat?.chosen
     ? outputFormat.formats.find((f) => f.id === outputFormat.chosen!.id && f.version === outputFormat.chosen!.version) ?? null
     : null;
-  const formatItem: MenuItem | null = outputFormat && variant !== 'sources-only'
+  // OF3b (K3 = A): in a Sandbox session a map format is not in force; the item reads Auto, and the stored choice comes
+  // back when Session type is Standard again, as Compare's does.
+  const chosenFormat = outputFormatInForce(storedFormat, sandbox);
+  // OF3b (C3 = A): while a map format is in force, Compare is off with its reason; its stored value comes back on Auto.
+  const mapChosen = isMapChoice(chosenFormat);
+  const formatItem: MenuItem | null = outputFormat && variant === 'full'
     ? {
         id: ID.outputFormat,
         label: OUTPUT_FORMAT_ITEM.label,
         value: chosenFormat ? chosenFormat.label : OUTPUT_FORMAT_ITEM.value,
         children: [
           { id: ID.outputFormatAuto, label: OUTPUT_FORMAT_ITEM.auto, description: OUTPUT_FORMAT_ITEM.autoDescription, checked: chosenFormat === null },
-          ...outputFormat.formats.map((f) => ({
-            id: `${ID.outputFormatPrefix}${storedOutputFormatValue(f)}`,
-            label: f.label,
-            ...(f.description !== undefined ? { description: f.description } : {}),
-            checked: chosenFormat !== null && chosenFormat.id === f.id && chosenFormat.version === f.version,
-          })),
+          ...outputFormat.formats.map((f): MenuItem => (sandbox && f.kind === 'map'
+            ? { id: `${ID.outputFormatPrefix}${storedOutputFormatValue(f)}`, label: f.label, checked: false, disabledReason: OUTPUT_FORMAT_ITEM.sandboxMapReason }
+            : {
+                id: `${ID.outputFormatPrefix}${storedOutputFormatValue(f)}`,
+                label: f.label,
+                ...(f.description !== undefined || f.capLine !== undefined
+                  ? {
+                      // OF3b (C4's note): the cap is stated where the format is described, as a second line.
+                      description: f.capLine === undefined ? f.description : (
+                        <>
+                          {f.description}
+                          {f.description !== undefined ? ' ' : null}
+                          <span data-part="format-cap-line" style={{ display: 'block' }}>{f.capLine}</span>
+                        </>
+                      ),
+                    }
+                  : {}),
+                checked: chosenFormat !== null && chosenFormat.id === f.id && chosenFormat.version === f.version,
+              })),
         ],
       }
     : null;
@@ -207,7 +228,8 @@ export default function HarnessMenu({ variant, models, model, onModel, session, 
   if (variant === 'sources-only') {
     items.push(sources);
   } else if (variant === 'signed-out') {
-    items.push(modelItem, sources, ...(formatItem ? [formatItem] : []), rule, {
+    // Fold 7 (D): no Output format item in the signed-out variant.
+    items.push(modelItem, sources, rule, {
       id: ID.signIn,
       kind: 'button',
       label: SIGN_IN_FOR_MORE,
@@ -216,7 +238,6 @@ export default function HarnessMenu({ variant, models, model, onModel, session, 
   } else {
     items.push(modelItem, sources, ...(formatItem ? [formatItem] : []));
     if (session) {
-      const sandbox = session.mode === 'notebook';
       const sandboxReason = session.affordance === 'unavailable' ? NOTEBOOK_MODE_UNAVAILABLE_REASON
         : session.affordance === 'sign-in' ? SANDBOX_SIGN_IN_REASON : undefined;
       items.push({
@@ -234,10 +255,11 @@ export default function HarnessMenu({ variant, models, model, onModel, session, 
         items.push({
           id: ID.compare,
           label: COMPARE_ITEM.label,
-          // In Sandbox, Compare is disabled (#735), and its value never reads On, whatever the stored choice says.
-          value: comparison.restored && !sandbox ? COMPARE_VALUE_ON : COMPARE_VALUE_OFF,
+          // In Sandbox, Compare is disabled (#735), and its value never reads On, whatever the stored choice says. So
+          // while a map format is chosen (OF3b, C3 = A): its stored value stays, and comes back when Auto is chosen.
+          value: comparison.restored && !sandbox && !mapChosen ? COMPARE_VALUE_ON : COMPARE_VALUE_OFF,
           description: COMPARE_ITEM.description,
-          ...(sandbox ? { disabledReason: COMPARE_ITEM.sandboxReason } : {}),
+          ...(sandbox ? { disabledReason: COMPARE_ITEM.sandboxReason } : mapChosen ? { disabledReason: COMPARE_ITEM.mapReason } : {}),
         });
       }
     }

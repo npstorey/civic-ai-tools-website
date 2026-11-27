@@ -11,6 +11,12 @@
 //   rateLimit      any request to `/api/rate-limit`, whatever its method;
 //   recordWrites   any non-GET to `/api/records*` (a publish, or the summary route's model call).
 // Every other request continues unchanged. A run whose lists are not all empty is VOID (`run.mjs`).
+//
+// EVERY HOST (OF3b, website #810; criterion 12). Beside the guard, each session records every request the page starts,
+// whatever its path or host (`notes.requests`, from CDP `Network.requestWillBeSent`), with its host, its resource
+// type and, when the browser refused it (a Content-Security-Policy block, a failed lookup), the reason. A request the
+// page's fetch wrapper answers never reaches the network and is not recorded here. `hostsOf` reads the set of hosts a
+// session contacted; check 7 compares a "Map" answer's hosts with the base answer's.
 import { spawn } from 'node:child_process';
 import fs from 'node:fs';
 import os from 'node:os';
@@ -41,7 +47,7 @@ export function emptyGuard() {
  * before the page's own scripts on every document. `protectionCookie`, when given, is set on the origin's host by CDP
  * and is never printed or written.
  */
-export async function openSession({ label, origin, guard, initScript, protectionCookie, profileRoot }) {
+export async function openSession({ label, origin, guard, initScript, protectionCookie, sessionCookie, profileRoot }) {
   const root = profileRoot ?? os.tmpdir();
   const profile = fs.mkdtempSync(path.join(root, 'layout-measure-chrome-'));
   const chrome = spawn(CHROME_PATH, [
@@ -54,7 +60,7 @@ export async function openSession({ label, origin, guard, initScript, protection
   const pending = new Map();
   const listeners = [];
   let buf = '';
-  const notes = { exceptions: [], consoleErrors: [], loads: 0 };
+  const notes = { exceptions: [], consoleErrors: [], loads: 0, requests: [] };
   fromChrome.on('data', (chunk) => {
     buf += chunk.toString('utf8');
     let i;
@@ -101,6 +107,16 @@ export async function openSession({ label, origin, guard, initScript, protection
     if (m.method === 'Runtime.consoleAPICalled' && m.params.type === 'error') {
       notes.consoleErrors.push(m.params.args.map((a) => a.value ?? a.description).join(' ').split('\n')[0].slice(0, 240));
     }
+    if (m.method === 'Network.requestWillBeSent') {
+      const url = m.params.request.url;
+      let host = null;
+      try { host = new URL(url).host || null; } catch { /* not a URL */ }
+      notes.requests.push({ id: m.params.requestId, host, scheme: url.split(':')[0], type: m.params.type ?? null, path: host ? new URL(url).pathname.slice(0, 120) : null });
+    }
+    if (m.method === 'Network.loadingFailed') {
+      const r = notes.requests.find((x) => x.id === m.params.requestId);
+      if (r) r.failed = m.params.blockedReason ?? m.params.errorText ?? 'failed';
+    }
     if (m.method === 'Fetch.requestPaused') {
       const u = new URL(m.params.request.url);
       const method = m.params.request.method;
@@ -115,6 +131,10 @@ export async function openSession({ label, origin, guard, initScript, protection
   });
   for (const d of ['Page', 'Runtime', 'Network']) await send(`${d}.enable`, {}, s);
   await send('Fetch.enable', { patterns: [{ urlPattern: '*/api/*', requestStage: 'Request' }] }, s);
+  if (sessionCookie) {
+    // OF3b: a local build's session, minted for that build's own throwaway secret, so `/ask` renders signed in.
+    await send('Network.setCookie', { name: 'next-auth.session-token', value: sessionCookie, domain: new URL(origin).hostname, path: '/', httpOnly: true, sameSite: 'Lax' }, s);
+  }
   if (protectionCookie) {
     await send('Network.setCookie', { name: '_vercel_jwt', value: protectionCookie, domain: new URL(origin).hostname, path: '/', secure: true, httpOnly: true, sameSite: 'Lax' }, s);
   }
@@ -184,7 +204,7 @@ export async function openSession({ label, origin, guard, initScript, protection
     return c[2];
   };
   const key = async (k) => {
-    const map = { Enter: [13, 'Enter', '\r'], Escape: [27, 'Escape'], End: [35, 'End'] };
+    const map = { Enter: [13, 'Enter', '\r'], Escape: [27, 'Escape'], End: [35, 'End'], Tab: [9, 'Tab'] };
     const [vk, code, text] = map[k];
     await send('Input.dispatchKeyEvent', { type: 'keyDown', key: k, code, windowsVirtualKeyCode: vk, ...(text ? { text } : {}) }, s);
     await send('Input.dispatchKeyEvent', { type: 'keyUp', key: k, code, windowsVirtualKeyCode: vk }, s);
@@ -206,4 +226,9 @@ export async function openSession({ label, origin, guard, initScript, protection
     try { fs.rmSync(profile, { recursive: true, force: true }); } catch { /* Chrome still writing */ }
   };
   return { send, ev, until, size, go, frames, still, settle, click, clickAt, key, insertText, wheel, shot, close, notes };
+}
+
+/** The hosts a session's page contacted, from `notes.requests`: http(s) requests only (`data:` and `blob:` have no host). */
+export function hostsOf(notes) {
+  return [...new Set(notes.requests.filter((r) => (r.scheme === 'http' || r.scheme === 'https') && r.host).map((r) => r.host))].sort();
 }

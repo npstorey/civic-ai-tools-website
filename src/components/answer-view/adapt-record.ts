@@ -70,6 +70,8 @@ import type { Notebook } from '../../lib/notebook-author/cells.ts';
 import type { PublishedLayout } from '../../lib/answer-layout/published-line.ts';
 import type { FlowsStatement } from '../../lib/flows/statement.ts';
 import { whereItWentFromPackage } from '../../lib/flows/where-it-went.ts';
+import { mapPartFromRecord } from '../../lib/output-format/map-part.ts';
+import { PRESENT_STEP_NAME } from '../../lib/output-format/attribute-names.ts';
 import { SEARCH_OPERATION, searchReadingsByQuery, searchStepOutcome } from '../../lib/flows/search-words.ts';
 import { chooserCardItems, chooserFromPackage } from '../../lib/flows/source-chooser.ts';
 import { withCurrentLoadAliases } from '../../lib/flows/recorded-alias.ts';
@@ -262,7 +264,9 @@ export function adaptRecord(input: RecordAdapterInput): AnswerViewModel {
   const searches = searchReadingsByQuery(pkg.trace, pkg.queries);
   // A load's alias read as the record meant it (CKAN-1 P3, A-C6): a record made before router 0.11.0 that loaded
   // `boston` loaded Boston OpenContext, whose alias the Boston pack now has.
-  const stepView = buildRecordStepView(withCurrentLoadAliases(pkg.queries, pkg), fromTrace.refused, searches);
+  // OF3b (website #810; W11): the format the record states, read from its bytes; none for a record with no key.
+  const map = mapPartFromRecord(pkg as unknown as Parameters<typeof mapPartFromRecord>[0]);
+  const stepView = buildRecordStepView(withCurrentLoadAliases(pkg.queries, pkg), fromTrace.refused, searches, map?.stepLine);
   const steps: StepsPart | null = stepView.steps.length > 0
     ? { kind: 'step-view', author: stepsAuthorLine(instance), view: stepView, closing: [] }
     : null;
@@ -327,7 +331,10 @@ export function adaptRecord(input: RecordAdapterInput): AnswerViewModel {
     // A search is the instance's own step (S3-B W2): its words, never "No result summary was recorded".
     const outcome = q.operationType === SEARCH_OPERATION
       ? { kind: 'answered-by-site' as const, text: searchStepOutcome(searches.get(i)) }
-      : describeQueryOutcome(q, { refusedInTrace: fromTrace.refused.has(i) });
+      // OF3b (W10): the map format's step is the site's own; its outcome is the map's step line, never "no summary".
+      : q.operationType === PRESENT_STEP_NAME && map?.stepLine !== undefined
+        ? { kind: 'answered-by-site' as const, text: /[.!?]$/.test(map.stepLine) ? map.stepLine : `${map.stepLine}.` }
+        : describeQueryOutcome(q, { refusedInTrace: fromTrace.refused.has(i) });
     const duration = outcome.kind === 'unrecorded' ? q.duration_ms : undefined;
     return {
       // Read, and shown, by the upstream name (W2 P2): the name the model called stays where the record states it.
@@ -375,6 +382,7 @@ export function adaptRecord(input: RecordAdapterInput): AnswerViewModel {
     },
     ...(input.publishedLayout !== undefined ? { publishedLayout: input.publishedLayout } : {}),
     ...(whereItWent !== null ? { whereItWent } : {}),
+    ...(map !== null ? { map } : {}),
   };
 }
 

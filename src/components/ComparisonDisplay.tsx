@@ -70,6 +70,11 @@ interface ComparisonDisplayProps {
    * question with both arms.
    */
   onRunComparison?: () => void;
+  /**
+   * OF3b (website #810; C3 = A): false for a map-format run, which runs with data tools only: the answer-first view
+   * then shows no "Without data tools" affordance. Default true.
+   */
+  comparisonOffered?: boolean;
 }
 
 function useMediaQuery(query: string) {
@@ -106,6 +111,7 @@ export default function ComparisonDisplay({
   onContinue,
   answerFirst = false,
   onRunComparison,
+  comparisonOffered = true,
 }: ComparisonDisplayProps) {
   const isMobile = useMediaQuery('(max-width: 640px)');
   const [nonMcpExpanded, setNonMcpExpanded] = useState(false);
@@ -366,7 +372,7 @@ export default function ComparisonDisplay({
         }}
       >
         {withMcpPanel}
-        {runComparisonAffordance}
+        {comparisonOffered && runComparisonAffordance}
       </div>
     );
   }

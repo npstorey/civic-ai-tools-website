@@ -62,7 +62,7 @@ import { BaseChangedError, createBaseCheck, type BaseCheck, type BaseReader } fr
 
 /** The base check's read: the client's `tools/list` read, loaded when a pack call first needs it. */
 const readBase: BaseReader = async (baseSourceId) => (await import('../mcp/client.ts')).readServerTools(baseSourceId);
-import type { LoadOutcome, SearchOutcome } from '@typedstandards/civic-typed-harness';
+import type { LoadOutcome, PresentOutcome, SearchOutcome } from '@typedstandards/civic-typed-harness';
 
 export interface TraceContext {
   builder: TraceBuilder;
@@ -112,6 +112,11 @@ export interface ToolCallRecord {
   searchOutcome?: SearchOutcome;
   /** A search's hits, by source id, in rank order: on outcome `searched` only, `[]` included. */
   searchHits?: string[];
+  /**
+   * How a `present_result` call ended (OF3a, website #810; harness 0.16.0's `PRESENT_OUTCOMES`), set by the loop on a
+   * present call only. A present call is never `failed`: the instance's own step answered it.
+   */
+  presentOutcome?: PresentOutcome;
 }
 
 /** What a search answers (S3-B W2). */
@@ -144,6 +149,65 @@ export interface SearchStep {
 
 /** The operation type a search call is recorded with: the value harness 0.14.0 reads a search span by. */
 export const FIND_SOURCE_OPERATION_TYPE = 'find_source';
+
+/** The operation type a present call is recorded with, and its tool name: the value harness 0.16.0 reads a present
+ *  span by (ADR-0033 amendment 6). */
+export const PRESENT_RESULT_OPERATION_TYPE = 'present_result';
+
+/** What the present step answers (OF3a). */
+export interface PresentStepResult {
+  /** `accepted`, the step took the result and the label the call named; `refused`, a value it named was not one the
+   *  step could check against the run's results. */
+  outcome: PresentOutcome;
+  /** The tool message the model receives: one line of plain text, no JSON. */
+  text: string;
+}
+
+/** What the loop tells the present step about the run so far: the calls before this one, in order, and each one's
+ *  whole result where a source answered it (`undefined` for a site step, a failed call, or a call not yet answered). */
+export interface PresentStepContext {
+  calls: readonly ToolCallRecord[];
+  results: readonly (string | undefined)[];
+}
+
+/**
+ * The in-loop present step (OF3a, website #810; S6 = A, S7). A call named `toolName` (`present_result`) is the
+ * instance's own step, as a load and a search are: the loop hands its arguments and the run's results to `present`,
+ * outside the per-call bound and never to `executeToolCall`, records it as a tool call and a span at the same
+ * position, and sends the model what it answers. Expected not to throw; a throw is not caught (the step is pure).
+ */
+export interface PresentStep {
+  /** The tool name the loop intercepts: `present_result`. */
+  toolName: string;
+  /** Answer a present call. `args` is the call's argument set, or `undefined` when it did not parse. */
+  present(args: Record<string, unknown> | undefined, context: PresentStepContext): PresentStepResult;
+}
+
+/** Whether a tool's name, in either spelling, is the present step's. */
+function namesPresentResult(tool: ChatCompletionTool): boolean {
+  if (tool.type !== 'function') return false;
+  const name = tool.function.name;
+  return name === PRESENT_RESULT_OPERATION_TYPE || name.endsWith(`__${PRESENT_RESULT_OPERATION_TYPE}`);
+}
+
+/**
+ * The loop's guard (OF3a, criterion 5): a tools array that offers a tool named `present_result`, in either spelling,
+ * with no present step to answer it, would send the model's call to `executeToolCall` and record it as a source's
+ * call; one that offers it with a step must offer exactly the step's own tool. Refused before any request, and again
+ * for a replacement tools array.
+ */
+function assertPresentAnswered(tools: readonly ChatCompletionTool[], presentStep: PresentStep | undefined): void {
+  const named = tools.filter(namesPresentResult);
+  if (!presentStep) {
+    if (named.length > 0) {
+      throw new Error('runToolLoop: the tools array offers a tool named present_result and no present step answers it');
+    }
+    return;
+  }
+  if (named.length !== 1 || named[0].type !== 'function' || named[0].function.name !== presentStep.toolName) {
+    throw new Error('runToolLoop: a present step needs exactly one tool named present_result, its own');
+  }
+}
 
 /**
  * The loop's guard (S3-B W2, A1): a tools array that offers `find_source` with no search step to answer it would
@@ -373,6 +437,15 @@ export interface ToolLoopOptions {
    * the system message and the tools array from the next request on.
    */
   searchStep?: SearchStep;
+  /**
+   * The present step (OF3a, website #810), in a run asked in a map format. Omitted, no call is a present call, no
+   * result is kept, and a tools array that offers `present_result` is refused before any request: every request is
+   * what it was before formats existed. Given, the loop keeps each source call's whole result for the run, a call
+   * named `presentStep.toolName` is answered by `presentStep.present`, recorded with operation type `present_result`
+   * and `presentOutcome`, and spanned with exactly `tool.present_outcome` and `tool.duration_ms` beside the call's
+   * name, type and arguments, and never `error` or a source's attribute.
+   */
+  presentStep?: PresentStep;
   /**
    * The base check this run applies before each pack call (S2-B P3R,
    * `../mcp/base-check.ts`). Omitted, the core makes its own for the run, so
@@ -934,12 +1007,16 @@ export async function runToolLoop(options: ToolLoopOptions): Promise<ToolLoopRes
     trace,
     loadStep,
     searchStep,
+    presentStep,
     checkBase = createBaseCheck({ read: readBase }),
     logContext = 'model-loop',
   } = options;
 
   const startTime = Date.now();
   const toolCalls: ToolCallRecord[] = [];
+  // Each call's whole result, by its position in `toolCalls`, kept only for a present step (OF3a): the model sees a
+  // truncated result, and the step reads the rows the source returned.
+  const results: (string | undefined)[] = [];
   const emit = (event: LoopEvent) => onEvent?.(event);
 
   const messages: ChatCompletionMessageParam[] = [];
@@ -953,6 +1030,7 @@ export async function runToolLoop(options: ToolLoopOptions): Promise<ToolLoopRes
   // every request, as they always were.
   let requestTools = tools;
   assertSearchAnswered(tools, searchStep);
+  assertPresentAnswered(tools, presentStep);
   const replaceSystemPrompt = (text: string) => {
     if (messages[0]?.role === 'system') messages[0] = { role: 'system', content: text };
     else messages.unshift({ role: 'system', content: text });
@@ -1058,6 +1136,7 @@ export async function runToolLoop(options: ToolLoopOptions): Promise<ToolLoopRes
           reason: generateToolReason(args, name),
         };
         toolCalls.push(loadEntry);
+        results.push(undefined);
         const loadPriorCalls = toolCalls.slice(0, -1);
         emit({ type: 'tool_start', iteration: currentIteration, call: loadEntry, priorCalls: loadPriorCalls });
         const loadSpanId = trace?.builder.startSpan('mcp_tool_call', trace.parentSpanId, {
@@ -1092,6 +1171,7 @@ export async function runToolLoop(options: ToolLoopOptions): Promise<ToolLoopRes
           if (answer.systemPrompt !== undefined) replaceSystemPrompt(answer.systemPrompt);
           if (answer.tools !== undefined) {
             assertSearchAnswered(answer.tools, searchStep);
+            assertPresentAnswered(answer.tools, presentStep);
             requestTools = answer.tools;
           }
         }
@@ -1117,6 +1197,7 @@ export async function runToolLoop(options: ToolLoopOptions): Promise<ToolLoopRes
           reason: generateToolReason(args, name),
         };
         toolCalls.push(searchEntry);
+        results.push(undefined);
         const searchPriorCalls = toolCalls.slice(0, -1);
         emit({ type: 'tool_start', iteration: currentIteration, call: searchEntry, priorCalls: searchPriorCalls });
         const searchSpanId = trace?.builder.startSpan('mcp_tool_call', trace.parentSpanId, {
@@ -1142,7 +1223,54 @@ export async function runToolLoop(options: ToolLoopOptions): Promise<ToolLoopRes
         emit({ type: 'tool_result', iteration: currentIteration, call: searchEntry });
         messages.push({ role: 'tool', tool_call_id: toolCall.id, content: found.text });
         if (found.systemPrompt !== undefined) replaceSystemPrompt(found.systemPrompt);
-        if (found.tools !== undefined) requestTools = found.tools;
+        if (found.tools !== undefined) {
+          assertPresentAnswered(found.tools, presentStep);
+          requestTools = found.tools;
+        }
+        continue;
+      }
+
+      /**
+       * THE PRESENT STEP (OF3a, website #810; S6 = A, S7; harness 0.16.0, ADR-0033 amendment 6). A `present_result`
+       * call is the instance's own step, as a load and a search are: answered here by `presentStep.present` over the
+       * calls before it and their whole results, never by `executeToolCall`, never under the per-call bound, and no
+       * source sees it. It is a tool call at its position in `toolCalls` and a span at the same position, the span
+       * carrying exactly `tool.present_outcome` and `tool.duration_ms` beside the call's name, type and arguments, and
+       * none of `error`, `mcp.source`, `mcp.server.id`, `mcp.alias`, `mcp.pack_id` or `tool.upstream_name`: harness
+       * 0.16.0 refuses a present span that carries one. Arguments that did not parse reach the step as `undefined`,
+       * which refuses them; `tool.arguments` records `{}` for them, as for any call.
+       */
+      if (presentStep && name === presentStep.toolName) {
+        const presentEntry: ToolCallRecord = {
+          name,
+          args,
+          operationType: PRESENT_RESULT_OPERATION_TYPE,
+          reason: generateToolReason(args, name),
+        };
+        const presentPriorCalls = toolCalls.slice();
+        const priorResults = results.slice();
+        toolCalls.push(presentEntry);
+        results.push(undefined);
+        emit({ type: 'tool_start', iteration: currentIteration, call: presentEntry, priorCalls: presentPriorCalls });
+        const presentSpanId = trace?.builder.startSpan('mcp_tool_call', trace.parentSpanId, {
+          'tool.name': name,
+          'tool.operation_type': PRESENT_RESULT_OPERATION_TYPE,
+          'tool.arguments': JSON.stringify(args),
+        });
+        const presentStartTime = Date.now();
+        const answer = presentStep.present(argumentsMalformed ? undefined : args, { calls: presentPriorCalls, results: priorResults });
+        const presentDuration = Date.now() - presentStartTime;
+        presentEntry.duration_ms = presentDuration;
+        presentEntry.presentOutcome = answer.outcome;
+        if (presentSpanId) {
+          trace!.builder.endSpan(presentSpanId, {
+            'tool.present_outcome': answer.outcome,
+            'tool.duration_ms': presentDuration,
+          });
+        }
+        emit({ type: 'tool_complete', iteration: currentIteration, call: presentEntry, priorCalls: presentPriorCalls, durationMs: presentDuration });
+        emit({ type: 'tool_result', iteration: currentIteration, call: presentEntry });
+        messages.push({ role: 'tool', tool_call_id: toolCall.id, content: answer.text });
         continue;
       }
 
@@ -1253,6 +1381,7 @@ export async function runToolLoop(options: ToolLoopOptions): Promise<ToolLoopRes
       // `executeToolCall` unchanged — see this file's header.
       const toolEntry: ToolCallRecord = { name, args, operationType, reason };
       toolCalls.push(toolEntry);
+      const resultPosition = results.push(undefined) - 1;
       const priorCalls = toolCalls.slice(0, -1);
       emit({ type: 'tool_start', iteration: currentIteration, call: toolEntry, priorCalls });
 
@@ -1305,6 +1434,8 @@ export async function runToolLoop(options: ToolLoopOptions): Promise<ToolLoopRes
         const toolDuration = Date.now() - toolStartTime;
         toolEntry.duration_ms = toolDuration;
         toolEntry.resultSummary = summarizeToolResult(result);
+        // Kept whole for the present step only (OF3a); with none, nothing of the result outlives this call.
+        if (presentStep) results[resultPosition] = result;
 
         // Trace: end tool call span with response metadata
         if (toolTraceSpanId) {
