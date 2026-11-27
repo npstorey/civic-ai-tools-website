@@ -30,6 +30,7 @@ import nodeCrypto, { createHash } from 'node:crypto';
 import * as nodeModule from 'node:module';
 import type { AddressInfo } from 'node:net';
 import { fileURLToPath, pathToFileURL } from 'node:url';
+import ts from 'typescript';
 
 // --- A fixed clock and fixed randomness, before any app module loads -----------------------------------------------
 
@@ -132,6 +133,8 @@ registerHooks({
       return { url: `${STUB_PREFIX}${encodeURIComponent(specifier)}.mjs`, format: 'module', shortCircuit: true };
     }
     if (specifier === 'next/server') return nextResolve('next/server.js', context);
+    // OF3-FX1 criterion 6: the answer view's components import Next's client modules by their bare names.
+    if (/^next\/[a-z-]+$/.test(specifier)) return nextResolve(`${specifier}.js`, context);
     if (specifier.startsWith('@/')) {
       const base = path.join(SRC, specifier.slice(2));
       for (const candidate of [base, `${base}.ts`, `${base}.tsx`, path.join(base, 'index.ts')]) {
@@ -158,6 +161,15 @@ registerHooks({
     if (loadUrl.startsWith('file:') && loadUrl.endsWith('.json') && !loadUrl.includes('/node_modules/')) {
       const json = fs.readFileSync(fileURLToPath(loadUrl), 'utf8');
       return { format: 'module', source: `export default ${json};`, shortCircuit: true };
+    }
+    // OF3-FX1 criterion 6: the answer view is rendered here, so a component file is transpiled as the render tests do.
+    if (loadUrl.startsWith('file:') && loadUrl.endsWith('.tsx') && fileURLToPath(loadUrl).startsWith(SRC)) {
+      const file = fileURLToPath(loadUrl);
+      const out = ts.transpileModule(fs.readFileSync(file, 'utf8'), {
+        fileName: file,
+        compilerOptions: { jsx: ts.JsxEmit.ReactJSX, module: ts.ModuleKind.ESNext, target: ts.ScriptTarget.ES2022 },
+      });
+      return { format: 'module', source: out.outputText, shortCircuit: true };
     }
     return nextLoad(loadUrl, context);
   },
@@ -194,6 +206,27 @@ const DATASETS: Record<string, Row[] | 'fail'> = {
   'null-0001': [{ complaint_type: 'Noise', latitude: null, longitude: null }],
   'none-0000': [],
   'fail-0001': 'fail',
+  // OF3-FX1 criterion 6: one row, with a location.
+  'one1-0001': [{ complaint_type: 'Noise', latitude: '40.701001', longitude: '-73.901001' }],
+};
+
+// OF3-FX1 (website #810): one dataset answering three queries differently, as the staging run's did: a one-row sample,
+// the query the answer reports (287 rows, 284 with a location), and an aggregate. Keyed by dataset and query text.
+const STAGING_DATASET = 'erm2-nwe9';
+const SAMPLE_QUERY = 'SELECT * LIMIT 1';
+const REPORTED_QUERY = "SELECT * WHERE complaint_type LIKE 'Noise%' AND incident_zip IN ('11201', '11215')";
+const AGGREGATE_QUERY = 'SELECT incident_zip, count(*) GROUP BY incident_zip';
+/** The sample's one row: located, and named by a complaint type no row of the reported query carries. */
+const SAMPLE_ROWS: Row[] = [{ unique_key: 's1', complaint_type: 'Blocked Driveway', latitude: '40.650001', longitude: '-73.950001' }];
+/** 287 rows; the 1st, 101st and 201st have no location. */
+const REPORTED_ROWS: Row[] = Array.from({ length: 287 }, (_unused, i) =>
+  i % 100 === 0
+    ? { unique_key: `n${i}`, complaint_type: i % 2 === 0 ? 'Noise - Residential' : 'Noise - Street/Sidewalk', incident_zip: '11201' }
+    : { unique_key: `n${i}`, complaint_type: i % 2 === 0 ? 'Noise - Residential' : 'Noise - Street/Sidewalk', incident_zip: i % 3 === 0 ? '11215' : '11201', latitude: (40.68 + i / 100000).toFixed(6), longitude: (-73.99 + i / 100000).toFixed(6) });
+const QUERY_ROWS: Record<string, Row[]> = {
+  [`${STAGING_DATASET}|${SAMPLE_QUERY}`]: SAMPLE_ROWS,
+  [`${STAGING_DATASET}|${REPORTED_QUERY}`]: REPORTED_ROWS,
+  [`${STAGING_DATASET}|${AGGREGATE_QUERY}`]: [{ incident_zip: '11201', count: '150' }, { incident_zip: '11215', count: '137' }],
 };
 
 let MCP_REQUESTS: Array<{ method?: string; name?: string }> = [];
@@ -214,7 +247,8 @@ const mcp = http.createServer(async (req, res) => {
     res.end(reply({ error: { code: -32603, message: 'fixture: no skill guidance here' } }));
     return;
   }
-  const rows = DATASETS[String(msg.params?.arguments?.dataset_id ?? 'cnt0-0001')] ?? DATASETS['cnt0-0001'];
+  const rows: Row[] | 'fail' = (QUERY_ROWS[`${String(msg.params?.arguments?.dataset_id)}|${String(msg.params?.arguments?.query)}`] as Row[] | undefined)
+    ?? DATASETS[String(msg.params?.arguments?.dataset_id ?? 'cnt0-0001')] ?? DATASETS['cnt0-0001'];
   res.writeHead(200, { 'content-type': 'text/event-stream' });
   if (rows === 'fail') {
     res.end(`event: message\ndata: ${reply({ result: { isError: true, content: [{ type: 'text', text: 'fixture: the source failed' }] } })}\n\n`);
@@ -229,7 +263,10 @@ const MCP_ORIGIN = `http://127.0.0.1:${(mcp.address() as AddressInfo).port}`;
 
 // --- The model, following one script of tool calls per drive ----------------------------------------------------------
 
-interface ScriptedCall { name: string; args: Record<string, unknown> }
+/** A message of a request the model receives, as this file reads it. */
+interface SentMessage { role?: string; content?: unknown; tool_call_id?: string; tool_calls?: Array<{ id?: string; function?: { name?: string } }> }
+/** A scripted turn's arguments, or (OF3-FX1) a function of the messages the model received on that turn. */
+interface ScriptedCall { name: string; args: Record<string, unknown> | ((messages: SentMessage[]) => Record<string, unknown>) }
 let SCRIPT: ScriptedCall[] = [];
 let MODEL_REQUESTS: Array<Record<string, unknown>> = [];
 const model = http.createServer((req, res) => {
@@ -239,7 +276,7 @@ const model = http.createServer((req, res) => {
     const raw = Buffer.concat(chunks).toString('utf8');
     const body = JSON.parse(raw) as Record<string, unknown>;
     MODEL_REQUESTS.push(body);
-    const messages = (body.messages ?? []) as Array<{ role?: string; tool_calls?: unknown }>;
+    const messages = (body.messages ?? []) as SentMessage[];
     const turn = messages.filter((m) => m.role === 'assistant' && m.tool_calls).length;
     const usage = { prompt_tokens: 10, completion_tokens: 5, total_tokens: 15 };
     if (body.stream === true) {
@@ -258,7 +295,8 @@ const model = http.createServer((req, res) => {
       res.end(JSON.stringify({ error: { message: 'fixture: the model endpoint failed' } }));
       return;
     }
-    const toolCalls = next ? [{ id: `call-of3a-${turn}`, type: 'function', function: { name: next.name, arguments: JSON.stringify(next.args) } }] : undefined;
+    const args = next ? (typeof next.args === 'function' ? next.args(messages) : next.args) : undefined;
+    const toolCalls = next ? [{ id: `call-of3a-${turn}`, type: 'function', function: { name: next.name, arguments: JSON.stringify(args) } }] : undefined;
     res.writeHead(200, { 'Content-Type': 'application/json' });
     res.end(JSON.stringify({
       id: 'chatcmpl-of3a',
@@ -416,6 +454,48 @@ const MAP_NOT_COMPLETED = await drive('map: the run does not complete', [getData
 /** Fold 5 (the seat's 7224717454, flag 5): a failed request beside the map step, with a second request and alone. */
 const MAP_ONE_OF_TWO_FAILED = await drive('map: one of two requests failed, then the step', [getData('fail-0001'), getData('pts1-0001'), present(2, 'complaint_type')], { format: true });
 const MAP_ONLY_REQUEST_FAILED = await drive('map: the only request failed, then the step', [getData('fail-0001'), present(1, 'complaint_type')], { format: true });
+
+// OF3-FX1's drives (website #810): the map names the call it draws.
+//
+// THE STAGING SHAPE. In loop, as the staging run was: `load_source` (call 1), a one-row sample of a dataset (call 2), the
+// query the answer reports on that dataset (call 3: 287 rows, 284 with a location), an aggregate of it (call 4), then
+// the scripted AI's map choice. The script chooses the way the guidance asks: it takes the number shown at the start of
+// call 3's result. WHERE NO NUMBER IS SHOWN, ITS FALLBACK COUNTS ITS OWN DATA CALLS ONLY, leaving the site's steps out.
+// That fallback encodes the premises' hypothesis (planning `of3-fx1-premises.md`, "The hypothesis"), the one sequence
+// every measured fact of the staging run fits; it is not a measurement of a real model. The staging re-read after the
+// fix is this test with a real model. At `04c99df` no number is shown, so the script names call 2 and the map draws
+// the sample's one row: criterion 4 fails at its assertion there.
+const loadSocrata: ScriptedCall = { name: 'load_source', args: { alias: 'socrata' } };
+const stagingQuery = (query: string): ScriptedCall => ({ name: 'socrata__get_data', args: { type: 'query', dataset_id: STAGING_DATASET, query } });
+/** The model turn, counting from 0, that made the reported query: its call id is `call-of3a-2`. */
+const REPORTED_TURN = 2;
+const SITE_STEP_NAMES = ['load_source', 'find_source', 'present_result'];
+/** The scripted AI's reading of the reported query's number: shown on its result, else its own count of data calls. */
+function numberOfReportedQuery(messages: SentMessage[]): number {
+  const answer = messages.find((m) => m.role === 'tool' && m.tool_call_id === `call-of3a-${REPORTED_TURN}`);
+  const shown = /^\[call (\d+)\]/.exec(typeof answer?.content === 'string' ? answer.content : '');
+  if (shown) return Number(shown[1]);
+  let dataCalls = 0;
+  for (const m of messages) {
+    for (const c of m.tool_calls ?? []) {
+      if (!SITE_STEP_NAMES.includes(c.function?.name ?? '')) dataCalls += 1;
+      if (c.id === `call-of3a-${REPORTED_TURN}`) return dataCalls;
+    }
+  }
+  return dataCalls;
+}
+const presentReported: ScriptedCall = { name: 'present_result', args: (messages) => ({ result: numberOfReportedQuery(messages), label: 'complaint_type' }) };
+const STAGING_CALLS: ScriptedCall[] = [loadSocrata, stagingQuery(SAMPLE_QUERY), stagingQuery(REPORTED_QUERY), stagingQuery(AGGREGATE_QUERY)];
+const MAP_STAGING_SHAPE = await drive('map: the staging run\'s shape', [...STAGING_CALLS, presentReported], { format: PLAIN_MAP, routing: 'in-loop' });
+/** The staging run's two map steps: a first choice naming the site's load (refused), then the script's choice. */
+const MAP_STAGING_REFUSED_FIRST = await drive('map: the staging shape, the load named first', [...STAGING_CALLS, present(1, 'complaint_type'), presentReported], { format: PLAIN_MAP, routing: 'in-loop' });
+/** A wrong choice accepted, then corrected: the sample (call 2), then the reported query (call 3). */
+const MAP_CORRECTED = await drive('map: the sample chosen, then corrected', [...STAGING_CALLS, present(2, 'complaint_type'), present(3, 'complaint_type')], { format: PLAIN_MAP, routing: 'in-loop' });
+// Criterion 6 (the seat's 7227472311): two accepted choices, one naming a call with no location column (call 2), one
+// naming a call whose one row has a location (call 3), in both orders.
+const TWO_CHOICE_CALLS: ScriptedCall[] = [loadSocrata, getData('nolc-0001'), getData('one1-0001')];
+const MAP_NO_COLUMN_THEN_DRAWN = await drive('map: no location column, then one located row', [...TWO_CHOICE_CALLS, present(2, 'complaint_type'), present(3, 'complaint_type')], { format: PLAIN_MAP, routing: 'in-loop' });
+const MAP_DRAWN_THEN_NO_COLUMN = await drive('map: one located row, then no location column', [...TWO_CHOICE_CALLS, present(3, 'complaint_type'), present(2, 'complaint_type')], { format: PLAIN_MAP, routing: 'in-loop' });
 
 
 // --- Readers --------------------------------------------------------------------------------------------------------
@@ -977,3 +1057,266 @@ test('OF3b (dump): the plain map run\'s stream and its record, when asked', asyn
   fs.writeFileSync(path.join(out, 'map-plain.record.json'), JSON.stringify(await recordOf(MAP_PLAIN), null, 2));
   fs.writeFileSync(path.join(out, 'auto.events.json'), JSON.stringify(events(AUTO_ALL), null, 2));
 });
+
+// --- OF3-FX1 (website #810): the map names the call it draws ---------------------------------------------------------
+//
+// WHAT MAKES THESE ABLE TO FAIL. At `04c99df` no answer the AI receives carries its call number, the guidance tells the
+// AI to count its calls, and the step's replies name calls by bare number. The staging-shaped drive's script then falls
+// back to counting its own data calls (see its comment above) and names the one-row sample, so the map draws one row.
+// Each red below fails at an assertion there. Criterion 5 and criterion 6 are pins: their values were measured at
+// `04c99df` by this file.
+
+/** The tool messages of a run's last request: every answer the AI received, in the order of its calls. */
+function toolMessagesOf(d: Drive): string[] {
+  const last = d.modelRequests[d.modelRequests.length - 1];
+  return ((last?.messages ?? []) as SentMessage[]).filter((m) => m.role === 'tool').map((m) => String(m.content ?? ''));
+}
+/** The call number at the start of an answer, as the AI reads it; `undefined` where none is shown. */
+const numberShown = (text: string): number | undefined => {
+  const shown = /^\[call (\d+)\]\n/.exec(text);
+  return shown ? Number(shown[1]) : undefined;
+};
+/** The answer the AI received for a run's call at a position (from 1). */
+const answerTo = (d: Drive, position: number): string => toolMessagesOf(d)[position - 1] ?? '';
+
+const FX_MAP_RUNS = [
+  ...MAP_RUNS, MAP_PLAIN, MAP_ACCEPTED_THEN_REFUSED, MAP_REFUSED_TWICE, MAP_ONE_OF_TWO_FAILED, MAP_ONLY_REQUEST_FAILED,
+  MAP_STAGING_SHAPE, MAP_STAGING_REFUSED_FIRST, MAP_CORRECTED, MAP_NO_COLUMN_THEN_DRAWN, MAP_DRAWN_THEN_NO_COLUMN,
+];
+
+test('OF3-FX1 premise: every OF3-FX1 drive ran to completion and emitted its trace', () => {
+  for (const d of [MAP_STAGING_SHAPE, MAP_STAGING_REFUSED_FIRST, MAP_CORRECTED, MAP_NO_COLUMN_THEN_DRAWN, MAP_DRAWN_THEN_NO_COLUMN]) {
+    assert.equal(d.status, 200, d.name);
+    toolCallsOf(d);
+    traceOf(d);
+  }
+  assert.deepEqual(toolCallsOf(MAP_STAGING_SHAPE).map((c) => c.name), ['load_source', 'socrata__get_data', 'socrata__get_data', 'socrata__get_data', 'present_result']);
+  assert.deepEqual(toolCallsOf(MAP_STAGING_SHAPE).slice(1, 4).map((c) => (c.resultSummary as { rows?: number } | undefined)?.rows), [1, 287, 2], 'premise: the sample, the reported query and the aggregate');
+});
+
+test('OF3-FX1 criterion 1 (red): every answer the AI receives under a map format begins with its call number, counting every call from 1', () => {
+  const kinds = new Set<string>();
+  for (const d of FX_MAP_RUNS) {
+    const answers = toolMessagesOf(d);
+    const calls = toolCallsOf(d);
+    assert.equal(answers.length, calls.length, `${d.name}: premise: one answer per recorded call`);
+    answers.forEach((text, i) => {
+      assert.equal(numberShown(text), i + 1, `${d.name}: the answer to call ${i + 1} (${String(calls[i].name)}) does not begin with its number: ${JSON.stringify(text.slice(0, 120))}`);
+      const call = calls[i];
+      kinds.add(call.operationType === 'load_source' ? 'load' : call.name === 'present_result' ? `present ${String(call.presentOutcome)}` : call.failed ? 'failed' : 'data');
+    });
+  }
+  assert.deepEqual([...kinds].sort(), ['data', 'failed', 'load', 'present accepted', 'present refused'], 'premise: every kind of answer is numbered');
+});
+
+test('OF3-FX1 criterion 1 (red): the number comes before any truncation, which cannot drop it, and the bound still holds', () => {
+  const answer = answerTo(MAP_CAP, 1);
+  assert.ok(/\[Truncated: showing \d+ of 1203 rows\]$/.test(answer), `premise: the over-the-cap result was truncated: ${JSON.stringify(answer.slice(-80))}`);
+  assert.equal(numberShown(answer), 1, JSON.stringify(answer.slice(0, 40)));
+  assert.ok(answer.length <= 50_000, `the numbered answer is ${answer.length} characters, over the bound`);
+});
+
+test('OF3-FX1 criterion 1 (pin): under "Auto" no answer carries a number (the send bodies are pinned by OF3a\'s digests above)', () => {
+  for (const d of [AUTO_ALL, AUTO_IN_LOOP]) {
+    const answers = toolMessagesOf(d);
+    assert.ok(answers.length > 0, `${d.name}: premise`);
+    for (const text of answers) assert.equal(numberShown(text), undefined, `${d.name}: ${text.slice(0, 40)}`);
+  }
+});
+
+test('OF3-FX1 criterion 2 (red): the composed prompt and the tool the model receives say to use the number shown, not to count', () => {
+  for (const d of [MAP_POINTS, MAP_IN_LOOP, MAP_STAGING_SHAPE]) {
+    const offered = d.modelRequests.filter((r) => Array.isArray(r.tools));
+    assert.ok(offered.length > 0, `${d.name}: premise`);
+    for (const request of offered) {
+      const prompt = systemPromptOf(request);
+      assert.ok(prompt.includes('Every tool result you receive begins with its call number in this run, for example [call 3].'), `${d.name}: the prompt does not say the number is shown`);
+      assert.ok(prompt.includes('Use the number shown; do not count your tool calls'), `${d.name}: the prompt does not say to use the number shown`);
+      assert.ok(!/counting every tool call/.test(prompt), `${d.name}: the prompt still asks the AI to count`);
+      const tool = ((request.tools ?? []) as Array<{ function?: { name?: string; parameters?: { properties?: { result?: { description?: string } } } } }>)
+        .find((t) => t.function?.name === 'present_result');
+      const description = tool?.function?.parameters?.properties?.result?.description ?? '';
+      assert.ok(description.includes('The call number shown at the start of the tool result whose rows to map'), `${d.name}: ${description}`);
+      assert.ok(!/counting every tool call|1 for your first/.test(description), `${d.name}: the tool still asks the AI to count: ${description}`);
+    }
+  }
+});
+
+/** How the step's replies identify a call: number, tool, dataset (`getDatasetName`) and row count. */
+const STAGING_NAME = '311 Service Requests (erm2-nwe9)';
+const identity = (n: number, rows: number, dataset = STAGING_NAME) => `call ${n} (socrata__get_data, ${dataset}, ${rows} ${rows === 1 ? 'row' : 'rows'})`;
+
+test('OF3-FX1 criterion 3 (red): a refusal lists each call that returned rows by number, tool, dataset and row count', () => {
+  // The fifth call names the site's load (call 1) and is refused.
+  const refusal = answerTo(MAP_STAGING_REFUSED_FIRST, 5);
+  assert.equal(toolCallsOf(MAP_STAGING_REFUSED_FIRST)[4].presentOutcome, 'refused', 'premise: the first choice was refused');
+  for (const listed of [identity(2, 1), identity(3, 287), identity(4, 2)]) assert.ok(refusal.includes(listed), `the refusal does not name ${listed}: ${refusal}`);
+  assert.ok(!/call 1 \(/.test(refusal), `the refusal lists the load: ${refusal}`);
+  assert.ok(/Nothing was mapped\./.test(refusal), refusal);
+  // A refusal with one call that returned rows, outside the staging dataset.
+  assert.ok(answerTo(MAP_NO_SUCH_RESULT, 2).includes(identity(1, 5, 'dataset pts1-0001')), answerTo(MAP_NO_SUCH_RESULT, 2));
+});
+
+test('OF3-FX1 criterion 3 (red): an acceptance names the mapped call the same way, with its rows mapped, and says to call again if it is the wrong one', () => {
+  const accepted = answerTo(MAP_STAGING_SHAPE, 5);
+  assert.ok(accepted.includes(`Mapped 284 of 287 rows from ${identity(3, 287)}.`), accepted);
+  assert.ok(accepted.includes('If that is not the query your answer reports, call present_result again with the number shown on that query\'s result.'), accepted);
+  // The wrong choice's acceptance names the sample: the AI can see it mapped one row from a one-row call.
+  const wrong = answerTo(MAP_CORRECTED, 5);
+  assert.ok(wrong.includes(`Mapped 1 of 1 row from ${identity(2, 1)}.`), wrong);
+  assert.ok(wrong.includes('call present_result again'), wrong);
+  // An acceptance that drew nothing names its call too.
+  const nothing = answerTo(MAP_NO_LOCATION_COLUMNS, 2);
+  assert.ok(nothing.includes(identity(1, 2, 'dataset nolc-0001')) && nothing.includes('no location column'), nothing);
+});
+
+test('OF3-FX1 criterion 3 (pin): a corrected second choice replaces the first', async () => {
+  assert.deepEqual(toolCallsOf(MAP_CORRECTED).filter((c) => c.name === 'present_result').map((c) => c.presentOutcome), ['accepted', 'accepted'], 'premise');
+  const format = await formatOf(MAP_CORRECTED);
+  assert.deepEqual(format.outcome, { drawn: true });
+  assert.deepEqual(format.counts, { returned: 287, drawn: 284, withoutLocation: 3, beyondCap: 0 });
+});
+
+test('OF3-FX1 criterion 4 (red): on the staging run\'s shape the map draws the reported query\'s located rows, never the one-row sample\'s', async () => {
+  const chosen = toolCallsOf(MAP_STAGING_SHAPE)[4];
+  const format = await formatOf(MAP_STAGING_SHAPE);
+  assert.deepEqual(format.outcome, { drawn: true });
+  assert.deepEqual(format.counts, { returned: 287, drawn: 284, withoutLocation: 3, beyondCap: 0 }, `the map drew call ${JSON.stringify((chosen.args as Json).result)}'s rows: ${JSON.stringify(format.counts)}`);
+  const names = ((format.map as { features: Array<{ properties: Json }> }).features).map((f) => f.properties.name);
+  assert.ok(!names.includes('Blocked Driveway'), 'the sample\'s row was drawn');
+  assert.deepEqual(chosen.args, { result: 3, label: 'complaint_type' });
+  // The same, on the staging run's two map steps: a first choice refused, then the script's.
+  assert.deepEqual((await formatOf(MAP_STAGING_REFUSED_FIRST)).counts, { returned: 287, drawn: 284, withoutLocation: 3, beyondCap: 0 });
+});
+
+// Criterion 5 (pin): what a reader and a record reader see, for every map drive whose choices name fixed numbers,
+// digested as measured at `04c99df` by this file. The staging-shaped drives are left out: their script reads the
+// number shown, so their outcome changes by design (criterion 4).
+const { adaptComparison: adaptRun } = await import('../../components/answer-view/adapt-comparison.ts');
+const { adaptRecord: adaptStored } = await import('../../components/answer-view/adapt-record.ts');
+const recordView = async (d: Drive) => adaptStored({ stored: (await recordOf(d)) as never, resolution: null, row: { slug: 'of3fx', summary: 'S', contentProfile: 'default', captureMethod: 'chat-flow-stream' }, instance: null, servedStatement: null });
+async function readerFacing(d: Drive): Promise<string> {
+  const calls = toolCallsOf(d);
+  const record = await recordView(d);
+  return JSON.stringify({
+    extension: await formatOf(d),
+    runPart: mapPartModule!.mapPartFromTrace(traceOf(d), calls),
+    recordPart: mapPartModule!.mapPartFromRecord(await recordOf(d)),
+    summary: buildNarrativeSummary(calls as never),
+    recordSteps: record.steps,
+    recordMap: (record as { map?: unknown }).map,
+  });
+}
+const PIN_RUNS = [
+  ...MAP_RUNS, MAP_PLAIN, MAP_ACCEPTED_THEN_REFUSED, MAP_REFUSED_TWICE, MAP_ONE_OF_TWO_FAILED, MAP_ONLY_REQUEST_FAILED,
+  MAP_NO_COLUMN_THEN_DRAWN, MAP_DRAWN_THEN_NO_COLUMN,
+];
+/** Measured at `04c99df` by this file (the first run of this test, before any fix). */
+const READER_FACING_AT_BASE: Record<string, string> = {
+  'map: points': '718b64163460a7a940d80df5afca399b9096a368bff53ca99a72529ac0f74a81',
+  'map: over the cap': '98aac4a994b2fed320c871de63adfc14c9006fcae55ddaa2875eda0af6b2c552',
+  'map: in loop': 'b3e003bfe7a1b11f811f3555f8e4e79d74d56b967c4e410c260faa28eb340ddd',
+  'map: a result that names no call': 'fc1f4a4a47e011be373684efe32f59d23d46a001e35aa63e7fd7d48528ea424e',
+  'map: a label the result lacks': '11de5d9be8ab72be64af06115fdbebf0f49fc2d1f6b1a3d5c900593b6ce337f2',
+  'map: the step never called': '953135711488b43b9b2a67b3ab971b044e32460522898992fd4e89bfed164594',
+  'map: no location column': 'c284714ac92e2dec9758243f889582435ade95e3a9a6f3f7910edaa3caf04fa5',
+  'map: none of 2 rows located': 'f1194f477ad6a8924487d8d71e478e53f20c2887b849e3298e62c4eaa8539e43',
+  'map: the one row not located': 'eae48fd86414bc49f2b9c2ec4ae5ee6d3e20a868ec9d7ed06b92323e15587358',
+  'map: no rows': 'f925fb4c8a3788ad716f0d5981322f3fa1832b111dc5f8982a5d2ef9d9c9ab58',
+  'map: the named call failed': '2cf8d30e92b6e305a73770486bb5376b1729f3d094cb2cea6a4f9273d91e03eb',
+  "map: the site's own plain map": '5a5872a9c68cb22de956d0b297191b9ba52ccc1896385796f7f9e5d90159a489',
+  'map: accepted, then refused': 'd67e9ddee2297844d7ef49f4fb733d9b573a577fe9796e834ebb13d45a188b19',
+  'map: refused twice, the last for a failed call': 'd01b2f4993236daf9c6bf2bcf0fef8846e7c9650087bb8ed53bff9c98a02aa96',
+  'map: one of two requests failed, then the step': '839c92caeca13b0812aa3fb2c09bbc161430ad7e94f2fcc011781f548ad0ceab',
+  'map: the only request failed, then the step': '2cf8d30e92b6e305a73770486bb5376b1729f3d094cb2cea6a4f9273d91e03eb',
+  'map: no location column, then one located row': 'c0bc2de3a50fffaded1c2b39430ee3519c96921d756fa0719484055b3fa75ea7',
+  'map: one located row, then no location column': 'a6c50370d432b276df66321c88046e288d19cc142d44ffe962d17395e149d93d',
+};
+
+test('OF3-FX1 criterion 5 (pin): the map\'s record part, the run\'s map part, the record page\'s steps and map, and the summary are the base\'s', async () => {
+  const measured: Record<string, string> = {};
+  for (const d of PIN_RUNS) measured[d.name] = digest(await readerFacing(d));
+  console.log(`# OF3-FX1 reader-facing digests: ${JSON.stringify(measured)}`);
+  assert.deepEqual(measured, READER_FACING_AT_BASE);
+});
+
+// With OF3FX_DUMP_DIR set (CI sets nothing), every map drive's record is written there, for the byte comparison of a
+// record at the base and on the fix (criterion 5: which hash covers what the model receives).
+test('OF3-FX1 (dump): every map drive\'s record, when asked', async () => {
+  const out = process.env.OF3FX_DUMP_DIR;
+  if (!out) return;
+  for (const d of FX_MAP_RUNS) fs.writeFileSync(path.join(out, `${d.name.replace(/\W+/g, '-')}.record.json`), JSON.stringify(await recordOf(d), null, 2));
+});
+
+// --- Criterion 6 (the seat's 7227472311): one outcome per run, on the run's view, its steps and the record page ------
+
+const { handleComparisonEvent } = (await import('../../hooks/useStreamingComparison.ts')) as typeof import('../../hooks/useStreamingComparison.ts');
+type AnyComponent = import('react').ComponentType<Record<string, unknown>>;
+const { createElement } = await import('react');
+const { renderToStaticMarkup } = await import('react-dom/server');
+const { default: AnswerView } = (await import('../../components/answer-view/AnswerView.tsx')) as unknown as { default: AnyComponent };
+const { AnswerLayoutsProvider } = (await import('../../components/answer-view/AnswerLayoutsProvider.tsx')) as unknown as { AnswerLayoutsProvider: import('react').ComponentType<{ value: unknown; children?: import('react').ReactNode }> };
+const { SessionProvider } = (await import('next-auth/react')) as unknown as { SessionProvider: import('react').ComponentType<{ session: unknown; children?: import('react').ReactNode }> };
+const { ANSWER_FIRST } = (await import('../../lib/answer-layout/index.ts')) as unknown as { ANSWER_FIRST: unknown };
+
+type HookDispatch = Parameters<typeof handleComparisonEvent>[1];
+type HookState = Exclude<Parameters<HookDispatch>[0], (...args: never[]) => unknown>;
+type HookEvent = Parameters<typeof handleComparisonEvent>[0];
+
+/** The run's state as the page's hook holds it once the stream ends: every event of the drive folded in, in order. */
+function liveState(d: Drive): HookState {
+  const panel = { content: '', progress: null, progressLog: [], progressGroups: [], isComplete: false };
+  let state: HookState = { withoutMcp: { ...panel }, withMcp: { ...panel }, isLoading: true, error: null, evidenceTrace: null, mcpOnly: true } as HookState;
+  const setState: HookDispatch = (update) => { state = typeof update === 'function' ? update(state) : update; };
+  for (const event of events(d)) {
+    if (typeof event.type !== 'string' || (event.panel !== undefined && event.panel !== 'withMcp')) continue;
+    handleComparisonEvent({ ...event, panel: 'withMcp' } as HookEvent, setState);
+  }
+  return state;
+}
+const renderView = (model: unknown): string =>
+  renderToStaticMarkup(createElement(SessionProvider, { session: null }, createElement(AnswerLayoutsProvider, { value: { default: ANSWER_FIRST, offered: [ANSWER_FIRST] } }, createElement(AnswerView, { model }))));
+const occurrences = (html: string, needle: string) => html.split(needle).length - 1;
+
+const NO_COLUMN = 'No map: the data chosen for the map has no location column.';
+const ONE_ROW_LINE = 'This site mapped 1 of 1 row from dataset one1-0001';
+for (const [d, last] of [[MAP_NO_COLUMN_THEN_DRAWN, 'drawn'], [MAP_DRAWN_THEN_NO_COLUMN, 'none']] as const) {
+  test(`OF3-FX1 criterion 6 (pin) (${d.name}): the run's view, its steps and the record page state one outcome, the last accepted`, async () => {
+    assert.deepEqual(toolCallsOf(d).filter((c) => c.name === 'present_result').map((c) => c.presentOutcome), ['accepted', 'accepted'], 'premise: two accepted choices');
+    const state = liveState(d);
+    const panel = state.withMcp as HookState['withMcp'] & { tools_called?: unknown[]; duration_ms?: number; flows?: unknown };
+    assert.ok(panel.isComplete, `premise: the live panel completed: ${JSON.stringify(panel).slice(0, 300)}`);
+    const run = adaptRun({
+      content: panel.content, isComplete: true, isActive: false, queryText: QUESTION, toolsCalled: (panel.tools_called ?? []) as never,
+      progressGroups: panel.progressGroups, progressLog: panel.progressLog, duration_ms: panel.duration_ms, model: 'fixture-fast', portal: PORTAL,
+      evidenceTrace: state.evidenceTrace, instance: null, flows: panel.flows as never,
+    });
+    const live = renderView(run);
+    const page = renderView(await recordView(d));
+    const runSteps = (run.steps as { groups: Array<{ label: string }> }).groups.map((g) => g.label);
+    const pageSteps = ((await recordView(d)).steps as { view: { steps: Array<{ label: string; calls: Array<{ outcome: string }> }> } }).view.steps;
+    const pageMapLines = pageSteps.filter((s) => s.label === 'Choosing what to map').flatMap((s) => s.calls.map((c) => c.outcome));
+    assert.equal(occurrences(live, 'data-part="map"'), 1, 'the run\'s view renders the map part more than once');
+    assert.equal(occurrences(page, 'data-part="map"'), 1, 'the record page renders the map part more than once');
+    assert.equal(pageMapLines.length, 2, `premise: the record page lists both map steps: ${JSON.stringify(pageSteps.map((s) => s.label))}`);
+    if (last === 'drawn') {
+      assert.equal(occurrences(live, 'data-part="map-plot"'), 1, 'no plot');
+      assert.equal(occurrences(live, '<circle'), 1, 'the plot does not draw the one point');
+      assert.ok(!live.includes('No map'), 'the run\'s view states "No map" beside a drawn map');
+      assert.ok(!page.includes('No map'), 'the record page states "No map" beside a drawn map');
+      assert.ok(page.includes('data-part="map-table"'), 'the record page lists no mapped row');
+      assert.deepEqual(runSteps.filter((l) => !['Querying data'].includes(l) && /map/i.test(l)), [ONE_ROW_LINE, ONE_ROW_LINE], `the run's steps: ${JSON.stringify(runSteps)}`);
+      for (const line of pageMapLines) assert.equal(line, `${ONE_ROW_LINE}.`);
+    } else {
+      assert.ok(live.includes(`>${NO_COLUMN}<`), 'the run\'s view does not state "No map"');
+      assert.ok(page.includes(`>${NO_COLUMN}<`), 'the record page does not state "No map"');
+      for (const html of [live, page]) {
+        for (const part of ['map-plot', 'map-table', 'map-download']) assert.ok(!html.includes(`data-part="${part}"`), `"No map" with ${part}`);
+        assert.ok(!html.includes('<circle'), '"No map" with a point');
+        assert.ok(!html.includes('mapped 1 of 1'), '"No map" beside a count of mapped rows');
+      }
+      assert.deepEqual(runSteps.filter((l) => l.startsWith('No map') || /mapped/.test(l)), [NO_COLUMN, NO_COLUMN], `the run's steps: ${JSON.stringify(runSteps)}`);
+      for (const line of pageMapLines) assert.equal(line, NO_COLUMN);
+    }
+  });
+}
