@@ -209,6 +209,15 @@ test('B3 (red): allow-class at the first member\'s pause loads it, and the secon
   assert.deepEqual(loadSpans(d), [{ alias: 'socrata', outcome: 'loaded', asked: true }, { alias: 'nyc_record', outcome: 'loaded', asked: false }]);
 });
 
+test('fix round 1, item 3 (red): after allow-class, "Where this question went" words the member loaded on another\'s answer as such; the member asked keeps S125[7] (B7)', async () => {
+  const d = await drive({ states: BOTH_ASK_FIRST, script: TWO_MEMBERS, decide: [{ afterMs: 2_000, decision: 'allow-class' }] });
+  assert.deepEqual(outcomes(d), ['loaded', 'loaded'], 'premise: both members loaded');
+  const model = whereItWentFromSpans({ spans: d.trace.spans, sourcesOffered: d.sourcesOffered, statement });
+  const why = Object.fromEntries(model.notReached.map((row) => [row.sourceId, row.whyNotSent]));
+  assert.equal(why.socrata, 'Accepted when asked, but not used for this question.', 'the member asked (S125[7])');
+  assert.equal(why['nyc-record'], 'Enabled by an answer about another source, but not used for this question.', 'the member loaded on the group answer');
+});
+
 test('B3 (decoy): the same run with allow, not allow-class, pauses on the second load', async () => {
   const d = await drive({ states: BOTH_ASK_FIRST, script: TWO_MEMBERS, decide: [{ afterMs: 2_000, decision: 'allow' }] });
   assert.equal(d.pauses.length, 2, 'the decoy did not pause on the second load: the instrument cannot see a second pause');

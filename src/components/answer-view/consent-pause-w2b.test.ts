@@ -642,3 +642,75 @@ test('POINTER (b) (red): after the hold, Enable reads S156 and the pointer follo
     mock.timers.reset();
   }
 });
+
+// =====================================================================================================================
+// Fix round 1 (the seat's ruling 7239440759): drafted forms, by the ruled pairs, for the words check
+// =====================================================================================================================
+
+const DRAFT = {
+  declined: "You chose Don't enable. Nothing is sent to it, and it is disabled now.",
+  classAllowedNotMoved: 'You chose Enable all 157 sources reached through Socrata, but they could not be enabled. You can enable them in Data source settings.',
+  classDeclinedNotMoved: "You chose Don't enable any of the 157, but they could not be disabled. You can disable them in Data source settings.",
+  allowedAllNotMoved: 'You chose Enable all data sources, but they could not be enabled. You can enable them in Data source settings.',
+  allowedAllFull: 'You chose Enable all data sources, but they could not be enabled, because the cookie that keeps your settings is full.',
+};
+
+test('fix round 1, item 1 (red): "Don\'t enable" while the question waits reads its drafted form, with the pointer', async () => {
+  const p = await paused({ sourceId: 'nyc-checkbook' });
+  await answer(p, 'prompt', W.S100[1]);
+  assert.deepEqual(decisionsPosted(p.net), ['off']);
+  assert.equal(cookieStates(p.net, p.ids)['nyc-checkbook'], 'off', 'premise: the setting moved');
+  assert.equal(outcomeIn(need(p.page, 'step card')), `${DRAFT.declined} ${POINTER}`);
+});
+
+test('fix round 1, item 2 (red): a class answer whose move throws (signed in, the real route) says the sources could not be set, with no pointer', async () => {
+  for (const [label, form, decision] of [[W.S12, DRAFT.classAllowedNotMoved, 'allow-class'], [W.S13, DRAFT.classDeclinedNotMoved, 'off-class']] as const) {
+    hook();
+    const p = await paused({ sourceId: AUSTIN, signedIn: true });
+    const restore = rowWritesThrow();
+    try {
+      await answer(p, 'prompt', label);
+    } finally {
+      restore();
+    }
+    assert.deepEqual(decisionsPosted(p.net), [decision]);
+    const card = need(p.page, 'step card');
+    assert.equal(outcomeIn(card), form, decision);
+    assert.equal(pointers(card), 0, `${decision}: the pointer follows a move that did not happen`);
+    for (const page of mounted.splice(0)) page.unmount();
+    mock.timers.reset();
+    flows.setFlowsSourceInputsForTests(null);
+    groups.setGroupManifestForTests(null);
+  }
+});
+
+test('fix round 1, item 2 (red): "Enable all data sources" whose move throws (signed in, the real route) says they could not be enabled, with no pointer', async () => {
+  const p = await paused({ sourceId: 'nyc-checkbook', signedIn: true });
+  const restore = rowWritesThrow();
+  try {
+    await answer(p, 'prompt', W.S96);
+  } finally {
+    restore();
+  }
+  assert.deepEqual(decisionsPosted(p.net), ['allow-all']);
+  const card = need(p.page, 'step card');
+  assert.equal(outcomeIn(card), DRAFT.allowedAllNotMoved);
+  assert.equal(pointers(card), 0);
+});
+
+test('fix round 1, item 2 (red): "Enable all data sources" refused at the cookie\'s bound reads its full-cookie form', () => {
+  assert.equal(typeof stepModule.pauseOutcome, 'function', 'ConsentStep has no pauseOutcome');
+  assert.equal(stepModule.pauseOutcome({ decision: 'allow-all', moved: false, code: 'consent_cookie_full' }, false), DRAFT.allowedAllFull);
+  assert.equal(stepModule.pauseOutcomePointed({ decision: 'allow-all', moved: false }), false);
+});
+
+test('fix round 1, item 5 (red): a Settings row with a live pause shows one "More about this source", the row\'s own', async () => {
+  const p = await paused({ sourceId: 'nyc-checkbook', panel: true });
+  const row = p.page.elements().find((el) => el.type === 'li' && el.props['data-source'] === 'nyc-checkbook');
+  assert.ok(row, 'premise: the panel has the row');
+  assert.ok(renderingOf(p.page, 'row card'), 'premise: the row carries the pause card');
+  const summaries = all(row!).filter((el) => el.type === 'summary' && textOf(el) === W.S103);
+  assert.equal(summaries.length, 1, `the row shows ${summaries.length} "${W.S103}"`);
+  // The step card in the run's steps keeps its own (C3-D = C).
+  assert.ok(disclosure(need(p.page, 'step card'), W.S103), 'the step card lost its disclosure');
+});

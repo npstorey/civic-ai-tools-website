@@ -520,6 +520,23 @@ test('criterion 1: the JSON compare route records declined with no event and no 
   assert.ok(elapsed < 5_000, `the compare route held for ${elapsed} ms`);
 });
 
+test('S4 W2b fix round 1, item 4 (red): the JSON compare route, which asks no one, words its Ask-first load "Not enabled: not asked for this question." (S125[6]), not "Declined when asked"', async () => {
+  await setRow(BOSTON_ASK_FIRST);
+  process.env.SOURCE_ROUTING = 'in-loop';
+  let body: Json;
+  try {
+    const response = (await compareRoute.POST(request('/api/compare', { query: QUESTION, model: 'fixture-fast', portal: 'data.example.org' }))) as Response;
+    body = (await response.json()) as Json;
+  } finally {
+    delete process.env.SOURCE_ROUTING;
+  }
+  assert.match(JSON.stringify(body), /"loadOutcome":"declined"/, 'premise: the compare route recorded declined');
+  const rows = (((body.withMcp as Json).flows as Json).notReached ?? []) as Array<{ sourceId: string; whyNotSent: string }>;
+  const boston = rows.find((row) => row.sourceId === 'boston-opencontext');
+  assert.ok(boston, `premise: Boston is listed as not reached: ${JSON.stringify(rows)}`);
+  assert.equal(boston!.whyNotSent, 'Not enabled: not asked for this question.');
+});
+
 test('criterion 1: replay passes no hold, and a replayed load emits no consent_pause', async () => {
   kv.calls.length = 0;
   const pkg = {

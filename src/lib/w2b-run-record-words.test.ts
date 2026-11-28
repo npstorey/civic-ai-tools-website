@@ -76,6 +76,30 @@ test('S96 (red; C3-ALL = A): the pause\'s third answer at twelve or fewer', () =
   assert.equal(ALLOW_ALL_SOURCES, 'Enable all data sources');
 });
 
+test('fix round 1, item 3 (red): a record whose load span says no question was put about the source (`tool.load_asked: false`) words it as loaded on another source\'s answer; one with no such attribute keeps S125[7]', () => {
+  const attr = (key: string, value: string) => ({ key, value: { stringValue: value } });
+  const load = (alias: string, asked?: boolean) => ({
+    name: 'mcp_tool_call',
+    attributes: [
+      attr('tool.name', LOAD), attr('tool.operation_type', LOAD), attr('tool.arguments', JSON.stringify({ alias })), attr('tool.load_outcome', 'loaded'),
+      ...(asked === undefined ? [] : [{ key: 'tool.load_asked', value: { boolValue: asked } }]),
+    ],
+  });
+  const model = whereItWentFromSpans({
+    spans: [load('socrata', true), load('nyc_record', false), load('nyc_checkbook')],
+    sourcesOffered: [
+      { sourceId: 'socrata', alias: 'socrata', reason: 'not-consented' },
+      { sourceId: 'nyc-record', alias: 'nyc_record', reason: 'not-consented' },
+      { sourceId: 'nyc-checkbook', alias: 'nyc_checkbook', reason: 'not-consented' },
+    ],
+  });
+  assert.deepEqual(model.notReached.map((row) => [row.sourceId, row.whyNotSent]), [
+    ['socrata', 'Accepted when asked, but not used for this question.'],
+    ['nyc-record', 'Enabled by an answer about another source, but not used for this question.'],
+    ['nyc-checkbook', 'Accepted when asked, but not used for this question.'],
+  ]);
+});
+
 test('B7 (red at the words): a record made before S4, read from its spans, takes S125\'s words; its sources and outcomes do not move', () => {
   const attr = (key: string, value: string) => ({ key, value: { stringValue: value } });
   const load = (alias: string, outcome: string) => ({ name: 'mcp_tool_call', attributes: [attr('tool.name', LOAD), attr('tool.operation_type', LOAD), attr('tool.arguments', JSON.stringify({ alias })), attr('tool.load_outcome', outcome)] });
