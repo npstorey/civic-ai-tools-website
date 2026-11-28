@@ -202,7 +202,8 @@ const settle = async (surface: Surface) => {
 function promptButton(surface: Surface, label: string, name: string): HostElement {
   const prompts = surface.elements().filter((el) => el.props['data-part'] === 'consent-pause-prompt');
   assert.equal(prompts.length, 1, `expected one short box, found ${prompts.length}: ${summary(surface)}`);
-  assert.ok(textOf(prompts[0]).startsWith(`${name} is set to Ask first.`), `the short box does not ask about ${name}`);
+  // Moved by S4 W2b (C3-D-H B): the short box heads with S146.
+  assert.ok(textOf(prompts[0]).startsWith(`The AI has asked to use ${name}. Nothing has been sent to it yet.`), `the short box does not ask about ${name}`);
   const button = [...within(prompts[0].props.children)].find((x) => x.type === 'button' && textOf(x) === label);
   assert.ok(button, `the short box has no ${label}`);
   return button!;
@@ -255,13 +256,13 @@ test('criterion 3 (#667), /ask in notebook mode: after Allow on one pause and Do
   stream.push(pauseLine(A, KEY_A, 'Boston OpenContext'));
   await settle(page);
   assert.equal(cardsIn(page.elements()).find((c) => c.source === A && c.place === 'steps')?.buttons.length, 0, `A's step card offers buttons while the short box asks: ${summary(page)}`);
-  await page.click(promptButton(page, 'Allow', 'Boston OpenContext'));
+  await page.click(promptButton(page, 'Enable', 'Boston OpenContext'));
   await settle(page);
   stream.push(loadLine('tool_complete', 'Boston OpenContext', 1));
   stream.push(loadLine('tool_start', 'Data Commons', 2));
   stream.push(pauseLine(B, KEY_B, 'Data Commons'));
   await settle(page);
-  await page.click(promptButton(page, "Don't allow", 'Data Commons'));
+  await page.click(promptButton(page, "Don't enable", 'Data Commons'));
   await settle(page);
   stream.push(loadLine('tool_complete', 'Data Commons', 2));
   await settle(page);

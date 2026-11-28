@@ -281,6 +281,8 @@ Be honest if you don't have access to current or real-time data.`;
       statement: consent.statement,
       model: model.declared,
       service: getGenAiSystem(),
+      // S4 W2b fix round 1: this route holds no pause, so an Ask-first load here was not asked about.
+      noPause: true,
     });
     const response = NextResponse.json({
       withoutMcp: withoutMcpResult,

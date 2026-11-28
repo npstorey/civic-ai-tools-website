@@ -177,7 +177,8 @@ const T4_KEEP = [
 ];
 // UX-2 P4b, item 46: the line after the card's "Don't allow".
 const T5 = "You chose Don't allow. Nothing was sent. Edit this question or write a new one, and you will be asked again before it is sent.";
-const T6 = 'Ask first: nothing is sent to this source until you turn it On.';
+// Moved by S4 W2a fix round 1 (item 3): T6's drafted form, the ruled pairs applied.
+const T6 = 'Not answered yet: nothing is sent to this source until you enable it.';
 // UX-2 P4b, items 38/49: the privacy page's effect sentence is item 37's words, byte for byte (the card's own
 // effect was re-worded apart from it by the owner's card ruling).
 const T7 = CARD_EFFECT_P4B;
@@ -186,7 +187,8 @@ const T8_NO_DB = 'We keep your answer for this browser session in a cookie.';
 // R9 P2 (#661, D3 = A of the UX pass): the panel's lead before consent counts the states Allow will use, at the
 // reference configuration's three sources, all On by default. It replaces row 2(a)'s "Allow uses these settings."
 // S2-B: four since router 0.8.0, which offers NYC City Record (On by default) wherever Socrata is.
-const T9_PANEL = 'These are the settings Allow will use: four sources On. Set them now, or change them after you allow.';
+// Moved by S4 W2a fix round 1 (item 3): the states renamed by the ruled pairs; the card's Allow keeps its word.
+const T9_PANEL = 'These are the settings Allow will use: four sources enabled. Set them now, or change them after you allow.';
 const T9_TAB = 'This site asks before your next question.';
 const T10 = "A dated log of every change to where a question can go is kept with the site's code.";
 const T11 = (holder: string) => `${holder}: what it keeps is for this site's operator to state`;
@@ -364,6 +366,8 @@ test('criterion 2 (S2; UX-2 P4b D6 B): the card lists no endpoint row, set or un
 // --- The panel: no consent; in force; a re-ask with stored states -----------------------------------
 
 const CONFIGURED = ['socrata', 'data-commons', 'nyc-charter', 'nyc-record'];
+/** Settings lists the sources by group (S4 W2a, C1 = A): NYC City Record under Socrata's group, then the two alone. */
+const GROUPED = ['socrata', 'nyc-record', 'data-commons', 'nyc-charter'];
 
 test('criterion 1, the panel with no consent: T9\'s lead, T12\'s link and T13\'s names', async () => {
   await under({}, async () => {
@@ -485,7 +489,7 @@ test('criterion 1, Data sources in the Settings overlay (UX-2 P4b), with notices
     const tab = await sourcesTab();
     assert.deepEqual([...noticeLines(tab)].sort(), [...expectedNotices(statement)].sort(), 'the tab\'s notice lines are not as ruled');
     assert.ok(tab.text().includes(T12_TAB(held.version, held.date)), `the tab does not read "${T12_TAB(held.version, held.date)}": ${tab.text().slice(0, 600)}`);
-    assertRowNames(tab, 'the Sources tab', CONFIGURED);
+    assertRowNames(tab, 'the Sources tab', GROUPED);
     assertNoneReplaced(readWithLinks(tab), 'the Sources tab (with notices)');
     tab.unmount();
   });
@@ -500,7 +504,7 @@ test('criterion 1, Data sources in the Settings overlay (UX-2 P4b), in force: T1
     const statement = await buildFlowsStatement();
     const tab = await sourcesTab();
     assert.ok(tab.text().includes(T12_TAB(statement.version, statement.date)), `the tab does not read "${T12_TAB(statement.version, statement.date)}": ${tab.text().slice(0, 600)}`);
-    assertRowNames(tab, 'the Sources tab', CONFIGURED);
+    assertRowNames(tab, 'the Sources tab', GROUPED);
     assertNoneReplaced(readWithLinks(tab), 'the Sources tab (in force)');
     tab.unmount();
   });

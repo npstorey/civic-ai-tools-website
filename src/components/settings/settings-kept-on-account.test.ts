@@ -33,8 +33,10 @@ import {
   h,
   installFetch,
   mount,
+  chooseState,
   registerSurfaceHooks,
   sessions,
+  stateControl,
   textOf,
   type HostElement,
   type Surface,
@@ -123,9 +125,10 @@ test('UX-2 P4b: the first signed-in read keeps the cookie\'s choice on the accou
   assert.ok(lede < markup.indexOf(LINE) && markup.indexOf(LINE) < markup.indexOf('<li'), 'the line is not under the lede, above the rows');
 
   // The page keeps it until the reader's next change.
-  const on = overlay.elements().find((el) => el.type === 'input' && String(el.props.name).startsWith(`source-state-${ids[0]}-`) && el.props.value === 'on');
-  assert.ok(on, 'premise: an On choice for the first source');
-  await overlay.check(on!);
+  // S4 W2a: the row's control is two buttons; the change is to the state the row does not show.
+  const row = overlay.elements().find((el) => el.type === 'li' && el.props['data-source'] === ids[0]);
+  assert.ok(row, 'premise: a row for the first source');
+  await chooseState(overlay, row!, stateControl(row!).shown === 'on' ? 'off' : 'on');
   assert.equal(keptLines(overlay).length, 0, 'the line is still shown after the reader\'s next change');
   overlay.unmount();
 

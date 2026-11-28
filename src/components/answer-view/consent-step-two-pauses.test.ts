@@ -81,10 +81,12 @@ const { buildFlowsStatement, statementHash } = await load('lib/flows/statement.t
 
 // --- The text the cards must read -------------------------------------------------------------
 
-const ALLOWED = 'You chose Allow. It is On now.';
+// Moved by S4 W2b (npstorey/civic-ai-tools#335): S112 and S113; `declined` has no taken form and keeps its words.
+// The buttons read S100, "Enable" and "Don't enable", and S96.
+const ALLOWED = 'You chose Enable. It is enabled now.';
 // UX-2 P4b: item 21's outcome, with item 13's one pointer; item 40's "in Data source settings".
-const DECLINED = "You chose Don't allow. Nothing is sent to it, and it is Off now. You can change this in Data source settings.";
-const ALLOWED_NOT_MOVED = 'You chose Allow. This question is sent to it, but it could not be turned On for later questions. You can turn it On in Data source settings.';
+const DECLINED = "You chose Don't enable. Nothing is sent to it, and it is disabled now. You can change this in Data source settings."; // moved by S4 W2b fix round 1 (drafted)
+const ALLOWED_NOT_MOVED = "You chose Enable. The AI's searches for this question are sent to it. It could not be enabled for later questions. You can enable it in Data source settings.";
 
 // --- The stream, the route answers, the pauses -----------------------------------------------
 
@@ -212,7 +214,7 @@ function buttonOf(surface: Surface, id: string, label: string): HostElement {
 function promptButton(surface: Surface, label: string, name: string): HostElement {
   const prompts = surface.elements().filter((el) => el.props['data-part'] === 'consent-pause-prompt');
   assert.equal(prompts.length, 1, `expected one short box, found ${prompts.length}: ${summary(surface)}`);
-  assert.ok(textOf(prompts[0]).startsWith(`${name} is set to Ask first.`), `the short box does not ask about ${name}: ${textOf(prompts[0]).slice(0, 120)}`);
+  assert.ok(textOf(prompts[0]).startsWith(`The AI has asked to use ${name}. Nothing has been sent to it yet.`), `the short box does not ask about ${name}: ${textOf(prompts[0]).slice(0, 120)}`);
   const button = [...within(prompts[0].props.children)].find((x) => x.type === 'button' && textOf(x) === label);
   assert.ok(button, `the short box has no ${label}`);
   return button!;
@@ -229,7 +231,7 @@ const loadDone = (label: string, iteration: number): Json => ({ type: 'progress'
  * with `choice`, A's load completes, and B pauses. Returns the page and the
  * stream, at B's pause.
  */
-async function twoPauses(choice: 'Allow' | "Don't allow", beside?: (page: Surface) => Promise<Surface>): Promise<{ page: Surface; stream: Held; panel?: Surface }> {
+async function twoPauses(choice: 'Enable' | "Don't enable", beside?: (page: Surface) => Promise<Surface>): Promise<{ page: Surface; stream: Held; panel?: Surface }> {
   sessions.server = null;
   sessions.client = { status: 'unauthenticated', data: null };
   answers();
@@ -248,7 +250,7 @@ async function twoPauses(choice: 'Allow' | "Don't allow", beside?: (page: Surfac
   assert.ok(cardsFor(page, A).length > 0, `premise: the page shows A's card: ${summary(page)}`);
   await page.click(promptButton(page, choice, 'Boston OpenContext'));
   await settle(...all);
-  assert.deepEqual(decisions, [{ key: KEY_A, decision: choice === 'Allow' ? 'allow' : 'off' }], 'premise: A\'s answer was posted with A\'s key');
+  assert.deepEqual(decisions, [{ key: KEY_A, decision: choice === 'Enable' ? 'allow' : 'off' }], 'premise: A\'s answer was posted with A\'s key');
   stream.push(loadDone('Boston OpenContext', 1));
   stream.push(loadStart('data_commons', 'Data Commons', 2));
   stream.push(pauseLine(B, KEY_B, 'Data Commons'));
@@ -258,8 +260,8 @@ async function twoPauses(choice: 'Allow' | "Don't allow", beside?: (page: Surfac
 
 // --- (a), (b): each card keeps its own outcome ----------------------------------------------
 
-for (const [choice, sentence] of [['Allow', ALLOWED], ["Don't allow", DECLINED]] as const) {
-  test(`item 1 (${choice === 'Allow' ? 'a' : 'b'}): after ${choice} on source A and a pause from source B in the same run, A's card reads its own outcome and the short box offers B's buttons`, async () => {
+for (const [choice, sentence] of [['Enable', ALLOWED], ["Don't enable", DECLINED]] as const) {
+  test(`item 1 (${choice === 'Enable' ? 'a' : 'b'}): after ${choice} on source A and a pause from source B in the same run, A's card reads its own outcome and the short box offers B's buttons`, async () => {
     const { page } = await twoPauses(choice);
     const a = cardsFor(page, A);
     const b = cardsFor(page, B);
@@ -273,8 +275,8 @@ for (const [choice, sentence] of [['Allow', ALLOWED], ["Don't allow", DECLINED]]
       // UX-2 HG: while the short box asks about B, it holds B's answers, and B's card in the steps none.
       assert.deepEqual(card.buttons, [], `card B's buttons while the short box asks: ${card.buttons.join(', ')}`);
     }
-    promptButton(page, 'Allow', 'Data Commons');
-    assert.deepEqual(promptButtons(page), ['Allow', "Don't allow", 'Allow all data sources'], 'the short box does not offer B\'s three buttons');
+    promptButton(page, 'Enable', 'Data Commons');
+    assert.deepEqual(promptButtons(page), ['Enable', "Don't enable", 'Enable all data sources'], 'the short box does not offer B\'s three buttons');
   });
 }
 
@@ -286,7 +288,7 @@ test('item 1 (c): the Sources panel beside the page: after pause B only B\'s row
     assert.ok(row, `premise: the panel has a row for ${id}`);
     return cardsIn([...within(row!)]);
   };
-  const { page, stream, panel } = await twoPauses('Allow', async () => {
+  const { page, stream, panel } = await twoPauses('Enable', async () => {
     const p = await mount(h(SourcesPanel));
     mounted.push(p);
     await p.settle();
@@ -295,11 +297,11 @@ test('item 1 (c): the Sources panel beside the page: after pause B only B\'s row
   assert.ok(panel);
   const bRow = rowCards(panel!, B);
   assert.equal(bRow.length, 1, `B's row shows ${bRow.length} cards: ${summary(panel!)}`);
-  assert.deepEqual(bRow[0].buttons, ['Allow', "Don't allow", 'Allow all data sources'], `B's row card: ${bRow[0].buttons.join(', ')}`);
+  assert.deepEqual(bRow[0].buttons, ['Enable', "Don't enable", 'Enable all data sources'], `B's row card: ${bRow[0].buttons.join(', ')}`);
   assert.equal(rowCards(panel!, A).length, 0, `A's row still shows a card once the run moved past A: ${summary(panel!)}`);
 
   // B answered from the panel's own row, then a later line of the run.
-  await panel!.click(buttonOf(panel!, B, 'Allow'));
+  await panel!.click(buttonOf(panel!, B, 'Enable'));
   await settle(page, panel!);
   assert.deepEqual(decisions.at(-1), { key: KEY_B, decision: 'allow' }, 'premise: B\'s answer was posted with B\'s key');
   for (const card of cardsFor(page, B)) assert.equal(card.outcome, ALLOWED, `card B on the page after Allow in the panel: ${card.outcome}`);
@@ -326,7 +328,7 @@ test('item 2 (e): when the route answers Allow with moved: false, the card says 
   stream.push(loadStart('boston_opencontext', 'Boston OpenContext', 1));
   stream.push(pauseLine(A, KEY_A, 'Boston OpenContext'));
   await settle(page);
-  await page.click(promptButton(page, 'Allow', 'Boston OpenContext'));
+  await page.click(promptButton(page, 'Enable', 'Boston OpenContext'));
   await settle(page);
   const a = cardsFor(page, A);
   assert.ok(a.length > 0, `premise: A's card is on the page: ${summary(page)}`);

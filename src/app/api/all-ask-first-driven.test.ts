@@ -519,7 +519,8 @@ for (const [what, d] of REFUSED) {
 
 // UX-2 P4b, criterion 4 (Part E, items 42/50): the two routes that cannot pause, with nothing On, answer item 42's
 // words, which point to Data source settings rather than the panel beside the question box.
-const ITEM_42 = 'Every data source is set to Off or Ask first, so nothing was sent. Turn a source On in Data source settings, then ask again.';
+// Moved by S4 W2b (npstorey/civic-ai-tools#335): item 42's place takes S90.
+const ITEM_42 = 'No data source is enabled, so nothing was sent. Enable a source in Data source settings, then ask again.';
 for (const [what, d] of REFUSED.filter(([w]) => w.startsWith('/api/compare (JSON)') || w.startsWith('/api/evidence/[slug]/replay'))) {
   test(`UX-2 P4b criterion 4 (${what}): the refusal reads item 42's words`, () => {
     const refusal = refusalOf(d);

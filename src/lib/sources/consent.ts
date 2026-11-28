@@ -160,9 +160,18 @@ export function applyConsentMove<E extends StoredEntry>(
 
 /**
  * The states a states-map write gives (the first consent's Allow, and a page loaded before S4), every stored entry
- * it does not name kept as it is. A named id in `own` is set on its own (premise 7's exception: a source the reader
- * changed before a first consent); a named id whose state does not change keeps its date and its flag; any other
- * named id is written with no flag.
+ * it does not name kept as it is. A named id whose state does not change keeps its date.
+ *
+ * THE FLAG, by whether the write is marked (`complete`: the body's `ownComplete: true`, S4 W2a fix rounds 1 and 2, the
+ * seat's rulings 7228846086 and 7229359694):
+ *   - a marked write's `own` is the whole set the reader holds as set on its own: a named id in it is set on its own,
+ *     and every other named id is written with `own: false`. Only the client since S4 W2a marks its write; without
+ *     this a group's Disable given before a first consent came out set on its own, as an Off with no flag reads
+ *     (`setOnItsOwn`);
+ *   - an unmarked write (every client before S4 W2a, whose `own` is only the sources changed before the answer, or
+ *     none) reads as before: a named id in `own` is set on its own, a named id whose state does not change keeps its
+ *     flag, and any other is written with no flag. So a page loaded before the deploy that answers a consent asked
+ *     again leaves every stored flag as it was.
  */
 export function applyGivenStates<E extends StoredEntry>(
   stored: Readonly<Record<string, E>>,
@@ -170,12 +179,13 @@ export function applyGivenStates<E extends StoredEntry>(
   own: ReadonlySet<string>,
   today: string,
   entry: (id: string, next: StoredEntry, prior: E | undefined) => E,
+  complete = false,
 ): Record<string, E> {
   const out: Record<string, E> = { ...stored };
   for (const [id, state] of given) {
     const prior = Object.hasOwn(stored, id) ? stored[id] : undefined;
     const same = prior?.state === state;
-    const flag = own.has(id) ? true : same ? prior?.own : undefined;
+    const flag = complete ? own.has(id) : own.has(id) ? true : same ? prior?.own : undefined;
     out[id] = entry(id, { state, since: same ? prior!.since : today, ...(flag === undefined ? {} : { own: flag }) }, prior);
   }
   return out;

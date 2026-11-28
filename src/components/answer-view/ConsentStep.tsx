@@ -36,6 +36,20 @@
  * and the run goes on with no further pause. The outcome sentences are this
  * card's only (L1), each with item 13's one pointer to Data source settings.
  *
+ * S4 W2b (npstorey/civic-ai-tools#335; criterion B3). The words are the
+ * rulings' taken forms (`CONSENT_STEP_TEXT`): the pair is "Enable" and "Don't
+ * enable" (S100), and the third button "Enable all data sources" (S96) at
+ * twelve or fewer configured sources. Above twelve, a source in a group of
+ * two or more gets the class answers instead, S12 and S13 (`allow-class`,
+ * `off-class`), which set every member of the group not set on its own, and
+ * a source alone gets the pair only (`pauseScope`, over the grouping Settings
+ * reads). The heading is S146 while the hold is open and unanswered and S147
+ * in every closed state, only the name bold, with no line under it
+ * (C3-D-H B). The prompt keeps S104 in view and puts the choices sentence
+ * behind "What each answer does" (S105); the card puts the source's facts
+ * behind "More about this source" (S103) (C3-D = C). The outcomes, and when
+ * the pointer follows them, are `pauseOutcome` and `pauseOutcomePointed`.
+ *
  * ONE PLACE TO ANSWER (UX-2 HG; D1-D4 = A; W2 = A). While `ConsentPausePrompt`
  * asks about a pause, it holds the only buttons, the choices sentence, and the
  * `change` sentence with its link to Data source settings, so the reader is
@@ -85,15 +99,16 @@
  * owner's preview read, R9 P1 Amendment 3).
  */
 
-import { useEffect, useRef, type CSSProperties } from 'react';
+import { useEffect, useRef, type CSSProperties, type ReactNode } from 'react';
 import Link from 'next/link';
 import type { FlowsStatement } from '@/lib/flows/statement';
 import type { ConsentPausePayload } from '@/lib/streaming';
-import { ALLOW_ALL_SOURCES, PANEL_PRIVACY_LINK, SETTINGS_HREF, SETTINGS_TEXT } from '@/lib/sources/copy';
+import { ALLOW_ALL_SOURCES, COOKIE_FULL_TEXT, PANEL_PRIVACY_LINK, PANEL_ROW_MORE, SETTINGS_HREF, SETTINGS_TEXT, countInWords } from '@/lib/sources/copy';
+import { pauseScope, type PauseScope } from '@/lib/sources/reader-groups';
 import { readerSourceName, sourceRowLines } from '@/lib/sources/source-name';
 import { KeptByLines } from '@/components/sources/KeptByLine';
 import LocalOnlyOffer from '@/components/sources/LocalOnlyOffer';
-import { decideConsentPause, pauseEntry, useSourceConsent, type PendingPause } from '@/components/sources/useSourceConsent';
+import { decideConsentPause, pauseEntry, useSourceConsent, type PauseAnswer, type PendingPause } from '@/components/sources/useSourceConsent';
 
 /**
  * The pause `ConsentPausePrompt` asks about: the newest that holds, whose hold is open, and that has no answer or
@@ -104,35 +119,172 @@ export function promptPause(pauses: Record<string, PendingPause>): [string, Pend
   return Object.entries(pauses).reverse().find(([, p]) => p.payload.holds && !p.holdEnded && !p.expired && p.decision === undefined && p.failure === undefined);
 }
 
-/** The card's own sentences, each checked against the consent-wording research. */
+/** The heading's two forms around the source's name (C3-D-H B): S146 while waiting, S147 when closed. */
+const HEADING_WAITING = { before: 'The AI has asked to use ', after: '. Nothing has been sent to it yet.' } as const;
+const HEADING_CLOSED = { before: 'The AI asked to use ', after: '.' } as const;
+/** The full form of a cookie-full outcome's reason (C4 = A). */
+const COOKIE_IS_FULL = 'because the cookie that keeps your settings is full.';
+const capital = (text: string) => text.charAt(0).toUpperCase() + text.slice(1);
+/** "{K} set on {its|their} own {was|were} left as {it is|they are}." (S17, S19, and S27's and S28's clause.) */
+const leftAsIs = (left: number) =>
+  `${capital(countInWords(left))} set on ${left === 1 ? 'its' : 'their'} own ${left === 1 ? 'was' : 'were'} left as ${left === 1 ? 'it is' : 'they are'}.`;
+
+/**
+ * The card's own sentences, each checked against the consent-wording research. S4 W2b (npstorey/civic-ai-tools#335):
+ * the taken forms of the owner's rulings of 2026-11-24 (C3 = A, C3-ALL = A, C3-D = C, C4 = A, C6 = B; DR-7 B, DR-8 A,
+ * DR-11 A, with W3 = A's pairs) and of the second sitting (C3-D-H B with N1 (b) and N2 (b); OUTCOME_LINES A; POINTER
+ * (b)), byte for byte; where a form carries a count, the count is the site's (`countInWords`). `asked` is gone: the
+ * step card has no line under its heading (C3-D-H B).
+ */
 export const CONSENT_STEP_TEXT = {
-  heading: (name: string) => `${name} is set to Ask first.`,
-  asked: 'The AI asked to use it for this question. Nothing has been sent to it yet.',
+  /** S146 (N1 (b)): while the hold is open and unanswered, in the prompt, the step card and the row card. Only the name is bold. */
+  waiting: HEADING_WAITING,
+  /** S147 (N2 (b)): the step card's and the row card's heading in every closed state. */
+  closed: HEADING_CLOSED,
+  /** The heading's text, without the bold: the group's accessible name. */
+  heading: (name: string, waiting = true) => {
+    const parts = waiting ? HEADING_WAITING : HEADING_CLOSED;
+    return `${parts.before}${name}${parts.after}`;
+  },
   cannotAsk: 'This question cannot stop to ask you, so it was not used.',
   nextQuestion: 'You can turn it On in Data source settings for your next question.',
-  choices: "Allow: this question is sent to it, and it is turned On for later questions. Don't allow: nothing is sent to it, and it is turned Off for later questions. Allow all data sources: every data source is turned On, and this question goes on without asking again.",
+  /** S104 (C3-D = C): the prompt's short line, in view, at every size. */
+  short: "Enable sends it the AI's searches, now and for later questions. Don't enable sends it nothing and disables it.",
+  /** S105 (C3-D = C): the prompt's closed disclosure, which holds the choices sentence. */
+  whatEachAnswerDoes: 'What each answer does',
+  /** S98: the choices sentence at twelve or fewer configured sources, where the third answer is S96. */
+  choices: "Enable: the AI's searches for this question are sent to it, and it is enabled for later questions. Don't enable: nothing is sent to it, and it is disabled for later questions. Enable all data sources: every data source is enabled, including any you disabled, and this question goes on without asking again.",
+  /** S79: above twelve, for a source alone in its class (the pair only). */
+  choicesAlone: "Enable: the AI's searches for this question are sent to it, and it is enabled for later questions. Don't enable: nothing is sent to it, and it is disabled for later questions.",
+  /** S14 (C6 = B): above twelve, for a source in a class of two or more. */
+  choicesClass: (n: number, phrase: string) =>
+    "Enable: the AI's searches for this question are sent to it, and it is enabled for later questions. Don't enable: nothing is sent to it, and it is disabled for later questions. "
+    + `Enable all ${countInWords(n)} ${phrase}: each is enabled, unless you set it on its own. Don't enable any of the ${countInWords(n)}: each is disabled, unless you set it on its own. `
+    + `After either answer for all ${countInWords(n)}, this question goes on without asking again about the sources it set.`,
+  /** S100: the pair, equal in size and style. */
+  enable: 'Enable',
+  dontEnable: "Don't enable",
+  /** S12 (C6 = B) and S13: the third and fourth answers above twelve, for a class of two or more. */
+  enableClass: (n: number, phrase: string) => `Enable all ${countInWords(n)} ${phrase}`,
+  dontEnableClass: (n: number) => `Don't enable any of the ${countInWords(n)}`,
   change: 'You can change this in Data source settings at any time.',
   wait: 'The question waits up to a minute for your answer.',
   reach: (hosts: readonly string[]) => `It would reach: ${hosts.join(', ')}.`,
-  allowed: 'You chose Allow. It is On now.',
-  /** Allow was saved, and the question uses the source, but its consent could not be turned On (fix round 2, item 2). */
-  allowedNotMoved: 'You chose Allow. This question is sent to it, but it could not be turned On for later questions. You can turn it On in Data source settings.',
-  declined: "You chose Don't allow. Nothing is sent to it, and it is Off now.",
-  /** B4b: after "Allow all data sources". */
-  allowedAll: 'You chose Allow all data sources. Every data source is On now.',
+  /** S112: after Enable, while the question waited. */
+  allowed: 'You chose Enable. It is enabled now.',
+  /** S113: Enable was saved, and the question uses the source, but its setting could not be moved, for any reason but a full cookie. */
+  allowedNotMoved: "You chose Enable. The AI's searches for this question are sent to it. It could not be enabled for later questions. You can enable it in Data source settings.",
+  /** S29 (C4 = A): the same, because the cookie is full. */
+  allowedFull: `You chose Enable. The AI's searches for this question are sent to it. It could not be enabled for later questions, ${COOKIE_IS_FULL}`,
+  /**
+   * After Don't enable while the question waited. Drafted in S4 W2b fix round 1 (the seat's ruling 7239440759) by the
+   * ruled pairs (Don't allow → Don't enable, Off → disabled), for the words check; no taken form (S101, these words,
+   * was dropped with C3 · C).
+   */
+  declined: "You chose Don't enable. Nothing is sent to it, and it is disabled now.",
+  /** S30 (C4 = A): after Don't enable while the question waited, because the cookie is full. */
+  declinedFull: `You chose Don't enable. Nothing is sent to it for this question. It could not be disabled for later questions, ${COOKIE_IS_FULL}`,
+  /** S102 (C3-ALL = A): after "Enable all data sources". */
+  allowedAll: 'You chose Enable all data sources. Every data source is enabled now. A source added later is not enabled until you enable it.',
+  /** S16 and S17: after S12, the class enabled but for `left` set on their own. */
+  classAllowed: (n: number, phrase: string, left: number) =>
+    left === 0
+      ? `You chose Enable all ${countInWords(n)} ${phrase}. They are enabled now.`
+      : `You chose Enable all ${countInWords(n)} ${phrase}. ${capital(countInWords(n - left))} ${n - left === 1 ? 'is' : 'are'} enabled now. ${leftAsIs(left)}`,
+  /** S18 and S19: after S13. */
+  classDeclined: (n: number, phrase: string, left: number) =>
+    left === 0
+      ? `You chose Don't enable any of the ${countInWords(n)}. The ${countInWords(n)} ${phrase} are disabled now, and nothing is sent to them.`
+      : `You chose Don't enable any of the ${countInWords(n)}. ${capital(countInWords(n - left))} of the ${countInWords(n)} ${phrase} are disabled now, and nothing is sent to them. ${leftAsIs(left)}`,
+  /** S27 (C4 = A): after S12, because the cookie is full. */
+  classAllowedFull: (n: number, phrase: string, left: number) =>
+    `You chose Enable all ${countInWords(n)} ${phrase}. The AI's searches for this question can go to ${left === 0 ? 'them' : `${countInWords(n - left)} of them`}. `
+    + `${left === 0 ? '' : `${leftAsIs(left)} `}They could not be enabled for later questions, ${COOKIE_IS_FULL}`,
+  /** S28 (C4 = A): after S13, because the cookie is full. */
+  classDeclinedFull: (n: number, phrase: string, left: number) =>
+    `You chose Don't enable any of the ${countInWords(n)}. Nothing is sent to ${left === 0 ? `the ${countInWords(n)}` : `${countInWords(n - left)} of the ${countInWords(n)}`} ${phrase} for this question. `
+    + `${left === 0 ? '' : `${leftAsIs(left)} `}They could not be disabled for later questions, ${COOKIE_IS_FULL}`,
+  /**
+   * Drafted in S4 W2b fix round 1 (7239440759), for the words check, built as S126 and S158 are: a class answer, or
+   * "Enable all data sources", whose move threw; and "Enable all data sources" refused at the cookie's bound. A class
+   * answer refused at the bound reads S27 or S28. No pointer follows any of them.
+   */
+  classAllowedNotMoved: (n: number, phrase: string) =>
+    `You chose Enable all ${countInWords(n)} ${phrase}, but they could not be enabled. You can enable them in Data source settings.`,
+  classDeclinedNotMoved: (n: number) =>
+    `You chose Don't enable any of the ${countInWords(n)}, but they could not be disabled. You can disable them in Data source settings.`,
+  allowedAllNotMoved: 'You chose Enable all data sources, but they could not be enabled. You can enable them in Data source settings.',
+  allowedAllFull: `You chose Enable all data sources, but they could not be enabled, ${COOKIE_IS_FULL}`,
   /** Item 13: the one pointer, added to an outcome once `change` no longer renders. */
   pointer: 'You can change this in Data source settings.',
   ended: 'The question went on without your answer, so it did not use this source.',
   gone: 'This question is no longer waiting for an answer.',
   decided: 'An answer was already given for this question.',
   failed: 'Your answer could not be saved. You can set this source in Data source settings.',
-  // After the hold (R9 P1, #669 D2): as the research check and the seat ruled them.
+  // After the hold (R9 P1, #669 D2): as the research check and the seat ruled them; renamed by OUTCOME_LINES A.
   stillAnswer: 'You can still answer for later questions.',
-  afterChoices: "Allow: it is turned On for later questions. Don't allow: it is turned Off for later questions.",
-  allowedAfter: 'You chose Allow. It is On for later questions.',
-  allowedAfterNotMoved: 'You chose Allow, but it could not be turned On. You can turn it On in Data source settings.',
-  declinedAfter: "You chose Don't allow. It is Off for later questions.",
+  /** S154. */
+  afterChoices: "Enable: it is enabled for later questions. Don't enable: it is disabled for later questions.",
+  /** S156; the pointer follows it (POINTER (b)). */
+  allowedAfter: 'You chose Enable. It is enabled for later questions.',
+  /** S126[1] and S126[2]: Enable after the hold did not move the setting. */
+  allowedAfterNotMoved: 'You chose Enable, but it could not be enabled. You can enable it in Data source settings.',
+  allowedAfterFull: `You chose Enable, but it could not be enabled, ${COOKIE_IS_FULL}`,
+  /** S157; the pointer follows it only when the setting moved (POINTER (b)). */
+  declinedAfter: "You chose Don't enable. It is disabled for later questions.",
+  /** S158[1] and S158[2]: Don't enable did not move the setting (the move threw, or the cookie is full); no pointer. */
+  declinedNotMoved: "You chose Don't enable, but it could not be disabled. You can disable it in Data source settings.",
+  declinedNotMovedFull: `You chose Don't enable, but it could not be disabled, ${COOKIE_IS_FULL}`,
 } as const;
+
+/**
+ * The outcome after an answer the route accepted, by its decision, whether it came after the hold, and whether the
+ * setting moved (and why not), with S25 after S27 to S30 on a site that keeps consents on accounts (C4 = A). The
+ * readings where two taken forms meet are stated in the phase report: S30 (C4 = A) while the question waits and S158[2]
+ * after the hold for a full cookie; S158[1] on both for a move that threw.
+ */
+export function pauseOutcome(slot: Pick<PendingPause, 'decision' | 'moved' | 'code' | 'group' | 'afterHold'>, accounts: boolean): string | null {
+  const T = CONSENT_STEP_TEXT;
+  const after = slot.afterHold === true;
+  const notMoved = slot.moved === false;
+  const full = notMoved && slot.code === 'consent_cookie_full';
+  const signIn = (text: string) => (accounts ? `${text} ${COOKIE_FULL_TEXT.signIn}` : text);
+  const g = slot.group;
+  switch (slot.decision) {
+    case 'allow':
+      if (!notMoved) return after ? T.allowedAfter : T.allowed;
+      if (full) return after ? T.allowedAfterFull : signIn(T.allowedFull);
+      return after ? T.allowedAfterNotMoved : T.allowedNotMoved;
+    case 'off':
+      if (!notMoved) return after ? T.declinedAfter : T.declined;
+      if (full) return after ? T.declinedNotMovedFull : signIn(T.declinedFull);
+      return T.declinedNotMoved;
+    case 'allow-all':
+      if (!notMoved) return T.allowedAll;
+      return full ? T.allowedAllFull : T.allowedAllNotMoved;
+    case 'allow-class':
+      if (!g) return T.allowed;
+      if (!notMoved) return T.classAllowed(g.n, g.phrase, g.left);
+      return full ? signIn(T.classAllowedFull(g.n, g.phrase, g.left)) : T.classAllowedNotMoved(g.n, g.phrase);
+    case 'off-class':
+      if (!g) return T.declined;
+      if (!notMoved) return T.classDeclined(g.n, g.phrase, g.left);
+      return full ? signIn(T.classDeclinedFull(g.n, g.phrase, g.left)) : T.classDeclinedNotMoved(g.n);
+    default:
+      return null;
+  }
+}
+
+/**
+ * Whether the pointer follows the outcome (item 13, B4b; POINTER (b)): while the question waited, after Don't enable,
+ * "Enable all data sources" and either class answer; after the hold, after Enable (S156) and Don't enable (S157); in
+ * each case only when the setting moved, so it never follows S113, S126, S158 or a cookie-full outcome.
+ */
+export function pauseOutcomePointed(slot: Pick<PendingPause, 'decision' | 'moved' | 'afterHold'>): boolean {
+  if (slot.moved === false || slot.decision === undefined) return false;
+  if (slot.afterHold === true) return slot.decision === 'allow' || slot.decision === 'off';
+  return slot.decision === 'off' || slot.decision === 'allow-all' || slot.decision === 'allow-class' || slot.decision === 'off-class';
+}
 
 /** How every scroll the question surface makes moves: at once when the reader asked for reduced motion. */
 export function preferredScrollBehavior(): ScrollBehavior {
@@ -242,6 +394,86 @@ const ALL_BUTTON: CSSProperties = {
 };
 const PROMPT_ALL_BUTTON: CSSProperties = { ...ALL_BUTTON, padding: '6px 12px', fontSize: '13px' };
 
+/**
+ * The class answers above twelve (C3 = A): S12 and S13 under the pair, in the third button's lighter style, equal in
+ * size, side by side where the width allows and stacked, each the full width, where it does not.
+ */
+const CLASS_ROW: CSSProperties = { display: 'flex', flexWrap: 'wrap', gap: '8px', width: '100%' };
+const CLASS_BUTTON: CSSProperties = { ...ALL_BUTTON, display: 'inline-block', flex: '1 1 240px', width: 'auto' };
+const PROMPT_CLASS_BUTTON: CSSProperties = { ...CLASS_BUTTON, padding: '6px 12px', fontSize: '13px' };
+
+/** The choices sentence for the pause's scope: S98 at twelve or fewer, S14 for a class above twelve, S79 for a source alone. */
+function choicesFor(scope: PauseScope): string {
+  if (scope.kind === 'all') return CONSENT_STEP_TEXT.choices;
+  if (scope.kind === 'class') return CONSENT_STEP_TEXT.choicesClass(scope.n, scope.phrase);
+  return CONSENT_STEP_TEXT.choicesAlone;
+}
+
+/**
+ * The heading (C3-D-H B): S146 while the hold is open and unanswered, S147 in every closed state, the source's name the
+ * only bold run. The group around it is named by the same words without the bold (`CONSENT_STEP_TEXT.heading`).
+ */
+function Heading({ name, waiting, style }: { name: string; waiting: boolean; style: CSSProperties }) {
+  const parts = waiting ? CONSENT_STEP_TEXT.waiting : CONSENT_STEP_TEXT.closed;
+  return (
+    <p data-part="consent-heading" style={style}>
+      {parts.before}
+      <strong style={{ fontWeight: 600 }}>{name}</strong>
+      {parts.after}
+    </p>
+  );
+}
+
+/**
+ * The wider answers while the pause asks (G0-4 = A, C3 = A, C3-ALL = A): "Enable all data sources" (S96) at twelve or
+ * fewer, full width; S12 and S13 for a class above twelve; none for a source alone above twelve.
+ */
+function WiderAnswers({ scope, disabled, onAnswer, compact }: { scope: PauseScope; disabled: boolean; onAnswer: (answer: PauseAnswer) => void; compact: boolean }) {
+  if (scope.kind === 'all') {
+    return (
+      <button type="button" style={compact ? PROMPT_ALL_BUTTON : { ...ALL_BUTTON, margin: '0 0 10px' }} disabled={disabled} onClick={() => onAnswer('allow-all')}>
+        {ALLOW_ALL_SOURCES}
+      </button>
+    );
+  }
+  if (scope.kind === 'class') {
+    const button = compact ? PROMPT_CLASS_BUTTON : CLASS_BUTTON;
+    return (
+      <div data-part="consent-class-answers" style={compact ? CLASS_ROW : { ...CLASS_ROW, margin: '0 0 10px' }}>
+        <button type="button" style={button} disabled={disabled} onClick={() => onAnswer('allow-class')}>
+          {CONSENT_STEP_TEXT.enableClass(scope.n, scope.phrase)}
+        </button>
+        <button type="button" style={button} disabled={disabled} onClick={() => onAnswer('off-class')}>
+          {CONSENT_STEP_TEXT.dontEnableClass(scope.n)}
+        </button>
+      </div>
+    );
+  }
+  return null;
+}
+
+/**
+ * The pause's wider answers depend on how many sources are configured and on the asking source's group (S4 W2b), which
+ * the page's statement says. A page whose consent was not read yet reads it once, as a surface that loads does; until
+ * then, and if it cannot be read, no wider answer is offered (`pauseScope`).
+ */
+function useConfiguredSources(consent: { loaded: boolean; refresh: () => Promise<void> }): void {
+  const { loaded, refresh } = consent;
+  useEffect(() => {
+    if (!loaded) void refresh();
+  }, [loaded, refresh]);
+}
+
+/** A closed disclosure (C3-D = C; design principle 8), in the style of a Settings row's drawer. */
+function Disclosure({ summary, children }: { summary: string; children: ReactNode }) {
+  return (
+    <details style={{ margin: '4px 0 0' }}>
+      <summary style={{ cursor: 'pointer', color: 'var(--text-secondary)' }}>{summary}</summary>
+      {children}
+    </details>
+  );
+}
+
 /** "You can change this in Data source settings…", the pointer's link a client-side one (the page beneath stays mounted). */
 function Pointer({ sentence }: { sentence: string }) {
   const at = sentence.indexOf(SETTINGS_TEXT.link);
@@ -264,6 +496,7 @@ function Pointer({ sentence }: { sentence: string }) {
  */
 export function ConsentPausePrompt() {
   const consent = useSourceConsent({ load: false });
+  useConfiguredSources(consent);
   const open = promptPause(consent.pauses);
   const key = open?.[0];
   const entry = open?.[1];
@@ -278,23 +511,29 @@ export function ConsentPausePrompt() {
     return () => clearTimeout(timer);
   }, [key]);
   if (key === undefined || entry === undefined) return null;
-  const heading = CONSENT_STEP_TEXT.heading(readerSourceName(entry.payload.source));
+  const name = readerSourceName(entry.payload.source);
+  const scope = pauseScope(consent.statement?.sources, entry.payload.source.sourceId);
+  // The prompt shows only while the hold is open and unanswered, so it always heads with S146 (C3-D-H B).
   return (
-    <div data-part="consent-pause-prompt" role="group" aria-label={heading} style={PROMPT}>
-      <p style={{ margin: 0, flex: '1 1 260px' }}>
-        <span style={{ fontWeight: 600, color: 'var(--text-primary)' }}>{heading}</span> {CONSENT_STEP_TEXT.choices} <Pointer sentence={CONSENT_STEP_TEXT.change} />
-      </p>
+    <div data-part="consent-pause-prompt" role="group" aria-label={CONSENT_STEP_TEXT.heading(name, true)} style={PROMPT}>
+      <div style={{ margin: 0, flex: '1 1 260px' }}>
+        <Heading name={name} waiting style={{ margin: 0, color: 'var(--text-primary)' }} />
+        {/* C3-D = C: a short line in view, and what each answer does behind a closed disclosure. */}
+        <p style={{ margin: '2px 0 0' }}>{CONSENT_STEP_TEXT.short}</p>
+        <Disclosure summary={CONSENT_STEP_TEXT.whatEachAnswerDoes}>
+          <p style={{ margin: '2px 0 0' }}>{choicesFor(scope)}</p>
+        </Disclosure>
+        <p style={{ margin: '2px 0 0' }}><Pointer sentence={CONSENT_STEP_TEXT.change} /></p>
+      </div>
       <div style={{ display: 'flex', gap: '8px' }}>
         <button type="button" style={PROMPT_BUTTON} disabled={entry.deciding} onClick={() => { void decideConsentPause(key, 'allow'); }}>
-          Allow
+          {CONSENT_STEP_TEXT.enable}
         </button>
         <button type="button" style={PROMPT_BUTTON} disabled={entry.deciding} onClick={() => { void decideConsentPause(key, 'off'); }}>
-          Don&apos;t allow
+          {CONSENT_STEP_TEXT.dontEnable}
         </button>
       </div>
-      <button type="button" style={PROMPT_ALL_BUTTON} disabled={entry.deciding} onClick={() => { void decideConsentPause(key, 'allow-all'); }}>
-        {ALLOW_ALL_SOURCES}
-      </button>
+      <WiderAnswers scope={scope} compact disabled={entry.deciding} onAnswer={(answer) => { void decideConsentPause(key, answer); }} />
     </div>
   );
 }
@@ -307,6 +546,7 @@ export default function ConsentStep({ pause, runMovedOn = false, place = 'steps'
   place?: 'steps' | 'row';
 }) {
   const consent = useSourceConsent({ load: false });
+  useConfiguredSources(consent);
   // This card's own entry on the bus, by its key: a later pause in the run never takes its answer (fix round 2, item 1).
   const slot = pauseEntry(consent.pauses, pause.key);
   const source = pause.source;
@@ -326,14 +566,11 @@ export default function ConsentStep({ pause, runMovedOn = false, place = 'steps'
   const runEnded = promptHolds && runMovedOn;
   // An answer given while the run waited reads as it always has.
   const answeredInHold = answered && !afterHold;
-  const outcome = runEnded ? CONSENT_STEP_TEXT.gone : slot?.decision === 'allow'
-    ? (slot.moved === false
-      ? (afterHold ? CONSENT_STEP_TEXT.allowedAfterNotMoved : CONSENT_STEP_TEXT.allowedNotMoved)
-      : (afterHold ? CONSENT_STEP_TEXT.allowedAfter : CONSENT_STEP_TEXT.allowed))
-    : slot?.decision === 'off'
-      ? (afterHold ? CONSENT_STEP_TEXT.declinedAfter : CONSENT_STEP_TEXT.declined)
-    : slot?.decision === 'allow-all'
-      ? CONSENT_STEP_TEXT.allowedAll
+  const accounts = consent.status?.accounts === true;
+  const outcome = runEnded
+    ? CONSENT_STEP_TEXT.gone
+    : slot?.decision !== undefined
+      ? pauseOutcome(slot, accounts)
       : slot?.failure === 'gone'
         ? CONSENT_STEP_TEXT.gone
         : slot?.failure === 'decided'
@@ -343,18 +580,20 @@ export default function ConsentStep({ pause, runMovedOn = false, place = 'steps'
             : pause.holds && expired
               ? CONSENT_STEP_TEXT.gone
               : null;
-  // Item 13 and B4b: the pointer follows the Off and Allow-all outcomes given while the question waited.
-  const pointed = !afterHold && (slot?.decision === 'off' || slot?.decision === 'allow-all');
+  // Item 13, B4b and POINTER (b): the pointer follows an outcome whose setting moved (`pauseOutcomePointed`).
+  const pointed = !runEnded && slot !== null && pauseOutcomePointed(slot);
   // The buttons stay while the entry takes an answer. With no entry on the bus (none was reported to this
   // page), the run's own state is all the card has, and they go with the hold, as before R9.
   const waiting = pause.holds && pause.key !== undefined && !answered && !expired && (slot !== null || !holdEnded);
+  // C3-D-H B: S146 only while the hold is open and unanswered; S147 in every closed state.
+  const headingWaits = pause.holds && !runEnded && !holdEnded && !expired && !answered;
+  const scope = pauseScope(consent.statement?.sources, source.sourceId);
   const key = pause.key;
 
   return (
-    <div data-part="consent-step" data-consent-source={source.sourceId} data-consent-place={place} role="group" aria-label={CONSENT_STEP_TEXT.heading(name)} style={promptHolds ? STEP_FRAME : CARD}>
-      <p style={{ margin: '0 0 4px', fontWeight: 600, color: 'var(--text-primary)' }}>{CONSENT_STEP_TEXT.heading(name)}</p>
+    <div data-part="consent-step" data-consent-source={source.sourceId} data-consent-place={place} role="group" aria-label={CONSENT_STEP_TEXT.heading(name, headingWaits)} style={promptHolds ? STEP_FRAME : CARD}>
+      <Heading name={name} waiting={headingWaits} style={{ margin: '0 0 4px', color: 'var(--text-primary)' }} />
       {!pause.holds && <p style={{ margin: '0 0 6px' }}>{CONSENT_STEP_TEXT.cannotAsk}</p>}
-      {pause.holds && !runEnded && ((!holdEnded && !expired) || answeredInHold) && <p style={{ margin: '0 0 6px' }}>{CONSENT_STEP_TEXT.asked}</p>}
       {pause.holds && holdEnded && !answeredInHold && <p data-part="consent-hold-ended" style={{ margin: '0 0 6px' }}>{CONSENT_STEP_TEXT.ended}</p>}
       {!pause.holds && <p style={{ margin: '0 0 6px' }}>{CONSENT_STEP_TEXT.nextQuestion}</p>}
       {promptHolds && !runEnded && <p style={{ margin: '0 0 6px' }}>{CONSENT_STEP_TEXT.wait}</p>}
@@ -366,49 +605,49 @@ export default function ConsentStep({ pause, runMovedOn = false, place = 'steps'
               <p style={{ margin: '2px 0 0' }}>{CONSENT_STEP_TEXT.afterChoices}</p>
             </>
           ) : (
-            <p style={{ margin: '0' }}>{CONSENT_STEP_TEXT.choices}</p>
+            <p style={{ margin: '0' }}>{choicesFor(scope)}</p>
           )}
           <p style={{ margin: '2px 0 0' }}><Pointer sentence={CONSENT_STEP_TEXT.change} /></p>
           {!holdEnded && <p style={{ margin: '2px 0 0' }}>{CONSENT_STEP_TEXT.wait}</p>}
           <div style={{ display: 'flex', gap: '12px', flexWrap: 'wrap', margin: '8px 0 8px' }}>
             <button type="button" style={BUTTON} disabled={slot?.deciding === true} onClick={() => { void decideConsentPause(key, 'allow'); }}>
-              Allow
+              {CONSENT_STEP_TEXT.enable}
             </button>
             <button type="button" style={BUTTON} disabled={slot?.deciding === true} onClick={() => { void decideConsentPause(key, 'off'); }}>
-              Don&apos;t allow
+              {CONSENT_STEP_TEXT.dontEnable}
             </button>
           </div>
-          {/* While the pause asks only (ruled W2): after the hold the run has moved on. */}
-          {!holdEnded && (
-            <button type="button" style={{ ...ALL_BUTTON, margin: '0 0 10px' }} disabled={slot?.deciding === true} onClick={() => { void decideConsentPause(key, 'allow-all'); }}>
-              {ALLOW_ALL_SOURCES}
-            </button>
-          )}
+          {/* While the pause asks only (ruled W2): after the hold the run has moved on, and there is no class answer (C3). */}
+          {!holdEnded && <WiderAnswers scope={scope} compact={false} disabled={slot?.deciding === true} onAnswer={(answer) => { void decideConsentPause(key, answer); }} />}
         </>
       )}
-      {lines.what !== null && <div>{lines.what.charAt(0).toUpperCase() + lines.what.slice(1)}</div>}
-      <div>
-        {lines.reach.map((part, i) =>
-          typeof part === 'string' ? (
-            part
-          ) : (
-            <a key={i} href={part.link} target="_blank" rel="noopener noreferrer">
-              {part.text}
-            </a>
-          ),
-        )}
-      </div>
-      <div>
-        Who holds its logs: <KeptByLines keptBy={source.recipients.flatMap((r) => r.keptBy)} retention />.
-      </div>
-      {/* An addressed source's address is the "running at" line above; this line names only the hosts beyond it. */}
-      {pause.outbound.length > 0 && <div>{CONSENT_STEP_TEXT.reach(pause.outbound)}</div>}
-      <div>
-        <a href={pause.links.privacy}>{PANEL_PRIVACY_LINK}</a>
-      </div>
-      <div>
-        <LocalOnlyOffer statement={linksOnly} />
-      </div>
+      {/* C3-D = C: the source's facts behind one closed disclosure, S103. In a Settings or picker row the row's own
+          "More about this source" holds them, so the row's card carries none (fix round 1, 7239440759). */}
+      {place !== 'row' && <Disclosure summary={PANEL_ROW_MORE}>
+        {lines.what !== null && <div>{lines.what.charAt(0).toUpperCase() + lines.what.slice(1)}</div>}
+        <div>
+          {lines.reach.map((part, i) =>
+            typeof part === 'string' ? (
+              part
+            ) : (
+              <a key={i} href={part.link} target="_blank" rel="noopener noreferrer">
+                {part.text}
+              </a>
+            ),
+          )}
+        </div>
+        <div>
+          Who holds its logs: <KeptByLines keptBy={source.recipients.flatMap((r) => r.keptBy)} retention />.
+        </div>
+        {/* An addressed source's address is the "running at" line above; this line names only the hosts beyond it. */}
+        {pause.outbound.length > 0 && <div>{CONSENT_STEP_TEXT.reach(pause.outbound)}</div>}
+        <div>
+          <a href={pause.links.privacy}>{PANEL_PRIVACY_LINK}</a>
+        </div>
+        <div>
+          <LocalOnlyOffer statement={linksOnly} />
+        </div>
+      </Disclosure>}
       {outcome !== null && (
         <p data-part="consent-outcome" style={{ margin: '6px 0 0', fontWeight: 600, color: 'var(--text-primary)' }}>
           {outcome}

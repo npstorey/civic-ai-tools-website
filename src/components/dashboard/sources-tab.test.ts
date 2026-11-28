@@ -42,6 +42,7 @@ import {
   mount,
   registerSurfaceHooks,
   sessions,
+  stateControl,
   textOf,
   type HostElement,
   type Surface,
@@ -129,16 +130,9 @@ async function sourcesTab(): Promise<{ tab: Surface; net: ReturnType<typeof answ
   return { tab, net, statement };
 }
 
-/** The value of the checked radio in a row, or undefined. */
+/** The state a row's control draws (S4 W2a: its pressed button, `ask-first` for neither). */
 function checkedIn(row: HostElement): unknown {
-  const walk = (node: unknown): unknown => {
-    if (Array.isArray(node)) { for (const c of node) { const v = walk(c); if (v !== undefined) return v; } return undefined; }
-    if (node === null || typeof node !== 'object' || !('props' in (node as object))) return undefined;
-    const el = node as HostElement;
-    if (el.type === 'input' && el.props.type === 'radio' && el.props.checked === true) return el.props.value;
-    return walk((el.props as { children?: unknown }).children);
-  };
-  return walk(row.props.children);
+  return stateControl(row).shown;
 }
 
 // --- UX-2 P4b, criterion 1: the dashboard's Sources tab is a pointer -----------------------------
@@ -154,7 +148,7 @@ test('UX-2 P4b criterion 1: the Sources tab renders X22d\'s sentence and its lin
   const links = tab.elements().filter((el) => el.type === 'a' && el.props.href === '/settings');
   assert.equal(links.length, 1, 'the tab has no one link to /settings');
   assert.equal(textOf(links[0]), 'Data source settings', 'the tab\'s link does not read "Data source settings"');
-  assert.deepEqual(tab.elements().filter((el) => el.props.role === 'radiogroup' || (el.type === 'input' && el.props.type === 'radio')).map((el) => el.type), [], 'the tab still renders a control');
+  assert.deepEqual(tab.elements().filter((el) => el.props.role === 'radiogroup' || el.props['data-part'] === 'enable-disable' || (el.type === 'input' && el.props.type === 'radio')).map((el) => el.type), [], 'the tab still renders a control');
   assert.ok(!text.includes('Given on') && !text.includes('as it stood on'), 'the tab still renders the dates');
   assert.equal(tab.elements().filter((el) => el.type === 'button' && /withdraw/i.test(textOf(el))).length, 0, 'the tab still offers "Withdraw consent"');
   assert.equal(tab.elements().filter((el) => typeof el.props['data-notice'] === 'string').length, 0, 'the tab still renders a notice');

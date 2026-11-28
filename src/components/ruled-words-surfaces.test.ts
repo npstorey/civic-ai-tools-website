@@ -406,13 +406,15 @@ const { buildFlowsStatement, statementHash } = await load('lib/flows/statement.t
 const wordsStatement = await buildFlowsStatement();
 const WORDS_IDS: string[] = wordsStatement.sources.map((s: { sourceId: string }) => s.sourceId);
 
+// Moved by S4 W2b (npstorey/civic-ai-tools#335): the Standard forms and the shared line take S87; the Sandbox forms have
+// no taken form and keep their words.
 const WHERE = {
-  standardOne: 'Where your question goes: the model service and 1 data source · Select sources',
-  standardAll: `Where your question goes: the model service and ${WORDS_IDS.length} data sources · Select sources`,
+  standardOne: "Where your question goes: the AI provider; the AI's searches go to 1 data source · Select sources",
+  standardAll: `Where your question goes: the AI provider; the AI's searches go to ${WORDS_IDS.length} data sources · Select sources`,
   sandboxOne: 'Where your question goes: the model service, the notebook runner and 1 data source · Select sources',
-  standardAsk: 'Where your question goes: the model service; data sources ask first · Select sources',
+  standardAsk: "Where your question goes: the AI provider; the AI's searches go to data sources you enable · Select sources",
   sandboxAsk: 'Where your question goes: the model service and the notebook runner; data sources ask first · Select sources',
-  everyOff: 'Where your question goes: nowhere; every data source is Off · Select sources',
+  everyOff: 'Where your question goes: nowhere; every data source is disabled · Select sources',
 };
 const P3B_SIGN_IN_LINE = 'Sign in for more features and usage.';
 
@@ -511,7 +513,7 @@ test('P3b-1 criterion 11 (W7; addendum 1, section 4): no word in src/components/
 // out here from the contract's Words table, byte for byte; Compare's "On" / "Off" are pending the words check
 // (criterion 13) and are not read here. At P3b-2's base there is no harness menu and no CA-1a line.
 
-const CA_1A = 'Where your question goes: nowhere; no data source is On · Select sources';
+const CA_1A = 'Where your question goes: nowhere; no data source is enabled · Select sources'; // moved by S4 W2b: S87[3]
 const MENU_WORDS = {
   trigger: 'Default harness',
   heading: 'Harness · Civic AI harness v1',
@@ -519,8 +521,9 @@ const MENU_WORDS = {
   values: ['Fixture model', 'Auto', 'Sandbox'],
   // S3-B W1 (npstorey/civic-ai-tools#318; B13, D8 = B, D9 = A): the in-loop form offers "Only the ones I pick" with S1;
   // the all-sources form's reason is D8's. The earlier reasons left with the commit that enabled the option.
-  inLoop: ['Auto - find sources for me', 'The model chooses which data sources to use, from those you set On or Ask first.', 'Only the ones I pick', 'You search for data sources and pick the ones this question can use. The model uses no others.', 'All data sources and your consent'],
-  allSources: ['Auto - use every source I set On', 'Every data source you set On is given to the model from the start. Sources set to Ask first are not used.', 'Only the ones I pick', 'Not offered on this site. Every data source you set On is given to the model.', 'All data sources and your consent'],
+  // S4 W2a (npstorey/civic-ai-tools#335): S110, and S115 to S117, the words W2 uses ("Seen and not carded" item 6).
+  inLoop: ['Auto - find sources for me', 'The AI chooses which data sources to use, from those you have not disabled. The site asks before it uses one not answered yet.', 'Only the ones I pick', 'You search for data sources and pick the ones this question can use. The model uses no others.', 'All data sources and your consent'],
+  allSources: ['Auto - use every enabled source', 'The AI can use every enabled data source. A source not enabled is not used.', 'Only the ones I pick', 'Not offered on this site. Every enabled data source is given to the AI.', 'All data sources and your consent'],
   session: ['Standard', 'Sandbox', 'Generates and executes a Jupyter notebook against live data. Typically 30 to 90 seconds. The notebook and a cryptographic execution record are signed by this site.'],
   compareReason: 'Not offered in a Sandbox session. Switch Session type to Standard to compare.',
   signedOut: ['Sign in to choose a model.', 'Sign in for more options'],

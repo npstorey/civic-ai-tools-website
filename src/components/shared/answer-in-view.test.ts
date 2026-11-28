@@ -67,9 +67,10 @@ process.env.EXECUTOR_DRIVER = 'vercel-sandbox';
 /** D6 = A, D7 = A: the one new sentence (G0, OA-1101). */
 const READY = 'The answer to your question is ready.';
 /** D8 = A reads out the card's own sentences (`CONSENT_STEP_TEXT`), as they stand at the base. */
-const ALLOWED = 'You chose Allow. It is On now.';
-const DECLINED = "You chose Don't allow. Nothing is sent to it, and it is Off now.";
-const ALLOWED_ALL = 'You chose Allow all data sources. Every data source is On now.';
+// Moved by S4 W2b (npstorey/civic-ai-tools#335): S112 and S102; `declined` has no taken form and keeps its words.
+const ALLOWED = 'You chose Enable. It is enabled now.';
+const DECLINED = "You chose Don't enable. Nothing is sent to it, and it is disabled now."; // moved by S4 W2b fix round 1 (drafted)
+const ALLOWED_ALL = 'You chose Enable all data sources. Every data source is enabled now. A source added later is not enabled until you enable it.';
 
 // --- A document answered from the page's own elements ---------------------------------------------------------------
 
@@ -563,10 +564,11 @@ function promptButton(surface: Surface, label: string): HostElement {
 }
 
 for (const [label, decision, sentence, path] of [
-  ['Allow', 'allow', ALLOWED, 'notebook'],
-  ["Don't allow", 'off', DECLINED, 'notebook'],
-  ['Allow all data sources', 'allow-all', ALLOWED_ALL, 'notebook'],
-  ['Allow', 'allow', ALLOWED, 'chat'],
+  // Moved by S4 W2b: the answers read S100 and S96.
+  ['Enable', 'allow', ALLOWED, 'notebook'],
+  ["Don't enable", 'off', DECLINED, 'notebook'],
+  ['Enable all data sources', 'allow-all', ALLOWED_ALL, 'notebook'],
+  ['Enable', 'allow', ALLOWED, 'chat'],
 ] as const) {
   test(`D8, the ${path} path: after ${label} at the prompt, a polite live region holds the card's own outcome sentence, word for word`, async () => {
     if (path === 'notebook') SIGNED_IN();

@@ -118,15 +118,18 @@ const W = {
   auto: 'Auto',
   inLoop: {
     label: 'Auto - find sources for me',
-    desc: 'The model chooses which data sources to use, from those you set On or Ask first.',
+    // S4 W2a (npstorey/civic-ai-tools#335): S110, the words W2 uses ("Seen and not carded" item 6, W3 = A's pair applied).
+    desc: 'The AI chooses which data sources to use, from those you have not disabled. The site asks before it uses one not answered yet.',
     // S3-B W1 (B13): the in-loop form's reason left with the commit that enabled the option; S1 describes it there.
     pickDesc: 'You search for data sources and pick the ones this question can use. The model uses no others.',
   },
   allSources: {
-    label: 'Auto - use every source I set On',
-    desc: 'Every data source you set On is given to the model from the start. Sources set to Ask first are not used.',
-    // S3-B W1: D8 = B's words for the reason (B13 removed the earlier "… yet." with the commit that enabled the option).
-    reason: 'Not offered on this site. Every data source you set On is given to the model.',
+    // S4 W2a: S115 and S116, the words W2 uses.
+    label: 'Auto - use every enabled source',
+    desc: 'The AI can use every enabled data source. A source not enabled is not used.',
+    // S3-B W1: D8 = B's place for the reason (B13 removed the earlier "… yet." with the commit that enabled the option);
+    // S4 W2a: S117's words.
+    reason: 'Not offered on this site. Every enabled data source is given to the AI.',
   },
   pick: 'Only the ones I pick',
   footer: 'All data sources and your consent',
@@ -311,7 +314,8 @@ async function ask(page: Surface, question: string): Promise<void> {
 }
 const whereLine = (page: Surface): string[] => page.elements().filter((el) => part(el) === 'where-this-question-goes').map((el) => textOf(el));
 const WHERE = {
-  standardOne: 'Where your question goes: the model service and 1 data source · Select sources',
+  // Moved by S4 W2b (npstorey/civic-ai-tools#335): S87's Standard form; the Sandbox form has no taken form and keeps its words.
+  standardOne: "Where your question goes: the AI provider; the AI's searches go to 1 data source · Select sources",
   sandboxOne: 'Where your question goes: the model service, the notebook runner and 1 data source · Select sources',
 };
 const oneOn = (): Record<string, string> => Object.fromEntries(IDS.map((id, i) => [id, i === 0 ? 'on' : 'off']));

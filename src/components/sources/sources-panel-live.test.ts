@@ -57,6 +57,7 @@ import {
   readableText,
   registerSurfaceHooks,
   sessions,
+  stateControl,
   textOf,
   type HostElement,
   type Surface,
@@ -197,22 +198,21 @@ function rowOf(surface: Surface, id: string): HostElement {
   return rows[0];
 }
 
-const radiosOf = (surface: Surface, id: string): HostElement[] =>
-  [...within(rowOf(surface, id))].filter((el) => el.type === 'input' && el.props.type === 'radio');
+/** A row's two buttons (S4 W2a: Enable and Disable, the set one pressed). */
+const buttonsOf = (surface: Surface, id: string): HostElement[] => {
+  const control = stateControl(rowOf(surface, id));
+  return [control.enable, control.disable];
+};
 
-function radio(surface: Surface, id: string, value: string): HostElement {
-  const found = radiosOf(surface, id).filter((el) => el.props.value === value);
-  assert.equal(found.length, 1, `${id} has no ${value} choice`);
-  return found[0];
+/** The button that sets `value` on a row (S4 W2a: Enable for On, Disable for Off). */
+function radio(surface: Surface, id: string, value: 'on' | 'off'): HostElement {
+  const control = stateControl(rowOf(surface, id));
+  return value === 'on' ? control.enable : control.disable;
 }
 
-/** The state each row shows checked, by source id. */
+/** The state each row shows, by source id: its pressed button, `ask-first` for neither. */
 function shown(surface: Surface, ids: string[]): Record<string, string> {
-  return Object.fromEntries(ids.map((id) => {
-    const checked = radiosOf(surface, id).filter((el) => el.props.checked === true);
-    assert.equal(checked.length, 1, `${id} shows ${checked.length} choices checked`);
-    return [id, String(checked[0].props.value)];
-  }));
+  return Object.fromEntries(ids.map((id) => [id, stateControl(rowOf(surface, id)).shown]));
 }
 
 /** What a reader sees with every row closed: each `<details>` keeps its `<summary>` only. */
@@ -251,14 +251,14 @@ test('criterion 1 (home, signed out): before a consent a change is kept, not wri
   const page = await mount(h('div', null, h(Home), h(SettingsOverlay, { mount: 'intercepted' })));
   assert.deepEqual(shown(page, SIX), status.defaults, 'premise: before a change the panel shows the defaults');
 
-  // The radios are live.
+  // The buttons are live.
   for (const id of SIX) {
-    for (const r of radiosOf(page, id)) assert.equal(r.props.disabled, false, `${id}'s ${r.props.value} radio is disabled before a consent`);
+    for (const b of buttonsOf(page, id)) assert.equal(b.props.disabled, false, `${id}'s ${textOf(b)} button is disabled before a consent`);
   }
 
   // Two changes: an On source to Off, an Ask first source to On. Nothing is written.
-  await page.check(radio(page, 'data-commons', 'off'));
-  await page.check(radio(page, 'nyc-checkbook', 'on'));
+  await page.click(radio(page, 'data-commons', 'off'));
+  await page.click(radio(page, 'nyc-checkbook', 'on'));
   assert.deepEqual(consentWrites(net.sent).map((r) => `${r.method} ${r.path}`), [], 'a change before a consent wrote something');
   assert.deepEqual(net.sent.filter((r) => r.method !== 'GET').map((r) => `${r.method} ${r.path}`), [], 'a change before a consent sent a request that is not a read');
   const expected = { ...status.defaults, 'data-commons': 'off', 'nyc-checkbook': 'on' };
@@ -294,13 +294,14 @@ test('criterion 1 (home, signed out): before a consent a change is kept, not wri
   assert.equal(leadOf(page), '', 'after Allow the overlay still shows the before-consent lead');
   assert.deepEqual([...within(section(page))].filter((el) => el.props.role === 'status').map((el) => textOf(el)), [], 'after Allow a pending change is confirmed as if it had been written on its own');
 
-  // With a consent in force a change writes at once, as before.
+  // With a consent in force a change writes at once, as before (S4 W2a: Disable on Socrata, which Allow wrote On;
+  // the control has no way back to Ask first, DR-8 A).
   net.clear();
-  await page.check(radio(page, 'socrata', 'ask-first'));
+  await page.click(radio(page, 'socrata', 'off'));
   const now = consentWrites(net.sent);
   assert.deepEqual(now.map((r) => r.method), ['PUT'], 'with a consent in force a change did not write at once');
   // S4 W1 (npstorey/civic-ai-tools#335): one source's change, which the endpoint applies and marks set on its own.
-  assert.deepEqual((JSON.parse(now[0].body) as { change: Record<string, string> }).change, { scope: 'source', sourceId: 'socrata', state: 'ask-first' });
+  assert.deepEqual((JSON.parse(now[0].body) as { change: Record<string, string> }).change, { scope: 'source', sourceId: 'socrata', state: 'off' });
   page.unmount();
   } finally {
     reading = 'panel';
@@ -310,17 +311,19 @@ test('criterion 1 (home, signed out): before a consent a change is kept, not wri
 // --- Criterion 2: the lead before a consent counts what Allow will use -------------------------------
 
 const LEAD_END = ' Set them now, or change them after you allow.';
+// Moved by S4 W2a fix round 1 (item 3): every lead below names its states by the ruled pairs (On to enabled, Ask first
+// to "not answered yet", Off to disabled); the card's Allow keeps its word.
 
 test('criterion 2: the lead before a consent counts the six defaults and follows a change (the in-force lead after Allow is read in criterion 1)', async () => {
   configure('six');
   ANON();
   answers();
   const page = await mount(h(Panel));
-  assert.equal(leadOf(page), `These are the settings Allow will use: four sources On, two Ask first.${LEAD_END}`);
-  await page.check(radio(page, 'socrata', 'off'));
-  assert.equal(leadOf(page), `These are the settings Allow will use: three sources On, two Ask first, one Off.${LEAD_END}`, 'the lead does not follow the panel');
-  await page.check(radio(page, 'socrata', 'on'));
-  assert.equal(leadOf(page), `These are the settings Allow will use: four sources On, two Ask first.${LEAD_END}`);
+  assert.equal(leadOf(page), `These are the settings Allow will use: four sources enabled, two not answered yet.${LEAD_END}`);
+  await page.click(radio(page, 'socrata', 'off'));
+  assert.equal(leadOf(page), `These are the settings Allow will use: three sources enabled, two not answered yet, one disabled.${LEAD_END}`, 'the lead does not follow the panel');
+  await page.click(radio(page, 'socrata', 'on'));
+  assert.equal(leadOf(page), `These are the settings Allow will use: four sources enabled, two not answered yet.${LEAD_END}`);
   await endPending(page);
 });
 
@@ -330,7 +333,7 @@ test('criterion 2: the lead at the three fixture sources, all On by default', as
   answers();
   const page = await mount(h(Panel));
   assert.deepEqual(shown(page, THREE), { socrata: 'on', 'data-commons': 'on', 'nyc-charter': 'on' }, 'premise: the three default On');
-  assert.equal(leadOf(page), `These are the settings Allow will use: four sources On.${LEAD_END}`);
+  assert.equal(leadOf(page), `These are the settings Allow will use: four sources enabled.${LEAD_END}`);
   page.unmount();
 });
 
@@ -340,10 +343,10 @@ test('criterion 2: the lead at a configuration with a source Off by default, one
   answers({ socrata: 'on', 'data-commons': 'ask-first', 'nyc-charter': 'off' });
   const page = await mount(h(Panel));
   assert.deepEqual(shown(page, THREE), { socrata: 'on', 'data-commons': 'ask-first', 'nyc-charter': 'off' }, 'premise: the stubbed defaults are shown');
-  assert.equal(leadOf(page), `These are the settings Allow will use: one source On, two Ask first, one Off.${LEAD_END}`);
+  assert.equal(leadOf(page), `These are the settings Allow will use: one source enabled, two not answered yet, one disabled.${LEAD_END}`);
   // With no source On, the first group named carries the noun.
-  await page.check(radio(page, 'socrata', 'off'));
-  assert.equal(leadOf(page), `These are the settings Allow will use: two sources Ask first, two Off.${LEAD_END}`);
+  await page.click(radio(page, 'socrata', 'off'));
+  assert.equal(leadOf(page), `These are the settings Allow will use: two sources not answered yet, two disabled.${LEAD_END}`);
   await endPending(page);
 });
 
@@ -365,15 +368,11 @@ for (const config of ['three', 'six'] as const) {
       // The first three: the name, the what-line, the control.
       assert.equal(textOf(children[0]), NAME[id], `${id}'s row does not open with its name`);
       assert.ok(/^[A-Z]/.test(textOf(children[1])) && !/^This site reaches it/.test(textOf(children[1])), `${id}'s second line is not its what-line: ${textOf(children[1])}`);
-      assert.equal(children[2].props.role, 'radiogroup', `${id}'s third element is not its control`);
-      // The control, byte for byte as at the base.
-      assert.equal(children[2].props['aria-label'], `${NAME[id]}: On, Ask first or Off`, `${id}'s control's accessible name moved`);
-      // Since UX-2 P4b each mounted control is its own group, named `source-state-<id>-<mount id>`: the pin is
-      // one shared name per group, beginning `source-state-<id>-`, with the types and values as at the base.
-      const group = radiosOf(page, id);
-      assert.deepEqual(group.map((r) => [r.props.type, r.props.value]), [['radio', 'on'], ['radio', 'ask-first'], ['radio', 'off']], `${id}'s radios moved`);
-      assert.equal(new Set(group.map((r) => r.props.name)).size, 1, `${id}'s radios do not share one name`);
-      assert.ok(String(group[0].props.name).startsWith(`source-state-${id}-`), `${id}'s group name ${String(group[0].props.name)} does not begin source-state-${id}-`);
+      assert.equal(children[2].props.role, 'group', `${id}'s third element is not its control`);
+      // The control (S4 W2a: S118's name; S109's two buttons, P-1 = A).
+      assert.equal(children[2].props['aria-label'], `${NAME[id]}: Enable or Disable`, `${id}'s control's accessible name moved`);
+      const group = buttonsOf(page, id);
+      assert.deepEqual(group.map((b) => [b.type, textOf(b)]), [['button', 'Enable'], ['button', 'Disable']], `${id}'s buttons moved`);
       // The drawer.
       const drawers = [...within(row)].filter((el) => el.type === 'details');
       assert.equal(drawers.length, 1, `${id}'s row has ${drawers.length} drawers`);

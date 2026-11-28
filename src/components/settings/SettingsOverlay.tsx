@@ -22,14 +22,18 @@
  * line the dashboard's Sources tab carried, moved verbatim (M7); the search
  * (item 17) with its count (item 24) and empty line (item 22); one row per
  * configured source, the Sources panel's own (`SourceRow`), with its pause
- * card while a question waits on that source; the local-only offer; the
+ * card while a question waits on that source, listed by group (S4 W2a,
+ * npstorey/civic-ai-tools#335: `SourceGroups`, each group's head with its
+ * count and one control; a search lists the matching rows flat), under
+ * "Enable all data sources" (C3-ALL = A); the local-only offer; the
  * privacy link; and "Withdraw consent" whenever a consent is in force, signed
  * in or out, as the panel offers it (item 40's one withdraw sentence points
  * every reader here). Before a consent the controls are live and hold pending
  * states, as the panel's do (R9 P2).
  *
- * ABOUT THESE SETTINGS (items 6-7). `PANEL_LEAD`, item 43's words for this
- * instance (new constants; `KEPT_*` stay the privacy page's), the privacy link.
+ * ABOUT THESE SETTINGS (items 6-7). `PANEL_LEAD`, then S11 (S4 W2a, C2 = B),
+ * item 43's words for this instance (new constants; `KEPT_*` stay the
+ * privacy page's), the privacy link.
  */
 
 import { useEffect, useRef, useState, useSyncExternalStore } from 'react';
@@ -38,10 +42,23 @@ import { Dialog } from '@/components/ui/Dialog';
 import { Tabs } from '@/components/ui/Tabs';
 import ConsentNotices from '@/components/sources/ConsentNotices';
 import LocalOnlyOffer from '@/components/sources/LocalOnlyOffer';
+import SourceGroups from '@/components/sources/SourceGroups';
 import SourceRow from '@/components/sources/SourceRow';
-import type { ConfirmedChange, SourceStateControlProps } from '@/components/sources/SourceStateControl';
-import { panelStates, useSourceConsent, type SourceStateValue } from '@/components/sources/useSourceConsent';
-import { PANEL_KEPT_ON_ACCOUNT, PANEL_LEAD, PANEL_PRIVACY_LINK, SETTINGS_TEXT, panelLeadBeforeConsent, sourcesShownLine } from '@/lib/sources/copy';
+import { groupOutcome, refusedLine, type ConfirmedChange, type SourceStateControlProps } from '@/components/sources/SourceStateControl';
+import { ownSources, panelStates, useSourceConsent, type SourceStateValue } from '@/components/sources/useSourceConsent';
+import type { FlowsSource } from '@/lib/flows/statement';
+import {
+  ABOUT_SET_ON_ITS_OWN,
+  ENABLE_ALL_SOURCES,
+  PANEL_KEPT_ON_ACCOUNT,
+  PANEL_LEAD,
+  PANEL_PRIVACY_LINK,
+  SETTINGS_TEXT,
+  enableAllDoneLine,
+  panelLeadBeforeConsent,
+  sourcesShownLine,
+} from '@/lib/sources/copy';
+import { groupOf, readerBlocks } from '@/lib/sources/reader-groups';
 import { readerSourceName, sourceRowLines } from '@/lib/sources/source-name';
 import { matchingSources } from '@/lib/sources/source-search';
 import { useHostLinks } from '@/components/HostLinksProvider';
@@ -90,6 +107,27 @@ function DataSources() {
   const [confirmed, setConfirmed] = useState<ConfirmedChange>(null);
   const searchable = sources.map((source) => ({ sourceId: source.sourceId, name: readerSourceName(source), what: sourceRowLines(source).what, source }));
   const shown = matchingSources(searchable, query);
+  // S4 W2a: the groups, the sources set on their own (the mark), and one row builder for the groups and the search.
+  const blocks = readerBlocks(sources);
+  const grouped = new Set(blocks.flatMap((block) => (block.kind === 'group' ? block.members.map((m) => m.sourceId) : [])));
+  const own = ownSources(consent);
+  const allConfirmed = confirmed !== null && 'group' in confirmed && confirmed.group === 'all' ? confirmed : null;
+  const row = (source: FlowsSource, marked: boolean) => {
+    const control: SourceStateControlProps = {
+      sourceId: source.sourceId,
+      name: readerSourceName(source),
+      state: states[source.sourceId] ?? 'ask-first',
+      since: status?.states?.[source.sourceId]?.since,
+      inForce,
+      writing: consent.writing,
+      setState: consent.setState,
+      confirmed,
+      setConfirmed,
+      // The consent's own date line above carries the date (as the dashboard's tab did).
+      sinceLine: false,
+    };
+    return <SourceRow key={source.sourceId} source={source} control={control} consent={consent} marked={marked} />;
+  };
   const lead = inForce ? '' : panelLeadBeforeConsent({ on: count('on'), askFirst: count('ask-first'), off: count('off') });
   // "Ask with this source" lands here as `/settings?source=<id>` (UX-2 P6 + P10, item 7; 0d item 9). The list marks the
   // row it was opened for (`data-target-source`) and brings that row into view inside the dialog's own scroller. An id
@@ -130,8 +168,9 @@ function DataSources() {
     // landing reads the address again here and lands only when it still names the source the render read.
     if (readAddressSource() !== targetSource) return;
     // A quoted attribute value: only a backslash and a double quote need escaping (the id is one the statement lists).
+    // S4 W2a: a row in a group sits in the group's own list under the marked one, so the row is any descendant.
     const id = targetSource.replace(/["\\]/g, '\\$&');
-    const row = document.querySelector<HTMLElement>(`ul[data-target-source="${id}"] > li[data-source="${id}"]`);
+    const row = document.querySelector<HTMLElement>(`ul[data-target-source="${id}"] li[data-source="${id}"]`);
     if (!row) return;
     broughtIntoView.current = targetSource;
     row.setAttribute('data-landing-target', '');
@@ -165,6 +204,24 @@ function DataSources() {
           {` It refers to the statement of where a question can go as it stood on ${status?.consentedFlowsDate ? dateInWords(status.consentedFlowsDate) : 'a date not recorded'} (version ${status?.consentedBaseVersion?.slice(0, 8) ?? 'not recorded'}).`}
         </p>
       )}
+      {/* S4 W2a (C3-ALL = A): "Enable all data sources" above the rows, and S97 after a write that succeeded. */}
+      <div data-part="enable-all" style={{ margin: '0 0 10px' }}>
+        <button
+          type="button"
+          className="source-enable-all"
+          disabled={consent.writing || ids.length === 0}
+          onClick={() => {
+            setConfirmed(null);
+            const writes = inForce;
+            void consent.enableAll().then((ok) => {
+              if (writes) setConfirmed(groupOutcome(ok, 'all', enableAllDoneLine(ids.length)));
+            });
+          }}
+        >
+          {ENABLE_ALL_SOURCES}
+        </button>
+        {allConfirmed && <div role="status" data-part="enable-all-done">{'refused' in allConfirmed ? refusedLine(allConfirmed.accounts) : allConfirmed.line}</div>}
+      </div>
       <input
         type="search"
         aria-label={SETTINGS_TEXT.search}
@@ -183,24 +240,22 @@ function DataSources() {
           why, and how to read it again (opening Settings reads it, `useSourceConsent`'s mount). */}
       {consent.loaded && statement === null ? (
         <p data-part="sources-not-loaded" style={MUTED}>{SETTINGS_TEXT.notLoaded}</p>
+      ) : query.trim() === '' ? (
+        // S4 W2a (B1): the sources by group; a search lists the matching rows flat, each with its mark.
+        <SourceGroups
+          sources={sources}
+          states={states}
+          own={own}
+          consent={consent}
+          confirmed={confirmed}
+          setConfirmed={setConfirmed}
+          renderRow={row}
+          openGroup={targetSource === null ? null : groupOf(blocks, targetSource)?.classId ?? null}
+          listProps={{ 'data-target-source': targetSource ?? undefined }}
+        />
       ) : (
         <ul data-target-source={targetSource ?? undefined} style={{ listStyle: 'none', margin: '0 0 10px', padding: 0, fontSize: '13px', color: 'var(--text-secondary)' }}>
-          {shown.map(({ source, name }) => {
-            const control: SourceStateControlProps = {
-              sourceId: source.sourceId,
-              name,
-              state: states[source.sourceId] ?? 'ask-first',
-              since: status?.states?.[source.sourceId]?.since,
-              inForce,
-              writing: consent.writing,
-              setState: consent.setState,
-              confirmed,
-              setConfirmed,
-              // The consent's own date line above carries the date (as the dashboard's tab did).
-              sinceLine: false,
-            };
-            return <SourceRow key={source.sourceId} source={source} control={control} consent={consent} />;
-          })}
+          {shown.map(({ source }) => row(source, grouped.has(source.sourceId) && own.has(source.sourceId)))}
         </ul>
       )}
       <p style={MUTED}>
@@ -234,6 +289,8 @@ function About() {
   return (
     <div style={{ fontSize: '14px', lineHeight: 1.6, color: 'var(--text-primary)' }}>
       <p style={PARA}>{PANEL_LEAD}</p>
+      {/* S4 W2a (C2 = B): S11, one sentence after the tab's first. */}
+      <p style={PARA}>{ABOUT_SET_ON_ITS_OWN}</p>
       <p style={PARA}>{accounts ? SETTINGS_TEXT.aboutKeptWithAccounts : SETTINGS_TEXT.aboutKeptWithoutAccounts}</p>
       {/* UX-2 P3b-2 (2F; Q2 = A, Q8 = A; C2 = A): the harness sentence, here only, and the link the gear's region carried. */}
       <p style={PARA}>{HARNESS_SENTENCE}</p>

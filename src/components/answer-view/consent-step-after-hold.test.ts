@@ -49,6 +49,7 @@ import {
   mount,
   registerSurfaceHooks,
   sessions,
+  stateControl,
   textOf,
   type HostElement,
   type Surface,
@@ -106,17 +107,20 @@ const { buildFlowsStatement, statementHash } = await load('lib/flows/statement.t
 const ENDED = 'The question went on without your answer, so it did not use this source.';
 const STILL = 'You can still answer for later questions.';
 // UX-2 P4b (item 39 under D7 C): the after-hold choices and the decline's outcome.
-const AFTER_CHOICES = "Allow: it is turned On for later questions. Don't allow: it is turned Off for later questions.";
-const ALLOWED_AFTER = 'You chose Allow. It is On for later questions.';
-const DECLINED_AFTER = "You chose Don't allow. It is Off for later questions.";
-/** The pause's buttons (UX-2 P4b, items 8 and 9; ASK2 = B): the pair, then the lighter third. */
-const PAUSE_BUTTONS = ['Allow', "Don't allow", 'Allow all data sources'];
+// Moved by S4 W2b (npstorey/civic-ai-tools#335; OUTCOME_LINES A, POINTER (b)): S154, S156 and S157; the pointer now
+// follows S156, and S157 when the setting moved.
+const AFTER_CHOICES = "Enable: it is enabled for later questions. Don't enable: it is disabled for later questions.";
+const ALLOWED_AFTER = 'You chose Enable. It is enabled for later questions.';
+const DECLINED_AFTER = "You chose Don't enable. It is disabled for later questions.";
+const POINTER = 'You can change this in Data source settings.';
+/** The pause's buttons (UX-2 P4b, items 8 and 9; ASK2 = B): the pair, then the lighter third. Moved by S4 W2b: S100, S96. */
+const PAUSE_BUTTONS = ['Enable', "Don't enable", 'Enable all data sources'];
 /**
  * After the hold's end, the pair only. Ruled W2 (relay 26): once the hold has ended the run has moved on and the card
  * no longer asks, so "Allow all data sources", which promises the question goes on without asking again, would promise
  * what it cannot do. The card offers item 39's two afterChoices only.
  */
-const AFTER_HOLD_BUTTONS = ['Allow', "Don't allow"];
+const AFTER_HOLD_BUTTONS = ['Enable', "Don't enable"];
 const GONE = 'This question is no longer waiting for an answer.';
 const DECIDED = 'An answer was already given for this question.';
 const WAIT = 'The question waits up to a minute for your answer.';
@@ -208,7 +212,8 @@ function buttonOf(c: CardRead, label: string): HostElement {
 function bostonState(surface: Surface): string | undefined {
   const row = surface.elements().find((el) => el.props['data-source'] === 'boston-opencontext');
   assert.ok(row, 'premise: the panel has no Boston row');
-  return [...within(row!)].find((el) => el.type === 'input' && el.props.checked === true)?.props.value as string | undefined;
+  // S4 W2a: the row's control is two buttons; its pressed one is the state (`ask-first` for neither).
+  return stateControl(row!).shown;
 }
 
 /**
@@ -241,7 +246,7 @@ async function pausedOnClock(): Promise<{ page: Surface; key: string; tick: (ms:
 
 // --- After the hold, before the entry's end ---------------------------------------------------
 
-test('criterion 2: after the hold\'s end the card says the run went on without the answer, keeps Allow and Not now, and the panel row renders the same card', async () => {
+test('criterion 2: after the hold\'s end the card says the run went on without the answer, keeps Enable and Don\'t enable, and the panel row renders the same card', async () => {
   const { page, tick } = await pausedOnClock();
   await tick(60_000);
   const card = stepsCard(page);
@@ -257,31 +262,32 @@ test('criterion 2: after the hold\'s end the card says the run went on without t
   assert.deepEqual(card.buttons[0].props.style, card.buttons[1].props.style, 'the two buttons are styled differently after the hold');
 });
 
-test('criterion 2: Allow after the hold posts to the decision route (200), the card says it applies to later questions, and the panel shows the source On', async () => {
+test('criterion 2: Enable after the hold posts to the decision route (200), the card says it applies to later questions, with the pointer, and the panel shows the source enabled', async () => {
   const { page, key, tick } = await pausedOnClock();
   await tick(60_000);
   await tick(240_000);
-  await page.click(buttonOf(stepsCard(page), 'Allow'));
+  await page.click(buttonOf(stepsCard(page), 'Enable'));
   await page.settle();
   const stored = JSON.parse(kv.entries.get(`consent-decision:${key}`)?.value ?? '{}') as Json;
   assert.equal(stored.decision, 'allow', 'the decision route did not save the answer');
   const card = stepsCard(page);
-  assert.equal(card.outcome, ALLOWED_AFTER, `the card after Allow: ${card.text}`);
+  // POINTER (b): the pointer follows S156.
+  assert.equal(card.outcome, `${ALLOWED_AFTER} ${POINTER}`, `the card after Enable: ${card.text}`);
   assert.deepEqual(labels(card), [], 'the buttons stay after a decision');
-  assert.equal(bostonState(page), 'on', 'the panel does not show the source On after Allow');
+  assert.equal(bostonState(page), 'on', 'the panel does not show the source enabled after Enable');
   const row = rowCards(page);
-  assert.ok(row.every((c) => c.outcome === ALLOWED_AFTER && c.buttons.length === 0), `the row's card after Allow: ${summary(page)}`);
+  assert.ok(row.every((c) => c.outcome === `${ALLOWED_AFTER} ${POINTER}` && c.buttons.length === 0), `the row's card after Enable: ${summary(page)}`);
 });
 
-// UX-2 P4b, criterion 5 (D7 C, L11): "Don't allow" after the hold turns the source Off, and says so (item 39).
-test('criterion 2 (UX-2 P4b criterion 5): Don\'t allow after the hold says it is Off for later questions, and the source reads Off', async () => {
+// UX-2 P4b, criterion 5 (D7 C, L11): "Don't enable" after the hold turns the source Off, and says so (S157).
+test('criterion 2 (UX-2 P4b criterion 5): Don\'t enable after the hold says it is disabled for later questions, with the pointer, and the source is disabled', async () => {
   const { page, key, tick } = await pausedOnClock();
   await tick(120_000);
-  await page.click(buttonOf(stepsCard(page), "Don't allow"));
+  await page.click(buttonOf(stepsCard(page), "Don't enable"));
   await page.settle();
   const stored = JSON.parse(kv.entries.get(`consent-decision:${key}`)?.value ?? '{}') as Json;
   assert.equal(stored.decision, 'off', 'the decision route did not save the Off decline');
-  assert.ok(stepsCard(page).outcome?.startsWith(DECLINED_AFTER), `the card after Don't allow: ${stepsCard(page).text}`);
+  assert.equal(stepsCard(page).outcome, `${DECLINED_AFTER} ${POINTER}`, `the card after Don't enable: ${stepsCard(page).text}`);
   assert.equal(bostonState(page), 'off', 'Don\'t allow did not turn the source Off');
 });
 
@@ -306,7 +312,7 @@ test('criterion 2: a 404 after the hold (the entry gone early) takes the buttons
   const { page, key, tick } = await pausedOnClock();
   await tick(90_000);
   kv.entries.delete(`consent-decision:${key}`);
-  await page.click(buttonOf(stepsCard(page), 'Allow'));
+  await page.click(buttonOf(stepsCard(page), 'Enable'));
   await page.settle();
   const card = stepsCard(page);
   assert.equal(card.outcome, GONE, `the card after a 404: ${card.text}`);
@@ -317,7 +323,7 @@ test('criterion 2: a 409 after the hold (answered elsewhere) says an answer was 
   const { page, key, tick } = await pausedOnClock();
   await tick(90_000);
   await kv.set(`consent-decision:${key}`, { sourceId: 'boston-opencontext', decision: 'not-now' }, { xx: true, keepTtl: true });
-  await page.click(buttonOf(stepsCard(page), 'Allow'));
+  await page.click(buttonOf(stepsCard(page), 'Enable'));
   await page.settle();
   const card = stepsCard(page);
   assert.equal(card.outcome, DECIDED, `the card after a 409: ${card.text}`);
@@ -338,7 +344,7 @@ test('criterion 2, the row: an earlier question\'s pause, unanswered and alive, 
   const row = rowCards(page);
   assert.equal(row.length, 1, `the row shows ${row.length} cards: ${summary(page)}`);
   assert.ok(row[0].text.includes(WAIT), `the row does not show the later pause: ${row[0].text}`);
-  await page.click(buttonOf(row[0], 'Allow'));
+  await page.click(buttonOf(row[0], 'Enable'));
   await page.settle();
   bus.reportConsentPause(null);
   await page.settle();

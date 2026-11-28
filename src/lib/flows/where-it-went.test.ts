@@ -140,14 +140,18 @@ const fromPackage = (pkg: unknown, served: FlowsStatement | null) => {
 
 // --- The reasons (§2), in their order of precedence --------------------------------
 
+// Moved by S4 W2b (npstorey/civic-ai-tools#335; C3-O = B, OA-1158): S125[7], S125[8], S125[3], S125[4], S125[5] and
+// S125[6]. Each case below reads the same reason key; only the words moved (B7).
 const REASON = {
-  allowedNotUsed: 'Ask first: allowed when asked, but not used for this question.',
-  declined: 'Ask first: not allowed for this question.',
-  noAnswer: 'Ask first: no answer arrived in time, so it was not used.',
+  allowedNotUsed: 'Accepted when asked, but not used for this question.',
+  // S4 W2b fix round 1 (drafted, for the words check): loaded on an answer about another source.
+  allowedByAnother: 'Enabled by an answer about another source, but not used for this question.',
+  declined: 'Declined when asked, so not used for this question.',
+  noAnswer: 'Not enabled: it could not be asked about, or no answer arrived in time.',
   unavailable: 'Unavailable. This site could not load it for this question.',
-  onNotUsed: 'On, not used for this question.',
-  off: 'Off.',
-  notAsked: 'Ask first: not asked for this question.',
+  onNotUsed: 'Enabled, not used for this question.',
+  off: 'Disabled.',
+  notAsked: 'Not enabled: not asked for this question.',
   // S3-B W1 (npstorey/civic-ai-tools#318): D7 = B's words for not-configured, and S11 for not-selected (B8).
   notSetUp: 'Not set up on the site that ran this question.',
   notPicked: 'Not picked for this question.',
@@ -849,7 +853,12 @@ test('criterion 4: the reasons are one export of copy.ts, pinned to §2\'s strin
   const reasons = (copyModule as unknown as Record<string, unknown>).WHERE_IT_WENT_REASONS;
   assert.ok(reasons !== undefined && reasons !== null && typeof reasons === 'object', 'copy.ts exports no WHERE_IT_WENT_REASONS');
   assert.deepEqual(Object.entries(reasons as Record<string, string>), Object.entries(REASON));
-  for (const text of Object.values(REASON)) assert.ok(text.split(/\s+/).length <= 13, `"${text}" runs over 13 words`);
+  // Moved by S4 W2b: S125[3], the owner's ruled form (C3-O = B), runs to 14 words; the ruling's words are not cut to fit
+  // R6's limit, and every other reason keeps it.
+  for (const text of Object.values(REASON)) {
+    const limit = text === REASON.noAnswer ? 14 : 13;
+    assert.ok(text.split(/\s+/).length <= limit, `"${text}" runs over ${limit} words`);
+  }
 });
 
 test('criterion 4: the service label is never a place, and no row uses the words the contract retires', () => {

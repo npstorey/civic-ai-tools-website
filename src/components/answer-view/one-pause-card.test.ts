@@ -93,7 +93,7 @@ const McpFlowDiagram = (await load('components/explore/McpFlowDiagram.tsx')).def
 const consentStep = await load('components/answer-view/ConsentStep.tsx');
 const ConsentStep = consentStep.default as ComponentType<Record<string, unknown>>;
 const ConsentPausePrompt = consentStep.ConsentPausePrompt as ComponentType;
-const STEP = consentStep.CONSENT_STEP_TEXT as Record<string, string> & { heading: (name: string) => string };
+const STEP = consentStep.CONSENT_STEP_TEXT as Record<string, string> & { heading: (name: string, waiting?: boolean) => string };
 const bus = await load('components/sources/useSourceConsent.ts');
 const flowsRoute = await load('app/api/flows/route.ts');
 const consentRoute = await load('app/api/sources/consent/route.ts');
@@ -101,16 +101,19 @@ const { buildFlowsStatement, statementHash } = await load('lib/flows/statement.t
 const { sourceRowLines } = await load('lib/sources/source-name.ts');
 const { SETTINGS_TEXT, SETTINGS_HREF } = await load('lib/sources/copy.ts');
 
-const ALLOW = 'Allow';
-const DONT_ALLOW = "Don't allow";
-const ALLOW_ALL = 'Allow all data sources';
+// Moved by S4 W2b (npstorey/civic-ai-tools#335): S100 and S96. The names keep the items they were ruled as.
+const ALLOW = 'Enable';
+const DONT_ALLOW = "Don't enable";
+const ALLOW_ALL = 'Enable all data sources';
 const STEPS_FRAME = '1px solid var(--border-color)';
 const ACCENT_FRAME = '1px solid var(--accent)';
 
 const statement = await buildFlowsStatement();
 const BOSTON = statement.sources.find((s: { sourceId: string }) => s.sourceId === 'boston-opencontext');
 assert.ok(BOSTON, 'premise: the statement names boston-opencontext');
+// S4 W2b (C3-D-H B): S146 while the hold is open and unanswered, S147 in every closed state.
 const HEADING = STEP.heading('Boston OpenContext');
+const HEADING_CLOSED = STEP.heading('Boston OpenContext', false);
 const WHAT = (() => {
   const what = sourceRowLines(BOSTON).what as string;
   return what.charAt(0).toUpperCase() + what.slice(1);
@@ -255,7 +258,8 @@ const stepCards = (surface: Surface): HostElement[] =>
 
 /** What a card shows: its buttons, which of the card's sentences it reads, and its frame. */
 interface CardReading { buttons: string[]; says: string[]; frame: string }
-const SENTENCES = ['asked', 'wait', 'choices', 'change', 'ended', 'stillAnswer', 'afterChoices', 'gone', 'cannotAsk', 'nextQuestion', 'allowed'] as const;
+// Moved by S4 W2b (C3-D-H B): `asked` is gone; the card has no line under its heading.
+const SENTENCES = ['wait', 'choices', 'change', 'ended', 'stillAnswer', 'afterChoices', 'gone', 'cannotAsk', 'nextQuestion', 'allowed'] as const;
 function readCard(card: HostElement): CardReading {
   const text = textOf(card);
   return {
@@ -294,14 +298,14 @@ function assertOnePlace(surface: Surface, where: string): void {
   assert.deepEqual(buttonLabels(card), [], `${where}: the step card has buttons`);
   assert.ok(!text.includes(STEP.choices), `${where}: the step card reads the choices sentence`);
   assert.ok(!text.includes(STEP.change), `${where}: the step card reads the change sentence`);
-  const order = [HEADING, STEP.asked, STEP.wait, WHAT, LOGS].map((s) => text.indexOf(s));
-  assert.ok(order.every((i, n) => i >= 0 && (n === 0 || i > order[n - 1])), `${where}: the card is not heading, asked, wait, then the source's lines (${order.join(', ')}): ${text.slice(0, 400)}`);
+  const order = [HEADING, STEP.wait, WHAT, LOGS].map((s) => text.indexOf(s));
+  assert.ok(order.every((i, n) => i >= 0 && (n === 0 || i > order[n - 1])), `${where}: the card is not heading, wait, then the source's lines (${order.join(', ')}): ${text.slice(0, 400)}`);
   assert.equal((card.props.style as { border?: unknown }).border, STEPS_FRAME, `${where}: the card's frame is not the steps' own`);
 }
 
 // --- Criterion 1: one set of buttons, in the short box ---------------------------------------------------------------
 
-test('HG criterion 1 (D1 A, D2 A), the home page (Standard): while the box asks, its three buttons are the only ones, and the step card reads heading, asked, wait, then the source\'s lines, in the steps\' frame', async () => {
+test('HG criterion 1 (D1 A, D2 A), the home page (Standard): while the box asks, its three buttons are the only ones, and the step card reads heading, wait, then the source\'s lines, in the steps\' frame', async () => {
   ANON();
   answers();
   await consentWith({ 'boston-opencontext': 'ask-first' });
@@ -316,7 +320,7 @@ test('HG criterion 1 (D1 A, D2 A), the home page (Standard): while the box asks,
   assertOnePlace(page, 'the home page');
 });
 
-test('HG criterion 1 (D1 A, D2 A), /ask (Sandbox): while the box asks, its three buttons are the only ones, and the step card reads heading, asked, wait, then the source\'s lines, in the steps\' frame', async () => {
+test('HG criterion 1 (D1 A, D2 A), /ask (Sandbox): while the box asks, its three buttons are the only ones, and the step card reads heading, wait, then the source\'s lines, in the steps\' frame', async () => {
   SIGNED_IN_DB();
   sessions.rows.clear();
   answers();
@@ -332,7 +336,7 @@ test('HG criterion 1 (D1 A, D2 A), /ask (Sandbox): while the box asks, its three
   assertOnePlace(page, '/ask');
 });
 
-test('HG criterion 1 (D3 A), /explore (Try your own): while the box asks, its three buttons are the only ones, and the response panel\'s card reads heading, asked, wait, then the source\'s lines, in the steps\' frame', async () => {
+test('HG criterion 1 (D3 A), /explore (Try your own): while the box asks, its three buttons are the only ones, and the response panel\'s card reads heading, wait, then the source\'s lines, in the steps\' frame', async () => {
   ANON();
   answers();
   await consentWith({ 'boston-opencontext': 'ask-first' });
@@ -362,7 +366,7 @@ async function boxAndCards(cards: Array<Record<string, unknown>>): Promise<{ rea
   return { reading: { box: box.length === 0 ? null : buttonLabels(box[0]), cards: all.map(readCard) }, texts: all.map((el) => textOf(el)) };
 }
 
-test('HG criterion 2 (a), a guard: the hold ends unanswered: the card reads ended, stillAnswer and afterChoices, keeps Allow and Don\'t allow, and has no Allow all data sources', async () => {
+test('HG criterion 2 (a), a guard: the hold ends unanswered: the card reads ended, stillAnswer and afterChoices, keeps Enable and Don\'t enable, and has no Enable all data sources', async () => {
   answers();
   const pause = pauseOf();
   bus.reportConsentPause(pause);
@@ -372,17 +376,17 @@ test('HG criterion 2 (a), a guard: the hold ends unanswered: the card reads ende
   assert.deepEqual(reading, { box: null, cards: [{ buttons: [ALLOW, DONT_ALLOW], says: ['change', 'ended', 'stillAnswer', 'afterChoices'], frame: ACCENT_FRAME }] }, 'after the hold: the box asks nothing, and the card reads as today');
 });
 
-test('HG criterion 2 (b), a guard: an answer given while the run waits: the card reads the heading, asked, the source\'s lines and the outcome', async () => {
+test('HG criterion 2 (b), a guard: an answer given while the run waits: the card reads the closed heading, the source\'s lines and the outcome', async () => {
   answers();
   const pause = pauseOf();
   bus.reportConsentPause(pause);
   decisionStatus = 200;
   await bus.decideConsentPause(pause.key, 'allow');
   const { reading, texts } = await boxAndCards([{ pause }]);
-  assert.deepEqual(reading, { box: null, cards: [{ buttons: [], says: ['asked', 'allowed'], frame: ACCENT_FRAME }] }, 'answered: the box asks nothing, and the card reads as today');
+  assert.deepEqual(reading, { box: null, cards: [{ buttons: [], says: ['allowed'], frame: ACCENT_FRAME }] }, 'answered: the box asks nothing, and the card reads as today');
   const text = texts[0];
-  const order = [HEADING, STEP.asked, WHAT, LOGS, STEP.allowed].map((x) => text.indexOf(x));
-  assert.ok(order.every((i, n) => i >= 0 && (n === 0 || i > order[n - 1])), `the answered card is not heading, asked, the source's lines, then the outcome (${order.join(', ')})`);
+  const order = [HEADING_CLOSED, WHAT, LOGS, STEP.allowed].map((x) => text.indexOf(x));
+  assert.ok(order.every((i, n) => i >= 0 && (n === 0 || i > order[n - 1])), `the answered card is not the closed heading, the source's lines, then the outcome (${order.join(', ')})`);
 });
 
 test('HG criterion 2 (c), a guard: the entry has expired, or the run was cancelled: the card reads gone and has no buttons', async () => {
@@ -413,14 +417,14 @@ test('HG criterion 2 (e), a guard (D4 A): the Sources row\'s card during the hol
   const pause = pauseOf();
   bus.reportConsentPause(pause);
   const { reading } = await boxAndCards([{ pause, place: 'row' }]);
-  assert.deepEqual(reading, { box: [ALLOW, DONT_ALLOW, ALLOW_ALL], cards: [{ buttons: [ALLOW, DONT_ALLOW, ALLOW_ALL], says: ['asked', 'wait', 'choices', 'change'], frame: ACCENT_FRAME }] }, 'the row during the hold: the box asks, and the row\'s card reads as today');
+  assert.deepEqual(reading, { box: [ALLOW, DONT_ALLOW, ALLOW_ALL], cards: [{ buttons: [ALLOW, DONT_ALLOW, ALLOW_ALL], says: ['wait', 'choices', 'change'], frame: ACCENT_FRAME }] }, 'the row during the hold: the box asks, and the row\'s card reads as today');
 });
 
 test('HG criterion 2 (f), a guard: a pause that is not on the bus keeps its three buttons in the card, as today', async () => {
   answers();
   const pause = pauseOf();
   const { reading } = await boxAndCards([{ pause }]);
-  assert.deepEqual(reading, { box: null, cards: [{ buttons: [ALLOW, DONT_ALLOW, ALLOW_ALL], says: ['asked', 'wait', 'choices', 'change'], frame: ACCENT_FRAME }] }, 'not on the bus: the box asks nothing, and the card reads as today');
+  assert.deepEqual(reading, { box: null, cards: [{ buttons: [ALLOW, DONT_ALLOW, ALLOW_ALL], says: ['wait', 'choices', 'change'], frame: ACCENT_FRAME }] }, 'not on the bus: the box asks nothing, and the card reads as today');
 });
 
 // W4 = b (#729 6920960303): in state (g) the card reads as a cancelled card reads: the heading, the source's lines,
@@ -428,7 +432,7 @@ test('HG criterion 2 (f), a guard: a pause that is not on the bus keeps its thre
 const G_CARD: CardReading = { buttons: [], says: ['gone'], frame: STEPS_FRAME };
 /** State (g)'s card, in order: the heading, the source's lines, then `gone`. */
 function assertGOrder(text: string, where: string): void {
-  const order = [HEADING, WHAT, LOGS, STEP.gone].map((x) => text.indexOf(x));
+  const order = [HEADING_CLOSED, WHAT, LOGS, STEP.gone].map((x) => text.indexOf(x));
   assert.ok(order.every((i, n) => i >= 0 && (n === 0 || i > order[n - 1])), `${where}: the card is not heading, the source's lines, then gone (${order.join(', ')}): ${text.slice(0, 300)}`);
 }
 

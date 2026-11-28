@@ -6,9 +6,10 @@
 // and "About these settings" (items 6-7). The arrow keys, Home and End move
 // between the tabs (`v4-notes-read.md:49-67`).
 //   - Data sources: the lede (X22b signed in, item 19 signed out); one row per
-//     configured source with `SourceStateControl` (one `role="radiogroup"`),
-//     "More about this source", and the Ask-first line under the panel's own
-//     condition (item 54 only in-loop with the store); the search (item 17)
+//     configured source with `SourceStateControl` (since S4 W2a one `role="group"`
+//     of two buttons, Enable and Disable; the rows by group, `settings-groups.test.ts`),
+//     "More about this source", and the line under a source not answered yet
+//     (S86 only in-loop with the store); the search (item 17)
 //     over each row's name and "what" line, with its count (item 24) and empty
 //     line (item 22); the local-only offer; the privacy link. Item 33: the
 //     Socrata row reads "Socrata", the name `readerSourceName` gives.
@@ -98,7 +99,8 @@ const SEARCH_LABEL = 'Search data sources';
 const NO_MATCH = 'No data source matches.';
 const ABOUT_KEPT_WITH = 'If you are signed in, your consent is kept on your account. If not, it is kept in a cookie until this browser session ends. The privacy page names the cookie.';
 const ABOUT_KEPT_WITHOUT = 'Your consent is kept in a cookie until this browser session ends. The privacy page names the cookie.';
-const ASK_FIRST_WITH_PAUSE = "Ask first: nothing is sent to this source until you turn it On, here or when the site asks you during a question. If you choose Allow then, it stays On for later questions. If you choose Don't allow, it is turned Off.";
+// Item 54's place, moved by S4 W2a (npstorey/civic-ai-tools#335): S86 replaces card F's words.
+const ASK_FIRST_WITH_PAUSE = 'Not answered yet: the site asks before it uses this source.';
 
 function answers() {
   return installFetch(ORIGIN, {
@@ -212,7 +214,7 @@ test('UX-2 P4b criterion 2: the arrow keys, Home and End move between the two ta
 
 // --- Data sources --------------------------------------------------------------------------------
 
-test('UX-2 P4b criterion 2: Data sources holds one row per configured source, each with one radio group, "More about this source", and the Socrata row reads "Socrata" (item 33)', async () => {
+test('UX-2 P4b criterion 2 (S4 W2a): Data sources holds one row per configured source, each with one control, "More about this source", and the Socrata row reads "Socrata" (item 33)', async () => {
   ANON();
   answers();
   const statement = await consentWith();
@@ -220,12 +222,14 @@ test('UX-2 P4b criterion 2: Data sources holds one row per configured source, ea
   const sources = statement.sources as Mod[];
   assert.equal(sources.length, 4, 'premise: four sources are configured');
   const rows = rowsOf(s);
-  assert.deepEqual(rows.map((r) => r.props['data-source']), sources.map((x) => x.sourceId), 'the rows are not the configured sources, in order');
+  // S4 W2a (C1 = A): by group, NYC City Record under Socrata's head, then the sources alone in the statement's order.
+  assert.deepEqual(rows.map((r) => r.props['data-source']), ['socrata', 'nyc-record', 'data-commons', 'boston-opencontext'], 'the rows are not the configured sources, by group');
+  assert.deepEqual(sources.map((x) => x.sourceId).sort(), ['boston-opencontext', 'data-commons', 'nyc-record', 'socrata'], 'premise: the configured sources');
   for (const row of rows) {
     const source = sources.find((x) => x.sourceId === row.props['data-source'])!;
-    const groups = within(row).filter((el) => el.props.role === 'radiogroup');
-    assert.equal(groups.length, 1, `${source.sourceId}'s row has ${groups.length} radio groups`);
-    assert.equal(groups[0].props['aria-label'], `${readerSourceName(source)}: On, Ask first or Off`);
+    const groups = within(row).filter((el) => el.props.role === 'group');
+    assert.equal(groups.length, 1, `${source.sourceId}'s row has ${groups.length} controls`);
+    assert.equal(groups[0].props['aria-label'], `${readerSourceName(source)}: Enable or Disable`);
     assert.ok(textOf(row).includes(copy.PANEL_ROW_MORE), `${source.sourceId}'s row has no "More about this source"`);
   }
   const socrata = textOf(rows.find((r) => r.props['data-source'] === 'socrata')!);
@@ -241,10 +245,11 @@ test('UX-2 P4b criterion 2: signed out, a change writes PUT /api/sources/consent
   const s = await overlay();
   const row = rowsOf(s).find((r) => r.props['data-source'] === 'boston-opencontext');
   assert.ok(row, `the overlay has no Boston row: ${s.text().slice(0, 300)}`);
-  const off = within(row!).filter((el) => el.type === 'input' && el.props.type === 'radio' && el.props.value === 'off');
-  assert.equal(off.length, 1, 'the Boston row has no Off choice');
+  // S4 W2a: Disable, the row's Off choice.
+  const off = within(row!).filter((el) => el.type === 'button' && textOf(el) === 'Disable');
+  assert.equal(off.length, 1, 'the Boston row has no Disable');
   net.clear();
-  await s.check(off[0]);
+  await s.click(off[0]);
   await s.settle();
   const puts = net.sent.filter((r) => r.method === 'PUT' && r.path === '/api/sources/consent');
   assert.equal(puts.length, 1, `the change did not write one PUT (${puts.length})`);
@@ -363,7 +368,7 @@ test('UX-2 P4b criterion 2 (Task B, D): while a question waits on a source, its 
   assert.ok(row, `the overlay has no Boston row: ${s.text().slice(0, 300)}`);
   const cards = within(row!).filter((el) => el.props['data-part'] === 'consent-step');
   assert.equal(cards.length, 1, 'the Boston row mounts no pause card');
-  assert.deepEqual(within(cards[0]).filter((el) => el.type === 'button').map((b) => textOf(b)), ['Allow', "Don't allow", 'Allow all data sources'], 'the row card\'s buttons');
+  assert.deepEqual(within(cards[0]).filter((el) => el.type === 'button').map((b) => textOf(b)), ['Enable', "Don't enable", 'Enable all data sources'], 'the row card\'s buttons (moved by S4 W2b: S100, S96)');
   s.unmount();
   bus.cancelConsentPauses();
 });

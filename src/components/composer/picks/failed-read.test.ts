@@ -312,7 +312,8 @@ function listPlace(page: Surface): string[] {
   assert.ok(search >= 0, 'premise: the search field');
   const ul = all.find((el, i) => i > search && el.type === 'ul');
   const notLoaded = parts(page, 'sources-not-loaded');
-  return [...(ul ? [`ul:${within(ul).filter((el) => el.type === 'li').length}`] : []), ...notLoaded.map((el) => textOf(el))];
+  // S4 W2a: a group's head is an `li` too, holding its rows' list: the count is of the sources' rows.
+  return [...(ul ? [`ul:${within(ul).filter((el) => el.type === 'li' && el.props['data-source'] !== undefined).length}`] : []), ...notLoaded.map((el) => textOf(el))];
 }
 
 test('#786 item 4 (D9 = A): with /api/flows failing, Settings shows N2 word for word in the list\'s place, and nothing else there', async () => {

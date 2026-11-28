@@ -29,6 +29,7 @@ import {
   mount,
   registerSurfaceHooks,
   sessions,
+  stateControl,
   textOf,
   type HostElement,
   type Surface,
@@ -81,11 +82,11 @@ async function panelInForce(): Promise<Surface> {
 }
 
 const statusLines = (panel: Surface): HostElement[] => panel.elements().filter((el) => el.props.role === 'status');
+/** The source's Disable button (S4 W2a: the control is two buttons, Enable and Disable). */
 const offFor = (panel: Surface, sourceId: string): HostElement => {
-  // The name is `source-state-<sourceId>-<mount id>` since UX-2 P4b (one group per mounted control): read by its prefix.
-  const found = panel.elements().filter((el) => el.type === 'input' && el.props.value === 'off' && String(el.props.name).startsWith(`source-state-${sourceId}-`));
-  assert.equal(found.length, 1, `no Off choice for ${sourceId}`);
-  return found[0];
+  const rows = panel.elements().filter((el) => el.props['data-source'] === sourceId);
+  assert.equal(rows.length, 1, `no one row for ${sourceId}`);
+  return stateControl(rows[0]).disable;
 };
 const today = () => new Date().toISOString().slice(0, 10);
 
@@ -93,10 +94,11 @@ test('row 5: before any change there is no status line; after a successful chang
   refuseWrites = false;
   const panel = await panelInForce();
   assert.deepEqual(statusLines(panel), [], 'premise: before the write there is no status line');
-  await panel.check(offFor(panel, 'data-commons'));
+  await panel.click(offFor(panel, 'data-commons'));
   const lines = statusLines(panel);
   assert.equal(lines.length, 1, `after the change there is not one status line: ${panel.text().slice(0, 300)}`);
-  assert.equal(textOf(lines[0]), `Data Commons is now Off. This applies from your next question. Set Off since ${today()}.`);
+  // Moved by S4 W2a fix round 1 (item 3): the confirmation and the since line, drafted by the ruled pairs.
+  assert.equal(textOf(lines[0]), `Data Commons is now disabled. This applies from your next question. Disabled since ${today()}.`);
   const row = panel.elements().find((el) => el.props['data-source'] === 'data-commons');
   assert.ok(row && textOf(row).includes(textOf(lines[0])), 'the status line is not under that source\'s control');
   panel.unmount();
@@ -108,7 +110,7 @@ test('row 5: no status line while the write is in flight', async () => {
   let release = () => {};
   holdWrites = new Promise<void>((resolve) => { release = resolve; });
   try {
-    void panel.check(offFor(panel, 'socrata'));
+    void panel.click(offFor(panel, 'socrata'));
     for (let i = 0; i < 20; i += 1) await new Promise((resolve) => setImmediate(resolve));
     assert.deepEqual(statusLines(panel), [], 'a status line appeared before the write resolved');
   } finally {
@@ -124,11 +126,11 @@ test('row 5: a refused write shows no confirmation', async () => {
   const panel = await panelInForce();
   refuseWrites = true;
   try {
-    await panel.check(offFor(panel, 'data-commons'));
+    await panel.click(offFor(panel, 'data-commons'));
   } finally {
     refuseWrites = false;
   }
-  assert.ok(!panel.text().includes('is now Off'), `a refused write was confirmed: ${panel.text().slice(0, 300)}`);
+  assert.ok(!panel.text().includes('is now Off') && !panel.text().includes('is now disabled'), `a refused write was confirmed: ${panel.text().slice(0, 300)}`);
   assert.deepEqual(statusLines(panel), []);
   panel.unmount();
 });

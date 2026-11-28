@@ -19,9 +19,12 @@
  * THE PICK (G0-3 = A, B10). A pick changes no setting. An Off row cannot be picked, and shows S5, until its own control
  * reads On or Ask first; a picked row set to Off loses its pick (the mount drops it, `QueryForm`).
  *
- * THE ROW'S CONTROL is Settings' own (`SourceStateRadios`, `SourceStateConfirmation`, through `SourceRow`), given the
- * same props Settings gives it, from the same `useSourceConsent` (the ORCH's A13; `SettingsOverlay.tsx` is another
- * lane's file this phase does not touch; a shared builder is a later change).
+ * THE ROW'S CONTROL is Settings' own (`SourceStateButtons`, `SourceStateConfirmation`, through `SourceRow`), given the
+ * same props Settings gives it, from the same `useSourceConsent` (the ORCH's A13).
+ *
+ * THE GROUPS (S4 W2a, npstorey/civic-ai-tools#335; C1 = A). Before any words the list is Settings' grouping
+ * (`SourceGroups`): a group's head with its count and one control, and its rows, each with its pick. With words the
+ * ranking's hits are listed flat, as before, a row set on its own inside a group carrying the mark (S10).
  */
 
 import { useEffect, useId, useRef, useState, type KeyboardEvent } from 'react';
@@ -29,9 +32,11 @@ import { CIVIC_MANIFEST } from '@typedstandards/civic-typed-router';
 import type { FlowsSource, FlowsStatement } from '@/lib/flows/statement';
 import { SETTINGS_TEXT } from '@/lib/sources/copy';
 import { readerSourceName, sourceRowLines } from '@/lib/sources/source-name';
+import SourceGroups from '@/components/sources/SourceGroups';
 import SourceRow from '@/components/sources/SourceRow';
 import type { ConfirmedChange, SourceStateControlProps } from '@/components/sources/SourceStateControl';
-import { panelStates, useSourceConsent, type SourceStateValue } from '@/components/sources/useSourceConsent';
+import { ownSources, panelStates, useSourceConsent, type SourceStateValue } from '@/components/sources/useSourceConsent';
+import { readerBlocks } from '@/lib/sources/reader-groups';
 import { useDefaultPortal, usePortalLocked } from '@/components/DefaultPortalProvider';
 import { PICKER_TEXT } from '../copy';
 import { hasSearchableWord, readerRanking, readerSearchConfiguration } from './search';
@@ -158,6 +163,34 @@ export default function PickerPanel({ docked }: { docked: boolean }) {
   const states = panelStates(consent, ids);
   const inForce = consent.status?.inForce === true;
   const { rows, searched } = pickerRows(picks.query, statement, readerSearchConfiguration(locked, defaultPortal));
+  // S4 W2a: the sources set on their own (the mark, inside a group), and the row Settings renders, with its pick.
+  const own = ownSources(consent);
+  const grouped = new Set(readerBlocks(statement?.sources ?? []).flatMap((block) => (block.kind === 'group' ? block.members.map((m) => m.sourceId) : [])));
+  const setUpRow = (source: FlowsSource, name: string, marked: boolean) => {
+    const state = states[source.sourceId] ?? 'ask-first';
+    const control: SourceStateControlProps = {
+      sourceId: source.sourceId,
+      name,
+      state,
+      since: consent.status?.states?.[source.sourceId]?.since,
+      inForce,
+      writing: consent.writing,
+      setState: consent.setState,
+      confirmed,
+      setConfirmed,
+      sinceLine: false,
+    };
+    return (
+      <SourceRow
+        key={source.sourceId}
+        source={source}
+        control={control}
+        consent={consent}
+        marked={marked}
+        pick={<PickControl sourceId={source.sourceId} name={name} state={state} picked={picks.picked.includes(source.sourceId)} />}
+      />
+    );
+  };
 
   const onKeyDown = (event: KeyboardEvent<HTMLElement>) => {
     if (event.key === 'Escape') {
@@ -203,32 +236,23 @@ export default function PickerPanel({ docked }: { docked: boolean }) {
           style={{ width: '100%', boxSizing: 'border-box', padding: '6px 10px', fontSize: '14px', border: '1px solid var(--border-color)', borderRadius: '6px', margin: '0 0 6px' }}
         />
         {searched && rows.length === 0 ? <p data-part="pick-no-match" style={{ margin: '0 0 6px', color: 'var(--text-secondary)' }}>{SETTINGS_TEXT.noMatch}</p> : null}
-        {rows.length > 0 ? (
+        {rows.length > 0 && !searched ? (
+          // S4 W2a (C1 = A): before any words, Settings' grouping, each row with its pick.
+          <SourceGroups
+            sources={rows.flatMap((row) => (row.kind === 'set-up' ? [row.source] : []))}
+            states={states}
+            own={own}
+            consent={consent}
+            confirmed={confirmed}
+            setConfirmed={setConfirmed}
+            renderRow={(source, marked) => setUpRow(source, readerSourceName(source), marked)}
+            listProps={{ 'data-part': 'pick-rows' }}
+          />
+        ) : rows.length > 0 ? (
           <ul data-part="pick-rows" style={{ listStyle: 'none', margin: 0, padding: 0, fontSize: '13px', color: 'var(--text-secondary)' }}>
             {rows.map((row) => {
               if (row.kind === 'not-set-up') return <NotSetUpRow key={row.sourceId} row={row} />;
-              const state = states[row.sourceId] ?? 'ask-first';
-              const control: SourceStateControlProps = {
-                sourceId: row.sourceId,
-                name: row.name,
-                state,
-                since: consent.status?.states?.[row.sourceId]?.since,
-                inForce,
-                writing: consent.writing,
-                setState: consent.setState,
-                confirmed,
-                setConfirmed,
-                sinceLine: false,
-              };
-              return (
-                <SourceRow
-                  key={row.sourceId}
-                  source={row.source}
-                  control={control}
-                  consent={consent}
-                  pick={<PickControl sourceId={row.sourceId} name={row.name} state={state} picked={picks.picked.includes(row.sourceId)} />}
-                />
-              );
+              return setUpRow(row.source, row.name, grouped.has(row.sourceId) && own.has(row.sourceId));
             })}
           </ul>
         ) : null}

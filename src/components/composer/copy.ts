@@ -46,20 +46,24 @@ export const FIRST_TIME_LINE_WITHHELD = 'To keep this answer, sign in and publis
 /** W7: the example row's accessible name (`ChipRow`'s `label`). */
 export const CHIP_ROW_LABEL = 'Example questions';
 
-/** The where-line (D5 B; items 23/47; W3-W6), everything before its link. */
+/**
+ * The where-line (D5 B; items 23/47; W3-W6), everything before its link. S4 W2b: the Standard forms are S87[1] to
+ * S87[5] (the renaming, DR-1 A, DR-8 A, DR-11 A, with W3 = A's pairs), and the two lines both session types share,
+ * S87[2] and S87[3]. The two Sandbox forms have no taken form (S87's note: "not drawn") and keep their words.
+ */
 const LEAD = 'Where your question goes: ';
 const dataSources = (n: number) => (n === 1 ? '1 data source' : `${n} data sources`);
 export const WHERE_LINE = {
-  /** N ≥ 1 sources On: Standard (items 23/47), or Sandbox with the notebook runner (W3). */
+  /** N ≥ 1 sources enabled: Standard (S87[4], S87[5]), or Sandbox with the notebook runner (W3). */
   on: (n: number, sandbox: boolean) =>
-    sandbox ? `${LEAD}the model service, the notebook runner and ${dataSources(n)}` : `${LEAD}the model service and ${dataSources(n)}`,
-  /** None On, a source Ask first: Standard (items 23/47), or Sandbox (W4). */
+    sandbox ? `${LEAD}the model service, the notebook runner and ${dataSources(n)}` : `${LEAD}the AI provider; the AI's searches go to ${dataSources(n)}`,
+  /** None enabled, a source not answered yet: Standard (S87[1]), or Sandbox (W4). */
   askFirst: (sandbox: boolean) =>
-    sandbox ? `${LEAD}the model service and the notebook runner; data sources ask first` : `${LEAD}the model service; data sources ask first`,
-  /** Every source Off, in both session types (W5, W6). */
-  everyOff: `${LEAD}nowhere; every data source is Off`,
-  /** CA-1a (C1 = A; v2 ruling 2): no source On where this site cannot ask, in both session types. */
-  cannotAsk: `${LEAD}nowhere; no data source is On`,
+    sandbox ? `${LEAD}the model service and the notebook runner; data sources ask first` : `${LEAD}the AI provider; the AI's searches go to data sources you enable`,
+  /** Every source disabled, in both session types (S87[2]). */
+  everyOff: `${LEAD}nowhere; every data source is disabled`,
+  /** CA-1a (C1 = A; v2 ruling 2): no source enabled where this site cannot ask, in both session types (S87[3]). */
+  cannotAsk: `${LEAD}nowhere; no data source is enabled`,
   /** Between the words and the link. */
   separator: ' · ',
   /** Item 32: the link to the Settings overlay. */
@@ -98,16 +102,18 @@ export const DATA_SOURCES_ITEM = {
   /** Shown only in loop with the decision store (`canPauseToAsk`; v2 ruling 1). */
   inLoop: {
     auto: 'Auto - find sources for me',
-    autoDescription: 'The model chooses which data sources to use, from those you set On or Ask first.',
+    /** S110 (S4 W2a; the words W2 uses, "Seen and not carded" item 6, with W3 = A's pair applied). */
+    autoDescription: 'The AI chooses which data sources to use, from those you have not disabled. The site asks before it uses one not answered yet.',
     /** S1 (S3-B W1; D9 = A): "Only the ones I pick", offered in this form only. */
     pickDescription: 'You search for data sources and pick the ones this question can use. The model uses no others.',
   },
   /** Where the read names all-sources, or in loop with no store. While the pair is unread or failed, Auto reads `value` alone (PQ6 = (b)). */
   allSources: {
-    auto: 'Auto - use every source I set On',
-    autoDescription: 'Every data source you set On is given to the model from the start. Sources set to Ask first are not used.',
-    /** D8 = B (S3-B W1): the reason "Only the ones I pick" is not offered here (D5 = A). */
-    pickReason: 'Not offered on this site. Every data source you set On is given to the model.',
+    /** S115, S116, S117 (S4 W2a; the words W2 uses, "Seen and not carded" item 6, with W3 = A's pair applied). */
+    auto: 'Auto - use every enabled source',
+    autoDescription: 'The AI can use every enabled data source. A source not enabled is not used.',
+    /** D8 = B (S3-B W1): the reason "Only the ones I pick" is not offered here (D5 = A); S117's words. */
+    pickReason: 'Not offered on this site. Every enabled data source is given to the AI.',
   },
   /** Rows 1-3: the second option. */
   pick: 'Only the ones I pick',
@@ -185,7 +191,9 @@ export const PICKER_TEXT = {
   pick: 'Pick for this question',
   pickName: (name: string) => `Pick ${name} for this question`,
   /** S5: an Off row, why it cannot be picked. */
-  offReason: 'Off. Set it to On or Ask first to pick it.',
+  // S4 W2a fix round 1: drafted by the ruled pairs, naming only a state the two buttons can set; for the words check.
+  // It was "Off. Set it to On or Ask first to pick it.".
+  offReason: 'Disabled. Enable it to pick it.',
   /** S6a: a hit this site has not set up. */
   notSetUp: 'Not set up on this site.',
   /** S7: under the box, once sources are picked; the names in the statement's order, "A", "A and B", "A, B and C". */

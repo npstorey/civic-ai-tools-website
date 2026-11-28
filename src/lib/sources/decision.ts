@@ -69,8 +69,9 @@
  *     move On or Off every configured source then in the asking source's
  *     class (a server and the packs over it, `./classes.ts`) that is not set
  *     on its own, and the run loads or declines the asking source as for
- *     `allow` and `off`. They are taken at any size; the surface shows them
- *     above twelve sources.
+ *     `allow` and `off`, and answers a later load of another member the same
+ *     way, with no pause (S4 W2b, B3: the hold returns the members). They are
+ *     taken at any size; the surface shows them above twelve sources.
  * "Set on its own" (premise 7): `allow` and `off` set the asking source's
  * flag; a class answer leaves a flagged source as it is, and clears its flag
  * when the class is set to the state it has; `allow-all` clears every flag.
@@ -95,7 +96,7 @@ import { createHmac, randomBytes, timingSafeEqual } from 'node:crypto';
 import { kv } from '@vercel/kv';
 import { CIVIC_MANIFEST } from '@typedstandards/civic-typed-router';
 import { getMissingRateLimitSecretError, RATE_LIMIT_SECRET_VARIABLE } from '../rate-limit.ts';
-import { buildFlowsStatement, flowsManifest, type FlowsLinks, type FlowsSource, type FlowsStatement } from '../flows/statement.ts';
+import { buildFlowsStatement, flowsManifest, flowsSourceInputs, type FlowsLinks, type FlowsSource, type FlowsStatement } from '../flows/statement.ts';
 import { hostingVariantInForce, type McpRegistryEnv } from '../mcp/registry.ts';
 import { readConsentRow, writeConsentRow } from './consent-store.ts';
 import {
@@ -143,11 +144,19 @@ const KEY_SHAPE = /^[0-9a-f]{32}$/;
 export type ConsentDecisionValue = 'allow' | 'off' | 'allow-all' | 'not-now' | 'allow-class' | 'off-class';
 export const CONSENT_DECISION_VALUES: readonly ConsentDecisionValue[] = ['allow', 'off', 'allow-all', 'not-now', 'allow-class', 'off-class'];
 
-/** What the run does with a decision: a class answer loads or declines the asking source as Allow or Don't allow. */
+/**
+ * What the run does with a decision. S4 W2b: a class answer reaches the run as itself (criterion B3): it loads or
+ * declines the asking source as Allow or Don't allow do, and the run answers a later load of another member of the
+ * class the same way, with no pause (`routing-mode.ts`).
+ */
 export function runDecisionOf(decision: ConsentDecisionValue): PauseDecision {
-  if (decision === 'allow-class') return 'allow';
-  if (decision === 'off-class') return 'off';
   return decision;
+}
+
+/** The configured members of a source's class, as the decision route's class move reads them (`moveFor`). */
+function classMembersOf(statement: Pick<FlowsStatement, 'sources'>, sourceId: string): string[] {
+  const manifest = flowsManifest();
+  return classMembers(manifest, classIdOfSource(manifest, sourceId), statement.sources.map((s) => s.sourceId));
 }
 
 function isDecisionValue(value: unknown): value is ConsentDecisionValue {
@@ -208,7 +217,13 @@ function sameCode(a: string, b: string): boolean {
 
 // --- The pause ------------------------------------------------------------------------
 
-/** What a pause shows of a source: its statement entry, the hosts its variant may reach, and the statement's links. */
+/**
+ * What a pause shows of a source: its statement entry, the hosts its variant may reach, and the statement's links.
+ * S4 W2b (W1's cost): the entry and its variant are read through the statement's inputs (`flowsSourceInputs`), so a
+ * test that sets the statement's hook (A14) sets the pause's hosts with it, as it sets the statement the card reads.
+ * Outside a test the inputs are `CIVIC_MANIFEST` and the variant this process's configuration puts in force, read here
+ * from `configured`, as before.
+ */
 export function pauseFacts(
   statement: Pick<FlowsStatement, 'sources' | 'links'>,
   configured: McpRegistryEnv,
@@ -216,8 +231,10 @@ export function pauseFacts(
 ): { source: FlowsSource; outbound: string[]; links: FlowsLinks } | null {
   const source = statement.sources.find((candidate) => candidate.sourceId === sourceId);
   if (!source) return null;
-  const entry = CIVIC_MANIFEST.find((candidate) => candidate.sourceId === sourceId);
-  const variant = entry ? hostingVariantInForce(entry, configured) : undefined;
+  const manifest = flowsManifest();
+  const entry = manifest.find((candidate) => candidate.sourceId === sourceId);
+  const hooked = manifest !== CIVIC_MANIFEST;
+  const variant = entry ? (hooked ? flowsSourceInputs().variantInForce(entry) : hostingVariantInForce(entry, configured)) : undefined;
   const outbound = variant?.kind === 'npm-package' ? [...variant.outbound] : [];
   return { source, outbound, links: statement.links };
 }
@@ -332,7 +349,12 @@ export function createConsentPause(input: ConsentPauseInput): ConsentPause {
           } catch {
             return heldWith('no-answer');
           }
-          if (isEntry(value) && value.decision !== undefined) return heldWith(runDecisionOf(value.decision));
+          if (isEntry(value) && value.decision !== undefined) {
+            const decision = runDecisionOf(value.decision);
+            // A class answer names the members it answers for, the class the decision route moves (S4 W2b, B3).
+            if (decision === 'allow-class' || decision === 'off-class') return { ...heldWith(decision), members: classMembersOf(input.statement, sourceId) };
+            return heldWith(decision);
+          }
         }
       } finally {
         spentMs += now() - start;

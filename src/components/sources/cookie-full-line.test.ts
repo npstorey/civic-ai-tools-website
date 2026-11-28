@@ -29,8 +29,10 @@ import {
   h,
   installFetch,
   mount,
+  chooseState,
   registerSurfaceHooks,
   sessions,
+  stateControl,
   textOf,
   type HostElement,
   type Surface,
@@ -134,7 +136,8 @@ const rowOf = (s: Surface, id: string): HostElement => {
   assert.equal(rows.length, 1, `no one row for ${id}`);
   return rows[0];
 };
-const radiosOf = (row: HostElement) => within(row).filter((el) => el.type === 'input' && el.props.type === 'radio');
+/** The row's two buttons (S4 W2a: Enable and Disable, the set one pressed). */
+const buttonsOf = (row: HostElement) => { const c = stateControl(row); return [c.enable, c.disable]; };
 
 for (const accounts of [true, false]) {
   test(`A2 (red): past the bound, the refused control's line is S24${accounts ? ', then S25 on a site with accounts' : ' alone on a site without accounts'}; the control shows its stored state and stays live`, async () => {
@@ -142,10 +145,8 @@ for (const accounts of [true, false]) {
     try {
       const { s, net, clicked, before } = await fullOverlay();
       const row = rowOf(s, clicked);
-      const shown = radiosOf(row).find((el) => el.props.checked === true)?.props.value;
-      assert.equal(shown, 'ask-first', 'premise: the clicked source shows Ask first (no stored state)');
-      const on = radiosOf(row).find((el) => el.props.value === 'on')!;
-      await s.check(on);
+      assert.equal(stateControl(row).shown, 'ask-first', 'premise: the clicked source shows neither pressed (no stored state)');
+      await chooseState(s, row, 'on');
       await s.settle();
       const puts = net.sent.filter((r) => r.method === 'PUT' && r.path === '/api/sources/consent');
       assert.equal(puts.length, 1, 'premise: the click wrote once');
@@ -155,8 +156,8 @@ for (const accounts of [true, false]) {
       const status = within(after).filter((el) => el.props.role === 'status');
       assert.equal(status.length, 1, `no status line under the refused control: ${textOf(after).slice(0, 400)}`);
       assert.equal(textOf(status[0]), accounts ? `${S24} ${S25}` : S24);
-      assert.deepEqual(radiosOf(after).filter((el) => el.props.checked === true).map((el) => el.props.value), ['ask-first'], 'the control does not show what it showed before');
-      assert.deepEqual(radiosOf(after).filter((el) => el.props.disabled === true), [], 'the control is held after the refusal');
+      assert.equal(stateControl(after).shown, 'ask-first', 'the control does not show what it showed before');
+      assert.deepEqual(buttonsOf(after).filter((el) => el.props.disabled === true), [], 'the control is held after the refusal');
       // Only the refused control says so.
       assert.equal(s.elements().filter((el) => el.props.role === 'status' && textOf(el).includes(S24)).length, 1);
       s.unmount();

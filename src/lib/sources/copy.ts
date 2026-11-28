@@ -39,18 +39,27 @@ export const NO_GUIDE_SENTENCE = 'This site does not name a deployment guide.';
 
 // --- The Sources panel ---
 
-/** What Ask first means in R6, in literal words (Q1): the pause is R8's. */
-export const ASK_FIRST_MEANS = 'Ask first: nothing is sent to this source until you turn it On.';
 /**
- * The same, where a question can stop to ask (`SOURCE_ROUTING=in-loop` with the decision store, R8 W2): the owner's
- * card F, as UX-2's item 54 re-words it under D7 C. The panel and the Settings overlay's Data sources rows render it
- * only there, where its "here" names the place it is read (M4).
+ * What not answered yet means, in literal words (Q1), where a question cannot stop to ask. Drafted in S4 W2a fix round
+ * 1 by the ruled pairs (Ask first to "Not answered yet", as S86 has it; On to enabled), for the words check; it was
+ * "Ask first: nothing is sent to this source until you turn it On.".
  */
-export const ASK_FIRST_MEANS_WITH_PAUSE = "Ask first: nothing is sent to this source until you turn it On, here or when the site asks you during a question. If you choose Allow then, it stays On for later questions. If you choose Don't allow, it is turned Off.";
+export const ASK_FIRST_MEANS = 'Not answered yet: nothing is sent to this source until you enable it.';
+/**
+ * Under a source not answered yet, whose control shows neither button pressed, where a question can stop to ask
+ * (`SOURCE_ROUTING=in-loop` with the decision store): S86 as ruled (S4, npstorey/civic-ai-tools#335; C1 = A,
+ * C9-L = A; DR-8 A), in place of card F's item 54 words. Settings and the picker render it only there, through
+ * `SourceRow`.
+ */
+export const ASK_FIRST_MEANS_WITH_PAUSE = 'Not answered yet: the site asks before it uses this source.';
 
-/** The panel's heading, and its lead sentence. */
+/**
+ * The panel's heading, and its lead sentence ("About these settings", first). The lead is drafted in S4 W2a fix round
+ * 1 by the ruled pairs (On to enabled, Off to disabled; "not answered yet" is a condition, not a setting, DR-8 A), for
+ * the words check; it was "Set each data source to On, Ask first or Off. …".
+ */
 export const PANEL_HEADING = 'Data sources';
-export const PANEL_LEAD = 'Set each data source to On, Ask first or Off. Your choice applies from your next question.';
+export const PANEL_LEAD = 'Set each data source to enabled or disabled. Your choice applies from your next question.';
 
 /**
  * The panel's lead before a consent is given (R9 P2, #661): the states Allow
@@ -73,7 +82,9 @@ const COUNT_WORDS = ['no', 'one', 'two', 'three', 'four', 'five', 'six', 'seven'
 
 /** The lead before a consent, for these counts; empty when there is no source to count. */
 export function panelLeadBeforeConsent(counts: { on: number; askFirst: number; off: number }): string {
-  const groups = ([[counts.on, 'On'], [counts.askFirst, 'Ask first'], [counts.off, 'Off']] as const).filter(([n]) => n > 0);
+  // S4 W2a fix round 1: the states by the ruled pairs (`STATE_WORDS`), drafted for the words check; Allow, the card's
+  // button, keeps its word.
+  const groups = ([[counts.on, STATE_WORDS.on], [counts.askFirst, STATE_WORDS['ask-first']], [counts.off, STATE_WORDS.off]] as const).filter(([n]) => n > 0);
   if (groups.length === 0) return '';
   const named = groups.map(([n, state], i) => {
     const count = n < COUNT_WORDS.length ? COUNT_WORDS[n] : String(n);
@@ -95,6 +106,19 @@ export const PANEL_PRIVACY_LINK = 'Where a question can go, in full';
  * question." The row's "Set <State> since <date>." follows on the same line.
  */
 export const PANEL_STATE_CHANGED = { middle: ' is now ', end: '. This applies from your next question.' } as const;
+
+/**
+ * A stored state in words (S4 W2a fix round 1, the ruled pairs: On to enabled, Off to disabled, Ask first to "not
+ * answered yet", as S86 has it), drafted for the words check: the row's confirmation ("{name} is now enabled. …"),
+ * the lead before a consent, and the since line.
+ */
+export const STATE_WORDS = { on: 'enabled', 'ask-first': 'not answered yet', off: 'disabled' } as const;
+
+/** The panel's since line, drafted in S4 W2a fix round 1 ("Enabled since <date>."); it was "Set On since <date>.". */
+export function sinceLine(state: keyof typeof STATE_WORDS, since: string): string {
+  const word = STATE_WORDS[state];
+  return `${word.charAt(0).toUpperCase()}${word.slice(1)} since ${since}.`;
+}
 
 /**
  * Under a source's control, as a status line, when its change was refused because the signed-out reader's cookie is
@@ -156,6 +180,97 @@ export function sourcesShownLine(shown: number, total: number): string {
   return `${shown} of ${total} sources shown`;
 }
 
+// --- Settings' groups and each source's control (S4 W2a, npstorey/civic-ai-tools#335) ---
+//
+// The words are the taken forms of the owner's rulings of 2026-11-24 (C1 = A, C2 = B, C3-ALL = A, C6 = B, C9-L = A),
+// byte for byte; where a form carries a count, the count is the site's (`countInWords`, as the lead counts).
+
+/** A count as the site writes it: in words up to twelve, in digits above. */
+export function countInWords(n: number): string {
+  return n < COUNT_WORDS.length ? COUNT_WORDS[n] : String(n);
+}
+
+const capital = (text: string) => text.charAt(0).toUpperCase() + text.slice(1);
+
+/**
+ * A source's control (S109, S118; P-1 = A, C9-L = A): two equal buttons, Enable and Disable, the one set drawn
+ * pressed, each keeping its word; `name` is the control's accessible name.
+ */
+export const SOURCE_CONTROL_TEXT = {
+  enable: 'Enable',
+  disable: 'Disable',
+  name: (source: string) => `${source}: Enable or Disable`,
+} as const;
+
+/** S10 (C2 = B): under the control of a source set on its own, in a group of two or more. */
+export const SET_ON_ITS_OWN_LINE = 'Set on its own: the group\'s control leaves it as it is.';
+
+/** S11 (C2 = B): "About these settings", after the tab's first sentence. */
+export const ABOUT_SET_ON_ITS_OWN = 'A source set on its own follows its group again once you set the group to that source\'s setting.';
+
+/** S96 (C3-ALL = A): Settings' button above the groups. */
+export const ENABLE_ALL_SOURCES = 'Enable all data sources';
+
+/** S97 (C3-ALL = A): the status line after "Enable all data sources", for the configured count. */
+export function enableAllDoneLine(total: number): string {
+  return `All ${countInWords(total)} data sources are now enabled, including any you disabled. A source added later is not enabled until you enable it. This applies from your next question.`;
+}
+
+/** The states a group's line counts. */
+export interface GroupCounts {
+  on: number;
+  askFirst: number;
+  off: number;
+}
+
+/**
+ * A group's words (C1 = A; C2 = B), for a group of two or more sources reached through one server, named by
+ * `groupName` (S42, `source-name.ts`):
+ *   - `count` (S1), after the group's name;
+ *   - `sets` (S2), under the group's control; a group of two reads "both", and its first sentence names the
+ *     exception only when one of the two is set on its own;
+ *   - `controlName` (S3), the control's accessible name;
+ *   - `statesLine` (S4), under the control when it shows neither button pressed: the lead's order with no clause
+ *     while the group's rows show, and on a closed group (above twelve) the sources not answered yet last, with
+ *     S86's condition where the site can ask;
+ *   - `disclosure` (S5), the summary that opens the rows of a group of more than twelve;
+ *   - `changed` (S6, S7, S8), the status line after a change that was saved.
+ */
+export const GROUP_TEXT = {
+  count: (n: number) => `${countInWords(n)} sources`,
+  sets: (n: number, own: number) => {
+    // A group of two with both set on their own: drafted in S4 W2a fix round 1 (item 4), built as S2[1] and S2[2] are,
+    // for the owner at W2's gate; no ruled form.
+    const first = n === 2
+      ? (own === 1 ? 'Sets both, except one set on its own.' : own === 2 ? 'Sets both, except any set on its own.' : 'Sets both.')
+      : `Sets all ${countInWords(n)}, except any set on its own.`;
+    return `${first} A source set on its own keeps its own setting.`;
+  },
+  controlName: (group: string, n: number) => `${group}: Enable or Disable, ${n === 2 ? 'for both' : `for all ${countInWords(n)}`}, except any set on its own`,
+  statesLine: (counts: GroupCounts, rowsShown: boolean, canAsk: boolean): string => {
+    const order: Array<[number, string]> = rowsShown
+      ? [[counts.on, 'enabled'], [counts.askFirst, 'not answered yet'], [counts.off, 'disabled']]
+      : [[counts.on, 'enabled'], [counts.off, 'disabled'], [counts.askFirst, 'not answered yet']];
+    const named = order
+      .filter(([n]) => n > 0)
+      .map(([n, state], i) => (i === 0 ? `${capital(countInWords(n))} ${n === 1 ? 'source' : 'sources'} ${state}` : `${countInWords(n)} ${state}`));
+    if (named.length === 0) return '';
+    const clause = !rowsShown && canAsk && counts.askFirst > 0 ? `: the site asks before it uses ${counts.askFirst === 1 ? 'it' : 'them'}` : '';
+    return `${named.join(', ')}${clause}.`;
+  },
+  disclosure: (n: number) => `The ${countInWords(n)} sources in this group`,
+  /**
+   * After a group's change was saved: `changed` sources now hold `state`; `left` set on their own to another setting
+   * were left as they are. `reached` is the group's phrase after "sources", "reached through Socrata".
+   */
+  changed: (changed: number, left: number, reached: string, state: 'enabled' | 'disabled') => {
+    if (changed === 0) return 'Nothing changed. Each source in this group is set on its own. Change each one on its own row.';
+    const now = `${capital(countInWords(changed))} ${changed === 1 ? 'source' : 'sources'} ${reached} ${changed === 1 ? 'is' : 'are'} now ${state}.`;
+    const kept = left === 0 ? '' : ` ${capital(countInWords(left))} set on ${left === 1 ? 'its' : 'their'} own ${left === 1 ? 'was' : 'were'} left as ${left === 1 ? 'it is' : 'they are'}.`;
+    return `${now}${kept} This applies from your next question.`;
+  },
+} as const;
+
 /** The overlay's address: served on both hosts (S1); every pointer opens it with a client-side link. */
 export const SETTINGS_HREF = '/settings';
 
@@ -196,8 +311,11 @@ const CARD_CHANGE_LINE = 'You can change or withdraw this in Data source setting
  */
 const ALLOW_EFFECT = "Allow: your question is sent to the model service. A data source is used only if it is On, or if it is set to Ask first and you allow it when asked. Don't allow: nothing is sent. You are asked again when you send a question.";
 
-/** Item 9: the pause's third button (never on the card, S3). */
-export const ALLOW_ALL_SOURCES = 'Allow all data sources';
+/**
+ * Item 9: the pause's third button at twelve or fewer configured sources (never on the card, S3). S4 W2b: S96 (C3 = A,
+ * C3-ALL = A; DR-7 B), the words of Settings' button, which sets the same thing.
+ */
+export const ALLOW_ALL_SOURCES = ENABLE_ALL_SOURCES;
 
 export const CONSENT_CARD = {
   /** D1 = A: the heading, a question, and the card's accessible name. */
@@ -456,13 +574,21 @@ export const NYC_RECORD_EXAMPLES_SENTENCE = {
  * reason `not-selected` on a run whose sources the reader picked: an allowed source the reader did not pick.
  */
 export const WHERE_IT_WENT_REASONS = {
-  allowedNotUsed: 'Ask first: allowed when asked, but not used for this question.',
-  declined: 'Ask first: not allowed for this question.',
-  noAnswer: 'Ask first: no answer arrived in time, so it was not used.',
+  // S4 W2b: C3-O = B's forms, S125[7], S125[8], S125[3], S125[4], S125[5] and S125[6] (OA-1158), on a run and on a
+  // record, whenever it was made: the page reads these at render time, so the signed bytes do not move (B7).
+  allowedNotUsed: 'Accepted when asked, but not used for this question.',
+  /**
+   * Drafted in S4 W2b fix round 1 (the seat's ruling 7239440759), for the words check: a source not enabled at the
+   * start that loaded with no question put about it, on an answer about another source (a class answer, or "Enable
+   * all data sources"); the record says so in `tool.load_asked: false`.
+   */
+  allowedByAnother: 'Enabled by an answer about another source, but not used for this question.',
+  declined: 'Declined when asked, so not used for this question.',
+  noAnswer: 'Not enabled: it could not be asked about, or no answer arrived in time.',
   unavailable: 'Unavailable. This site could not load it for this question.',
-  onNotUsed: 'On, not used for this question.',
-  off: 'Off.',
-  notAsked: 'Ask first: not asked for this question.',
+  onNotUsed: 'Enabled, not used for this question.',
+  off: 'Disabled.',
+  notAsked: 'Not enabled: not asked for this question.',
   notSetUp: 'Not set up on the site that ran this question.',
   notPicked: 'Not picked for this question.',
 } as const;
@@ -628,8 +754,8 @@ export const ECHO_LIMIT = 40;
  * them claims a question put to the reader: `declined` is also the outcome when
  * no pause could be held, and `no-answer` when the reader could not be asked
  * (`decision.ts`, `notHeld`); a record states whether a question was put only
- * in `tool.load_asked`. `WHERE_IT_WENT_REASONS` above is owner-approved and
- * unchanged.
+ * in `tool.load_asked`. `WHERE_IT_WENT_REASONS` above is owner-approved; S4 W2b
+ * gave it C3-O = B's forms, and these three are not among the rows it ruled.
  */
 export const CHOOSER_REASONS = {
   declined: 'Not allowed, so it was not used for this question.',

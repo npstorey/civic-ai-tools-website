@@ -224,12 +224,13 @@ function buttonsOf(node: HostElement): string[] {
 
 function assertCard(surface: Surface, card: HostElement, where: string): void {
   const text = textOf(card);
-  assert.ok(text.startsWith('Boston OpenContext is set to Ask first.'), `${where}: the card reads: ${text.slice(0, 200)}`);
+  // Moved by S4 W2b (npstorey/civic-ai-tools#335): the heading S146, and the answers S100 and S96.
+  assert.ok(text.startsWith('The AI has asked to use Boston OpenContext. Nothing has been sent to it yet.'), `${where}: the card reads: ${text.slice(0, 200)}`);
   // UX-2 HG (D1-D3 = A): while the pause asks, the short box carries the pair, then Allow all data sources; the card
   // in the steps carries none.
   const prompts = surface.elements().filter((el) => el.props['data-part'] === 'consent-pause-prompt');
   assert.equal(prompts.length, 1, `${where}: expected one short box, found ${prompts.length}`);
-  assert.deepEqual(buttonsOf(prompts[0]), ['Allow', "Don't allow", 'Allow all data sources'], `${where}: the short box's buttons`);
+  assert.deepEqual(buttonsOf(prompts[0]), ['Enable', "Don't enable", 'Enable all data sources'], `${where}: the short box's buttons`);
   assert.deepEqual(buttonsOf(card), [], `${where}: the card's buttons`);
 }
 

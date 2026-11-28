@@ -543,8 +543,22 @@ test('A8 (red): the pause\'s off-class turns Off the class\'s members not set on
   const now = held(reader, ids);
   assert.equal(now['nyc-record'].state, 'off');
   assert.equal(now.socrata.state, 'on', 'off-class turned Off a source set On on its own');
-  assert.equal(decision.runDecisionOf('off-class'), 'off');
-  assert.equal(decision.runDecisionOf('allow-class'), 'allow');
+  // Moved by S4 W2b (criterion B3): a class answer reaches the run as itself, which declines or loads the asking source
+  // as `off` and `allow` do and answers a later member's load the same way (`consent-pause-class.test.ts`).
+  assert.equal(decision.runDecisionOf('off-class'), 'off-class');
+  assert.equal(decision.runDecisionOf('allow-class'), 'allow-class');
+});
+
+test('S4 W2b (B3): the gate names the sources set on their own, in both stores, so a class answer in the run leaves them as they are', async () => {
+  for (const store of ['cookie', 'row'] as const) {
+    const { hash, ids } = await current();
+    const reader = await consented(store, Object.fromEntries(ids.map((id) => [id, 'ask-first'])));
+    const flagged = await put(reader, { change: { scope: 'source', sourceId: 'nyc-record', state: 'on' }, flowsVersion: hash });
+    assert.equal(flagged.status, 200, store);
+    const g = await gate(reader);
+    assert.equal(g.ok, true, store);
+    assert.deepEqual(g.own, ['nyc-record'], `${store}: the gate's own`);
+  }
 });
 
 // =====================================================================================================================

@@ -126,7 +126,7 @@ const READER_PICKED = 'reader-picked';
 
 type Contact =
   | { kind: 'call'; source: string | undefined; failureKind: string | undefined; pack?: string }
-  | { kind: 'load'; alias: string | undefined; outcome: string };
+  | { kind: 'load'; alias: string | undefined; outcome: string; asked?: boolean };
 
 interface ServerEntry { url: string; name?: string }
 
@@ -150,6 +150,11 @@ interface CoreInput {
    * publish contract admits `not-selected` from any producer's trace, where it need not mean a pick.
    */
   notSelectedIsUnpicked: boolean;
+  /**
+   * The run held no pause (S4 W2b fix round 1): the JSON compare route, which asks no one, so a `declined` load there
+   * was not asked about and reads `notAsked`. Absent on every route that writes a record.
+   */
+  noPause?: boolean;
 }
 
 const nameOf = sourceReaderName;
@@ -197,13 +202,23 @@ function sourceRecipients(side: Side, sourceId: string, base?: string): WhereRec
 }
 
 /** A source's reason for not being reached (§2): its last load first, then its stated reason. */
-function whyNotSentFor(offered: OfferedSource, lastLoad: string | undefined, notSelectedIsUnpicked: boolean): string | null {
+function whyNotSentFor(
+  offered: OfferedSource,
+  load: { outcome: string; asked?: boolean } | undefined,
+  notSelectedIsUnpicked: boolean,
+  noPause = false,
+): string | null {
   const R = WHERE_IT_WENT_REASONS;
-  switch (lastLoad) {
+  switch (load?.outcome) {
     case 'loaded':
-      return offered.reason === 'not-consented' ? R.allowedNotUsed : R.onNotUsed;
+      // S4 W2b fix round 1: a source not enabled at the start that loaded with no question put about it (the record's
+      // `tool.load_asked: false`) loaded on an answer about another source (a class answer, or "Enable all data
+      // sources"). A record with no such attribute reads as before.
+      if (offered.reason !== 'not-consented') return R.onNotUsed;
+      return load.asked === false ? R.allowedByAnother : R.allowedNotUsed;
     case 'declined':
-      return R.declined;
+      // The JSON compare route asks no one (S4 W2b fix round 1).
+      return noPause ? R.notAsked : R.declined;
     case 'no-answer':
       return R.noAnswer;
     case 'unavailable':
@@ -294,11 +309,11 @@ function build(input: CoreInput, countedUnder: typeof PACK_CALL_COUNTED_UNDER = 
     if (countedUnder !== 'pack') count(source);
   }
 
-  const lastLoad = new Map<string, string>();
+  const lastLoad = new Map<string, { outcome: string; asked?: boolean }>();
   for (const contact of input.contacts) {
     if (contact.kind !== 'load' || contact.outcome === 'not-offered') continue;
     const offered = input.sourcesOffered.find((o) => o.alias === contact.alias);
-    if (offered) lastLoad.set(offered.sourceId, contact.outcome);
+    if (offered) lastLoad.set(offered.sourceId, { outcome: contact.outcome, ...(contact.asked === undefined ? {} : { asked: contact.asked }) });
   }
 
   const reached: WhereReachedRow[] = [
@@ -324,7 +339,7 @@ function build(input: CoreInput, countedUnder: typeof PACK_CALL_COUNTED_UNDER = 
   const notReached: WhereNotReachedRow[] = [];
   for (const offered of input.sourcesOffered) {
     if (calls.has(offered.sourceId) || reachedByPack.has(offered.sourceId)) continue;
-    const whyNotSent = whyNotSentFor(offered, lastLoad.get(offered.sourceId), input.notSelectedIsUnpicked);
+    const whyNotSent = whyNotSentFor(offered, lastLoad.get(offered.sourceId), input.notSelectedIsUnpicked, input.noPause === true);
     if (whyNotSent !== null) notReached.push({ sourceId: offered.sourceId, name: nameOf(offered.sourceId, offered.alias), whyNotSent });
   }
 
@@ -359,7 +374,12 @@ function readSpans(spans: readonly unknown[]): { contacts: Contact[]; model: str
       // OF3b (website #810): the map format's step is the site's own; no source saw it, so it is no contact.
       if (attrs.get('tool.operation_type') === PRESENT_STEP_NAME) continue;
       if (attrs.get('tool.operation_type') === LOAD_OPERATION) {
-        contacts.push({ kind: 'load', alias: aliasOf(text(attrs.get('tool.arguments'))), outcome: text(attrs.get('tool.load_outcome')) ?? '' });
+        // `tool.load_asked` (G0-B2 A): whether a question was put about the source; absent on an older record.
+        const asked = attrs.get('tool.load_asked');
+        contacts.push({
+          kind: 'load', alias: aliasOf(text(attrs.get('tool.arguments'))), outcome: text(attrs.get('tool.load_outcome')) ?? '',
+          ...(typeof asked === 'boolean' ? { asked } : {}),
+        });
       } else {
         const failed = attrs.get('error') === true || attrs.has('error.kind');
         const pack = packSourceOfId(text(attrs.get('mcp.pack_id')));
@@ -407,6 +427,8 @@ export function whereItWentFromCalls(input: {
   model: string;
   service: string;
   executed?: boolean;
+  /** The run held no pause (the JSON compare route, S4 W2b fix round 1): a `declined` load was not asked about. */
+  noPause?: boolean;
 }): WhereItWentModel {
   // A search (S3-B W2) is no contact with any source, whatever the resolver would make of its name.
   // OF3b: nor is the map format's step, the site's own (`present_result`).
@@ -420,7 +442,7 @@ export function whereItWentFromCalls(input: {
   );
   return build({
     contacts, model: input.model, service: input.service, sourcesOffered: input.sourcesOffered,
-    executed: input.executed === true, ...runSide(input.statement), notSelectedIsUnpicked: true,
+    executed: input.executed === true, ...runSide(input.statement), notSelectedIsUnpicked: true, noPause: input.noPause === true,
   });
 }
 

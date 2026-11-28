@@ -56,6 +56,7 @@ import {
   reaskOf,
   recordSourcesOffered,
   selectionFromStates,
+  setOnItsOwn,
   type Reask,
   type SourceState,
 } from '@/lib/sources/consent';
@@ -112,6 +113,11 @@ export type ConsentDecision =
       statement?: FlowsStatement;
       /** Every stored state (stale ids are harmless where it is read); empty while dormant. */
       states: Record<string, SourceState>;
+      /**
+       * The stored sources set on their own (premise 7's rule, `setOnItsOwn`), which a class answer at a pause leaves
+       * as they are in the run too (S4 W2b; `directorySet`). Absent while dormant.
+       */
+      own?: string[];
     }
   | { ok: false; store: 'row' | 'cookie'; statement: FlowsStatement; payload: ConsentRefusalPayload };
 
@@ -146,6 +152,7 @@ export async function consentInForce(request: Request, session: ConsentSession |
   const configured = statement.sources.map((source) => source.sourceId);
   const dbId = session?.user?.dbId;
   let states: Record<string, SourceState>;
+  let own: string[];
   let store: 'row' | 'cookie';
   if (dbId) {
     store = 'row';
@@ -154,6 +161,7 @@ export async function consentInForce(request: Request, session: ConsentSession |
     const reask = reaskOf(classifyFlowsChange(row.flowsStatement, statement));
     if (reask.base || reask.sources.length > 0) return refusal(store, statement, reask);
     states = flatStates(row.states);
+    own = Object.entries(row.states).filter(([, entry]) => setOnItsOwn(entry)).map(([id]) => id);
   } else {
     store = 'cookie';
     // Either form; a second-form entry is matched against the sources the statement in force lists (S4 W1).
@@ -162,6 +170,7 @@ export async function consentInForce(request: Request, session: ConsentSession |
     const verdict = cookieConsentInForce(cookie, statement);
     if (!verdict.inForce) return refusal(store, statement, verdict.reask);
     states = flatStates(cookie.states);
+    own = Object.entries(cookie.states).filter(([, entry]) => setOnItsOwn(entry)).map(([id]) => id);
   }
   const selection = selectionFromStates(configured, states);
   // No source On: refused unless the run can ask and a configured source is
@@ -178,5 +187,6 @@ export async function consentInForce(request: Request, session: ConsentSession |
     selection,
     recordReasons: (offered) => recordSourcesOffered(offered, states),
     states,
+    own,
   };
 }

@@ -1697,11 +1697,61 @@ footer a:visited {
    gives that source's card (DirectoryClient's server card: an accent border, the accent at 3%). The overlay sets the
    attribute before it scrolls the row into view. The row's own padding and top border are inline (SourceRow), so these
    two take `!important`; the vertical padding stays the row's 8px. */
-ul[data-target-source] > li[data-landing-target] {
+/* S4 W2a: a row in a group sits in its group's list, under the marked one, so the row is any descendant. */
+ul[data-target-source] li[data-landing-target] {
   border: 1px solid var(--accent) !important;
   border-radius: 4px;
   background-color: rgba(var(--accent-rgb), 0.03);
   padding: 8px !important;
+}
+
+/* S4 W2a (npstorey/civic-ai-tools#335; P-1 = A, C9-L = A): a source's control, and a group's, is two equal buttons,
+   Enable and Disable, each keeping its word; the one set is drawn pressed (`aria-pressed="true"`: the accent's light
+   fill, the accent's border, the weight up). A source not answered yet, and a group whose sources differ, show neither
+   pressed. */
+.source-toggle {
+  min-width: 88px;
+  padding: 4px 14px;
+  font-family: inherit;
+  font-size: 13px;
+  line-height: 1.6;
+  color: var(--text-primary);
+  background-color: var(--white);
+  border: 1px solid var(--neutral-70);
+  border-radius: 4px;
+  cursor: pointer;
+}
+
+.source-toggle[aria-pressed="true"] {
+  font-weight: 600;
+  color: var(--accent-hover);
+  background-color: var(--accent-light);
+  border-color: var(--accent);
+}
+
+.source-toggle:focus-visible,
+.source-enable-all:focus-visible {
+  outline: 2px dashed var(--accent);
+  outline-offset: 2px;
+}
+
+.source-toggle:disabled,
+.source-enable-all:disabled {
+  cursor: not-allowed;
+  color: var(--text-muted);
+}
+
+/* S4 W2a (C3-ALL = A): "Enable all data sources", above the rows, drawn lighter than a row's control. */
+.source-enable-all {
+  padding: 4px 14px;
+  font-family: inherit;
+  font-size: 13px;
+  line-height: 1.6;
+  color: var(--accent);
+  background-color: transparent;
+  border: 1px dashed var(--neutral-70);
+  border-radius: 4px;
+  cursor: pointer;
 }
 
 /* The directory's filters at 640 px and up: the Disclosure's summary hidden and its closed body shown through
