@@ -390,6 +390,8 @@ test('fix round 1 (6): WHERE_IT_WENT_REASONS is the owner-approved set, and the 
   // Moved by S4 W2b (npstorey/civic-ai-tools#335; C3-O = B, OA-1158): six reasons take S125[3] to S125[8].
   assert.deepEqual({ ...copy.WHERE_IT_WENT_REASONS }, {
     allowedNotUsed: 'Accepted when asked, but not used for this question.',
+    // S4 W2b fix round 1 (drafted, for the words check).
+    allowedByAnother: 'Enabled by an answer about another source, but not used for this question.',
     declined: 'Declined when asked, so not used for this question.',
     noAnswer: 'Not enabled: it could not be asked about, or no answer arrived in time.',
     unavailable: 'Unavailable. This site could not load it for this question.',

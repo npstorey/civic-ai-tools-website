@@ -85,7 +85,7 @@ const { buildFlowsStatement, statementHash } = await load('lib/flows/statement.t
 // The buttons read S100, "Enable" and "Don't enable", and S96.
 const ALLOWED = 'You chose Enable. It is enabled now.';
 // UX-2 P4b: item 21's outcome, with item 13's one pointer; item 40's "in Data source settings".
-const DECLINED = "You chose Don't allow. Nothing is sent to it, and it is Off now. You can change this in Data source settings.";
+const DECLINED = "You chose Don't enable. Nothing is sent to it, and it is disabled now. You can change this in Data source settings."; // moved by S4 W2b fix round 1 (drafted)
 const ALLOWED_NOT_MOVED = "You chose Enable. The AI's searches for this question are sent to it. It could not be enabled for later questions. You can enable it in Data source settings.";
 
 // --- The stream, the route answers, the pauses -----------------------------------------------

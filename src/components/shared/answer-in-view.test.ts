@@ -69,7 +69,7 @@ const READY = 'The answer to your question is ready.';
 /** D8 = A reads out the card's own sentences (`CONSENT_STEP_TEXT`), as they stand at the base. */
 // Moved by S4 W2b (npstorey/civic-ai-tools#335): S112 and S102; `declined` has no taken form and keeps its words.
 const ALLOWED = 'You chose Enable. It is enabled now.';
-const DECLINED = "You chose Don't allow. Nothing is sent to it, and it is Off now.";
+const DECLINED = "You chose Don't enable. Nothing is sent to it, and it is disabled now."; // moved by S4 W2b fix round 1 (drafted)
 const ALLOWED_ALL = 'You chose Enable all data sources. Every data source is enabled now. A source added later is not enabled until you enable it.';
 
 // --- A document answered from the page's own elements ---------------------------------------------------------------

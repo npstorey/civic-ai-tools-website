@@ -289,7 +289,7 @@ for (const [label, decision, outcome] of [
   // Moved by S4 W2b: S100's labels, S112 and S102; `declined` has no taken form and keeps its words.
   ['Enable', 'allow', 'You chose Enable. It is enabled now.'],
   // UX-2 P4b (D7 C, items 13, 21): "Don't allow" posts off, and the outcome says it is Off now.
-  ["Don't enable", 'off', "You chose Don't allow. Nothing is sent to it, and it is Off now."],
+  ["Don't enable", 'off', "You chose Don't enable. Nothing is sent to it, and it is disabled now."], // moved by S4 W2b fix round 1 (drafted)
   // ASK2 = B, B4b: the third button posts allow-all.
   ['Enable all data sources', 'allow-all', 'You chose Enable all data sources. Every data source is enabled now. A source added later is not enabled until you enable it.'],
 ] as const) {

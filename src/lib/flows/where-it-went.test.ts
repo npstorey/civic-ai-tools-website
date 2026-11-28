@@ -144,6 +144,8 @@ const fromPackage = (pkg: unknown, served: FlowsStatement | null) => {
 // S125[6]. Each case below reads the same reason key; only the words moved (B7).
 const REASON = {
   allowedNotUsed: 'Accepted when asked, but not used for this question.',
+  // S4 W2b fix round 1 (drafted, for the words check): loaded on an answer about another source.
+  allowedByAnother: 'Enabled by an answer about another source, but not used for this question.',
   declined: 'Declined when asked, so not used for this question.',
   noAnswer: 'Not enabled: it could not be asked about, or no answer arrived in time.',
   unavailable: 'Unavailable. This site could not load it for this question.',

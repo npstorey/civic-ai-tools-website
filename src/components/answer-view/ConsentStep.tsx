@@ -176,8 +176,12 @@ export const CONSENT_STEP_TEXT = {
   allowedNotMoved: "You chose Enable. The AI's searches for this question are sent to it. It could not be enabled for later questions. You can enable it in Data source settings.",
   /** S29 (C4 = A): the same, because the cookie is full. */
   allowedFull: `You chose Enable. The AI's searches for this question are sent to it. It could not be enabled for later questions, ${COOKIE_IS_FULL}`,
-  /** Today's words: no taken form renames this outcome (S101, its rename, was dropped with C3 · C). */
-  declined: "You chose Don't allow. Nothing is sent to it, and it is Off now.",
+  /**
+   * After Don't enable while the question waited. Drafted in S4 W2b fix round 1 (the seat's ruling 7239440759) by the
+   * ruled pairs (Don't allow → Don't enable, Off → disabled), for the words check; no taken form (S101, these words,
+   * was dropped with C3 · C).
+   */
+  declined: "You chose Don't enable. Nothing is sent to it, and it is disabled now.",
   /** S30 (C4 = A): after Don't enable while the question waited, because the cookie is full. */
   declinedFull: `You chose Don't enable. Nothing is sent to it for this question. It could not be disabled for later questions, ${COOKIE_IS_FULL}`,
   /** S102 (C3-ALL = A): after "Enable all data sources". */
@@ -200,6 +204,17 @@ export const CONSENT_STEP_TEXT = {
   classDeclinedFull: (n: number, phrase: string, left: number) =>
     `You chose Don't enable any of the ${countInWords(n)}. Nothing is sent to ${left === 0 ? `the ${countInWords(n)}` : `${countInWords(n - left)} of the ${countInWords(n)}`} ${phrase} for this question. `
     + `${left === 0 ? '' : `${leftAsIs(left)} `}They could not be disabled for later questions, ${COOKIE_IS_FULL}`,
+  /**
+   * Drafted in S4 W2b fix round 1 (7239440759), for the words check, built as S126 and S158 are: a class answer, or
+   * "Enable all data sources", whose move threw; and "Enable all data sources" refused at the cookie's bound. A class
+   * answer refused at the bound reads S27 or S28. No pointer follows any of them.
+   */
+  classAllowedNotMoved: (n: number, phrase: string) =>
+    `You chose Enable all ${countInWords(n)} ${phrase}, but they could not be enabled. You can enable them in Data source settings.`,
+  classDeclinedNotMoved: (n: number) =>
+    `You chose Don't enable any of the ${countInWords(n)}, but they could not be disabled. You can disable them in Data source settings.`,
+  allowedAllNotMoved: 'You chose Enable all data sources, but they could not be enabled. You can enable them in Data source settings.',
+  allowedAllFull: `You chose Enable all data sources, but they could not be enabled, ${COOKIE_IS_FULL}`,
   /** Item 13: the one pointer, added to an outcome once `change` no longer renders. */
   pointer: 'You can change this in Data source settings.',
   ended: 'The question went on without your answer, so it did not use this source.',
@@ -245,13 +260,16 @@ export function pauseOutcome(slot: Pick<PendingPause, 'decision' | 'moved' | 'co
       if (full) return after ? T.declinedNotMovedFull : signIn(T.declinedFull);
       return T.declinedNotMoved;
     case 'allow-all':
-      return T.allowedAll;
+      if (!notMoved) return T.allowedAll;
+      return full ? T.allowedAllFull : T.allowedAllNotMoved;
     case 'allow-class':
       if (!g) return T.allowed;
-      return full ? signIn(T.classAllowedFull(g.n, g.phrase, g.left)) : T.classAllowed(g.n, g.phrase, g.left);
+      if (!notMoved) return T.classAllowed(g.n, g.phrase, g.left);
+      return full ? signIn(T.classAllowedFull(g.n, g.phrase, g.left)) : T.classAllowedNotMoved(g.n, g.phrase);
     case 'off-class':
       if (!g) return T.declined;
-      return full ? signIn(T.classDeclinedFull(g.n, g.phrase, g.left)) : T.classDeclined(g.n, g.phrase, g.left);
+      if (!notMoved) return T.classDeclined(g.n, g.phrase, g.left);
+      return full ? signIn(T.classDeclinedFull(g.n, g.phrase, g.left)) : T.classDeclinedNotMoved(g.n);
     default:
       return null;
   }
@@ -603,8 +621,9 @@ export default function ConsentStep({ pause, runMovedOn = false, place = 'steps'
           {!holdEnded && <WiderAnswers scope={scope} compact={false} disabled={slot?.deciding === true} onAnswer={(answer) => { void decideConsentPause(key, answer); }} />}
         </>
       )}
-      {/* C3-D = C: the source's facts behind one closed disclosure, S103. */}
-      <Disclosure summary={PANEL_ROW_MORE}>
+      {/* C3-D = C: the source's facts behind one closed disclosure, S103. In a Settings or picker row the row's own
+          "More about this source" holds them, so the row's card carries none (fix round 1, 7239440759). */}
+      {place !== 'row' && <Disclosure summary={PANEL_ROW_MORE}>
         {lines.what !== null && <div>{lines.what.charAt(0).toUpperCase() + lines.what.slice(1)}</div>}
         <div>
           {lines.reach.map((part, i) =>
@@ -628,7 +647,7 @@ export default function ConsentStep({ pause, runMovedOn = false, place = 'steps'
         <div>
           <LocalOnlyOffer statement={linksOnly} />
         </div>
-      </Disclosure>
+      </Disclosure>}
       {outcome !== null && (
         <p data-part="consent-outcome" style={{ margin: '6px 0 0', fontWeight: 600, color: 'var(--text-primary)' }}>
           {outcome}

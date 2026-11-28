@@ -109,7 +109,7 @@ const ALLOW = 'Enable';
 const DONT_ALLOW = "Don't enable";
 const ALLOW_ALL = 'Enable all data sources';
 const CHOICES = "Enable: the AI's searches for this question are sent to it, and it is enabled for later questions. Don't enable: nothing is sent to it, and it is disabled for later questions. Enable all data sources: every data source is enabled, including any you disabled, and this question goes on without asking again.";
-const DECLINED = "You chose Don't allow. Nothing is sent to it, and it is Off now.";
+const DECLINED = "You chose Don't enable. Nothing is sent to it, and it is disabled now."; // moved by S4 W2b fix round 1 (drafted)
 const ALLOWED_ALL = 'You chose Enable all data sources. Every data source is enabled now. A source added later is not enabled until you enable it.';
 const POINTER = 'You can change this in Data source settings';
 

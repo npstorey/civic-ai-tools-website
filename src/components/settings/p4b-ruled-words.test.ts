@@ -71,7 +71,7 @@ const DONT_ALLOW_LINE = "You chose Don't allow. Nothing was sent. Edit this ques
 // Item 39's and item 40's places, moved by S4 W2b (npstorey/civic-ai-tools#335): S98, S154, S157, S102, S113 and
 // S126[1] (the rulings of 2026-11-24 and OUTCOME_LINES A). `declined` and `nextQuestion` have no taken form and stay.
 const CHOICES = "Enable: the AI's searches for this question are sent to it, and it is enabled for later questions. Don't enable: nothing is sent to it, and it is disabled for later questions. Enable all data sources: every data source is enabled, including any you disabled, and this question goes on without asking again."; // S98
-const DECLINED = "You chose Don't allow. Nothing is sent to it, and it is Off now."; // 13, 21, 39
+const DECLINED = "You chose Don't enable. Nothing is sent to it, and it is disabled now."; // 13, 21, 39's place; moved by S4 W2b fix round 1 (drafted)
 const AFTER_CHOICES = "Enable: it is enabled for later questions. Don't enable: it is disabled for later questions."; // S154
 const DECLINED_AFTER = "You chose Don't enable. It is disabled for later questions."; // S157
 const STILL = 'You can still answer for later questions.'; // 39: unchanged

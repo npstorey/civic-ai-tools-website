@@ -577,6 +577,12 @@ export const WHERE_IT_WENT_REASONS = {
   // S4 W2b: C3-O = B's forms, S125[7], S125[8], S125[3], S125[4], S125[5] and S125[6] (OA-1158), on a run and on a
   // record, whenever it was made: the page reads these at render time, so the signed bytes do not move (B7).
   allowedNotUsed: 'Accepted when asked, but not used for this question.',
+  /**
+   * Drafted in S4 W2b fix round 1 (the seat's ruling 7239440759), for the words check: a source not enabled at the
+   * start that loaded with no question put about it, on an answer about another source (a class answer, or "Enable
+   * all data sources"); the record says so in `tool.load_asked: false`.
+   */
+  allowedByAnother: 'Enabled by an answer about another source, but not used for this question.',
   declined: 'Declined when asked, so not used for this question.',
   noAnswer: 'Not enabled: it could not be asked about, or no answer arrived in time.',
   unavailable: 'Unavailable. This site could not load it for this question.',
