@@ -174,7 +174,8 @@ const buttonsIn = (node: HostElement): HostElement[] => [...within(node.props.ch
 test('criterion 3 (a): the card names the source by its reader name, never a tool\'s exposed name', async () => {
   const card = await mountCard();
   const text = textOf(cardOf(card));
-  assert.ok(text.startsWith(`${NAME} is set to Ask first.`), `the card opens: ${text.slice(0, 120)}`);
+  // Moved by S4 W2b (C3-D-H B, N1 (b)): the heading while the hold is open and unanswered is S146.
+  assert.ok(text.startsWith(`The AI has asked to use ${NAME}. Nothing has been sent to it yet.`), `the card opens: ${text.slice(0, 120)}`);
   assert.doesNotMatch(text, /MCP Server|boston_opencontext__|boston__|load_source/);
   card.unmount();
 });
@@ -215,16 +216,17 @@ test('criterion 3 (a): the hosts it would reach, the privacy page, and the guide
 // UX-2 P4b (item 8): the decline reads "Don't allow"; the pair stays equal.
 test('criterion 3 (a): Allow and Don\'t allow, one button each, equal in size and style', async () => {
   // UX-2 HG: while the short box asks, it holds the pair, and the card none.
+  // Moved by S4 W2b: the pair reads S100, Enable and Don't enable.
   const page = await mountCard();
-  const allow = page.button('Allow');
-  const dontAllow = page.button("Don't allow");
+  const allow = page.button('Enable');
+  const dontAllow = page.button("Don't enable");
   assert.ok(buttonsIn(promptOf(page)).includes(allow) && buttonsIn(promptOf(page)).includes(dontAllow), 'the pair is not in the short box');
   assert.deepEqual(allow.props.style, dontAllow.props.style, 'the two buttons are styled differently');
   assert.deepEqual(buttonsIn(cardOf(page)), [], 'the card has buttons while the short box asks');
   page.unmount();
   // A pause the bus does not hold: the card carries the pair, equal as before.
   const card = await mountCardOffBus();
-  assert.deepEqual(card.button('Allow').props.style, card.button("Don't allow").props.style, 'the card\'s two buttons are styled differently');
+  assert.deepEqual(card.button('Enable').props.style, card.button("Don't enable").props.style, 'the card\'s two buttons are styled differently');
   card.unmount();
 });
 
@@ -234,7 +236,8 @@ test('criterion 3 (a): Allow and Don\'t allow, one button each, equal in size an
  * What each choice sends (the research's "sends"; T7's "turns on"), as UX-2 P4b re-words them: item 39's choices
  * (item 20's Don't-allow half, D7 C) and B4c's third half, with S4's clause.
  */
-const CHOICES = "Allow: this question is sent to it, and it is turned On for later questions. Don't allow: nothing is sent to it, and it is turned Off for later questions. Allow all data sources: every data source is turned On, and this question goes on without asking again.";
+// Moved by S4 W2b: S98, at twelve or fewer configured sources (behind S105 in the short box, C3-D = C).
+const CHOICES = "Enable: the AI's searches for this question are sent to it, and it is enabled for later questions. Don't enable: nothing is sent to it, and it is disabled for later questions. Enable all data sources: every data source is enabled, including any you disabled, and this question goes on without asking again.";
 
 test('item 3: the card says what each choice sends', async () => {
   // UX-2 HG: while the short box asks, it says what each choice sends, and the card does not.
@@ -254,12 +257,12 @@ test('item 3: the decision comes before the explanation: Allow precedes "Who hol
   // A card that carries the answers: a pause the bus does not hold (UX-2 HG; while the short box asks the card has none).
   const card = await mountCardOffBus();
   const inCard = [...within(cardOf(card))];
-  const allowAt = inCard.findIndex((el) => el.type === 'button' && textOf(el) === 'Allow');
+  const allowAt = inCard.findIndex((el) => el.type === 'button' && textOf(el) === 'Enable');
   const logsAt = inCard.findIndex((el) => el.type !== 'a' && textOf(el).startsWith('Who holds its logs'));
   assert.ok(allowAt >= 0 && logsAt >= 0, `premise: Allow at ${allowAt}, "Who holds its logs" at ${logsAt}`);
   assert.ok(allowAt < logsAt, `Allow (element ${allowAt}) comes after "Who holds its logs" (element ${logsAt}): ${textOf(cardOf(card))}`);
   const text = textOf(cardOf(card));
-  assert.ok(text.indexOf("Allow Don't allow") < text.indexOf('Who holds its logs'), `the buttons read after the explanation: ${text}`);
+  assert.ok(text.indexOf("Enable Don't enable") < text.indexOf('Who holds its logs'), `the buttons read after the explanation: ${text}`);
   card.unmount();
 });
 
@@ -283,11 +286,12 @@ test('criterion 3 (h): the card\'s lines are sourceRowLines\', the panel\'s, and
 // --- (b) the outcome ------------------------------------------------------------------------
 
 for (const [label, decision, outcome] of [
-  ['Allow', 'allow', 'You chose Allow. It is On now.'],
+  // Moved by S4 W2b: S100's labels, S112 and S102; `declined` has no taken form and keeps its words.
+  ['Enable', 'allow', 'You chose Enable. It is enabled now.'],
   // UX-2 P4b (D7 C, items 13, 21): "Don't allow" posts off, and the outcome says it is Off now.
-  ["Don't allow", 'off', "You chose Don't allow. Nothing is sent to it, and it is Off now."],
+  ["Don't enable", 'off', "You chose Don't allow. Nothing is sent to it, and it is Off now."],
   // ASK2 = B, B4b: the third button posts allow-all.
-  ['Allow all data sources', 'allow-all', 'You chose Allow all data sources. Every data source is On now.'],
+  ['Enable all data sources', 'allow-all', 'You chose Enable all data sources. Every data source is enabled now. A source added later is not enabled until you enable it.'],
 ] as const) {
   test(`criterion 3 (b): after ${label}, the card posts its own key and shows the outcome, with no buttons`, async () => {
     answerStatus = 200;
@@ -297,7 +301,7 @@ for (const [label, decision, outcome] of [
     assert.deepEqual(decisions.map((d) => JSON.parse(d.body)), [{ key: KEY, decision }]);
     const text = textOf(cardOf(card));
     assert.ok(text.includes(outcome), `the card after ${label}: ${text}`);
-    assert.equal(card.buttons('Allow').length + card.buttons("Don't allow").length + card.buttons('Allow all data sources').length, 0, 'the buttons stay after a decision');
+    assert.equal(card.buttons('Enable').length + card.buttons("Don't enable").length + card.buttons('Enable all data sources').length, 0, 'the buttons stay after a decision');
     card.unmount();
   });
 }
@@ -305,7 +309,7 @@ for (const [label, decision, outcome] of [
 test('criterion 3 (b): a decision the route refuses as gone says the question is no longer waiting', async () => {
   answerStatus = 404;
   const card = await mountCard();
-  await card.click(card.button('Allow'));
+  await card.click(card.button('Enable'));
   assert.ok(textOf(cardOf(card)).includes('This question is no longer waiting for an answer.'), textOf(cardOf(card)));
   answerStatus = 200;
   card.unmount();
@@ -320,7 +324,7 @@ test('criterion 4: a pause that does not hold says the source can be turned On i
   const text = textOf(cardOf(card));
   assert.ok(text.includes('This question cannot stop to ask you, so it was not used.'), text);
   assert.ok(text.includes('You can turn it On in Data source settings for your next question.'), text);
-  assert.equal(card.buttons('Allow').length + card.buttons("Don't allow").length, 0);
+  assert.equal(card.buttons('Enable').length + card.buttons("Don't enable").length, 0);
   card.unmount();
 });
 
@@ -344,7 +348,7 @@ test('criterion 3 (c): while a decision is pending, the panel\'s row for that so
   const cardAt = inRow.findIndex((el) => el.props['data-part'] === 'consent-step');
   const controlAt = inRow.findIndex((el) => el.props.role === 'group' && el.props['data-part'] === 'enable-disable');
   assert.ok(cardAt > controlAt && controlAt >= 0, 'the row shows no card below its state control');
-  assert.ok(inRow.some((el) => el.type === 'button' && textOf(el) === 'Allow'), 'the row\'s card has no Allow');
+  assert.ok(inRow.some((el) => el.type === 'button' && textOf(el) === 'Enable'), 'the row\'s card has no Enable');
   const socrata = [...within(rowOf('socrata'))];
   assert.ok(!socrata.some((el) => el.props['data-part'] === 'consent-step'), 'another source\'s row shows the card');
   bus.reportConsentPause(null);
@@ -356,6 +360,6 @@ test('criterion 3 (c): while a decision is pending, the panel\'s row for that so
   const cardAfter = after.find((el) => el.props['data-part'] === 'consent-step');
   assert.ok(cardAfter, 'the row lost the card when the run moved on, while the entry lives');
   assert.ok(textOf(cardAfter!).includes('The question went on without your answer'), `the row's card after the run moved on: ${textOf(cardAfter!)}`);
-  assert.deepEqual([...within(cardAfter!.props.children)].filter((el) => el.type === 'button').map((el) => textOf(el)), ['Allow', "Don't allow"], 'the row\'s card lost its buttons when the run moved on');
+  assert.deepEqual([...within(cardAfter!.props.children)].filter((el) => el.type === 'button').map((el) => textOf(el)), ['Enable', "Don't enable"], 'the row\'s card lost its buttons when the run moved on');
   panel.unmount();
 });

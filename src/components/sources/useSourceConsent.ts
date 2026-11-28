@@ -66,6 +66,7 @@ import { useCallback, useEffect, useSyncExternalStore } from 'react';
 import type { FlowsStatement } from '../../lib/flows/statement.ts';
 import type { ConsentNotice } from '../../lib/sources/consent.ts';
 import type { ConsentPausePayload } from '../../lib/streaming.ts';
+import { pauseScope } from '../../lib/sources/reader-groups.ts';
 
 export type SourceStateValue = 'on' | 'ask-first' | 'off';
 
@@ -133,10 +134,21 @@ export interface PendingPause {
   payload: ConsentPausePayload;
   /** An answer is being posted. */
   deciding: boolean;
-  /** The answer the decision route accepted (UX-2 P4b: Allow, Don't allow as `off`, Allow all). */
+  /** The answer the decision route accepted (UX-2 P4b: Allow, Don't allow as `off`, Allow all; S4: a class answer). */
   decision?: PauseAnswer;
-  /** `false` when the route saved Allow but could not turn the source On (fix round 2, item 2); absent otherwise. */
+  /** `false` when the route saved the answer but could not move the consent (fix round 2, item 2); absent otherwise. */
   moved?: false;
+  /**
+   * Why the consent did not move, when the route said (S4 W2b): `consent_cookie_full`, the signed-out reader's cookie
+   * is full (A2, C4 = A). Absent when it moved, or when the move threw (the route names no code then).
+   */
+  code?: 'consent_cookie_full';
+  /**
+   * A class answer's counts, read from the page's consent when it was given (S4 W2b; S16 to S19, S27, S28): the
+   * group's `n` sources, `left` of them set on their own to the other setting (left as they are), and the group's
+   * `phrase` after a count.
+   */
+  group?: { n: number; left: number; phrase: string };
   /** Why the route did not accept one: the question no longer waits, it was answered already, or anything else. */
   failure?: 'gone' | 'decided' | 'other';
   /** The hold is over: its time is up, or the run has moved past it. The entry may still take an answer. */
@@ -327,20 +339,46 @@ export function cancelConsentPauses(): void {
   if (ended) set({ pauses: ended });
 }
 
-/** A reader's answer at a pause (UX-2 P4b, L10): Allow, "Don't allow" (`off`) or "Allow all data sources" (`allow-all`). */
-export type PauseAnswer = 'allow' | 'off' | 'allow-all';
+/**
+ * A reader's answer at a pause (UX-2 P4b, L10): Enable (`allow`), "Don't enable" (`off`), "Enable all data sources"
+ * (`allow-all`); S4 W2b, above twelve sources: "Enable all {n} {group phrase}" (`allow-class`) and "Don't enable any of
+ * the {n}" (`off-class`), each the route's value of the same name (G0-4 = A, C3 = A).
+ */
+export type PauseAnswer = 'allow' | 'off' | 'allow-all' | 'allow-class' | 'off-class';
+
+/**
+ * A class answer's counts from the page's consent before the answer is written: the group's members, those set on
+ * their own to the other setting (which the class write leaves as they are, premise 7 "Honoured"), and its phrase.
+ * Null when the answer is not a class answer, or the page has no group for the source.
+ */
+function classCounts(sourceId: string, decision: PauseAnswer): PendingPause['group'] | null {
+  if (decision !== 'allow-class' && decision !== 'off-class') return null;
+  const scope = pauseScope(snapshot.statement?.sources, sourceId);
+  if (scope.kind !== 'class') return null;
+  const target: SourceStateValue = decision === 'allow-class' ? 'on' : 'off';
+  const own = ownSources(snapshot);
+  const states = panelStates(snapshot, configured());
+  const left = scope.members.filter((id) => own.has(id) && states[id] !== target).length;
+  return { n: scope.n, left, phrase: scope.phrase };
+}
 
 /**
  * Post the reader's answer to a pause, and keep what the route said. Each
- * answer moves the consent (one source On or Off, or every source On), so the
- * consent is read again, and the panel and the Settings overlay show it.
+ * answer moves the consent (one source enabled or disabled, a class, or every
+ * source enabled), so the consent is read again, and the panel and the
+ * Settings overlay show it. The route's `moved: false` is kept, and its `code`
+ * on every answer (S4 W2b), so a card can say why the setting did not move.
  */
 export async function decideConsentPause(key: string, decision: PauseAnswer): Promise<void> {
+  const entry = pauseEntry(snapshot.pauses, key);
   // Given after the hold: the run went on without it, and it applies to later questions (#669 D2).
-  const afterHold = pauseEntry(snapshot.pauses, key)?.holdEnded === true ? { afterHold: true as const } : {};
+  const afterHold = entry?.holdEnded === true ? { afterHold: true as const } : {};
+  // Counted before the write and the read after it, which change what is set on its own.
+  const group = entry ? classCounts(entry.payload.source.sourceId, decision) : null;
   updatePause(key, { deciding: true });
   let status = 0;
   let moved: boolean | undefined;
+  let code: PendingPause['code'];
   try {
     const response = await fetch('/api/sources/consent/decision', {
       method: 'POST',
@@ -349,14 +387,22 @@ export async function decideConsentPause(key: string, decision: PauseAnswer): Pr
     });
     status = response.status;
     if (status === 200) {
-      const body = (await response.json().catch(() => null)) as { moved?: unknown } | null;
+      const body = (await response.json().catch(() => null)) as { moved?: unknown; code?: unknown } | null;
       if (body?.moved === false) moved = false;
+      if (body?.code === 'consent_cookie_full') code = 'consent_cookie_full';
     }
   } catch {
     status = 0;
   }
   if (status === 200) {
-    updatePause(key, { deciding: false, decision, ...(moved === false ? { moved: false as const } : {}), ...afterHold });
+    updatePause(key, {
+      deciding: false,
+      decision,
+      ...(moved === false ? { moved: false as const } : {}),
+      ...(code ? { code } : {}),
+      ...(group ? { group } : {}),
+      ...afterHold,
+    });
     void refreshConsent();
     return;
   }

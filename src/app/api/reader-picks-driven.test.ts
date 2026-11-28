@@ -486,8 +486,9 @@ for (const d of [PICKED_STREAM, PICKED_NOTEBOOK, PICKED_COMPARE]) {
   test(`W1-2 (${d.name}): "Where this question went" names Data Commons with S11, Boston with Off, City Record as Ask first`, () => {
     const why = Object.fromEntries(flowsOf(d).notReached.map((row) => [row.sourceId, row.whyNotSent]));
     assert.equal(why['data-commons'], S11);
-    assert.equal(why['boston-opencontext'], 'Off.');
-    assert.equal(why['nyc-record'], 'Ask first: not asked for this question.');
+    // Moved by S4 W2b (C3-O = B): S125[5] and S125[6].
+    assert.equal(why['boston-opencontext'], 'Disabled.');
+    assert.equal(why['nyc-record'], 'Not enabled: not asked for this question.');
   });
 }
 

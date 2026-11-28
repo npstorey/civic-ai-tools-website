@@ -311,8 +311,11 @@ const CARD_CHANGE_LINE = 'You can change or withdraw this in Data source setting
  */
 const ALLOW_EFFECT = "Allow: your question is sent to the model service. A data source is used only if it is On, or if it is set to Ask first and you allow it when asked. Don't allow: nothing is sent. You are asked again when you send a question.";
 
-/** Item 9: the pause's third button (never on the card, S3). */
-export const ALLOW_ALL_SOURCES = 'Allow all data sources';
+/**
+ * Item 9: the pause's third button at twelve or fewer configured sources (never on the card, S3). S4 W2b: S96 (C3 = A,
+ * C3-ALL = A; DR-7 B), the words of Settings' button, which sets the same thing.
+ */
+export const ALLOW_ALL_SOURCES = ENABLE_ALL_SOURCES;
 
 export const CONSENT_CARD = {
   /** D1 = A: the heading, a question, and the card's accessible name. */
@@ -571,13 +574,15 @@ export const NYC_RECORD_EXAMPLES_SENTENCE = {
  * reason `not-selected` on a run whose sources the reader picked: an allowed source the reader did not pick.
  */
 export const WHERE_IT_WENT_REASONS = {
-  allowedNotUsed: 'Ask first: allowed when asked, but not used for this question.',
-  declined: 'Ask first: not allowed for this question.',
-  noAnswer: 'Ask first: no answer arrived in time, so it was not used.',
+  // S4 W2b: C3-O = B's forms, S125[7], S125[8], S125[3], S125[4], S125[5] and S125[6] (OA-1158), on a run and on a
+  // record, whenever it was made: the page reads these at render time, so the signed bytes do not move (B7).
+  allowedNotUsed: 'Accepted when asked, but not used for this question.',
+  declined: 'Declined when asked, so not used for this question.',
+  noAnswer: 'Not enabled: it could not be asked about, or no answer arrived in time.',
   unavailable: 'Unavailable. This site could not load it for this question.',
-  onNotUsed: 'On, not used for this question.',
-  off: 'Off.',
-  notAsked: 'Ask first: not asked for this question.',
+  onNotUsed: 'Enabled, not used for this question.',
+  off: 'Disabled.',
+  notAsked: 'Not enabled: not asked for this question.',
   notSetUp: 'Not set up on the site that ran this question.',
   notPicked: 'Not picked for this question.',
 } as const;
@@ -743,8 +748,8 @@ export const ECHO_LIMIT = 40;
  * them claims a question put to the reader: `declined` is also the outcome when
  * no pause could be held, and `no-answer` when the reader could not be asked
  * (`decision.ts`, `notHeld`); a record states whether a question was put only
- * in `tool.load_asked`. `WHERE_IT_WENT_REASONS` above is owner-approved and
- * unchanged.
+ * in `tool.load_asked`. `WHERE_IT_WENT_REASONS` above is owner-approved; S4 W2b
+ * gave it C3-O = B's forms, and these three are not among the rows it ruled.
  */
 export const CHOOSER_REASONS = {
   declined: 'Not allowed, so it was not used for this question.',

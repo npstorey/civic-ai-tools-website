@@ -368,7 +368,7 @@ test('UX-2 P4b criterion 2 (Task B, D): while a question waits on a source, its 
   assert.ok(row, `the overlay has no Boston row: ${s.text().slice(0, 300)}`);
   const cards = within(row!).filter((el) => el.props['data-part'] === 'consent-step');
   assert.equal(cards.length, 1, 'the Boston row mounts no pause card');
-  assert.deepEqual(within(cards[0]).filter((el) => el.type === 'button').map((b) => textOf(b)), ['Allow', "Don't allow", 'Allow all data sources'], 'the row card\'s buttons');
+  assert.deepEqual(within(cards[0]).filter((el) => el.type === 'button').map((b) => textOf(b)), ['Enable', "Don't enable", 'Enable all data sources'], 'the row card\'s buttons (moved by S4 W2b: S100, S96)');
   s.unmount();
   bus.cancelConsentPauses();
 });

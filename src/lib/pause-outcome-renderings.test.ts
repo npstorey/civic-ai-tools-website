@@ -30,10 +30,12 @@ const LOAD = 'load_source';
 /** The sentences W2 states, as rendered. */
 const RESULT = {
   noAnswer: 'The Boston OpenContext source was not used: this site could not ask you, or no answer arrived in time',
-  noAnswerUnnamed: 'A source set to Ask first was not used: this site could not ask you, or no answer arrived in time',
+  // Moved by S4 W2b (npstorey/civic-ai-tools#335; C3-O = B): S123[6] and S123[4]; the named no-answer form has no taken
+  // form and keeps its words.
+  noAnswerUnnamed: 'A source not enabled was not used. This site could not ask you, or no answer arrived in time.',
   unavailable: 'This site could not load the Boston OpenContext source for this question',
   unavailableUnnamed: 'This site could not load a data source for this question',
-  declined: 'The Boston OpenContext source is set to Ask first, so it was not used for this question',
+  declined: 'The Boston OpenContext source was declined when you were asked, so it was not used for this question',
 };
 const NARRATIVE = {
   noAnswer: 'did not use the Boston OpenContext source, because this site could not ask you or no answer arrived in time',

@@ -102,27 +102,31 @@ test('row 11: premise, the five configured sources in manifest order', async () 
   assert.deepEqual(statement.sources.map((s: { sourceId: string }) => s.sourceId), ['socrata', 'data-commons', 'boston-opencontext', 'nyc-charter', 'nyc-record']);
 });
 
+// Moved by S4 W2b (npstorey/civic-ai-tools#335): the Standard forms take S87[4] and S87[1]; the Sandbox forms below
+// have no taken form and keep their words.
+const STANDARD = `the AI provider; the AI's searches go to`;
+
 test('row 11 (P3b-1 re-cut, D5 B): every source On, the line counts them and names none', async () => {
   const page = await homeWith(statesOf([], 'on'));
-  assert.deepEqual(lineOf(page), [`${LEAD}the model service and ${IDS.length} data sources${LINK}`]);
+  assert.deepEqual(lineOf(page), [`${LEAD}${STANDARD} ${IDS.length} data sources${LINK}`]);
   page.unmount();
 });
 
 test('row 11 (P3b-1 re-cut, D5 B): a mix, one On, two Ask first, the rest Off: N counts the On source only', async () => {
   const page = await homeWith(statesOf(['on', 'ask-first', 'ask-first'], 'off'));
-  assert.deepEqual(lineOf(page), [`${LEAD}the model service and 1 data source${LINK}`]);
+  assert.deepEqual(lineOf(page), [`${LEAD}${STANDARD} 1 data source${LINK}`]);
   page.unmount();
 });
 
 test('row 11 (P3b-1 re-cut, D5 B): two On, the rest Ask first: "2 data sources"', async () => {
   const page = await homeWith(statesOf(['on', 'on'], 'ask-first'));
-  assert.deepEqual(lineOf(page), [`${LEAD}the model service and 2 data sources${LINK}`]);
+  assert.deepEqual(lineOf(page), [`${LEAD}${STANDARD} 2 data sources${LINK}`]);
   page.unmount();
 });
 
 test('row 11 (P3b-1 re-cut, items 23/47): none On and one Ask first, the line says the data sources ask first', async () => {
   const page = await homeWith(statesOf(['off', 'ask-first'], 'off'));
-  assert.deepEqual(lineOf(page), [`${LEAD}the model service; data sources ask first${LINK}`]);
+  assert.deepEqual(lineOf(page), [`${LEAD}${STANDARD} data sources you enable${LINK}`]);
   page.unmount();
 });
 
@@ -204,6 +208,6 @@ test('UX-2 P4b: /ask renders no "Data sources this site can use" and no Sources 
 
 test('owner fix, re-cut: in standard mode, signed in, the line counts the On sources', async () => {
   const page = await askWith(MIX, 'standard');
-  assert.deepEqual(lineOf(page), [`${LEAD}the model service and 2 data sources${LINK}`]);
+  assert.deepEqual(lineOf(page), [`${LEAD}${STANDARD} 2 data sources${LINK}`]);
   page.unmount();
 });

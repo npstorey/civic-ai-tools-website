@@ -387,14 +387,15 @@ test('criterion 4: an all-sources record (record-d887c1) shows "not recorded" in
 test('fix round 1 (6): WHERE_IT_WENT_REASONS is the owner-approved set, and the chooser line reads its own reasons', async () => {
   // The base's eight sentences (website main 567a7c2, copy.ts:313-322), owner-approved, unchanged by R10 P1; S3-B W1
   // (npstorey/civic-ai-tools#318) moved `notSetUp` to D7 = B's words and added S11 (`notPicked`), both owner-ruled.
+  // Moved by S4 W2b (npstorey/civic-ai-tools#335; C3-O = B, OA-1158): six reasons take S125[3] to S125[8].
   assert.deepEqual({ ...copy.WHERE_IT_WENT_REASONS }, {
-    allowedNotUsed: 'Ask first: allowed when asked, but not used for this question.',
-    declined: 'Ask first: not allowed for this question.',
-    noAnswer: 'Ask first: no answer arrived in time, so it was not used.',
+    allowedNotUsed: 'Accepted when asked, but not used for this question.',
+    declined: 'Declined when asked, so not used for this question.',
+    noAnswer: 'Not enabled: it could not be asked about, or no answer arrived in time.',
     unavailable: 'Unavailable. This site could not load it for this question.',
-    onNotUsed: 'On, not used for this question.',
-    off: 'Off.',
-    notAsked: 'Ask first: not asked for this question.',
+    onNotUsed: 'Enabled, not used for this question.',
+    off: 'Disabled.',
+    notAsked: 'Not enabled: not asked for this question.',
     notSetUp: 'Not set up on the site that ran this question.',
     notPicked: 'Not picked for this question.',
   });

@@ -88,6 +88,11 @@ export interface DirectoryEntry {
   /** `on` loads; `ask-first` asks the reader when the run holds a pause
    *  (`InLoopRoutingInput.pause`), and is declined when it does not. */
   state: 'on' | 'ask-first';
+  /**
+   * The source is set on its own (premise 7; S4 W2b): a class answer at a pause leaves it as it is, in the run as in
+   * the store. Absent otherwise.
+   */
+  own?: true;
 }
 
 /** What the directory set reads from the consent gate's decision. */
@@ -96,6 +101,8 @@ export interface DirectoryConsent {
   enforced: boolean;
   /** The stored states, by source id; empty while the gate is dormant. */
   states: Readonly<Record<string, string>>;
+  /** The sources set on their own (the gate's `own`, S4 W2b); absent reads as none. */
+  own?: readonly string[];
 }
 
 /**
@@ -115,7 +122,8 @@ export function directorySet(configured: McpRegistryEnv, consent: DirectoryConse
     }
     const stored = Object.hasOwn(consent.states, entry.sourceId) ? consent.states[entry.sourceId] : undefined;
     if (stored === 'off') continue;
-    entries.push({ sourceId: entry.sourceId, alias: entry.alias, state: stored === 'on' ? 'on' : 'ask-first' });
+    const own = consent.own?.includes(entry.sourceId) ? { own: true as const } : {};
+    entries.push({ sourceId: entry.sourceId, alias: entry.alias, state: stored === 'on' ? 'on' : 'ask-first', ...own });
   }
   return entries;
 }
@@ -188,9 +196,12 @@ export type InLoopToolTransport = (name: string, args: Record<string, unknown>, 
  * adds `off` ("Don't allow" at the pause: declined, and the source is Off for
  * later questions) and `allow-all` ("Allow all data sources": this source
  * loads, and no later load in the run pauses). `not-now` is a page's from
- * before P4b, declined as before.
+ * before P4b, declined as before. S4 W2b (criterion B3; G0-4 = A, C3 = A):
+ * `allow-class` and `off-class`, the class answers, load or decline this
+ * source as `allow` and `off` do, and the run answers a later load of another
+ * member of the class (`PauseResult.members`) the same way, with no pause.
  */
-export type PauseDecision = 'allow' | 'off' | 'allow-all' | 'not-now' | 'no-answer';
+export type PauseDecision = 'allow' | 'off' | 'allow-all' | 'not-now' | 'no-answer' | 'allow-class' | 'off-class';
 
 /**
  * How a pause ended, and whether it held (S2-B, G0-B1 A): `held` is true when
@@ -202,6 +213,8 @@ export type PauseDecision = 'allow' | 'off' | 'allow-all' | 'not-now' | 'no-answ
 export interface PauseResult {
   decision: PauseDecision;
   held: boolean;
+  /** For a class answer: the configured members of the asking source's class, the ones the answer is for (S4 W2b). */
+  members?: readonly string[];
 }
 
 /**
@@ -447,6 +460,11 @@ export async function createInLoopRouting(input: InLoopRoutingInput): Promise<In
   const asked = new Map<string, { decision: PauseDecision; asked: boolean | undefined }>();
   // Allow all at a pause of this run (UX-2 P4b, S4): no later load pauses.
   let allowedAll = false;
+  // A class answer at a pause of this run (S4 W2b, criterion B3; C3 = A), by member: a later load of another member
+  // the run has not asked about is loaded (`allow`) or declined (`off`) with no pause, unless the member is set on its
+  // own, which the class answer leaves as it is. "Enable all data sources" later in the run outranks it, as its words
+  // say ("including any you disabled").
+  const classAnswers = new Map<string, 'allow' | 'off'>();
   const loadedNow = (): string[] => directoryIds.filter((id) => loadedIds.includes(id));
 
   let current: { systemPrompt: string; tools: ChatCompletionTool[]; components: CompositionComponent[] } = {
@@ -465,32 +483,43 @@ export async function createInLoopRouting(input: InLoopRoutingInput): Promise<In
       const entry = alias === undefined ? undefined : directory.find((candidate) => candidate.alias === alias);
       if (!entry) return { outcome: 'not-offered', text: LOAD_RESULT_TEXT.notOffered, asked: false };
       let questioned: boolean | undefined = false;
-      if (entry.state !== 'on') {
-        const prior = asked.get(entry.sourceId);
+      const prior = asked.get(entry.sourceId);
+      // Another member's class answer (S4 W2b): only for a source this run has not asked about, and not set on its own.
+      const byClass = prior === undefined && !allowedAll && entry.own !== true ? classAnswers.get(entry.sourceId) : undefined;
+      // "Don't enable any of the {n}": declined with no question, whether the member was On or Ask first at the start.
+      if (byClass === 'off') return { outcome: 'declined', text: LOAD_RESULT_TEXT.declined(entry.alias), asked: false };
+      // "Enable all {n} {group phrase}": an Ask-first member loads as an On source does, with no question.
+      if (entry.state !== 'on' && byClass !== 'allow') {
         if (allowedAll) {
           // Under Allow all the load proceeds. It reuses this source's own
           // decision only when that allowed it (its own pause, Allow or Allow
           // all); otherwise it loads on Allow all, a question about another
           // source, and puts none about this one.
-          questioned = prior && (prior.decision === 'allow' || prior.decision === 'allow-all') ? prior.asked : false;
+          questioned = prior && (prior.decision === 'allow' || prior.decision === 'allow-all' || prior.decision === 'allow-class') ? prior.asked : false;
         } else {
           if (!pause) return { outcome: 'declined', text: LOAD_RESULT_TEXT.declined(entry.alias), asked: false };
           let answer = prior;
           if (answer === undefined) {
+            let members: readonly string[] = [];
             try {
               const result = await pause.ask(entry.sourceId, (payload) => context.reportPause?.(payload));
               answer = { decision: result.decision, asked: result.held };
+              members = result.members ?? [];
             } catch {
               // Not expected (ruling A): a pause that could not finish heard no
               // answer, and whether it asked is not known.
               answer = { decision: 'no-answer', asked: undefined };
             }
             asked.set(entry.sourceId, answer);
+            if (answer.decision === 'allow-class' || answer.decision === 'off-class') {
+              const by = answer.decision === 'allow-class' ? 'allow' : 'off';
+              for (const id of members) if (id !== entry.sourceId && !classAnswers.has(id)) classAnswers.set(id, by);
+            }
           }
           const { decision } = answer;
           questioned = answer.asked;
           const pausedPart = questioned === undefined ? {} : { asked: questioned };
-          if (decision === 'off' || decision === 'not-now') return { outcome: 'declined', text: LOAD_RESULT_TEXT.declined(entry.alias), ...pausedPart };
+          if (decision === 'off' || decision === 'not-now' || decision === 'off-class') return { outcome: 'declined', text: LOAD_RESULT_TEXT.declined(entry.alias), ...pausedPart };
           if (decision === 'no-answer') return { outcome: 'no-answer', text: LOAD_RESULT_TEXT.noAnswer(entry.alias), ...pausedPart };
           if (decision === 'allow-all') allowedAll = true;
           // Allow, or Allow all: the source loads as an On source does.

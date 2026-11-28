@@ -56,6 +56,32 @@ export function readerBlocks(sources: readonly FlowsSource[]): ReaderBlock[] {
   });
 }
 
+/** Above this many configured sources the pause answers by class (G0-4 = A; criterion B3). */
+export const PAUSE_CLASS_ANSWERS_ABOVE = 12;
+
+/**
+ * Which wider answers the pause offers about `sourceId` (S4 W2b; G0-4 = A, C3 = A, C3-ALL = A), read from the same
+ * grouping Settings and the picker read:
+ *   - `all`: twelve or fewer configured sources: "Enable all data sources" (S96);
+ *   - `class`: above twelve, the source is in a group of two or more: S12 and S13, for `members`, the group's
+ *     configured sources, `n` of them, and `phrase`, the group's phrase after a count ("sources reached through
+ *     Socrata");
+ *   - `alone`: above twelve, the source is alone in its class: the pair only. Also while the configured sources are
+ *     not known (no statement read): no wider answer is offered on a count the page does not have.
+ */
+export type PauseScope =
+  | { kind: 'all' }
+  | { kind: 'class'; classId: string; members: string[]; n: number; phrase: string }
+  | { kind: 'alone' };
+
+export function pauseScope(sources: readonly FlowsSource[] | null | undefined, sourceId: string): PauseScope {
+  if (!sources || sources.length === 0) return { kind: 'alone' };
+  if (sources.length <= PAUSE_CLASS_ANSWERS_ABOVE) return { kind: 'all' };
+  const group = groupOf(readerBlocks(sources), sourceId);
+  if (!group) return { kind: 'alone' };
+  return { kind: 'class', classId: group.classId, members: group.members.map((m) => m.sourceId), n: group.members.length, phrase: `sources ${group.reached}` };
+}
+
 /** The class a configured source is in, as `readerBlocks` groups it: its group's id, or `null` for a source alone. */
 export function groupOf(blocks: readonly ReaderBlock[], sourceId: string): Extract<ReaderBlock, { kind: 'group' }> | null {
   for (const block of blocks) {

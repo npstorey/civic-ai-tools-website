@@ -82,8 +82,9 @@ test('S3-B W1 (B8, S11; D7 = B): "Where this question went" words not-selected a
   assert.deepEqual(Object.fromEntries(model.notReached.map((row) => [row.sourceId, row.whyNotSent])), {
     'data-commons': 'Not picked for this question.',
     'boston-opencontext': 'Not set up on the site that ran this question.',
-    'nyc-checkbook': 'Off.',
-    'nyc-record': 'Ask first: not asked for this question.',
+    // Moved by S4 W2b (C3-O = B): S125[5] and S125[6].
+    'nyc-checkbook': 'Disabled.',
+    'nyc-record': 'Not enabled: not asked for this question.',
   });
 });
 

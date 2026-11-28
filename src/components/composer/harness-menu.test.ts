@@ -314,7 +314,8 @@ async function ask(page: Surface, question: string): Promise<void> {
 }
 const whereLine = (page: Surface): string[] => page.elements().filter((el) => part(el) === 'where-this-question-goes').map((el) => textOf(el));
 const WHERE = {
-  standardOne: 'Where your question goes: the model service and 1 data source · Select sources',
+  // Moved by S4 W2b (npstorey/civic-ai-tools#335): S87's Standard form; the Sandbox form has no taken form and keeps its words.
+  standardOne: "Where your question goes: the AI provider; the AI's searches go to 1 data source · Select sources",
   sandboxOne: 'Where your question goes: the model service, the notebook runner and 1 data source · Select sources',
 };
 const oneOn = (): Record<string, string> => Object.fromEntries(IDS.map((id, i) => [id, i === 0 ? 'on' : 'off']));

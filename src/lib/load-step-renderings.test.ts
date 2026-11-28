@@ -50,7 +50,8 @@ test('the load step: the result line states each outcome W1 records, and nothing
   assert.equal(formatToolResult({ alias: 'socrata' }, undefined, LOAD, 'loaded'), 'Loaded the Socrata source');
   assert.equal(
     formatToolResult({ alias: 'boston_opencontext' }, undefined, LOAD, 'declined'),
-    'The Boston OpenContext source is set to Ask first, so it was not used for this question',
+    // Moved by S4 W2b (C3-O = B): S123[4].
+    'The Boston OpenContext source was declined when you were asked, so it was not used for this question',
   );
   assert.equal(
     formatToolResult({ alias: UNKNOWN_ALIAS }, undefined, LOAD, 'not-offered'),
@@ -73,7 +74,7 @@ test('the load step: the annotation, the breadcrumb and the narrative have a loa
     { name: LOAD, args: { alias: 'data_commons' }, operationType: 'load_source' },
   ]);
   assert.match(narrative, /loaded the Socrata source/);
-  assert.match(narrative, /did not use the Boston OpenContext source, which is set to Ask first/);
+  assert.match(narrative, /did not use the Boston OpenContext source, which was declined when you were asked/); // moved by S4 W2b: S124[3]
   assert.match(narrative, /asked for a source this question cannot use/);
   assert.match(narrative, /asked to load the Google Data Commons source/);
 });

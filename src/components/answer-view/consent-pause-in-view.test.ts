@@ -157,6 +157,8 @@ const withSettings = (page: ReturnType<typeof h>) => h('div', null, page, h(Sett
 const flowsRoute = await load('app/api/flows/route.ts');
 const consentRoute = await load('app/api/sources/consent/route.ts');
 const { buildFlowsStatement, statementHash } = await load('lib/flows/statement.ts');
+/** The step card's sentences by name (S4 W2b): an assertion on an outcome reads it here, so it moves with the words. */
+const STEP_TEXT = (await load('components/answer-view/ConsentStep.tsx')).CONSENT_STEP_TEXT as Record<string, unknown>;
 
 // --- The held stream and the answers ------------------------------------------------------------
 
@@ -285,12 +287,16 @@ function onePrompt(surface: Surface, where: string): HostElement {
   return found[0];
 }
 
-/** The prompt names the source and offers Allow and Don't allow, equal in style, then Allow all data sources (UX-2 P4b), with the card's own words. */
+/** The pause's answers during the hold at twelve or fewer sources (S4 W2b: S100, then S96). */
+const PAUSE_LABELS = ['Enable', "Don't enable", 'Enable all data sources'];
+
+/** The prompt names the source and offers Enable and Don't enable, equal in style, then Enable all data sources (UX-2 P4b; S4 W2b), with the card's own words. */
 function assertPrompt(prompt: HostElement, where: string): void {
   const text = textOf(prompt);
-  assert.ok(text.startsWith('Boston OpenContext is set to Ask first.'), `${where}: the prompt reads: ${text}`);
+  // Moved by S4 W2b (npstorey/civic-ai-tools#335): the heading S146, and S100 and S96.
+  assert.ok(text.startsWith('The AI has asked to use Boston OpenContext. Nothing has been sent to it yet.'), `${where}: the prompt reads: ${text}`);
   const buttons = buttonsIn(prompt);
-  assert.deepEqual(buttons.map((b) => textOf(b)), ['Allow', "Don't allow", 'Allow all data sources'], `${where}: the prompt's buttons`);
+  assert.deepEqual(buttons.map((b) => textOf(b)), PAUSE_LABELS, `${where}: the prompt's buttons`);
   assert.deepEqual(buttons[0].props.style, buttons[1].props.style, `${where}: the prompt's two buttons are styled differently`);
 }
 
@@ -517,7 +523,7 @@ test('criterion 1, /explore: a holding pause shows the prompt under the running 
   const cancel = p.button('Cancel');
   assert.ok(before(p, cancel, prompt) && before(p, prompt, stepCards(p)[0]), '/explore: the prompt is not between the running question and the run\'s steps');
   // UX-2 HG (D3 A): during the hold the prompt holds the answers, and the step card none.
-  assert.deepEqual(labels(prompt), ['Allow', "Don't allow", 'Allow all data sources'], 'premise: the prompt offers the buttons during the hold');
+  assert.deepEqual(labels(prompt), PAUSE_LABELS, 'premise: the prompt offers the buttons during the hold');
   assert.deepEqual(labels(stepCards(p)[0]), [], 'premise: the step card offers none during the hold');
 
   // Criterion 3: Cancel during the hold.
@@ -580,7 +586,7 @@ test('criterion 3, /explore on the browser\'s abort path (Amendment 3, the owner
   stream.push({ type: 'progress', panel: 'withMcp', message: PAUSE_LINE, phase: 'consent_pause', pause: pauseOf(nextKey()) });
   await settle(p, SCROLL_WAIT);
   // UX-2 HG (D3 A): during the hold the prompt holds the answers, and the step card none.
-  assert.deepEqual(labels(onePrompt(p, '/explore')), ['Allow', "Don't allow", 'Allow all data sources'], `premise: the prompt offers the buttons during the hold: ${summary(p)}`);
+  assert.deepEqual(labels(onePrompt(p, '/explore')), PAUSE_LABELS, `premise: the prompt offers the buttons during the hold: ${summary(p)}`);
   assert.deepEqual(labels(stepCards(p)[0]), [], `premise: the step card offers none during the hold: ${summary(p)}`);
   await p.click(p.button('Cancel'));
   await settle(p, 200);
@@ -622,7 +628,7 @@ async function pausedOnExplore(): Promise<{ p: Surface; stream: Held }> {
   stream.push({ type: 'progress', panel: 'withMcp', message: PAUSE_LINE, phase: 'consent_pause', pause: pauseOf(nextKey()) });
   await settle(p, SCROLL_WAIT);
   // UX-2 HG (D3 A): during the hold the prompt holds the answers, and the step card none.
-  assert.deepEqual(labels(onePrompt(p, '/explore')), ['Allow', "Don't allow", 'Allow all data sources'], `premise: the prompt offers the buttons during the hold: ${summary(p)}`);
+  assert.deepEqual(labels(onePrompt(p, '/explore')), PAUSE_LABELS, `premise: the prompt offers the buttons during the hold: ${summary(p)}`);
   assert.deepEqual(labels(stepCards(p)[0]), [], `premise: the step card offers none during the hold: ${summary(p)}`);
   return { p, stream };
 }
@@ -648,7 +654,7 @@ test('criterion 3, /explore, Amendment 4 (1): Cancel during a hold when abort() 
   assert.deepEqual([...stepCards(p), ...rowCards(p)].map((c) => labels(c)).flat(), [], `a card offers an answer after Cancel: ${summary(p)}`);
 });
 
-test('criterion 3, /explore, Amendment 4 (2): the stream ends on its own during a hold: the hold is over, so the row\'s card reads the after-hold words, and Don\'t allow reads the after-hold sentence', async () => {
+test('criterion 3, /explore, Amendment 4 (2): the stream ends on its own during a hold: the hold is over, so the row\'s card reads the after-hold words, and Don\'t enable reads the after-hold sentence', async () => {
   const { p, stream } = await pausedOnExplore();
   stream.close();
   await settle(p, 200);
@@ -658,10 +664,12 @@ test('criterion 3, /explore, Amendment 4 (2): the stream ends on its own during 
   assert.ok(!textOf(row).includes('The question waits up to a minute for your answer.'), `the row's card still reads as the hold being open: ${textOf(row)}`);
   assert.ok(textOf(row).includes('The question went on without your answer, so it did not use this source.'), `the row's card after the drop: ${textOf(row)}`);
   // UX-2 P4b (W2): after the hold the row's card offers the pair only.
-  assert.deepEqual(buttonsIn(row).map((b) => textOf(b)), ['Allow', "Don't allow"], 'the row\'s card after the drop');
-  await p.click(buttonsIn(row).find((b) => textOf(b) === "Don't allow")!);
+  assert.deepEqual(buttonsIn(row).map((b) => textOf(b)), ["Enable", "Don't enable"], 'the row\'s card after the drop');
+  await p.click(buttonsIn(row).find((b) => textOf(b) === "Don't enable")!);
   await settle(p);
   const after = rowCards(p).map((c) => textOf(c)).join(' ') + ' ' + stepCards(p).map((c) => textOf(c)).join(' ');
-  assert.ok(after.includes("You chose Don't allow. It is Off for later questions."), `Don't allow after the drop: ${after.slice(-300)}`);
-  assert.ok(!after.includes("You chose Don't allow. Nothing is sent to it, and it is Off now."), 'Don\'t allow after the drop reads the in-hold sentence');
+  // Moved by S4 W2b (OUTCOME_LINES A): S157. The in-hold sentence is read by name, so the check can fail whatever its words.
+  assert.ok(after.includes("You chose Don't enable. It is disabled for later questions."), `Don't enable after the drop: ${after.slice(-300)}`);
+  assert.equal(typeof STEP_TEXT.declined, 'string', 'premise: the in-hold outcome is a sentence');
+  assert.ok(!after.includes(STEP_TEXT.declined as string), 'Don\'t enable after the drop reads the in-hold sentence');
 });

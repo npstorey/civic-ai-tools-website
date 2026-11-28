@@ -341,14 +341,16 @@ const SELF = 'src/components/composer/where-line.test.ts';
 const LEAD = 'Where your question goes: ';
 const LINK = ' · Select sources';
 const n = (count: number) => (count === 1 ? '1 data source' : `${count} data sources`);
+// Moved by S4 W2b (npstorey/civic-ai-tools#335): the Standard forms and the two shared lines take S87[1] to S87[5]; the
+// two Sandbox forms have no taken form and keep their words.
 const FORM = {
-  standardOn: (count: number) => `${LEAD}the model service and ${n(count)}${LINK}`,
+  standardOn: (count: number) => `${LEAD}the AI provider; the AI's searches go to ${n(count)}${LINK}`,
   sandboxOn: (count: number) => `${LEAD}the model service, the notebook runner and ${n(count)}${LINK}`,
-  standardAsk: `${LEAD}the model service; data sources ask first${LINK}`,
+  standardAsk: `${LEAD}the AI provider; the AI's searches go to data sources you enable${LINK}`,
   sandboxAsk: `${LEAD}the model service and the notebook runner; data sources ask first${LINK}`,
-  everyOff: `${LEAD}nowhere; every data source is Off${LINK}`,
-  /** UX-2 P3b-2, CA-1a (C1 = A; v2 ruling 2): no source On where this site cannot ask, in both session types. */
-  cannotAsk: `${LEAD}nowhere; no data source is On${LINK}`,
+  everyOff: `${LEAD}nowhere; every data source is disabled${LINK}`,
+  /** UX-2 P3b-2, CA-1a (C1 = A; v2 ruling 2): no source enabled where this site cannot ask, in both session types. */
+  cannotAsk: `${LEAD}nowhere; no data source is enabled${LINK}`,
 };
 
 const lineOf = (page: Surface): string[] => parts(page, 'where-this-question-goes').map((el) => textOf(el));

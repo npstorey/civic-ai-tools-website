@@ -406,13 +406,15 @@ const { buildFlowsStatement, statementHash } = await load('lib/flows/statement.t
 const wordsStatement = await buildFlowsStatement();
 const WORDS_IDS: string[] = wordsStatement.sources.map((s: { sourceId: string }) => s.sourceId);
 
+// Moved by S4 W2b (npstorey/civic-ai-tools#335): the Standard forms and the shared line take S87; the Sandbox forms have
+// no taken form and keep their words.
 const WHERE = {
-  standardOne: 'Where your question goes: the model service and 1 data source · Select sources',
-  standardAll: `Where your question goes: the model service and ${WORDS_IDS.length} data sources · Select sources`,
+  standardOne: "Where your question goes: the AI provider; the AI's searches go to 1 data source · Select sources",
+  standardAll: `Where your question goes: the AI provider; the AI's searches go to ${WORDS_IDS.length} data sources · Select sources`,
   sandboxOne: 'Where your question goes: the model service, the notebook runner and 1 data source · Select sources',
-  standardAsk: 'Where your question goes: the model service; data sources ask first · Select sources',
+  standardAsk: "Where your question goes: the AI provider; the AI's searches go to data sources you enable · Select sources",
   sandboxAsk: 'Where your question goes: the model service and the notebook runner; data sources ask first · Select sources',
-  everyOff: 'Where your question goes: nowhere; every data source is Off · Select sources',
+  everyOff: 'Where your question goes: nowhere; every data source is disabled · Select sources',
 };
 const P3B_SIGN_IN_LINE = 'Sign in for more features and usage.';
 
@@ -511,7 +513,7 @@ test('P3b-1 criterion 11 (W7; addendum 1, section 4): no word in src/components/
 // out here from the contract's Words table, byte for byte; Compare's "On" / "Off" are pending the words check
 // (criterion 13) and are not read here. At P3b-2's base there is no harness menu and no CA-1a line.
 
-const CA_1A = 'Where your question goes: nowhere; no data source is On · Select sources';
+const CA_1A = 'Where your question goes: nowhere; no data source is enabled · Select sources'; // moved by S4 W2b: S87[3]
 const MENU_WORDS = {
   trigger: 'Default harness',
   heading: 'Harness · Civic AI harness v1',

@@ -46,20 +46,24 @@ export const FIRST_TIME_LINE_WITHHELD = 'To keep this answer, sign in and publis
 /** W7: the example row's accessible name (`ChipRow`'s `label`). */
 export const CHIP_ROW_LABEL = 'Example questions';
 
-/** The where-line (D5 B; items 23/47; W3-W6), everything before its link. */
+/**
+ * The where-line (D5 B; items 23/47; W3-W6), everything before its link. S4 W2b: the Standard forms are S87[1] to
+ * S87[5] (the renaming, DR-1 A, DR-8 A, DR-11 A, with W3 = A's pairs), and the two lines both session types share,
+ * S87[2] and S87[3]. The two Sandbox forms have no taken form (S87's note: "not drawn") and keep their words.
+ */
 const LEAD = 'Where your question goes: ';
 const dataSources = (n: number) => (n === 1 ? '1 data source' : `${n} data sources`);
 export const WHERE_LINE = {
-  /** N ≥ 1 sources On: Standard (items 23/47), or Sandbox with the notebook runner (W3). */
+  /** N ≥ 1 sources enabled: Standard (S87[4], S87[5]), or Sandbox with the notebook runner (W3). */
   on: (n: number, sandbox: boolean) =>
-    sandbox ? `${LEAD}the model service, the notebook runner and ${dataSources(n)}` : `${LEAD}the model service and ${dataSources(n)}`,
-  /** None On, a source Ask first: Standard (items 23/47), or Sandbox (W4). */
+    sandbox ? `${LEAD}the model service, the notebook runner and ${dataSources(n)}` : `${LEAD}the AI provider; the AI's searches go to ${dataSources(n)}`,
+  /** None enabled, a source not answered yet: Standard (S87[1]), or Sandbox (W4). */
   askFirst: (sandbox: boolean) =>
-    sandbox ? `${LEAD}the model service and the notebook runner; data sources ask first` : `${LEAD}the model service; data sources ask first`,
-  /** Every source Off, in both session types (W5, W6). */
-  everyOff: `${LEAD}nowhere; every data source is Off`,
-  /** CA-1a (C1 = A; v2 ruling 2): no source On where this site cannot ask, in both session types. */
-  cannotAsk: `${LEAD}nowhere; no data source is On`,
+    sandbox ? `${LEAD}the model service and the notebook runner; data sources ask first` : `${LEAD}the AI provider; the AI's searches go to data sources you enable`,
+  /** Every source disabled, in both session types (S87[2]). */
+  everyOff: `${LEAD}nowhere; every data source is disabled`,
+  /** CA-1a (C1 = A; v2 ruling 2): no source enabled where this site cannot ask, in both session types (S87[3]). */
+  cannotAsk: `${LEAD}nowhere; no data source is enabled`,
   /** Between the words and the link. */
   separator: ' · ',
   /** Item 32: the link to the Settings overlay. */

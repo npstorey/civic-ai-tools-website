@@ -58,12 +58,15 @@ export interface ConsentPausePayload {
   holds: boolean;
 }
 
-/** The progress line a pause is shown with: the source by its reader name, and whether the question waits. */
+/**
+ * The progress line a pause is shown with: the source by its reader name, and whether the question waits. S4 W2b:
+ * C3-O = B's forms, S122[3] and S122[4] (OA-1158).
+ */
 export function formatConsentPause(pause: Pick<ConsentPausePayload, 'source' | 'holds'>): string {
   const name = readerSourceName(pause.source);
   return pause.holds
-    ? `Waiting for your answer about ${name}, which is set to Ask first`
-    : `${name} is set to Ask first, and this question cannot stop to ask you`;
+    ? `Waiting for your answer about ${name}`
+    : `${name} is not answered yet, and this question cannot stop to ask you`;
 }
 
 export interface ProgressEvent extends StreamEvent {
@@ -445,7 +448,8 @@ const FRIENDLY_STREAM_COPY: Record<StreamErrorKind, string> = {
   // R6 W3: a consent is in force, and every source is Off or Ask first, so
   // nothing was sent. Data source settings (the Settings overlay) is what
   // turns one On (UX-2 P4b, items 42/50; a link where the surface can carry one).
-  no_sources_on: 'Every data source is set to Off or Ask first, so nothing was sent. Turn a source On in Data source settings, then ask again.',
+  // S4 W2b: S90 ("Seen and not carded", item 6, the words W2 uses).
+  no_sources_on: 'No data source is enabled, so nothing was sent. Enable a source in Data source settings, then ask again.',
   // S3-B W1 (S10, D9 = A): the reader picked sources for this question and none could be used, so nothing was sent.
   no_picks_usable: 'None of the data sources you picked could be used, so nothing was sent. Pick again, or choose Auto.',
   // OF2 (website #810): the question named an output format this site does not offer, so nothing was sent. Ruled at G0b,
@@ -1708,19 +1712,22 @@ export function formatToolResult(
       switch (loadOutcome) {
         case 'loaded':
           return source ? `Loaded the ${source} source` : 'Loaded a data source';
+        // S4 W2b: C3-O = B's forms, S123[4] and S123[5] (OA-1158); on every record "declined" is a refusal at the
+        // pause (the seat's ruling 7136409623).
         case 'declined':
           return source
-            ? `The ${source} source is set to Ask first, so it was not used for this question`
-            : 'A source set to Ask first was not used for this question';
+            ? `The ${source} source was declined when you were asked, so it was not used for this question`
+            : 'A source declined when you were asked was not used for this question';
         case 'not-offered':
           return 'No source was loaded: the request named none this question can use';
         // #644 W2: true whether the reader did not decide in time or could
         // not be asked; the record cannot tell the two apart, so the line
         // names both.
+        // S4 W2b: the unnamed form is S123[6]; the named form has no taken form and keeps its words.
         case 'no-answer':
           return source
             ? `The ${source} source was not used: this site could not ask you, or no answer arrived in time`
-            : 'A source set to Ask first was not used: this site could not ask you, or no answer arrived in time';
+            : 'A source not enabled was not used. This site could not ask you, or no answer arrived in time.';
         // The load step threw, which it is not expected to do.
         case 'unavailable':
           return source ? `This site could not load the ${source} source for this question` : 'This site could not load a data source for this question';
@@ -2122,8 +2129,9 @@ function describeToolNarrative(
       switch (tool.loadOutcome) {
         case 'loaded':
           return `loaded ${named}`;
+        // S4 W2b: C3-O = B's forms, S124[3] and S124[4] (OA-1158).
         case 'declined':
-          return source ? `did not use ${named}, which is set to Ask first` : 'did not use a source set to Ask first';
+          return source ? `did not use ${named}, which was declined when you were asked` : 'did not use a source declined when you were asked';
         case 'not-offered':
           return 'asked for a source this question cannot use';
         case 'no-answer':

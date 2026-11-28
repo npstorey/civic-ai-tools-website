@@ -227,7 +227,8 @@ const BEFORE: Record<string, string> = {
   notebook_execution: 'The notebook could not finish running. Please try again.',
   not_offered: 'This question did not use that data source, so nothing was sent to it.',
   consent_required: 'This site asks for your consent before it sends your question anywhere, so nothing has been sent yet.',
-  no_sources_on: 'Every data source is set to Off or Ask first, so nothing was sent. Turn a source On in Data source settings, then ask again.',
+  // Moved by S4 W2b (npstorey/civic-ai-tools#335): S90.
+  no_sources_on: 'No data source is enabled, so nothing was sent. Enable a source in Data source settings, then ask again.',
   no_picks_usable: 'None of the data sources you picked could be used, so nothing was sent. Pick again, or choose Auto.',
   generic: 'Something went wrong while running this query. Please try again in a moment.',
 };

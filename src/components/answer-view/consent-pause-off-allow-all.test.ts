@@ -103,12 +103,14 @@ const { readConsentCookie } = await load('lib/sources/consent.ts');
 
 // --- The words (the research check's text) ------------------------------------------------------
 
-const ALLOW = 'Allow';
-const DONT_ALLOW = "Don't allow";
-const ALLOW_ALL = 'Allow all data sources';
-const CHOICES = "Allow: this question is sent to it, and it is turned On for later questions. Don't allow: nothing is sent to it, and it is turned Off for later questions. Allow all data sources: every data source is turned On, and this question goes on without asking again.";
+// Moved by S4 W2b (npstorey/civic-ai-tools#335): S100, S96, S98 and S102; `declined` has no taken form and keeps its
+// words. The constants' names keep the items they were ruled as.
+const ALLOW = 'Enable';
+const DONT_ALLOW = "Don't enable";
+const ALLOW_ALL = 'Enable all data sources';
+const CHOICES = "Enable: the AI's searches for this question are sent to it, and it is enabled for later questions. Don't enable: nothing is sent to it, and it is disabled for later questions. Enable all data sources: every data source is enabled, including any you disabled, and this question goes on without asking again.";
 const DECLINED = "You chose Don't allow. Nothing is sent to it, and it is Off now.";
-const ALLOWED_ALL = 'You chose Allow all data sources. Every data source is On now.';
+const ALLOWED_ALL = 'You chose Enable all data sources. Every data source is enabled now. A source added later is not enabled until you enable it.';
 const POINTER = 'You can change this in Data source settings';
 
 // --- The fixture ----------------------------------------------------------------------------------
@@ -302,7 +304,7 @@ test('UX-2 P4b criterion 5 (items 13, 21): after "Don\'t allow" the step card an
   }
 });
 
-test('UX-2 P4b criterion 5 (L11, the row card): "Don\'t allow" after the hold reads item 39\'s declinedAfter, and the source reads Off', async () => {
+test('UX-2 P4b criterion 5 (L11, the row card): "Don\'t enable" after the hold reads declinedAfter (S157, moved by S4 W2b), and the source is disabled', async () => {
   const { page, net, tick } = await paused();
   await tick(120_000);
   await page.click(buttonOf(page, 'row card', DONT_ALLOW));
@@ -310,6 +312,7 @@ test('UX-2 P4b criterion 5 (L11, the row card): "Don\'t allow" after the hold re
   assert.deepEqual(decisionsPosted(net), ['off'], 'the row card did not post the Off value');
   const node = renderingOf(page, 'row card');
   assert.ok(node, 'the row card is gone after the answer');
-  assert.ok(outcomeIn(node!)?.startsWith("You chose Don't allow. It is Off for later questions."), `the row card after Don't allow: ${outcomeIn(node!)}`);
+  // Moved by S4 W2b (OUTCOME_LINES A, POINTER (b)): S157, and the pointer follows it, since the setting moved.
+  assert.equal(outcomeIn(node!), "You chose Don't enable. It is disabled for later questions. You can change this in Data source settings.", `the row card after Don't enable: ${outcomeIn(node!)}`);
   assert.equal(stateIn(page, 'boston-opencontext'), 'off', 'the source does not read Off');
 });

@@ -56,7 +56,7 @@ const TAB_SENTENCE = 'Your data sources are set in Data source settings.'; // 41
 
 // Part C: the card.
 const DONT_ALLOW = "Don't allow"; // 8
-const ALLOW_ALL = 'Allow all data sources'; // 9
+const ALLOW_ALL = 'Enable all data sources'; // 9's place, moved by S4 W2b: S96
 // The card's own words since the owner's ruling (#729 comment 6727853028: D1 = A, D2 = A with the owner's
 // note): the heading is a question, the lead (item 34) is gone, and the effect is D2's, without item 11's words.
 const CARD_HEADING = 'Allow this site to send your question to a model service?'; // D1 = A
@@ -68,23 +68,25 @@ const ASK1_LINE = 'You can change or withdraw this in Data source settings.'; //
 const DONT_ALLOW_LINE = "You chose Don't allow. Nothing was sent. Edit this question or write a new one, and you will be asked again before it is sent."; // 46
 
 // Part D: the pause.
-const CHOICES = "Allow: this question is sent to it, and it is turned On for later questions. Don't allow: nothing is sent to it, and it is turned Off for later questions. Allow all data sources: every data source is turned On, and this question goes on without asking again."; // 20, 39, B4c with S4's clause
+// Item 39's and item 40's places, moved by S4 W2b (npstorey/civic-ai-tools#335): S98, S154, S157, S102, S113 and
+// S126[1] (the rulings of 2026-11-24 and OUTCOME_LINES A). `declined` and `nextQuestion` have no taken form and stay.
+const CHOICES = "Enable: the AI's searches for this question are sent to it, and it is enabled for later questions. Don't enable: nothing is sent to it, and it is disabled for later questions. Enable all data sources: every data source is enabled, including any you disabled, and this question goes on without asking again."; // S98
 const DECLINED = "You chose Don't allow. Nothing is sent to it, and it is Off now."; // 13, 21, 39
-const AFTER_CHOICES = "Allow: it is turned On for later questions. Don't allow: it is turned Off for later questions."; // 39
-const DECLINED_AFTER = "You chose Don't allow. It is Off for later questions."; // 39
+const AFTER_CHOICES = "Enable: it is enabled for later questions. Don't enable: it is disabled for later questions."; // S154
+const DECLINED_AFTER = "You chose Don't enable. It is disabled for later questions."; // S157
 const STILL = 'You can still answer for later questions.'; // 39: unchanged
-const ALLOWED_ALL = 'You chose Allow all data sources. Every data source is On now.'; // B4b
+const ALLOWED_ALL = 'You chose Enable all data sources. Every data source is enabled now. A source added later is not enabled until you enable it.'; // S102
 const CHANGE = 'You can change this in Data source settings at any time.'; // 13 (56), 40
 const NEXT_QUESTION = 'You can turn it On in Data source settings for your next question.'; // 40
-const ALLOWED_NOT_MOVED = 'You chose Allow. This question is sent to it, but it could not be turned On for later questions. You can turn it On in Data source settings.'; // 40
-const ALLOWED_AFTER_NOT_MOVED = 'You chose Allow, but it could not be turned On. You can turn it On in Data source settings.'; // 40
+const ALLOWED_NOT_MOVED = "You chose Enable. The AI's searches for this question are sent to it. It could not be enabled for later questions. You can enable it in Data source settings."; // S113
+const ALLOWED_AFTER_NOT_MOVED = 'You chose Enable, but it could not be enabled. You can enable it in Data source settings.'; // S126[1]
 const FAILED = 'Your answer could not be saved. You can set this source in Data source settings.'; // 40
 const PRIVACY_777 = 'The source is not used for that question. You can turn it On in Data source settings for your next question.'; // 40
 // Item 54's place, moved by S4 W2a (npstorey/civic-ai-tools#335; 7227321296 A2): S86 replaces card F's words.
 const ASK_FIRST_WITH_PAUSE = 'Not answered yet: the site asks before it uses this source.'; // S86
 
 // Part E: the refusal (42/50), read here because it is a "panel" sentence of item 40.
-const NO_SOURCES_ON = 'Every data source is set to Off or Ask first, so nothing was sent. Turn a source On in Data source settings, then ask again.';
+const NO_SOURCES_ON = 'No data source is enabled, so nothing was sent. Enable a source in Data source settings, then ask again.'; // moved by S4 W2b: S90
 
 // Part F: the panel and privacy sentences.
 const WITHDRAW = 'To withdraw consent, open Data source settings.'; // 40 (X2c): one sentence for both
